@@ -1,0 +1,2 @@
+tax_id,company,amount,comment
+123456789,შპს მაგალითი (სატესტო),0,"დეშბორდი კითხულობს Financial_Analysis/manual_payments.csv (ამ ფაილის ნაცვლად დააკოპირე ან გადაარქვი სახელი). თანხა: 1500,50 ან 1500.50. შემდეგ: python generate_dashboard_data.py"

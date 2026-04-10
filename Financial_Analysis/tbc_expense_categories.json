@@ -1,0 +1,171 @@
+{
+  "notes": "ბუღალტრული მნიშვნელობა: accounting_role — operating_expense (საოპერაციო/საქმიანობის ხარჯი) ან state_treasury (სახელმწიფო ხაზინა/საბიუჯეტო არხი). incasso_cash_handling და treasury_budget_commission — state_treasury; დანარჩენი კატეგორიები — operating_expense. ქვემოთ მოცემული კატეგორიები (ბარათით შეძენა MCC-ით, საკუთარი ქსელი, საბანკო პაკეტი და სხვა) ბანკის ტექსტით ხარჯის კლასიფიკაციაა. TBC გასული თანხა — თითო ხაზი ერთ კატეგორიას (ფაილის რიგით პირველი დამთხვევა). match_all_substrings = AND. გადარიცხვის საკომისიო პირველია: სატრანზიტოზე „საკომისიო:“ ხაზები — საკომისიო+სატრანზიტო; თორემ IBAN იგივე ტექსტში უშვება transit_ucc-ს.",
+  "categories": [
+    {
+      "id": "bank_fees_software_service",
+      "label_ka": "ბანკის/სერვისის საკომისიო (მეგასოფტვეარი)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "შპს მეგასოფტვეარ",
+        "მეგასოფტვეარი",
+        "მეგასოფტვეარ",
+        "megasoft",
+        "megasoftware"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "transfer_commission_fee",
+      "label_ka": "გადარიცხვის საკომისიო (ბანკი)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "გადარიცხვის საკომისიო",
+        "საკომისიო გადარიცხვ",
+        "საკომისიოს გადახდა",
+        "transfer commission",
+        "transfer fee",
+        "commission fee",
+        "fee for transfer",
+        "payment commission"
+      ],
+      "match_all_substrings": [
+        "საკომისიო",
+        "სატრანზიტო"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "transit_ucc_communal",
+      "label_ka": "სატრანზიტო (UCC) — კომუნალური, მობილური, ჯარიმები",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "სატრანზიტო",
+        "ucc",
+        "GE59TB0000000450109787"
+      ],
+      "iban_hints": ["GE59TB0000000450109787"]
+    },
+    {
+      "id": "utility_telecom_bank_commission",
+      "label_ka": "კომუნალური/ტელეკომის გადახდის საკომისიო (ბანკიდან)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "სილქნეტი",
+        "silknet",
+        "მაგთის ინტერნეტ",
+        "telmico",
+        "ტელმიკო",
+        "აბონენტის პირადი",
+        "აბონენტის სატელეფონო",
+        "აბონენტის ნომერი"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "transit_magti_mobile",
+      "label_ka": "სატრანზიტო (მაგთი) — ნომერზე ჩარიცხვა",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "მაგთი",
+        "magti",
+        "GE70TB0000000450109783"
+      ],
+      "iban_hints": ["GE70TB0000000450109783"]
+    },
+    {
+      "id": "pos_terminal_service_fee",
+      "label_ka": "დებიტორები — POS ტერმინალების მომსახურების საკომისიო",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "pos ტერმინალ",
+        "ტერმინალების მომსახურების",
+        "GE30TB0000025013100015"
+      ],
+      "iban_hints": ["GE30TB0000025013100015"]
+    },
+    {
+      "id": "incoming_packages_fee",
+      "label_ka": "დებიტორები — მისაღები ნაკრებების საკომისიო",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "მისაღები ნაკრებების",
+        "ნაკრებების საკომისიო",
+        "GE62TB0000025013100021"
+      ],
+      "iban_hints": ["GE62TB0000025013100021"]
+    },
+    {
+      "id": "incasso_cash_handling",
+      "label_ka": "ინკასო / ნაღდის მოძრაობის საკომისიო — სახელმწიფო ხაზინა",
+      "accounting_role": "state_treasury",
+      "match_substrings": [
+        "ინკასო",
+        "ინკასოს"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "treasury_budget_commission",
+      "label_ka": "სახელმწიფო ხაზინა / საბიუჯეტო — გადახდის საკომისიო (ერთიანი კოდი, RS)",
+      "accounting_role": "state_treasury",
+      "match_substrings": [
+        "ერთიანი სახაზინო",
+        "საბიუჯეტო გადასახად",
+        "სახაზინო კოდი"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "bank_account_package_fee",
+      "label_ka": "საბანკო ანგარიშის პაკეტი / ბანკის პაკეტის საკომისიო",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "business package",
+        "პაკეტის მომსახურების საკომისიო",
+        "პაკეტის მომსახურება"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "card_retail_own_chain",
+      "label_ka": "ბარათით შეძენა — საკუთარი ქსელი (Ioli)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "ioli"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_groceries_5411",
+      "label_ka": "ბარათით შეძენა — სასურსაო/საკვები (MCC 5411)",
+      "accounting_role": "operating_expense",
+      "match_substrings": ["mcc:5411"],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_misc_retail_5943",
+      "label_ka": "ბარათით შეძენა — ოფისი/საჩუქრები (MCC 5943)",
+      "accounting_role": "operating_expense",
+      "match_substrings": ["mcc:5943"],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_building_supplies_5039",
+      "label_ka": "ბარათით შეძენა — მასალა/აღჭურვილობა (MCC 5039)",
+      "accounting_role": "operating_expense",
+      "match_substrings": ["mcc:5039"],
+      "iban_hints": []
+    },
+    {
+      "id": "salary_payments",
+      "label_ka": "ხელფასები",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "ხელფასი",
+        "ხელფასი ოზურგეთი",
+        "ხელფასი დვაბზუ"
+      ],
+      "iban_hints": []
+    }
+  ]
+}

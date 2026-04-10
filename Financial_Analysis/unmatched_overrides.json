@@ -1,0 +1,88 @@
+{
+  "notes": [
+    "ორი სხვადასხვა ფენა: (1) RS მომწოდებელთან მიბმა — generate_dashboard_data.py: KNOWN_ALIASES, PARTNER_IBAN_TO_RS_TAX_ID, სახელების დამთხვევა.",
+    "(2) დეშბორდზე „არამიბმული ბანკის“ ხაზების კატეგორია — ქვემოთ approvals/rejections (სიგნატურა/IBAN/ტექსტი).",
+    "ახალი წესი: contains_any + (სურვილისამებრ) signature_contains ან ibans_any — სამივე ერთდროულად AND-ით იკითხება, თუ ველი ცარიელია — არ ითვლება ფილტრად.",
+    "იჯარის სამი ცნობილი IBAN უკვე ავტომატურად იჭერება კოდში (PARTNER_IBAN_TO_RS_TAX_ID) — approvals მხოლოდ დამატებითი ეტიკეტისთვისაა."
+  ],
+  "approvals": [
+    {
+      "contains_any": [],
+      "signature_contains": "",
+      "ibans_any": ["GE60BG0000000667583800"],
+      "category_id": "rent_known_landlord_ibans",
+      "label_ka": "იჯარა — ბესიკ კურტანიძე (IBAN)",
+      "confidence": "high",
+      "note": "წინ RS/ბიუჯეტად იყო მონიშნული — სინამდვილეში იჯარა; ibans_any ზუსტია"
+    },
+    {
+      "contains_any": [],
+      "signature_contains": "",
+      "ibans_any": ["GE04BG0000000201978600"],
+      "category_id": "rs_budget_payments",
+      "label_ka": "RS/ბიუჯეტის გადარიცხვები",
+      "confidence": "high"
+    },
+    {
+      "contains_any": ["ოპერაცია:განაღდება", "mcc:6011"],
+      "signature_contains": "",
+      "ibans_any": [],
+      "category_id": "cash_withdrawal",
+      "label_ka": "ნაღდი განაღდება / ბანკომატი",
+      "confidence": "high"
+    },
+    {
+      "contains_any": [],
+      "signature_contains": "NAME:ბესიკ კურტანიძე",
+      "ibans_any": [],
+      "category_id": "salary_payments",
+      "label_ka": "ხელფასები",
+      "confidence": "medium"
+    },
+    {
+      "contains_any": [],
+      "signature_contains": "NAME:შორენა წურწუმია",
+      "ibans_any": [],
+      "category_id": "salary_payments",
+      "label_ka": "ხელფასები",
+      "confidence": "medium"
+    },
+    {
+      "contains_any": [],
+      "signature_contains": "NAME:გადარიცხვების სატრანზიტო ანგარიში - Ucc",
+      "ibans_any": [],
+      "category_id": "transit_ucc_communal",
+      "label_ka": "სატრანზიტო (UCC) — კომუნალური, მობილური, ჯარიმები",
+      "confidence": "high",
+      "note": "safe split: exact receiver signature for UCC transit"
+    },
+    {
+      "contains_any": [],
+      "signature_contains": "NAME:გადარიცხვების სატრანზიტო ანგარიში - მაგთი",
+      "ibans_any": [],
+      "category_id": "transit_magti_mobile",
+      "label_ka": "სატრანზიტო (მაგთი) — ნომერზე ჩარიცხვა",
+      "confidence": "high",
+      "note": "safe split: exact receiver signature for Magti transit"
+    },
+    {
+      "contains_any": ["საკომისიო"],
+      "signature_contains": "NAME:შპს მეგასოფტვეარ",
+      "ibans_any": [],
+      "category_id": "bank_fees_software_service",
+      "label_ka": "ბანკის/სერვისის საკომისიო (მეგასოფტვეარი)",
+      "confidence": "medium",
+      "note": "narrow split: receiver + commission keyword"
+    },
+    {
+      "contains_any": [],
+      "signature_contains": "",
+      "ibans_any": ["GE78BG0000000269727500", "GE81BG0000000890516000"],
+      "category_id": "rent_known_landlord_ibans",
+      "label_ka": "იჯარა — ცნობილი ანგარიში (ხელით დადასტურებული ეტიკეტი)",
+      "confidence": "high",
+      "note": "თენიეშვილი/ხუჭუა კახაბერ — დუბლირება კოდის ავტო-კატეგორიასთან, თუ საჭიროა UI-ზე სხვა სახელი"
+    }
+  ],
+  "rejections": []
+}

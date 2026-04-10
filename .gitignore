@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Node / Vite
+**/node_modules/
+rs-dashboard/dist/
+
+# გენერირებული დეშბორდის მონაცემი (ძალიან დიდი; გაუშვი generate_dashboard_data.py)
+rs-dashboard/public/data.json
+
+# სკრიპტის ჩამოტვირთვების საქაღალდე
+download/
+
+# ლოკალური / ჟურნალი
+*.log
+.DS_Store
+Thumbs.db
+
+# ფინანსური წყარო და ხელით ჟურნალი — Git-ში არა (კონფიდენციალურობა; ფაილები ლოკალურად რჩება)
+Financial_Analysis/**/*.xlsx
+Financial_Analysis/**/*.xls
+Financial_Analysis/manual_payments.csv
+RS_Final_Check.xlsx

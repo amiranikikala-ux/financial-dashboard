@@ -1,0 +1,15 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "mechatroner.rainbow-csv",
+    "eamodio.gitlens",
+    "GrapeCity.gc-excelviewer",
+    "usernamehw.errorlens",
+    "editorconfig.editorconfig",
+    "ms-vscode.powershell",
+    "christian-kohler.path-intellisense"
+  ]
+}
