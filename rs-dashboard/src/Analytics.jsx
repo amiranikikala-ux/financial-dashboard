@@ -38,17 +38,16 @@ function fmtFull(v) {
 export default function Analytics({ suppliers, localPayments }) {
   const [includeBrowser, setIncludeBrowser] = useState(true);
 
-  const lp = includeBrowser ? localPayments : {};
-
   const rows = useMemo(() => {
+    const local = includeBrowser ? localPayments : {};
     return (suppliers || []).map((s) => {
-      const m = mergeSupplier(s, lp);
+      const m = mergeSupplier(s, local);
       return {
         ...m,
         label: shortLabel(m.org, 34),
       };
     });
-  }, [suppliers, lp]);
+  }, [suppliers, includeBrowser, localPayments]);
 
   const totals = useMemo(() => {
     let eff = 0;
@@ -131,15 +130,20 @@ export default function Analytics({ suppliers, localPayments }) {
   }, [rows]);
 
   const tooltipStyle = {
-    background: 'rgba(15, 23, 42, 0.95)',
-    border: '1px solid rgba(148, 163, 184, 0.35)',
-    borderRadius: 8,
+    background: 'rgba(12, 18, 34, 0.97)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: 10,
     color: '#f1f5f9',
     fontSize: 12,
+    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
   };
 
   return (
     <div className="analytics-page">
+      <div className="tab-hero">
+        <span className="tab-hero-title">📊 ანალიტიკა</span>
+        <span className="tab-hero-desc">მომწოდებლების ვიზუალური ანალიზი — ვალი, გადახდა, წილი</span>
+      </div>
       <div className="analytics-toolbar">
         <label className="analytics-toggle">
           <input
@@ -156,12 +160,12 @@ export default function Analytics({ suppliers, localPayments }) {
       </div>
 
       <div className="kpi-grid">
-        <div className="kpi-card">
+        <div className="kpi-card" style={{ borderBottom: '3px solid #3b82f6' }}>
           <div className="kpi-label">რეალური ჯამი (RS)</div>
           <div className="kpi-value">{fmtFull(totals.eff)}</div>
           <div className="kpi-sub">{totals.n} მომწოდებელი</div>
         </div>
-        <div className="kpi-card kpi-card--accent">
+        <div className="kpi-card kpi-card--accent" style={{ borderBottom: '3px solid #22c55e' }}>
           <div className="kpi-label">სულ გადახდილი</div>
           <div className="kpi-value">{fmtFull(totals.paid)}</div>
           {includeBrowser && totals.browser > 0 ? (
@@ -170,7 +174,7 @@ export default function Analytics({ suppliers, localPayments }) {
             <div className="kpi-sub">&nbsp;</div>
           )}
         </div>
-        <div className="kpi-card kpi-card--warn">
+        <div className="kpi-card kpi-card--warn" style={{ borderBottom: '3px solid #ef4444' }}>
           <div className="kpi-label">დავალიანება</div>
           <div className="kpi-value">{fmtFull(totals.debt)}</div>
           <div className="kpi-sub">
@@ -181,8 +185,10 @@ export default function Analytics({ suppliers, localPayments }) {
 
       <div className="charts-grid">
         <div className="chart-card">
-          <h3>TOP დავალიანებით</h3>
-          <p className="chart-desc">ყველაზე მაღალი დარჩენილი ვალი (₾)</p>
+          <div className="chart-card-header">
+            <h3>TOP დავალიანებით</h3>
+            <span className="chart-card-header-desc">ყველაზე მაღალი დარჩენილი ვალი (₾)</span>
+          </div>
           <div className="chart-area">
             <ResponsiveContainer width="100%" height={420}>
               <BarChart
@@ -213,8 +219,10 @@ export default function Analytics({ suppliers, localPayments }) {
         </div>
 
         <div className="chart-card">
-          <h3>TOP რეალური ბრუნვით</h3>
-          <p className="chart-desc">ეფექტური ჯამი ზედნადებიდან (₾)</p>
+          <div className="chart-card-header">
+            <h3>TOP რეალური ბრუნვით</h3>
+            <span className="chart-card-header-desc">ეფექტური ჯამი ზედნადებიდან (₾)</span>
+          </div>
           <div className="chart-area">
             <ResponsiveContainer width="100%" height={420}>
               <BarChart
@@ -245,8 +253,10 @@ export default function Analytics({ suppliers, localPayments }) {
         </div>
 
         <div className="chart-card chart-card--pie">
-          <h3>დავალიანების სტრუქტურა</h3>
-          <p className="chart-desc">TOP-5 + დანარჩენი</p>
+          <div className="chart-card-header">
+            <h3>დავალიანების სტრუქტურა</h3>
+            <span className="chart-card-header-desc">TOP-5 + დანარჩენი</span>
+          </div>
           <div className="chart-area chart-area--pie">
             <ResponsiveContainer width="100%" height={320}>
               <PieChart>
@@ -305,10 +315,10 @@ export default function Analytics({ suppliers, localPayments }) {
         </div>
 
         <div className="chart-card chart-card--wide">
-          <h3>რეალური vs გადახდილი (scatter)</h3>
-          <p className="chart-desc">
-            ღერძები: X = რეალური ჯამი, Y = სულ გადახდილი (ნაწილობრივი სია, max 80 ობიექტი)
-          </p>
+          <div className="chart-card-header">
+            <h3>რეალური vs გადახდილი (scatter)</h3>
+            <span className="chart-card-header-desc">X = რეალური ჯამი, Y = სულ გადახდილი (max 80)</span>
+          </div>
           <div className="chart-area">
             <ResponsiveContainer width="100%" height={380}>
               <ScatterChart margin={{ top: 16, right: 24, bottom: 48, left: 8 }}>
@@ -337,7 +347,7 @@ export default function Analytics({ suppliers, localPayments }) {
                 <ZAxis type="number" dataKey="z" range={[40, 40]} />
                 <Tooltip
                   contentStyle={tooltipStyle}
-                  formatter={(v, name, p) => [fmtFull(v), name === 'y' ? 'გადახდილი' : 'რეალური']}
+                  formatter={(v, name) => [fmtFull(v), name === 'y' ? 'გადახდილი' : 'რეალური']}
                   labelFormatter={(_, p) => (p && p[0] && p[0].payload ? p[0].payload.name : '')}
                 />
                 <Scatter name="მომწოდებლები" data={scatterPay} fill="#60a5fa" />

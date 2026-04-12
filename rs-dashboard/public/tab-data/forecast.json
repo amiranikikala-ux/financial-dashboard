@@ -1,0 +1,2162 @@
+{
+  "meta": {
+    "manual_payments_total": 0.0,
+    "manual_payments_rows_with_amount": 0,
+    "suppliers_only_journal_or_bank": 4,
+    "bank_orphan_total_ge": 135350.0,
+    "bank_unmatched_total_ge": 13109.980000000003,
+    "bank_unmatched_line_count": 238,
+    "bank_unmatched_categorized_total_ge": 4823.35,
+    "bank_unmatched_uncategorized_total_ge": 8286.63,
+    "bank_unmatched_dynamic_promoted_total_ge": 154.6,
+    "bank_unmatched_confidence_high_ge": 4087.7300000000005,
+    "bank_unmatched_confidence_medium_ge": 310.88,
+    "bank_unmatched_confidence_low_ge": 8711.369999999999,
+    "bank_unmatched_manual_override_approved_lines": 0,
+    "bank_unmatched_manual_override_rejected_lines": 0,
+    "bank_recon_total_outgoing_amount": 5386780.86,
+    "bank_recon_matched_high_amount": 4516386.97,
+    "bank_recon_ambiguous_amount": 0.0,
+    "bank_recon_non_supplier_amount": 857283.9100000069,
+    "bank_recon_unmatched_amount": 13109.980000000003,
+    "bank_recon_skipped_amount": 0.0,
+    "tbc_card_income_total_ge": 3176399.880000085,
+    "tbc_card_income_line_count": 42419,
+    "pos_terminal_income_total_ge": 4657442.760000097,
+    "pos_terminal_income_tbc_total_ge": 3176399.880000085,
+    "pos_terminal_income_bog_total_ge": 1481042.880000011,
+    "tbc_expenses_grand_total_ge": 3758916.0900000003,
+    "tbc_expenses_operating_total_ge": 3732246.58,
+    "tbc_expenses_treasury_total_ge": 26669.51,
+    "tbc_expenses_total_lines": 7572,
+    "tbc_samurneo_expense_total_ge": 197973.95,
+    "tbc_samurneo_return_total_ge": 244400.0,
+    "tbc_samurneo_net_ge": 46426.04999999999,
+    "tax_out_total_ge": 112675.41,
+    "tax_in_total_ge": 46071.98,
+    "tax_treasury_in_total_ge": 46071.98,
+    "tax_treasury_in_line_count": 12,
+    "tax_net_ge": -66603.43,
+    "tbc_foodmart_cashback_total_ge": 313725.75000000006,
+    "tbc_foodmart_cashback_line_count": 33,
+    "retail_sales_row_count": 1462967,
+    "retail_sales_total_quantity": 1585003.5629000014,
+    "retail_sales_revenue_ge": 5039708.479997783,
+    "retail_sales_cost_ge": 4277066.030001483,
+    "retail_sales_profit_ge": 648931.6441000304,
+    "retail_sales_gross_margin_pct": 12.876372644877982,
+    "retail_sales_distinct_object_count": 2,
+    "retail_sales_distinct_category_count": 645,
+    "retail_sales_distinct_product_count": 9095,
+    "retail_sales_duplicate_excluded_file_count": 1,
+    "generated_at": "2026-04-12T19:16:02Z",
+    "source_manifest_summary": {
+      "group_count": 6,
+      "total_files": 25,
+      "total_size_bytes": 353489830,
+      "missing_groups": [],
+      "groups": {
+        "bog_bank_statement": {
+          "label_ka": "BOG ბანკის ამონაწერი",
+          "file_count": 4,
+          "total_size_bytes": 24608869,
+          "latest_modified_at": "2026-04-11T09:33:54.065151Z"
+        },
+        "tbc_bank_statement": {
+          "label_ka": "TBC ბანკის ამონაწერი",
+          "file_count": 5,
+          "total_size_bytes": 6326178,
+          "latest_modified_at": "2026-04-11T09:31:03.247878Z"
+        },
+        "rs_waybills": {
+          "label_ka": "RS ზედნადები",
+          "file_count": 5,
+          "total_size_bytes": 7957504,
+          "latest_modified_at": "2026-04-07T12:56:24.832216Z"
+        },
+        "imported_products": {
+          "label_ka": "შემოტანილი პროდუქცია",
+          "file_count": 4,
+          "total_size_bytes": 109031509,
+          "latest_modified_at": "2026-04-11T09:08:39.628083Z"
+        },
+        "retail_sales_dvabzu": {
+          "label_ka": "გაყიდული პროდუქცია — დვაბზუ",
+          "file_count": 3,
+          "total_size_bytes": 78578486,
+          "latest_modified_at": "2026-04-11T00:49:03.317474Z"
+        },
+        "retail_sales_ozurgeti": {
+          "label_ka": "გაყიდული პროდუქცია — ოზურგეთი",
+          "file_count": 4,
+          "total_size_bytes": 126987284,
+          "latest_modified_at": "2026-04-09T22:39:30.970313Z"
+        }
+      }
+    },
+    "config_validation": {
+      "ok": true,
+      "warning_count": 0,
+      "error_count": 0
+    },
+    "payment_scope_summary": {
+      "strict_bank_only_total": 4516386.97,
+      "manual_journal_total": 0,
+      "combined_supplier_paid_total": 4516386.97,
+      "strict_supplier_count": 192,
+      "manual_supplier_count": 0,
+      "combined_supplier_count": 192,
+      "strict_and_manual_overlap_count": 0,
+      "manual_only_supplier_count": 0,
+      "strict_only_supplier_count": 192,
+      "scope_notes": [
+        "strict_bank_only_total ითვლის მხოლოდ მაღალი სანდოობის bank-reconciled supplier matches-ს.",
+        "manual_journal_total ითვლის მხოლოდ manual/off-bank journal adjustments-ს.",
+        "combined_supplier_paid_total არის supplier-level total_paid მეტრიკების წყარო."
+      ],
+      "manual_only_suppliers_preview": [],
+      "strict_only_suppliers_preview": [
+        {
+          "tax_id": "01001006813",
+          "supplier_name": "მერაბ ჯაფარიძე",
+          "strict_bank_paid": 1400.0,
+          "manual_paid": 0.0,
+          "combined_paid": 1400.0,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "01016006672",
+          "supplier_name": "ლია ეჯოშვილი",
+          "strict_bank_paid": 190.0,
+          "manual_paid": 0.0,
+          "combined_paid": 190.0,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "01025003711",
+          "supplier_name": "01025003711",
+          "strict_bank_paid": 10100.0,
+          "manual_paid": 0.0,
+          "combined_paid": 10100.0,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "200040222",
+          "supplier_name": "შპს ასკანელი ძმები",
+          "strict_bank_paid": 550.0,
+          "manual_paid": 0.0,
+          "combined_paid": 550.0,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "200140267",
+          "supplier_name": "შპს კანტი",
+          "strict_bank_paid": 67885.21,
+          "manual_paid": 0.0,
+          "combined_paid": 67885.21,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "200172785",
+          "supplier_name": "შპს ტკბილი ქვეყანა",
+          "strict_bank_paid": 18115.359999999997,
+          "manual_paid": 0.0,
+          "combined_paid": 18115.359999999997,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "200179118",
+          "supplier_name": "შპს იფქლი",
+          "strict_bank_paid": 133140.43,
+          "manual_paid": 0.0,
+          "combined_paid": 133140.43,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "201948063",
+          "supplier_name": "სს კოკა-კოლა ბოთლერს ჯორჯია",
+          "strict_bank_paid": 20416.760000000002,
+          "manual_paid": 0.0,
+          "combined_paid": 20416.760000000002,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202061053",
+          "supplier_name": "შპს ზახარ",
+          "strict_bank_paid": 8600.0,
+          "manual_paid": 0.0,
+          "combined_paid": 8600.0,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202163292",
+          "supplier_name": "შპს ორიენტი",
+          "strict_bank_paid": 945.0,
+          "manual_paid": 0.0,
+          "combined_paid": 945.0,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202196426",
+          "supplier_name": "შპს ბი ემ ესი",
+          "strict_bank_paid": 4228.16,
+          "manual_paid": 0.0,
+          "combined_paid": 4228.16,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202227134",
+          "supplier_name": "შპს ევროპროდუქტი",
+          "strict_bank_paid": 1371.0,
+          "manual_paid": 0.0,
+          "combined_paid": 1371.0,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202230790",
+          "supplier_name": "შპს კომპანია ორბიტა",
+          "strict_bank_paid": 18532.8,
+          "manual_paid": 0.0,
+          "combined_paid": 18532.8,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202243401",
+          "supplier_name": "შპს ჯეოსტარი",
+          "strict_bank_paid": 4937.1,
+          "manual_paid": 0.0,
+          "combined_paid": 4937.1,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202246097",
+          "supplier_name": "შპს ალგანი",
+          "strict_bank_paid": 4514.84,
+          "manual_paid": 0.0,
+          "combined_paid": 4514.84,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202282369",
+          "supplier_name": "შპს ქართული სადისტრიბუციო-მარკეტინგული კომპანია",
+          "strict_bank_paid": 33243.89,
+          "manual_paid": 0.0,
+          "combined_paid": 33243.89,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202311738",
+          "supplier_name": "სს თ & რ დისტრიბუშენ",
+          "strict_bank_paid": 61533.200000000004,
+          "manual_paid": 0.0,
+          "combined_paid": 61533.200000000004,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "204487616",
+          "supplier_name": "შპს ნატახტარი 2005",
+          "strict_bank_paid": 20176.739999999998,
+          "manual_paid": 0.0,
+          "combined_paid": 20176.739999999998,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "204490390",
+          "supplier_name": "შპს კუმისი XXI",
+          "strict_bank_paid": 2757.75,
+          "manual_paid": 0.0,
+          "combined_paid": 2757.75,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "204516194",
+          "supplier_name": "შპს დილის პროდუქტები",
+          "strict_bank_paid": 4225.02,
+          "manual_paid": 0.0,
+          "combined_paid": 4225.02,
+          "source": "strict_bank_only"
+        }
+      ],
+      "strict_and_manual_overlap_preview": [],
+      "largest_manual_adjustments_preview": []
+    },
+    "truth_source_breakdown": {
+      "bank_tax_id": {
+        "rows": 4338,
+        "amount": 3193013.2800000007
+      },
+      "rs_legal_name_backstop": {
+        "rows": 2243,
+        "amount": 1027227.1200000002
+      },
+      "registry_iban": {
+        "rows": 453,
+        "amount": 295346.5699999998
+      },
+      "registry_alias": {
+        "rows": 2,
+        "amount": 800.0
+      }
+    },
+    "truth_boundary_summary": {
+      "summary_ka": "Strict supplier matching-ში `supplier_matching_registry.json` არის primary truth. RS supplier names რჩება exact-name backstop-ად, ხოლო legacy IBAN/alias რუკები audit-only truth-assist layer-ია და strict supplier totals-ში არ ერთვება.",
+      "badges_ka": [
+        "registry primary",
+        "RS backstop",
+        "legacy audit-only"
+      ],
+      "primary_supplier_truth_path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\Financial_Analysis\\supplier_matching_registry.json",
+      "registry_primary_supplier_count": 16,
+      "rs_backstop_supplier_count": 262,
+      "legacy_truth_assist_supplier_count": 10,
+      "strict_layers": [
+        "bank.raw_tax_id",
+        "bank.extracted_tax_id",
+        "supplier_matching_registry.official_name",
+        "supplier_matching_registry.alias",
+        "supplier_matching_registry.person_alias",
+        "supplier_matching_registry.iban",
+        "supplier_matching_registry.account_hint",
+        "rs_waybills.organization_name",
+        "rs_waybills.waybill_reference"
+      ],
+      "legacy_audit_only_layers": [
+        "legacy_truth_assist.partner_iban_map",
+        "legacy_truth_assist.known_aliases"
+      ]
+    },
+    "strict_bank_only_total": 4516386.97,
+    "combined_supplier_paid_total": 4516386.97,
+    "manual_vs_bank_gap_total": 0.0,
+    "reproducibility_report": {
+      "generated_at": "2026-04-12T19:16:02Z",
+      "source_manifest_summary": {
+        "group_count": 6,
+        "total_files": 25,
+        "total_size_bytes": 353489830,
+        "missing_groups": [],
+        "groups": {
+          "bog_bank_statement": {
+            "label_ka": "BOG ბანკის ამონაწერი",
+            "file_count": 4,
+            "total_size_bytes": 24608869,
+            "latest_modified_at": "2026-04-11T09:33:54.065151Z"
+          },
+          "tbc_bank_statement": {
+            "label_ka": "TBC ბანკის ამონაწერი",
+            "file_count": 5,
+            "total_size_bytes": 6326178,
+            "latest_modified_at": "2026-04-11T09:31:03.247878Z"
+          },
+          "rs_waybills": {
+            "label_ka": "RS ზედნადები",
+            "file_count": 5,
+            "total_size_bytes": 7957504,
+            "latest_modified_at": "2026-04-07T12:56:24.832216Z"
+          },
+          "imported_products": {
+            "label_ka": "შემოტანილი პროდუქცია",
+            "file_count": 4,
+            "total_size_bytes": 109031509,
+            "latest_modified_at": "2026-04-11T09:08:39.628083Z"
+          },
+          "retail_sales_dvabzu": {
+            "label_ka": "გაყიდული პროდუქცია — დვაბზუ",
+            "file_count": 3,
+            "total_size_bytes": 78578486,
+            "latest_modified_at": "2026-04-11T00:49:03.317474Z"
+          },
+          "retail_sales_ozurgeti": {
+            "label_ka": "გაყიდული პროდუქცია — ოზურგეთი",
+            "file_count": 4,
+            "total_size_bytes": 126987284,
+            "latest_modified_at": "2026-04-09T22:39:30.970313Z"
+          }
+        }
+      },
+      "config_validation": {
+        "ok": true,
+        "warning_count": 0,
+        "error_count": 0
+      },
+      "bank_unmatched_total_ge": 13109.980000000003,
+      "bank_recon_ambiguous_amount": 0.0,
+      "bank_recon_unmatched_amount": 13109.980000000003,
+      "truth_source_breakdown": {
+        "bank_tax_id": {
+          "rows": 4338,
+          "amount": 3193013.2800000007
+        },
+        "rs_legal_name_backstop": {
+          "rows": 2243,
+          "amount": 1027227.1200000002
+        },
+        "registry_iban": {
+          "rows": 453,
+          "amount": 295346.5699999998
+        },
+        "registry_alias": {
+          "rows": 2,
+          "amount": 800.0
+        }
+      },
+      "truth_boundary_summary": {
+        "summary_ka": "Strict supplier matching-ში `supplier_matching_registry.json` არის primary truth. RS supplier names რჩება exact-name backstop-ად, ხოლო legacy IBAN/alias რუკები audit-only truth-assist layer-ია და strict supplier totals-ში არ ერთვება.",
+        "badges_ka": [
+          "registry primary",
+          "RS backstop",
+          "legacy audit-only"
+        ],
+        "primary_supplier_truth_path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\Financial_Analysis\\supplier_matching_registry.json",
+        "registry_primary_supplier_count": 16,
+        "rs_backstop_supplier_count": 262,
+        "legacy_truth_assist_supplier_count": 10,
+        "strict_layers": [
+          "bank.raw_tax_id",
+          "bank.extracted_tax_id",
+          "supplier_matching_registry.official_name",
+          "supplier_matching_registry.alias",
+          "supplier_matching_registry.person_alias",
+          "supplier_matching_registry.iban",
+          "supplier_matching_registry.account_hint",
+          "rs_waybills.organization_name",
+          "rs_waybills.waybill_reference"
+        ],
+        "legacy_audit_only_layers": [
+          "legacy_truth_assist.partner_iban_map",
+          "legacy_truth_assist.known_aliases"
+        ]
+      },
+      "imported_products_truncation_suspected": false,
+      "retail_sales_duplicate_policy_mode": "exclude_suspected_until_explicit_policy",
+      "retail_sales_duplicate_excluded_file_count": 1
+    }
+  },
+  "download_files": [
+    "POS_ტერმინალი_TBC_BOG.xlsx",
+    "TBC_ბარათის_შემოსავალი.xlsx",
+    "TBC_დარჩენილი_არამიბმული_ანალიზი.xlsx",
+    "TBC_სამეურნეო_მოძრაობა.xlsx",
+    "TBC_ფუდმარტი_ქეშბექი.xlsx",
+    "TBC_ხარჯები_კატეგორიები.xlsx",
+    "ბანკი_non_supplier_ხაზები.xlsx",
+    "ბანკი_overrides_audit.xlsx",
+    "ბანკი_არამიბმული_კატეგორიები.xlsx",
+    "ბანკი_არამიბმული_ხაზები.xlsx",
+    "ბანკი_ბუნდოვანი_მიბმები.xlsx",
+    "ბანკი_მაღალი_სანდოობის_მიბმები.xlsx",
+    "ბანკი_სხვა_top20.xlsx",
+    "მომწოდებლები_RS.xlsx",
+    "საგადასახადო_მოძრაობა.xlsx",
+    "სახელმწიფო_ხაზინა_ჩარიცხვები.xlsx"
+  ],
+  "download_zip_file": "ყველა_ანგარიში.xlsx.zip",
+  "forecast": {
+    "forecast": {
+      "method": "SMA-6",
+      "months": [
+        {
+          "month": "2026-03",
+          "is_forecast": true,
+          "total": {
+            "pos_income": 157414.55,
+            "expenses": 181527.17,
+            "net": -24112.62
+          },
+          "objects": {
+            "ოზურგეთი": {
+              "pos_income": 55243.74,
+              "expenses": 135627.24,
+              "net": -80383.51
+            },
+            "დვაბზუ": {
+              "pos_income": 83269.88,
+              "expenses": 17120.67,
+              "net": 66149.21
+            },
+            "საერთო": {
+              "pos_income": 0.0,
+              "expenses": 28779.26,
+              "net": -28779.26
+            },
+            "გაუნაწილებელი": {
+              "pos_income": 18900.94,
+              "expenses": 0.0,
+              "net": 18900.94
+            }
+          }
+        },
+        {
+          "month": "2026-04",
+          "is_forecast": true,
+          "total": {
+            "pos_income": 151866.89,
+            "expenses": 174747.75,
+            "net": -22880.87
+          },
+          "objects": {
+            "ოზურგეთი": {
+              "pos_income": 56246.64,
+              "expenses": 129425.14,
+              "net": -73178.5
+            },
+            "დვაბზუ": {
+              "pos_income": 77522.48,
+              "expenses": 17693.78,
+              "net": 59828.7
+            },
+            "საერთო": {
+              "pos_income": 0.0,
+              "expenses": 27628.83,
+              "net": -27628.83
+            },
+            "გაუნაწილებელი": {
+              "pos_income": 18097.77,
+              "expenses": 0.0,
+              "net": 18097.77
+            }
+          }
+        },
+        {
+          "month": "2026-05",
+          "is_forecast": true,
+          "total": {
+            "pos_income": 146830.91,
+            "expenses": 170039.78,
+            "net": -23208.87
+          },
+          "objects": {
+            "ოზურგეთი": {
+              "pos_income": 54670.35,
+              "expenses": 125215.49,
+              "net": -70545.14
+            },
+            "დვაბზუ": {
+              "pos_income": 73724.25,
+              "expenses": 16798.88,
+              "net": 56925.37
+            },
+            "საერთო": {
+              "pos_income": 0.0,
+              "expenses": 28025.4,
+              "net": -28025.4
+            },
+            "გაუნაწილებელი": {
+              "pos_income": 18436.3,
+              "expenses": 0.0,
+              "net": 18436.3
+            }
+          }
+        },
+        {
+          "month": "2026-06",
+          "is_forecast": true,
+          "total": {
+            "pos_income": 146208.16,
+            "expenses": 170435.58,
+            "net": -24227.42
+          },
+          "objects": {
+            "ოზურგეთი": {
+              "pos_income": 54247.54,
+              "expenses": 125804.43,
+              "net": -71556.89
+            },
+            "დვაბზუ": {
+              "pos_income": 73393.92,
+              "expenses": 15383.85,
+              "net": 58010.08
+            },
+            "საერთო": {
+              "pos_income": 0.0,
+              "expenses": 29247.3,
+              "net": -29247.3
+            },
+            "გაუნაწილებელი": {
+              "pos_income": 18566.7,
+              "expenses": 0.0,
+              "net": 18566.7
+            }
+          }
+        },
+        {
+          "month": "2026-07",
+          "is_forecast": true,
+          "total": {
+            "pos_income": 143607.52,
+            "expenses": 164497.4,
+            "net": -20889.88
+          },
+          "objects": {
+            "ოზურგეთი": {
+              "pos_income": 52395.07,
+              "expenses": 123623.72,
+              "net": -71228.65
+            },
+            "დვაბზუ": {
+              "pos_income": 72565.62,
+              "expenses": 13442.55,
+              "net": 59123.07
+            },
+            "საერთო": {
+              "pos_income": 0.0,
+              "expenses": 27431.13,
+              "net": -27431.13
+            },
+            "გაუნაწილებელი": {
+              "pos_income": 18646.83,
+              "expenses": 0.0,
+              "net": 18646.83
+            }
+          }
+        },
+        {
+          "month": "2026-08",
+          "is_forecast": true,
+          "total": {
+            "pos_income": 144835.2,
+            "expenses": 166599.49,
+            "net": -21764.29
+          },
+          "objects": {
+            "ოზურგეთი": {
+              "pos_income": 53453.59,
+              "expenses": 124417.95,
+              "net": -70964.36
+            },
+            "დვაბზუ": {
+              "pos_income": 73739.04,
+              "expenses": 14603.21,
+              "net": 59135.84
+            },
+            "საერთო": {
+              "pos_income": 0.0,
+              "expenses": 27578.33,
+              "net": -27578.33
+            },
+            "გაუნაწილებელი": {
+              "pos_income": 17642.57,
+              "expenses": 0.0,
+              "net": 17642.57
+            }
+          }
+        }
+      ]
+    },
+    "seasonality": {
+      "by_calendar_month": [
+        {
+          "calendar_month": 1,
+          "label": "იანვარი",
+          "avg_income": 95196.81,
+          "avg_expenses": 106939.61,
+          "avg_net": -11742.8,
+          "months_count": 4,
+          "seasonality_index": 0.9
+        },
+        {
+          "calendar_month": 2,
+          "label": "თებერვალი",
+          "avg_income": 84834.53,
+          "avg_expenses": 109932.48,
+          "avg_net": -25097.95,
+          "months_count": 4,
+          "seasonality_index": 0.8
+        },
+        {
+          "calendar_month": 3,
+          "label": "მარტი",
+          "avg_income": 79589.3,
+          "avg_expenses": 89043.69,
+          "avg_net": -9454.39,
+          "months_count": 3,
+          "seasonality_index": 0.75
+        },
+        {
+          "calendar_month": 4,
+          "label": "აპრილი",
+          "avg_income": 87983.42,
+          "avg_expenses": 103787.25,
+          "avg_net": -15803.83,
+          "months_count": 3,
+          "seasonality_index": 0.83
+        },
+        {
+          "calendar_month": 5,
+          "label": "მაისი",
+          "avg_income": 103301.68,
+          "avg_expenses": 109829.98,
+          "avg_net": -6528.3,
+          "months_count": 3,
+          "seasonality_index": 0.98
+        },
+        {
+          "calendar_month": 6,
+          "label": "ივნისი",
+          "avg_income": 86608.09,
+          "avg_expenses": 95625.61,
+          "avg_net": -9017.52,
+          "months_count": 4,
+          "seasonality_index": 0.82
+        },
+        {
+          "calendar_month": 7,
+          "label": "ივლისი",
+          "avg_income": 107346.53,
+          "avg_expenses": 121592.91,
+          "avg_net": -14246.38,
+          "months_count": 4,
+          "seasonality_index": 1.01
+        },
+        {
+          "calendar_month": 8,
+          "label": "აგვისტო",
+          "avg_income": 210430.28,
+          "avg_expenses": 225236.42,
+          "avg_net": -14806.13,
+          "months_count": 3,
+          "seasonality_index": 1.99
+        },
+        {
+          "calendar_month": 9,
+          "label": "სექტემბერი",
+          "avg_income": 122098.82,
+          "avg_expenses": 138839.78,
+          "avg_net": -16740.96,
+          "months_count": 4,
+          "seasonality_index": 1.15
+        },
+        {
+          "calendar_month": 10,
+          "label": "ოქტომბერი",
+          "avg_income": 108954.11,
+          "avg_expenses": 122689.51,
+          "avg_net": -13735.4,
+          "months_count": 4,
+          "seasonality_index": 1.03
+        },
+        {
+          "calendar_month": 11,
+          "label": "ნოემბერი",
+          "avg_income": 96679.64,
+          "avg_expenses": 116614.53,
+          "avg_net": -19934.9,
+          "months_count": 4,
+          "seasonality_index": 0.91
+        },
+        {
+          "calendar_month": 12,
+          "label": "დეკემბერი",
+          "avg_income": 101663.66,
+          "avg_expenses": 133612.79,
+          "avg_net": -31949.13,
+          "months_count": 4,
+          "seasonality_index": 0.96
+        }
+      ],
+      "strongest_month": {
+        "calendar_month": 8,
+        "label": "აგვისტო",
+        "seasonality_index": 1.99
+      },
+      "weakest_month": {
+        "calendar_month": 3,
+        "label": "მარტი",
+        "seasonality_index": 0.75
+      }
+    },
+    "yoy": {
+      "last_12m": {
+        "income": 1897583.9,
+        "expenses": 2139321.93,
+        "net": -241738.03
+      },
+      "prev_12m": {
+        "income": 1605440.72,
+        "expenses": 1861511.51,
+        "net": -256070.79
+      },
+      "income_change_pct": 18.2,
+      "expenses_change_pct": 14.92,
+      "net_change_pct": -5.6
+    }
+  },
+  "monthly_pnl": [
+    {
+      "month": "2022-06",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "დვაბზუ": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 5.0,
+          "net": -5.0
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 5.0,
+          "expenses": 0.0,
+          "net": 5.0
+        }
+      },
+      "total": {
+        "pos_income": 5.0,
+        "expenses": 5.0,
+        "net": 0.0
+      }
+    },
+    {
+      "month": "2022-07",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "დვაბზუ": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 6.0,
+          "net": -6.0
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 6.0,
+          "expenses": 0.0,
+          "net": 6.0
+        }
+      },
+      "total": {
+        "pos_income": 6.0,
+        "expenses": 6.0,
+        "net": 0.0
+      }
+    },
+    {
+      "month": "2022-09",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "დვაბზუ": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 990.8699999999999,
+          "net": -990.8699999999999
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        }
+      },
+      "total": {
+        "pos_income": 0.0,
+        "expenses": 990.8699999999999,
+        "net": -990.8699999999999
+      }
+    },
+    {
+      "month": "2022-10",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "დვაბზუ": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 14470.36,
+          "net": -14470.36
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 8872.749999999995,
+          "expenses": 0.0,
+          "net": 8872.749999999995
+        }
+      },
+      "total": {
+        "pos_income": 8872.749999999995,
+        "expenses": 14470.36,
+        "net": -5597.610000000006
+      }
+    },
+    {
+      "month": "2022-11",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "დვაბზუ": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 29869.390000000007,
+          "net": -29869.390000000007
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 25249.699999999957,
+          "expenses": 0.0,
+          "net": 25249.699999999957
+        }
+      },
+      "total": {
+        "pos_income": 25249.699999999957,
+        "expenses": 29869.390000000007,
+        "net": -4619.69000000005
+      }
+    },
+    {
+      "month": "2022-12",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "დვაბზუ": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 45347.060000000005,
+          "net": -45347.060000000005
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 42076.68000000003,
+          "expenses": 0.0,
+          "net": 42076.68000000003
+        }
+      },
+      "total": {
+        "pos_income": 42076.68000000003,
+        "expenses": 45347.060000000005,
+        "net": -3270.3799999999756
+      }
+    },
+    {
+      "month": "2023-01",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "დვაბზუ": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 46776.149999999994,
+          "net": -46776.149999999994
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 33509.51999999999,
+          "expenses": 0.0,
+          "net": 33509.51999999999
+        }
+      },
+      "total": {
+        "pos_income": 33509.51999999999,
+        "expenses": 46776.149999999994,
+        "net": -13266.630000000005
+      }
+    },
+    {
+      "month": "2023-02",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "დვაბზუ": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 50729.70000000001,
+          "net": -50729.70000000001
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 31689.380000000026,
+          "expenses": 0.0,
+          "net": 31689.380000000026
+        }
+      },
+      "total": {
+        "pos_income": 31689.380000000026,
+        "expenses": 50729.70000000001,
+        "net": -19040.319999999985
+      }
+    },
+    {
+      "month": "2023-03",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "დვაბზუ": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 51410.58999999999,
+          "net": -51410.58999999999
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 34956.549999999945,
+          "expenses": 0.0,
+          "net": 34956.549999999945
+        }
+      },
+      "total": {
+        "pos_income": 34956.549999999945,
+        "expenses": 51410.58999999999,
+        "net": -16454.040000000045
+      }
+    },
+    {
+      "month": "2023-04",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "დვაბზუ": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 68030.59,
+          "net": -68030.59
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 51257.16000000015,
+          "expenses": 0.0,
+          "net": 51257.16000000015
+        }
+      },
+      "total": {
+        "pos_income": 51257.16000000015,
+        "expenses": 68030.59,
+        "net": -16773.429999999847
+      }
+    },
+    {
+      "month": "2023-05",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "დვაბზუ": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 64958.92999999999,
+          "net": -64958.92999999999
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 53083.64000000001,
+          "expenses": 0.0,
+          "net": 53083.64000000001
+        }
+      },
+      "total": {
+        "pos_income": 53083.64000000001,
+        "expenses": 64958.92999999999,
+        "net": -11875.289999999986
+      }
+    },
+    {
+      "month": "2023-06",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 4759.779999999993,
+          "expenses": 3752.8000000000006,
+          "net": 1006.9799999999927
+        },
+        "დვაბზუ": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 74149.34,
+          "net": -74149.34
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 57724.810000000114,
+          "expenses": 0.0,
+          "net": 57724.810000000114
+        }
+      },
+      "total": {
+        "pos_income": 62484.590000000106,
+        "expenses": 77902.14,
+        "net": -15417.549999999894
+      }
+    },
+    {
+      "month": "2023-07",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 18265.13000000004,
+          "expenses": 10365.820000000002,
+          "net": 7899.3100000000395
+        },
+        "დვაბზუ": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 98197.45000000001,
+          "net": -98197.45000000001
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 76258.53999999978,
+          "expenses": 0.0,
+          "net": 76258.53999999978
+        }
+      },
+      "total": {
+        "pos_income": 94523.66999999981,
+        "expenses": 108563.27000000002,
+        "net": -14039.60000000021
+      }
+    },
+    {
+      "month": "2023-08",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 77959.57000000039,
+          "expenses": 43881.45999999999,
+          "net": 34078.11000000039
+        },
+        "დვაბზუ": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 100844.37999999999,
+          "net": -100844.37999999999
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 47717.34999999997,
+          "expenses": 0.0,
+          "net": 47717.34999999997
+        }
+      },
+      "total": {
+        "pos_income": 125676.92000000036,
+        "expenses": 144725.83999999997,
+        "net": -19048.919999999605
+      }
+    },
+    {
+      "month": "2023-09",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 60198.08999999998,
+          "expenses": 50602.95000000001,
+          "net": 9595.13999999997
+        },
+        "დვაბზუ": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 73992.17,
+          "net": -73992.17
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 51555.900000000154,
+          "expenses": 0.0,
+          "net": 51555.900000000154
+        }
+      },
+      "total": {
+        "pos_income": 111753.99000000014,
+        "expenses": 124595.12000000001,
+        "net": -12841.129999999874
+      }
+    },
+    {
+      "month": "2023-10",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 52172.38000000016,
+          "expenses": 45200.16999999999,
+          "net": 6972.2100000001665
+        },
+        "დვაბზუ": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 65884.72999999998,
+          "net": -65884.72999999998
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 48450.600000000144,
+          "expenses": 0.0,
+          "net": 48450.600000000144
+        }
+      },
+      "total": {
+        "pos_income": 100622.9800000003,
+        "expenses": 111084.89999999997,
+        "net": -10461.919999999664
+      }
+    },
+    {
+      "month": "2023-11",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 50728.43000000018,
+          "expenses": 60753.990000000005,
+          "net": -10025.559999999823
+        },
+        "დვაბზუ": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 55937.579999999994,
+          "net": -55937.579999999994
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 51308.27999999999,
+          "expenses": 0.0,
+          "net": 51308.27999999999
+        }
+      },
+      "total": {
+        "pos_income": 102036.71000000017,
+        "expenses": 116691.57,
+        "net": -14654.85999999984
+      }
+    },
+    {
+      "month": "2023-12",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 57861.620000000294,
+          "expenses": 58131.479999999996,
+          "net": -269.85999999970227
+        },
+        "დვაბზუ": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 53594.09,
+          "net": -53594.09
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 44380.14000000018,
+          "expenses": 0.0,
+          "net": 44380.14000000018
+        }
+      },
+      "total": {
+        "pos_income": 102241.76000000047,
+        "expenses": 111725.56999999999,
+        "net": -9483.809999999517
+      }
+    },
+    {
+      "month": "2024-01",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 48140.850000000195,
+          "expenses": 46099.94,
+          "net": 2040.9100000001927
+        },
+        "დვაბზუ": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 58801.740000000005,
+          "net": -58801.740000000005
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 43915.11000000027,
+          "expenses": 0.0,
+          "net": 43915.11000000027
+        }
+      },
+      "total": {
+        "pos_income": 92055.96000000046,
+        "expenses": 104901.68000000001,
+        "net": -12845.71999999955
+      }
+    },
+    {
+      "month": "2024-02",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 49380.06000000015,
+          "expenses": 49671.36999999999,
+          "net": -291.3099999998376
+        },
+        "დვაბზუ": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 43791.32,
+          "net": -43791.32
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 32935.12000000005,
+          "expenses": 0.0,
+          "net": 32935.12000000005
+        }
+      },
+      "total": {
+        "pos_income": 82315.1800000002,
+        "expenses": 93462.68999999999,
+        "net": -11147.509999999791
+      }
+    },
+    {
+      "month": "2024-03",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 57381.039999999906,
+          "expenses": 44175.37,
+          "net": 13205.669999999904
+        },
+        "დვაბზუ": {
+          "pos_income": 0.0,
+          "expenses": 0.0,
+          "net": 0.0
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 54784.09000000001,
+          "net": -54784.09000000001
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 35205.530000000035,
+          "expenses": 0.0,
+          "net": 35205.530000000035
+        }
+      },
+      "total": {
+        "pos_income": 92586.56999999995,
+        "expenses": 98959.46000000002,
+        "net": -6372.890000000072
+      }
+    },
+    {
+      "month": "2024-04",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 57484.61999999978,
+          "expenses": 57363.350000000006,
+          "net": 121.26999999977124
+        },
+        "დვაბზუ": {
+          "pos_income": 2839.6399999999994,
+          "expenses": 0.0,
+          "net": 2839.6399999999994
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 47509.97,
+          "net": -47509.97
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 34198.43000000009,
+          "expenses": 0.0,
+          "net": 34198.43000000009
+        }
+      },
+      "total": {
+        "pos_income": 94522.68999999986,
+        "expenses": 104873.32,
+        "net": -10350.63000000015
+      }
+    },
+    {
+      "month": "2024-05",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 58973.31999999965,
+          "expenses": 83436.86999999998,
+          "net": -24463.55000000033
+        },
+        "დვაბზუ": {
+          "pos_income": 50032.7499999999,
+          "expenses": 1000.0,
+          "net": 49032.7499999999
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 45722.2,
+          "net": -45722.2
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 17688.579999999987,
+          "expenses": 0.0,
+          "net": 17688.579999999987
+        }
+      },
+      "total": {
+        "pos_income": 126694.64999999953,
+        "expenses": 130159.06999999998,
+        "net": -3464.4200000004494
+      }
+    },
+    {
+      "month": "2024-06",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 70962.3599999999,
+          "expenses": 90618.77,
+          "net": -19656.410000000105
+        },
+        "დვაბზუ": {
+          "pos_income": 61195.33999999999,
+          "expenses": 9500.0,
+          "net": 51695.33999999999
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 28148.78,
+          "net": -28148.78
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 1338.2700000000007,
+          "expenses": 0.0,
+          "net": 1338.2700000000007
+        }
+      },
+      "total": {
+        "pos_income": 133495.96999999988,
+        "expenses": 128267.55,
+        "net": 5228.419999999882
+      }
+    },
+    {
+      "month": "2024-07",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 76126.65000000002,
+          "expenses": 111141.4,
+          "net": -35014.74999999997
+        },
+        "დვაბზუ": {
+          "pos_income": 72444.46999999991,
+          "expenses": 10700.0,
+          "net": 61744.469999999914
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 45841.11,
+          "net": -45841.11
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 1388.0700000000004,
+          "expenses": 0.0,
+          "net": 1388.0700000000004
+        }
+      },
+      "total": {
+        "pos_income": 149959.18999999994,
+        "expenses": 167682.51,
+        "net": -17723.320000000065
+      }
+    },
+    {
+      "month": "2024-08",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 109315.78000000057,
+          "expenses": 191578.09999999995,
+          "net": -82262.31999999938
+        },
+        "დვაბზუ": {
+          "pos_income": 129928.87000000013,
+          "expenses": 12413.3,
+          "net": 117515.57000000012
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 52871.48,
+          "net": -52871.48
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 8138.629999999991,
+          "expenses": 0.0,
+          "net": 8138.629999999991
+        }
+      },
+      "total": {
+        "pos_income": 247383.2800000007,
+        "expenses": 256862.87999999995,
+        "net": -9479.59999999925
+      }
+    },
+    {
+      "month": "2024-09",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 81203.79000000017,
+          "expenses": 166003.21999999997,
+          "net": -84799.4299999998
+        },
+        "დვაბზუ": {
+          "pos_income": 101400.40000000018,
+          "expenses": 9490.0,
+          "net": 91910.40000000018
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 32076.25,
+          "net": -32076.25
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 3336.609999999998,
+          "expenses": 0.0,
+          "net": 3336.609999999998
+        }
+      },
+      "total": {
+        "pos_income": 185940.80000000034,
+        "expenses": 207569.46999999997,
+        "net": -21628.669999999634
+      }
+    },
+    {
+      "month": "2024-10",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 56337.50999999983,
+          "expenses": 125335.83999999995,
+          "net": -68998.33000000013
+        },
+        "დვაბზუ": {
+          "pos_income": 65333.229999999654,
+          "expenses": 10349.2,
+          "net": 54984.02999999965
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 26522.120000000003,
+          "net": -26522.120000000003
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 22567.220000000056,
+          "expenses": 0.0,
+          "net": 22567.220000000056
+        }
+      },
+      "total": {
+        "pos_income": 144237.95999999953,
+        "expenses": 162207.15999999995,
+        "net": -17969.20000000042
+      }
+    },
+    {
+      "month": "2024-11",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 40853.60999999977,
+          "expenses": 78427.21,
+          "net": -37573.60000000024
+        },
+        "დვაბზუ": {
+          "pos_income": 55979.729999999894,
+          "expenses": 8072.9,
+          "net": 47906.82999999989
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 65732.10999999999,
+          "net": -65732.10999999999
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 12031.39,
+          "expenses": 0.0,
+          "net": 12031.39
+        }
+      },
+      "total": {
+        "pos_income": 108864.72999999966,
+        "expenses": 152232.21999999997,
+        "net": -43367.49000000031
+      }
+    },
+    {
+      "month": "2024-12",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 41629.58999999991,
+          "expenses": 116670.09999999999,
+          "net": -75040.51000000008
+        },
+        "დვაბზუ": {
+          "pos_income": 52737.4700000001,
+          "expenses": 10552.099999999999,
+          "net": 42185.370000000104
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 44091.68,
+          "net": -44091.68
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 6157.149999999997,
+          "expenses": 0.0,
+          "net": 6157.149999999997
+        }
+      },
+      "total": {
+        "pos_income": 100524.21,
+        "expenses": 171313.87999999998,
+        "net": -70789.66999999997
+      }
+    },
+    {
+      "month": "2025-01",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 49418.669999999955,
+          "expenses": 83873.33,
+          "net": -34454.66000000005
+        },
+        "დვაბზუ": {
+          "pos_income": 61846.819999999854,
+          "expenses": 14112.1,
+          "net": 47734.719999999856
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 26210.26,
+          "net": -26210.26
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 7714.769999999998,
+          "expenses": 0.0,
+          "net": 7714.769999999998
+        }
+      },
+      "total": {
+        "pos_income": 118980.25999999982,
+        "expenses": 124195.69,
+        "net": -5215.430000000182
+      }
+    },
+    {
+      "month": "2025-02",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 39952.750000000065,
+          "expenses": 121219.93999999999,
+          "net": -81267.18999999992
+        },
+        "დვაბზუ": {
+          "pos_income": 52407.22999999991,
+          "expenses": 10718.369999999999,
+          "net": 41688.85999999991
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 25249.989999999998,
+          "net": -25249.989999999998
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 9890.43,
+          "expenses": 0.0,
+          "net": 9890.43
+        }
+      },
+      "total": {
+        "pos_income": 102250.40999999997,
+        "expenses": 157188.3,
+        "net": -54937.890000000014
+      }
+    },
+    {
+      "month": "2025-03",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 48740.4099999999,
+          "expenses": 73083.57,
+          "net": -24343.160000000105
+        },
+        "დვაბზუ": {
+          "pos_income": 54851.05000000007,
+          "expenses": 12307.439999999999,
+          "net": 42543.61000000007
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 31369.999999999993,
+          "net": -31369.999999999993
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 7633.309999999995,
+          "expenses": 0.0,
+          "net": 7633.309999999995
+        }
+      },
+      "total": {
+        "pos_income": 111224.76999999996,
+        "expenses": 116761.01000000001,
+        "net": -5536.240000000049
+      }
+    },
+    {
+      "month": "2025-04",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 46371.08000000026,
+          "expenses": 97187.05999999998,
+          "net": -50815.97999999973
+        },
+        "დვაბზუ": {
+          "pos_income": 65904.58,
+          "expenses": 8751.0,
+          "net": 57153.58
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 32519.78,
+          "net": -32519.78
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 5894.739999999985,
+          "expenses": 0.0,
+          "net": 5894.739999999985
+        }
+      },
+      "total": {
+        "pos_income": 118170.40000000026,
+        "expenses": 138457.83999999997,
+        "net": -20287.43999999971
+      }
+    },
+    {
+      "month": "2025-05",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 45441.36000000024,
+          "expenses": 100385.66,
+          "net": -54944.29999999976
+        },
+        "დვაბზუ": {
+          "pos_income": 69901.72000000002,
+          "expenses": 6161.6,
+          "net": 63740.12000000002
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 27824.670000000002,
+          "net": -27824.670000000002
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 14783.670000000011,
+          "expenses": 0.0,
+          "net": 14783.670000000011
+        }
+      },
+      "total": {
+        "pos_income": 130126.75000000026,
+        "expenses": 134371.93000000002,
+        "net": -4245.17999999976
+      }
+    },
+    {
+      "month": "2025-06",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 55929.15000000003,
+          "expenses": 146049.14000000007,
+          "net": -90119.99000000005
+        },
+        "დვაბზუ": {
+          "pos_income": 77531.18000000036,
+          "expenses": 5667.0,
+          "net": 71864.18000000036
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 24611.6,
+          "net": -24611.6
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 16986.460000000006,
+          "expenses": 0.0,
+          "net": 16986.460000000006
+        }
+      },
+      "total": {
+        "pos_income": 150446.7900000004,
+        "expenses": 176327.74000000008,
+        "net": -25880.94999999969
+      }
+    },
+    {
+      "month": "2025-07",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 58542.24000000009,
+          "expenses": 172777.00000000003,
+          "net": -114234.75999999994
+        },
+        "დვაბზუ": {
+          "pos_income": 97688.50000000076,
+          "expenses": 12096.11,
+          "net": 85592.39000000076
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 25246.75,
+          "net": -25246.75
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 28666.530000000042,
+          "expenses": 0.0,
+          "net": 28666.530000000042
+        }
+      },
+      "total": {
+        "pos_income": 184897.2700000009,
+        "expenses": 210119.86000000004,
+        "net": -25222.589999999152
+      }
+    },
+    {
+      "month": "2025-08",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 60956.35000000027,
+          "expenses": 221971.31000000003,
+          "net": -161014.95999999976
+        },
+        "დვაბზუ": {
+          "pos_income": 159386.47999999908,
+          "expenses": 13693.64,
+          "net": 145692.8399999991
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 38455.58,
+          "net": -38455.58
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 37887.819999999956,
+          "expenses": 0.0,
+          "net": 37887.819999999956
+        }
+      },
+      "total": {
+        "pos_income": 258230.6499999993,
+        "expenses": 274120.53,
+        "net": -15889.880000000732
+      }
+    },
+    {
+      "month": "2025-09",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 49226.31000000048,
+          "expenses": 172839.84999999998,
+          "net": -123613.5399999995
+        },
+        "დვაბზუ": {
+          "pos_income": 117754.25000000025,
+          "expenses": 13681.97,
+          "net": 104072.28000000025
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 35681.85,
+          "net": -35681.85
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 23719.94000000004,
+          "expenses": 0.0,
+          "net": 23719.94000000004
+        }
+      },
+      "total": {
+        "pos_income": 190700.50000000076,
+        "expenses": 222203.66999999998,
+        "net": -31503.169999999227
+      }
+    },
+    {
+      "month": "2025-10",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 65704.37000000023,
+          "expenses": 154683.04,
+          "net": -88978.66999999978
+        },
+        "დვაბზუ": {
+          "pos_income": 100311.8299999994,
+          "expenses": 23063.18,
+          "net": 77248.64999999941
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 25249.39,
+          "net": -25249.39
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 16066.550000000032,
+          "expenses": 0.0,
+          "net": 16066.550000000032
+        }
+      },
+      "total": {
+        "pos_income": 182082.74999999965,
+        "expenses": 202995.61,
+        "net": -20912.860000000335
+      }
+    },
+    {
+      "month": "2025-11",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 57207.240000000114,
+          "expenses": 121681.86,
+          "net": -64474.619999999886
+        },
+        "დვაბზუ": {
+          "pos_income": 75706.23000000019,
+          "expenses": 25289.100000000002,
+          "net": 50417.13000000018
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 20694.0,
+          "net": -20694.0
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 17653.93000000002,
+          "expenses": 0.0,
+          "net": 17653.93000000002
+        }
+      },
+      "total": {
+        "pos_income": 150567.4000000003,
+        "expenses": 167664.96,
+        "net": -17097.559999999678
+      }
+    },
+    {
+      "month": "2025-12",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 65362.32000000008,
+          "expenses": 138888.67,
+          "net": -73526.34999999993
+        },
+        "დვაბზუ": {
+          "pos_income": 78363.76000000027,
+          "expenses": 27031.62,
+          "net": 51332.140000000276
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 40144.35000000001,
+          "net": -40144.35000000001
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 18085.90000000003,
+          "expenses": 0.0,
+          "net": 18085.90000000003
+        }
+      },
+      "total": {
+        "pos_income": 161811.9800000004,
+        "expenses": 206064.64,
+        "net": -44252.659999999625
+      }
+    },
+    {
+      "month": "2026-01",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 46043.96999999974,
+          "expenses": 118858.34999999998,
+          "net": -72814.38000000024
+        },
+        "დვაბზუ": {
+          "pos_income": 65525.09000000021,
+          "expenses": 6478.63,
+          "net": 59046.46000000021
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 26547.93,
+          "net": -26547.93
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 24672.430000000044,
+          "expenses": 0.0,
+          "net": 24672.430000000044
+        }
+      },
+      "total": {
+        "pos_income": 136241.49,
+        "expenses": 151884.90999999997,
+        "net": -15643.419999999984
+      }
+    },
+    {
+      "month": "2026-02",
+      "objects": {
+        "ოზურგეთი": {
+          "pos_income": 47918.19999999985,
+          "expenses": 106811.68000000001,
+          "net": -58893.480000000156
+        },
+        "დვაბზუ": {
+          "pos_income": 61958.09000000003,
+          "expenses": 7179.5,
+          "net": 54778.59000000003
+        },
+        "საერთო": {
+          "pos_income": 0.0,
+          "expenses": 24358.05,
+          "net": -24358.05
+        },
+        "გაუნაწილებელი": {
+          "pos_income": 13206.860000000033,
+          "expenses": 0.0,
+          "net": 13206.860000000033
+        }
+      },
+      "total": {
+        "pos_income": 123083.14999999992,
+        "expenses": 138349.23,
+        "net": -15266.080000000089
+      }
+    }
+  ],
+  "response_meta": {
+    "tab": "forecast",
+    "trust_label": "forecast",
+    "trust_badge_ka": "Forecast",
+    "scope_ka": "SMA-based management forecast.",
+    "notes_ka": [
+      "Forecast არ არის audited result."
+    ],
+    "generated_at": "2026-04-12T19:16:02Z",
+    "source_manifest_summary": {
+      "group_count": 6,
+      "total_files": 25,
+      "total_size_bytes": 353489830,
+      "missing_groups": [],
+      "groups": {
+        "bog_bank_statement": {
+          "label_ka": "BOG ბანკის ამონაწერი",
+          "file_count": 4,
+          "total_size_bytes": 24608869,
+          "latest_modified_at": "2026-04-11T09:33:54.065151Z"
+        },
+        "tbc_bank_statement": {
+          "label_ka": "TBC ბანკის ამონაწერი",
+          "file_count": 5,
+          "total_size_bytes": 6326178,
+          "latest_modified_at": "2026-04-11T09:31:03.247878Z"
+        },
+        "rs_waybills": {
+          "label_ka": "RS ზედნადები",
+          "file_count": 5,
+          "total_size_bytes": 7957504,
+          "latest_modified_at": "2026-04-07T12:56:24.832216Z"
+        },
+        "imported_products": {
+          "label_ka": "შემოტანილი პროდუქცია",
+          "file_count": 4,
+          "total_size_bytes": 109031509,
+          "latest_modified_at": "2026-04-11T09:08:39.628083Z"
+        },
+        "retail_sales_dvabzu": {
+          "label_ka": "გაყიდული პროდუქცია — დვაბზუ",
+          "file_count": 3,
+          "total_size_bytes": 78578486,
+          "latest_modified_at": "2026-04-11T00:49:03.317474Z"
+        },
+        "retail_sales_ozurgeti": {
+          "label_ka": "გაყიდული პროდუქცია — ოზურგეთი",
+          "file_count": 4,
+          "total_size_bytes": 126987284,
+          "latest_modified_at": "2026-04-09T22:39:30.970313Z"
+        }
+      }
+    },
+    "partial": false,
+    "partial_reason": ""
+  }
+}

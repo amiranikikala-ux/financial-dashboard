@@ -1,8 +1,22 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import * as XLSX from 'xlsx';
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import './index.css';
-import Analytics from './Analytics.jsx';
 import { STORAGE_KEY, extractTaxId, mergeSupplier } from './financeMerge.js';
+import DashboardTabs from './components/DashboardTabs.jsx';
+import TrustBanner from './components/TrustBanner.jsx';
+import useHashTab from './hooks/useHashTab.js';
+import { fetchApiJson } from './lib/api.js';
+
+const Analytics = lazy(() => import('./Analytics.jsx'));
+const PnL = lazy(() => import('./PnL.jsx'));
+const WorkingCapital = lazy(() => import('./WorkingCapital.jsx'));
+const Ratios = lazy(() => import('./Ratios.jsx'));
+const Forecast = lazy(() => import('./Forecast.jsx'));
+const Budget = lazy(() => import('./Budget.jsx'));
+const Valuation = lazy(() => import('./Valuation.jsx'));
+const Executive = lazy(() => import('./Executive.jsx'));
+const ImportedProducts = lazy(() => import('./ImportedProducts.jsx'));
+const RetailSales = lazy(() => import('./RetailSales.jsx'));
+const SupplierModal = lazy(() => import('./SupplierModal.jsx'));
 
 /** TBC ხარჯები — tbc_expense_categories.json რიგით */
 const TBC_TAXONOMY_ORDER = [
@@ -61,50 +75,330 @@ function previewSnippet(text, maxLen = 96) {
   return t.length > maxLen ? `${t.slice(0, maxLen)}…` : t;
 }
 
+const WAYBILL_SORT_OPTIONS = [
+  { value: 'amount_asc', label: 'თანხა ზრდით' },
+  { value: 'amount_desc', label: 'თანხა კლებით' },
+  { value: 'date_desc', label: 'თარიღი ახლიდან' },
+  { value: 'date_asc', label: 'თარიღი ძველიდან' },
+];
+const WAYBILL_SERVER_LIMIT = 5000;
+
+const SUPPLIER_SORT_OPTIONS = [
+  { value: 'debt_asc', label: 'დავალიანება ზრდადობით' },
+  { value: 'debt_desc', label: 'დავალიანება კლებადობით' },
+];
+
+function getWaybillAmount(wb) {
+  const effective = Number(wb?.effective_amount);
+  if (Number.isFinite(effective)) return effective;
+  const nominal = Number(wb?.nominal_amount);
+  return Number.isFinite(nominal) ? nominal : 0;
+}
+
+async function loadXlsxModule() {
+  const xlsxModule = await import('xlsx');
+  return xlsxModule.default || xlsxModule;
+}
+
 function App() {
-  const [data, setData] = useState({ suppliers: [], waybills: [], meta: {} });
+  const [data, setData] = useState({ suppliers: [], waybills: [], waybills_summary: null, meta: {} });
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('suppliers'); // suppliers | waybills | analytics | cashflow
+  const [error, setError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [activeTab, setActiveTab] = useHashTab('suppliers');
   const [showPosDailyTable, setShowPosDailyTable] = useState(false);
-  const [showTbcExpenseDetailPanel, setShowTbcExpenseDetailPanel] = useState(true);
+  const [showSalaryBreakdown, setShowSalaryBreakdown] = useState(false);
+  const [showUnmatchedBankDetail, setShowUnmatchedBankDetail] = useState(false);
+  const [showTbcExpenseDetailPanel, setShowTbcExpenseDetailPanel] = useState(false);
   const [posDateFrom, setPosDateFrom] = useState('');
   const [posDateTo, setPosDateTo] = useState('');
   const [showDownloads, setShowDownloads] = useState(false);
+  const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [searchName, setSearchName] = useState('');
+  const [supplierSortKey, setSupplierSortKey] = useState('debt_asc');
+  const [waybillSortKey, setWaybillSortKey] = useState('amount_asc');
   const [payAmount, setPayAmount] = useState('');
   const [localPayments, setLocalPayments] = useState({});
+  const [importedProductsResponse, setImportedProductsResponse] = useState(null);
+  const [importedProductsLoading, setImportedProductsLoading] = useState(false);
+  const [importedProductsError, setImportedProductsError] = useState(null);
+  const [importedProductsLoadedKey, setImportedProductsLoadedKey] = useState(-1);
+  const [cashflowTbcExpensesDetail, setCashflowTbcExpensesDetail] = useState({
+    key: '',
+    detail: null,
+    error: '',
+    loading: false,
+  });
+  const [cashflowBankUnmatchedDetail, setCashflowBankUnmatchedDetail] = useState({
+    key: '',
+    detail: null,
+    error: '',
+    loading: false,
+  });
 
   useEffect(() => {
-    fetch(`/data.json?v=${Date.now()}`, { cache: 'no-store' })
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(`data.json: HTTP ${res.status} — გაუშვი პროექტის ფოლდერში: python generate_dashboard_data.py`);
+    const POLLING_INTERVAL = 5 * 60 * 1000;
+    let lastFetchTime = Date.now();
+
+    const triggerReload = () => {
+      lastFetchTime = Date.now();
+      setReloadKey((k) => k + 1);
+    };
+
+    const intervalId = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        triggerReload();
+      }
+    }, POLLING_INTERVAL);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const now = Date.now();
+        if (now - lastFetchTime >= POLLING_INTERVAL) {
+          triggerReload();
         }
-        return res.json();
-      })
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'imported_products' || activeTab === 'waybills' || activeTab === 'cashflow') return undefined;
+    let active = true;
+    const requestTab = activeTab === 'pnl' ? 'pnl_summary' : activeTab;
+    setTimeout(() => {
+      if (active) {
+        setLoading(true);
+        setError(null);
+      }
+    }, 0);
+    fetchApiJson(`/api/data?tab=${requestTab}`)
       .then((json) => {
+        if (!active) return;
         setData({
           suppliers: [],
           waybills: [],
+          waybills_summary: null,
           meta: null,
           ...json,
         });
         setLoading(false);
       })
       .catch((err) => {
+        if (!active) return;
         console.error('Failed to load data:', err);
+        setError(err.message);
         setLoading(false);
       });
-  }, []);
+    return () => {
+      active = false;
+    };
+  }, [activeTab, reloadKey]);
+
+  useEffect(() => {
+    if (activeTab !== 'waybills') return undefined;
+
+    let active = true;
+    const controller = new AbortController();
+    const handle = setTimeout(() => {
+      if (!active) return;
+      setTimeout(() => {
+        if (active) {
+          setLoading(true);
+          setError(null);
+        }
+      }, 0);
+
+      const params = new URLSearchParams({
+        tab: 'waybills',
+        sort: waybillSortKey,
+        limit: String(WAYBILL_SERVER_LIMIT),
+      });
+      const needle = searchName.trim();
+      if (needle) params.set('q', needle);
+
+      fetchApiJson(`/api/data?${params.toString()}`, { signal: controller.signal })
+        .then((json) => {
+          if (!active) return;
+          setData({
+            suppliers: [],
+            waybills: [],
+            waybills_summary: null,
+            meta: null,
+            ...json,
+          });
+          setLoading(false);
+        })
+        .catch((err) => {
+          if (!active || err.name === 'AbortError') return;
+          console.error('Failed to load waybills:', err);
+          setError(err.message);
+          setLoading(false);
+        });
+    }, 600);
+
+    return () => {
+      active = false;
+      clearTimeout(handle);
+      controller.abort();
+    };
+  }, [activeTab, reloadKey, searchName, waybillSortKey]);
+
+  useEffect(() => {
+    if (activeTab !== 'cashflow') return undefined;
+
+    let active = true;
+    const controller = new AbortController();
+    setTimeout(() => {
+      if (active) {
+        setLoading(true);
+        setError(null);
+      }
+    }, 0);
+
+    fetchApiJson('/api/data?tab=cashflow_summary', { signal: controller.signal })
+      .then((json) => {
+        if (!active) return;
+        setData({
+          suppliers: [],
+          waybills: [],
+          waybills_summary: null,
+          meta: null,
+          ...json,
+        });
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (!active || err.name === 'AbortError') return;
+        console.error('Failed to load cashflow summary:', err);
+        setError(err.message);
+        setLoading(false);
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [activeTab, reloadKey]);
+
+  useEffect(() => {
+    if (activeTab !== 'imported_products') return undefined;
+    if (importedProductsLoadedKey === reloadKey && importedProductsResponse) return undefined;
+
+    let active = true;
+    const controller = new AbortController();
+    setTimeout(() => {
+      if (!active) return;
+      setImportedProductsLoading(true);
+      setImportedProductsError(null);
+    }, 0);
+
+    fetchApiJson('/api/data?tab=imported_products', { signal: controller.signal })
+      .then((json) => {
+        if (!active) return;
+        setImportedProductsResponse(json);
+        setImportedProductsLoadedKey(reloadKey);
+        setImportedProductsLoading(false);
+      })
+      .catch((err) => {
+        if (!active || err.name === 'AbortError') return;
+        console.error('Failed to load imported products:', err);
+        setImportedProductsError(err.message);
+        setImportedProductsLoading(false);
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [activeTab, importedProductsLoadedKey, importedProductsResponse, reloadKey]);
+
+  const cashflowDetailKey = `cashflow:${reloadKey}`;
+
+  useEffect(() => {
+    if (activeTab !== 'cashflow' || !showTbcExpenseDetailPanel) return undefined;
+    if (cashflowTbcExpensesDetail.key === cashflowDetailKey) return undefined;
+
+    let active = true;
+    const controller = new AbortController();
+
+    fetchApiJson('/api/data?tab=cashflow_tbc_expenses_detail', { signal: controller.signal })
+      .then((json) => {
+        if (!active) return;
+        setCashflowTbcExpensesDetail({
+          key: cashflowDetailKey,
+          detail: json.tbc_expenses || {},
+          error: '',
+          loading: false,
+        });
+      })
+      .catch((err) => {
+        if (!active || err.name === 'AbortError') return;
+        console.error('Failed to load cashflow TBC expense detail:', err);
+        setCashflowTbcExpensesDetail({
+          key: cashflowDetailKey,
+          detail: null,
+          error: err.message || 'უცნობი შეცდომა',
+          loading: false,
+        });
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [activeTab, cashflowDetailKey, cashflowTbcExpensesDetail.key, showTbcExpenseDetailPanel]);
+
+  useEffect(() => {
+    if (activeTab !== 'cashflow' || !showUnmatchedBankDetail) return undefined;
+    if (cashflowBankUnmatchedDetail.key === cashflowDetailKey) return undefined;
+
+    let active = true;
+    const controller = new AbortController();
+
+    fetchApiJson('/api/data?tab=cashflow_bank_unmatched_detail', { signal: controller.signal })
+      .then((json) => {
+        if (!active) return;
+        setCashflowBankUnmatchedDetail({
+          key: cashflowDetailKey,
+          detail: json.bank_unmatched_analysis || {},
+          error: '',
+          loading: false,
+        });
+      })
+      .catch((err) => {
+        if (!active || err.name === 'AbortError') return;
+        console.error('Failed to load unmatched bank detail:', err);
+        setCashflowBankUnmatchedDetail({
+          key: cashflowDetailKey,
+          detail: null,
+          error: err.message || 'უცნობი შეცდომა',
+          loading: false,
+        });
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [activeTab, cashflowBankUnmatchedDetail.key, cashflowDetailKey, showUnmatchedBankDetail]);
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object') setLocalPayments(parsed);
+        if (parsed && typeof parsed === 'object') {
+          setTimeout(() => setLocalPayments(parsed), 0);
+        }
       }
-    } catch (_) {
+    } catch {
       /* ignore */
     }
   }, []);
@@ -115,8 +409,10 @@ function App() {
     if (!Array.isArray(raw) || !raw.length) return;
     const days = raw.map((r) => r.day).filter(Boolean).sort();
     if (!days.length) return;
-    setPosDateFrom((f) => f || days[0]);
-    setPosDateTo((t) => t || days[days.length - 1]);
+    setTimeout(() => {
+      setPosDateFrom((f) => f || days[0]);
+      setPosDateTo((t) => t || days[days.length - 1]);
+    }, 0);
   }, [loading, data.pos_terminal_income]);
 
   const posDailySorted = useMemo(() => {
@@ -156,13 +452,13 @@ function App() {
     setLocalPayments(next);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    } catch (_) {
+    } catch {
       /* ignore */
     }
   }, []);
 
   const formatNumber = (num) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'GEL' }).format(
+    return new Intl.NumberFormat('ka-GE', { style: 'currency', currency: 'GEL', maximumFractionDigits: 0 }).format(
       num || 0
     );
   };
@@ -172,7 +468,7 @@ function App() {
     return Number.isNaN(n) ? 0 : Math.max(0, n);
   };
 
-  const getDisplay = (sup) => {
+  const getDisplay = useCallback((sup) => {
     const m = mergeSupplier(sup, localPayments);
     return {
       tid: extractTaxId(sup['ორგანიზაცია']),
@@ -180,16 +476,30 @@ function App() {
       paid: m.paid,
       debt: m.debt,
       tp0: m.paidBase,
+      strictBankPaid: m.bank,
       manualTotal: m.manualTotal,
+      paymentScope: sup.payment_scope || 'unpaid_or_unmatched',
+      paymentScopeNote: sup.payment_scope_note || '',
     };
-  };
+  }, [localPayments]);
 
   const nameNeedle = searchName.trim().toLowerCase();
-  const filteredSuppliers = (data.suppliers || []).filter((s) => {
-    const org = String(s['ორგანიზაცია'] || '');
-    if (nameNeedle && !org.toLowerCase().includes(nameNeedle)) return false;
-    return true;
-  });
+  const filteredSuppliers = useMemo(() => {
+    const filtered = (data.suppliers || []).filter((s) => {
+      const org = String(s['ორგანიზაცია'] || '');
+      if (nameNeedle && !org.toLowerCase().includes(nameNeedle)) return false;
+      return true;
+    });
+    const sorted = [...filtered];
+    sorted.sort((a, b) => {
+      const debtA = Number(getDisplay(a).debt) || 0;
+      const debtB = Number(getDisplay(b).debt) || 0;
+      if (supplierSortKey === 'debt_asc' && debtA !== debtB) return debtA - debtB;
+      if (supplierSortKey === 'debt_desc' && debtA !== debtB) return debtB - debtA;
+      return String(a['ორგანიზაცია'] || '').localeCompare(String(b['ორგანიზაცია'] || ''));
+    });
+    return sorted;
+  }, [data.suppliers, nameNeedle, supplierSortKey, getDisplay]);
 
   const payVal = parseMoney(payAmount);
   const canRecord =
@@ -214,7 +524,7 @@ function App() {
 
   const hasLocalPayments = Object.values(localPayments).some((v) => Number(v) > 0);
 
-  const handleDownloadSuppliersExcel = () => {
+  const handleDownloadSuppliersExcel = async () => {
     if (!filteredSuppliers.length) return;
     const rows = filteredSuppliers.map((sup) => {
       const d = getDisplay(sup);
@@ -223,11 +533,14 @@ function App() {
         რაოდენობა: sup.waybills_count,
         ნომინალური: Number(sup.total_nominal) || 0,
         'რეალური ჯამი': Number(sup.total_effective) || 0,
+        'strict ბანკით გადახდა': d.strictBankPaid ?? 0,
         'ნაღდით გადახდა': d.manualTotal ?? 0,
         'სულ გადახდილი': d.paid,
         დავალიანება: d.debt,
+        'გადახდის scope': d.paymentScope,
       };
     });
+    const XLSX = await loadXlsxModule();
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'მომწოდებლები');
@@ -251,7 +564,7 @@ function App() {
     URL.revokeObjectURL(a.href);
   };
 
-  const handleDownloadBankExpensesExcel = () => {
+  const handleDownloadBankExpensesExcel = async () => {
     const rows = expenseCategories.map((c) => ({
       კატეგორია: c.label_ka || c.id,
       ბუღალტრული_როლი:
@@ -260,6 +573,7 @@ function App() {
       ჯამი: Number(c.total_ge) || 0,
     }));
     if (!rows.length) return;
+    const XLSX = await loadXlsxModule();
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'TBC ხარჯები');
@@ -267,25 +581,32 @@ function App() {
     XLSX.writeFile(wb, `TBC_ხარჯები_შეჯამება_${stamp}.xlsx`);
   };
 
-  const filteredWaybills = (data.waybills || []).filter((w) => {
-    if (!nameNeedle) return true;
-    return (
-      w.supplier?.toLowerCase().includes(nameNeedle) ||
-      String(w.waybill_number || '')
-        .toLowerCase()
-        .includes(nameNeedle)
-    );
-  });
+  const filteredWaybills = useMemo(() => {
+    return Array.isArray(data.waybills) ? data.waybills : [];
+  }, [data.waybills]);
 
-  const tbcCardIncome = data.tbc_card_income || {};
+  const waybillsSummary = data.waybills_summary || {};
+
   const posTerminalIncome = data.pos_terminal_income || {};
   const tbcExpenses = data.tbc_expenses || { categories: [] };
+  const tbcExpensesDetail =
+    cashflowTbcExpensesDetail.key === cashflowDetailKey ? (cashflowTbcExpensesDetail.detail || null) : null;
   const tbcSamurneo = data.tbc_samurneo || {};
   const taxFlow = data.tax_flow || {};
   const tbcFoodmartCashback = data.tbc_foodmart_cashback || {};
   const unmatchedAnalysis = data.bank_unmatched_analysis || { categories: [] };
+  const unmatchedAnalysisDetail =
+    cashflowBankUnmatchedDetail.key === cashflowDetailKey
+      ? (cashflowBankUnmatchedDetail.detail || null)
+      : null;
   const expenseCategories = Array.isArray(tbcExpenses.categories) ? tbcExpenses.categories : [];
+  const expenseDetailCategories = Array.isArray(tbcExpensesDetail?.categories)
+    ? tbcExpensesDetail.categories
+    : expenseCategories;
   const unmatchedCategories = Array.isArray(unmatchedAnalysis.categories) ? unmatchedAnalysis.categories : [];
+  const unmatchedDetailCategories = Array.isArray(unmatchedAnalysisDetail?.categories)
+    ? unmatchedAnalysisDetail.categories
+    : unmatchedCategories;
   const salaryCategory = expenseCategories.find((c) => c?.id === 'salary_payments') || null;
   const salaryTotal = Number(salaryCategory?.total_ge) || 0;
   const posTotal = Number(posTerminalIncome.total_ge) || 0;
@@ -301,13 +622,6 @@ function App() {
       ? Number(operatingExplicit) || 0
       : Math.max(0, grandTbcExpenseAll - treasuryTbcExpenseCat);
   const netCashflow = posTotal - totalExpenses;
-  const incomeMonthly =
-    Array.isArray(posTerminalIncome.monthly_summary) && posTerminalIncome.monthly_summary.length > 0
-      ? posTerminalIncome.monthly_summary
-      : Array.isArray(tbcCardIncome.monthly_summary)
-        ? tbcCardIncome.monthly_summary
-        : [];
-  const expenseMonthly = Array.isArray(tbcExpenses.monthly_summary) ? tbcExpenses.monthly_summary : [];
   const salaryBreakdown = Array.isArray(tbcExpenses.salary_breakdown) ? tbcExpenses.salary_breakdown : [];
   const unmatchedTotal = Number(unmatchedAnalysis.total_ge) || 0;
   const unmatchedUncategorized = Number(unmatchedAnalysis.uncategorized_total_ge) || 0;
@@ -339,94 +653,115 @@ function App() {
   const unmatchedManualSplit = unmatchedCategories.filter((c) => unmatchedManualSplitIds.includes(String(c?.id || '')));
   const unmatchedManualSplitTotal = unmatchedManualSplit.reduce((acc, c) => acc + (Number(c?.total_ge) || 0), 0);
 
-  const bankTaxonomyCategories = useMemo(() => {
+  const bankTaxonomyCategories = (() => {
     const byId = Object.fromEntries(
-      unmatchedCategories.map((c) => [String(c?.id || ''), c]),
+      unmatchedDetailCategories.map((c) => [String(c?.id || ''), c]),
     );
     const ordered = BANK_TAXONOMY_ORDER.map((id) => byId[id]).filter(Boolean);
     const seen = new Set(ordered.map((c) => String(c.id)));
-    const rest = unmatchedCategories
+    const rest = unmatchedDetailCategories
       .filter((c) => c && !seen.has(String(c.id)))
       .sort((a, b) => String(a.id).localeCompare(String(b.id)));
     return [...ordered, ...rest];
-  }, [unmatchedCategories]);
+  })();
 
-  const tbcTaxonomyCategories = useMemo(() => {
+  const tbcTaxonomyCategories = (() => {
     const byId = Object.fromEntries(
-      expenseCategories.map((c) => [String(c?.id || ''), c]),
+      expenseDetailCategories.map((c) => [String(c?.id || ''), c]),
     );
     const ordered = TBC_TAXONOMY_ORDER.map((id) => byId[id]).filter(Boolean);
     const seen = new Set(ordered.map((c) => String(c.id)));
-    const rest = expenseCategories
+    const rest = expenseDetailCategories
       .filter((c) => c && !seen.has(String(c.id)))
       .sort((a, b) => String(a.id).localeCompare(String(b.id)));
     return [...ordered, ...rest];
-  }, [expenseCategories]);
+  })();
+  const cashflowTbcDetailLoading =
+    activeTab === 'cashflow' &&
+    showTbcExpenseDetailPanel &&
+    (cashflowTbcExpensesDetail.key !== cashflowDetailKey ||
+      cashflowTbcExpensesDetail.loading);
+  const cashflowTbcDetailError =
+    cashflowTbcExpensesDetail.key === cashflowDetailKey ? cashflowTbcExpensesDetail.error : '';
+  const cashflowBankDetailLoading =
+    activeTab === 'cashflow' &&
+    showUnmatchedBankDetail &&
+    (cashflowBankUnmatchedDetail.key !== cashflowDetailKey ||
+      cashflowBankUnmatchedDetail.loading);
+  const cashflowBankDetailError =
+    cashflowBankUnmatchedDetail.key === cashflowDetailKey ? cashflowBankUnmatchedDetail.error : '';
   const confidenceBadgeClass = (raw) => {
     const v = String(raw || 'low').toLowerCase();
     if (v === 'high') return 'badge conf-high';
     if (v === 'medium') return 'badge conf-medium';
     return 'badge conf-low';
   };
+  const expectedTab = activeTab === 'pnl' ? 'pnl_summary' : activeTab === 'cashflow' ? 'cashflow_summary' : activeTab;
+  const currentResponseMeta = activeTab === 'imported_products'
+    ? importedProductsResponse?.response_meta ?? null
+    : data.response_meta?.tab === expectedTab
+      ? data.response_meta
+      : null;
+  const currentMeta = activeTab === 'imported_products'
+    ? importedProductsResponse?.meta ?? data.meta
+    : data.meta;
+  const monthlyPnl = Array.isArray(data.monthly_pnl) ? data.monthly_pnl : [];
+  const supplierAging = Array.isArray(data.supplier_aging) ? data.supplier_aging : [];
+  const agingSummary = data.aging_summary || {};
+  const apMonthlyTrend = Array.isArray(data.ap_monthly_trend) ? data.ap_monthly_trend : [];
+  const financialRatios = data.financial_ratios || null;
+  const forecastBlock = data.forecast || null;
+  const budgetBlock = data.budget || null;
+  const companyValuation = data.company_valuation || null;
+  const executiveSummary = data.executive_summary || null;
+  const paymentScopeSummary = currentMeta?.payment_scope_summary || {};
+  const truthBoundarySummary = currentMeta?.truth_boundary_summary || {};
+  const suppliersOnlyJournalOrBank = Number(currentMeta?.suppliers_only_journal_or_bank) || 0;
+  const showGlobalError = Boolean(error) && activeTab !== 'imported_products';
+  const showGlobalLoading = loading && activeTab !== 'imported_products';
+  const tabSuspenseFallback = <div className="loading">იტვირთება გვერდი...</div>;
 
   return (
     <div className="dashboard-container">
-      {loading ? (
+      {showGlobalError && (
+        <div className="local-pay-banner" style={{ background: '#ef4444', color: '#fff' }} role="alert">
+          <strong>შეცდომა:</strong> {error}
+          <button type="button" onClick={() => setReloadKey((v) => v + 1)} style={{ marginLeft: 16, padding: '4px 8px', background: '#fff', color: '#ef4444', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
+            თავიდან ცდა
+          </button>
+        </div>
+      )}
+      {showGlobalLoading ? (
         <div className="loading">იტვირთება მონაცემები...</div>
       ) : (
         <>
       <header>
-        <div>
+        <div className="header-brand">
           <h1>RS Dashboard</h1>
           <div className="subtitle">ფინანსური ანალიზი და ზედნადებების კონტროლი</div>
-          {data.meta != null && (
+          {currentMeta != null && (
             <div className="subtitle meta-hint">
-              ნაღდით გადახდა (manual_payments.csv):{' '}
-              {formatNumber(data.meta.manual_payments_total)}{' '}
-              — {data.meta.manual_payments_rows_with_amount || 0} კომპანიაზე თანხით &gt; 0
-              {Number(data.meta.suppliers_only_journal_or_bank) > 0 && (
-                <>
-                  {' '}
-                  | RS-ის გარეშე სიაში: {data.meta.suppliers_only_journal_or_bank}
-                </>
+              strict ბანკი: {formatNumber(currentMeta.strict_bank_only_total)} · supplier total_paid:{' '}
+              {formatNumber(currentMeta.combined_supplier_paid_total)} · manual/off-bank:{' '}
+              {formatNumber(currentMeta.manual_payments_total)} · {currentMeta.manual_payments_rows_with_amount || 0} კომპ.
+              {Number(currentMeta.suppliers_only_journal_or_bank) > 0 && (
+                <> | RS-ის გარეშე: {currentMeta.suppliers_only_journal_or_bank}</>
               )}
             </div>
           )}
         </div>
-        <div className="tabs">
-          <button
-            type="button"
-            className={`tab-btn ${activeTab === 'suppliers' ? 'active' : ''}`}
-            onClick={() => setActiveTab('suppliers')}
-          >
-            🏢 მომწოდებლები
-          </button>
-          <button
-            type="button"
-            className={`tab-btn ${activeTab === 'waybills' ? 'active' : ''}`}
-            onClick={() => setActiveTab('waybills')}
-          >
-            📄 ზედნადებები
-          </button>
-          <button
-            type="button"
-            className={`tab-btn ${activeTab === 'analytics' ? 'active' : ''}`}
-            onClick={() => setActiveTab('analytics')}
-          >
-            📊 ანალიტიკა
-          </button>
-          <button
-            type="button"
-            className={`tab-btn ${activeTab === 'cashflow' ? 'active' : ''}`}
-            onClick={() => setActiveTab('cashflow')}
-          >
-            💳 ბანკის ანალიზი
-          </button>
-        </div>
+        <DashboardTabs activeTab={activeTab} onTabChange={setActiveTab} />
       </header>
 
       <div className="panel">
-        {activeTab !== 'analytics' && activeTab !== 'cashflow' && (
+        <TrustBanner
+          responseMeta={currentResponseMeta}
+          waybillsSummary={waybillsSummary}
+          paymentScopeSummary={paymentScopeSummary}
+          truthBoundarySummary={truthBoundarySummary}
+          suppliersOnlyJournalOrBank={suppliersOnlyJournalOrBank}
+        />
+        {activeTab !== 'analytics' && activeTab !== 'cashflow' && activeTab !== 'imported_products' && activeTab !== 'retail_sales' && activeTab !== 'pnl' && activeTab !== 'working_capital' && activeTab !== 'ratios' && activeTab !== 'forecast' && activeTab !== 'budget' && activeTab !== 'valuation' && activeTab !== 'executive' && (
         <div className="controls controls-filters">
           <label className="filter-field">
             <span className="filter-label">
@@ -445,6 +780,38 @@ function App() {
               autoComplete="off"
             />
           </label>
+          {activeTab === 'suppliers' && (
+            <label className="filter-field">
+              <span className="filter-label">სორტი</span>
+              <select
+                className="pnl-month-select"
+                value={supplierSortKey}
+                onChange={(e) => setSupplierSortKey(e.target.value)}
+              >
+                {SUPPLIER_SORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {activeTab === 'waybills' && (
+            <label className="filter-field">
+              <span className="filter-label">სორტი</span>
+              <select
+                className="pnl-month-select"
+                value={waybillSortKey}
+                onChange={(e) => setWaybillSortKey(e.target.value)}
+              >
+                {WAYBILL_SORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           {activeTab === 'suppliers' && (
             <>
               <label className="filter-field">
@@ -524,9 +891,63 @@ function App() {
         )}
 
         {activeTab === 'analytics' ? (
-          <Analytics suppliers={data.suppliers} localPayments={localPayments} />
+          <Suspense fallback={tabSuspenseFallback}>
+            <Analytics suppliers={data.suppliers} localPayments={localPayments} />
+          </Suspense>
+        ) : activeTab === 'imported_products' ? (
+          <Suspense fallback={tabSuspenseFallback}>
+            <ImportedProducts
+              response={importedProductsResponse}
+              loading={importedProductsLoading}
+              error={importedProductsError}
+              onRetry={() => setReloadKey((v) => v + 1)}
+            />
+          </Suspense>
+        ) : activeTab === 'pnl' ? (
+          <Suspense fallback={tabSuspenseFallback}>
+            <PnL monthlyPnl={monthlyPnl} />
+          </Suspense>
+        ) : activeTab === 'working_capital' ? (
+          <Suspense fallback={tabSuspenseFallback}>
+            <WorkingCapital
+              supplierAging={supplierAging}
+              agingSummary={agingSummary}
+              apMonthlyTrend={apMonthlyTrend}
+              paymentScopeSummary={paymentScopeSummary}
+              truthBoundarySummary={truthBoundarySummary}
+              onSupplierClick={setSelectedSupplier}
+            />
+          </Suspense>
+        ) : activeTab === 'ratios' ? (
+          <Suspense fallback={tabSuspenseFallback}>
+            <Ratios financialRatios={financialRatios} />
+          </Suspense>
+        ) : activeTab === 'forecast' ? (
+          <Suspense fallback={tabSuspenseFallback}>
+            <Forecast forecast={forecastBlock} monthlyPnl={monthlyPnl} />
+          </Suspense>
+        ) : activeTab === 'budget' ? (
+          <Suspense fallback={tabSuspenseFallback}>
+            <Budget budget={budgetBlock} />
+          </Suspense>
+        ) : activeTab === 'valuation' ? (
+          <Suspense fallback={tabSuspenseFallback}>
+            <Valuation companyValuation={companyValuation} />
+          </Suspense>
+        ) : activeTab === 'executive' ? (
+          <Suspense fallback={tabSuspenseFallback}>
+            <Executive executiveSummary={executiveSummary} />
+          </Suspense>
+        ) : activeTab === 'retail_sales' ? (
+          <Suspense fallback={tabSuspenseFallback}>
+            <RetailSales retailSales={data.retail_sales} />
+          </Suspense>
         ) : activeTab === 'cashflow' ? (
           <div className="cashflow-page">
+            <div className="tab-hero">
+              <span className="tab-hero-title">💳 ბანკის ანალიზი</span>
+              <span className="tab-hero-desc">POS შემოსავალი · TBC/BOG ხარჯი · არამიბმული ბანკი · სამეურნეო მოძრაობა</span>
+            </div>
             <div className="kpi-grid">
               <div
                 className="kpi-card kpi-card--accent"
@@ -540,7 +961,7 @@ function App() {
                   }
                 }}
                 title="დააჭირე POS დღიური — თარიღის დიაპაზონით"
-                style={{ cursor: 'pointer' }}
+                style={{ cursor: 'pointer', borderBottom: '3px solid #22c55e' }}
               >
                 <div className="kpi-label">POS ტერმინალი (TBC + BOG)</div>
                 <div className="kpi-value amount-positive">{formatNumber(posTotal)}</div>
@@ -561,11 +982,8 @@ function App() {
                     setShowTbcExpenseDetailPanel((v) => !v);
                   }
                 }}
-                title={
-                  tbcExpenses.ledger_note_ka ||
-                  'დააჭირე — ცხრილი და დეტალური კატეგორიები'
-                }
-                style={{ cursor: 'pointer' }}
+                title={tbcExpenses.ledger_note_ka || 'დააჭირე — ცხრილი და დეტალური კატეგორიები'}
+                style={{ cursor: 'pointer', borderBottom: '3px solid #ef4444' }}
               >
                 <div className="kpi-label">TBC — საოპერაციო ხარჯი (კატეგორიები)</div>
                 <div className="kpi-value amount-negative">{formatNumber(totalExpenses)}</div>
@@ -580,12 +998,61 @@ function App() {
                     : '▶ TBC ხარჯები — ცხრილი და დეტალური კატეგორიები'}
                 </div>
               </div>
-              <div className="kpi-card">
+              <div
+                className="kpi-card"
+                role="button"
+                tabIndex={0}
+                onClick={() => setShowSalaryBreakdown((v) => !v)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setShowSalaryBreakdown((v) => !v);
+                  }
+                }}
+                title="იგივე მონაცემია, რაც ქვემოთ იყო ცხრილად — TBC ხელფასის ხაზების დაყოფა ტექსტით"
+                style={{ cursor: 'pointer' }}
+              >
                 <div className="kpi-label">ხელფასები</div>
                 <div className="kpi-value amount-negative">{formatNumber(salaryTotal)}</div>
                 <div className="kpi-sub">{salaryCategory?.line_count || 0} ხაზი</div>
+                <div className="kpi-sub">
+                  {showSalaryBreakdown
+                    ? '▼ დახურვა'
+                    : '▶ ხელფასის ჯგუფი (ოზურგეთი / დვაბზუ / სხვა)'}
+                </div>
+                {showSalaryBreakdown && (
+                  <div
+                    className="salary-breakdown-embed"
+                    onClick={(e) => e.stopPropagation()}
+                    role="presentation"
+                  >
+                    <table className="salary-breakdown-table">
+                      <thead>
+                        <tr>
+                          <th>ჯგუფი</th>
+                          <th>ჯამი</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {salaryBreakdown.map((r) => (
+                          <tr key={r.name}>
+                            <td>{r.name}</td>
+                            <td className="amount-negative">{formatNumber(r.total_ge)}</td>
+                          </tr>
+                        ))}
+                        {salaryBreakdown.length === 0 && (
+                          <tr>
+                            <td colSpan="2" style={{ textAlign: 'center' }}>
+                              breakdown ცარიელია
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-              <div className="kpi-card">
+              <div className="kpi-card" style={{ borderBottom: `3px solid ${netCashflow >= 0 ? '#22c55e' : '#ef4444'}` }}>
                 <div className="kpi-label">სუფთა სხვაობა (შემოსავალი - ხარჯი)</div>
                 <div className={`kpi-value ${netCashflow >= 0 ? 'amount-positive' : 'amount-negative'}`}>
                   {formatNumber(netCashflow)}
@@ -596,13 +1063,25 @@ function App() {
               </div>
               <div
                 className="kpi-card"
+                role="button"
+                tabIndex={0}
+                onClick={() => setShowUnmatchedBankDetail((v) => !v)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setShowUnmatchedBankDetail((v) => !v);
+                  }
+                }}
                 title={unmatchedAnalysis.ledger_note_ka || ''}
+                style={{ cursor: 'pointer' }}
               >
                 <div className="kpi-label">არამიბმული ბანკი (სულ)</div>
                 <div className="kpi-value amount-negative">{formatNumber(unmatchedTotal)}</div>
                 <div className="kpi-sub">{unmatchedAnalysis.line_count || 0} ხაზი</div>
                 <div className="kpi-sub">
-                  ბუღალტრულად ბევრი აქ — ხარჯებია, მაგრამ RS მომწოდებელთან ვერ მიბმულია (ვრცლად — tooltip)
+                  {showUnmatchedBankDetail
+                    ? '▼ დახურვა — დეტალური კატეგორიები'
+                    : '▶ დეტალური კატეგორიები (BOG/TBC, ნიმუშის ხაზები)'}
                 </div>
               </div>
               <div className="kpi-card">
@@ -665,6 +1144,147 @@ function App() {
                 <div className="kpi-sub">{foodmartCashbackLines} ხაზი</div>
               </div>
             </div>
+
+            {showUnmatchedBankDetail && (
+              <div className="unmatched-bank-detail-panel">
+                <p className="taxonomy-lead unmatched-bank-detail-lead">
+                  RS მომწოდებელთან რომ არ მიებმება — ავტომატური წესები + ხელით override; ქვემოთ ნიმუშის ხაზები
+                  (BOG/TBC). ბუღალტრულად ბევრი ხარჯია, მაგრამ RS ID-ზე ვერ მიბმულია.
+                </p>
+                {cashflowBankDetailLoading ? (
+                  <p className="chart-desc">დეტალური ნიმუშები იტვირთება...</p>
+                ) : null}
+                {cashflowBankDetailError ? (
+                  <p className="chart-desc amount-negative">
+                    დეტალური ნიმუშები ვერ ჩაიტვირთა: {cashflowBankDetailError}
+                  </p>
+                ) : null}
+                <div className="taxonomy-grid">
+                  {bankTaxonomyCategories.map((cat) => {
+                    const prev = Array.isArray(cat.rows_preview) ? cat.rows_preview : [];
+                    const show = prev.slice(0, 10);
+                    return (
+                      <div className="taxonomy-card" key={`bank-tax-panel-${cat.id}`}>
+                        <div className="taxonomy-card-head">
+                          <span className="taxonomy-card-title">{cat.label_ka || cat.id}</span>
+                          <code className="taxonomy-card-id">{cat.id}</code>
+                        </div>
+                        <div className="taxonomy-card-stats">
+                          <span
+                            className={
+                              cat.id === 'other_unclassified' ? 'amount-negative' : 'amount-neutral'
+                            }
+                          >
+                            {formatNumber(cat.total_ge)}
+                          </span>
+                          <span className="taxonomy-meta">{cat.line_count || 0} ხაზი</span>
+                          <span className={confidenceBadgeClass(cat.confidence)}>
+                            {String(cat.confidence || 'low').toUpperCase()}
+                          </span>
+                        </div>
+                        <details className="taxonomy-details">
+                          <summary>
+                            ნიმუშის ხაზები ({show.length}
+                            {prev.length > 10 ? ` / ${prev.length}` : ''})
+                          </summary>
+                          <div className="taxonomy-preview-list">
+                            {show.length === 0 && (
+                              <div className="taxonomy-preview-empty">პრევიუ არ არის</div>
+                            )}
+                            {show.map((r, idx) => (
+                              <div className="taxonomy-preview-row" key={`bank-panel-${cat.id}-${idx}`}>
+                                <div className="taxonomy-preview-top">
+                                  <span className="taxonomy-preview-date">{r.თარიღი || '—'}</span>
+                                  {r.ბანკი ? (
+                                    <span className="taxonomy-preview-bank">{r.ბანკი}</span>
+                                  ) : null}
+                                  <span className="taxonomy-preview-amt amount-negative">
+                                    {formatNumber(r.თანხა)}
+                                  </span>
+                                </div>
+                                <span className="taxonomy-preview-desc">
+                                  {previewSnippet(
+                                    r.ოპერაციის_შინაარსი || r.მიმღები_სახელი || r.მიზეზი,
+                                    120,
+                                  )}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      </div>
+                    );
+                  })}
+                </div>
+                {bankTaxonomyCategories.length === 0 && (
+                  <p className="taxonomy-empty">არამიბმული კატეგორიები ცარიელია.</p>
+                )}
+
+                <div className="table-wrapper cashflow-table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>არამიბმული კატეგორია (ავტომატური)</th>
+                        <th>სანდოობა</th>
+                        <th>ხაზები</th>
+                        <th>ჯამი</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {unmatchedCategories.map((cat) => (
+                        <tr key={`um-row-${cat.id}`}>
+                          <td>{cat.label_ka || cat.id}</td>
+                          <td>
+                            <span className={confidenceBadgeClass(cat.confidence)}>
+                              {String(cat.confidence || 'low').toUpperCase()}
+                            </span>
+                          </td>
+                          <td>{cat.line_count || 0}</td>
+                          <td className={cat.id === 'other_unclassified' ? 'amount-negative' : 'amount-neutral'}>
+                            {formatNumber(cat.total_ge)}
+                          </td>
+                        </tr>
+                      ))}
+                      {unmatchedCategories.length === 0 && (
+                        <tr>
+                          <td colSpan="4" style={{ textAlign: 'center' }}>
+                            არამიბმული ავტომატური კატეგორიები ჯერ არ არის
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="table-wrapper cashflow-table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>TOP „სხვა“ პატერნი</th>
+                        <th>ხაზები</th>
+                        <th>ჯამი</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {unmatchedTop.map((r, idx) => (
+                        <tr key={`${r.signature}-${idx}`}>
+                          <td>{r.signature}</td>
+                          <td>{r.line_count || 0}</td>
+                          <td className="amount-negative">{formatNumber(r.total_ge)}</td>
+                        </tr>
+                      ))}
+                      {unmatchedTop.length === 0 && (
+                        <tr>
+                          <td colSpan="3" style={{ textAlign: 'center' }}>
+                            TOP პატერნები ჯერ არ არის
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             {showPosDailyTable && (
               <div className="pos-daily-panel">
@@ -792,6 +1412,14 @@ function App() {
                   <p className="taxonomy-lead">
                     იგივე წესები, რაც <code>tbc_expense_categories.json</code>-შია — ჯამი და ნიმუშის ხაზები.
                   </p>
+                  {cashflowTbcDetailLoading ? (
+                    <p className="chart-desc">დეტალური ნიმუშები იტვირთება...</p>
+                  ) : null}
+                  {cashflowTbcDetailError ? (
+                    <p className="chart-desc amount-negative">
+                      დეტალური ნიმუშები ვერ ჩაიტვირთა: {cashflowTbcDetailError}
+                    </p>
+                  ) : null}
                   <div className="taxonomy-grid">
                     {tbcTaxonomyCategories.map((cat) => {
                       const prev = Array.isArray(cat.rows_preview) ? cat.rows_preview : [];
@@ -841,75 +1469,6 @@ function App() {
               </div>
             )}
 
-            <div className="cashflow-grid-2">
-              <div className="table-wrapper cashflow-table">
-                <p className="taxonomy-lead" style={{ marginBottom: '0.5rem' }}>
-                  ყოველთვიური შემოსავალი = <strong>POS ტერმინალი (TBC + BOG)</strong> — იგივე ლოგიკა, რაც ზემოთ KPI და დღიური ცხრილი.
-                </p>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>თვე</th>
-                      <th>შემოსავალი (POS TBC+BOG)</th>
-                      <th>ხარჯი (TBC კატეგორიები)</th>
-                      <th>სხვაობა</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {incomeMonthly.map((im) => {
-                      const em = expenseMonthly.find((x) => x.month === im.month);
-                      const inAmt = Number(im.total_ge) || 0;
-                      const exAmt = Number(em?.total_ge) || 0;
-                      const delta = inAmt - exAmt;
-                      return (
-                        <tr key={im.month}>
-                          <td>{im.month}</td>
-                          <td className="amount-positive">{formatNumber(inAmt)}</td>
-                          <td className="amount-negative">{formatNumber(exAmt)}</td>
-                          <td className={delta >= 0 ? 'amount-positive' : 'amount-negative'}>
-                            {formatNumber(delta)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {incomeMonthly.length === 0 && (
-                      <tr>
-                        <td colSpan="4" style={{ textAlign: 'center' }}>
-                          თვეების ჭრილი ჯერ არ არის
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="table-wrapper cashflow-table">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>ხელფასის ჯგუფი</th>
-                      <th>ჯამი</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {salaryBreakdown.map((r) => (
-                      <tr key={r.name}>
-                        <td>{r.name}</td>
-                        <td className="amount-negative">{formatNumber(r.total_ge)}</td>
-                      </tr>
-                    ))}
-                    {salaryBreakdown.length === 0 && (
-                      <tr>
-                        <td colSpan="2" style={{ textAlign: 'center' }}>
-                          ხელფასის breakdown ჯერ არ არის
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
             <div className="cashflow-focus-grid">
               <div className="kpi-card kpi-card--accent">
                 <div className="kpi-label">ახალი დაყოფა — ფოკუსი</div>
@@ -931,138 +1490,6 @@ function App() {
                   </div>
                 </div>
               ))}
-            </div>
-
-            <div className="taxonomy-section">
-              <h3 className="taxonomy-heading">არამიბმული ბანკი — დეტალური კატეგორიები (ეკრანზე)</h3>
-              <p className="taxonomy-lead">
-                RS მომწოდებელთან რომ არ მიებმება — ავტომატური წესები + ხელით override; ქვემოთ ნიმუშის ხაზები
-                (BOG/TBC).
-              </p>
-              <div className="taxonomy-grid">
-                {bankTaxonomyCategories.map((cat) => {
-                  const prev = Array.isArray(cat.rows_preview) ? cat.rows_preview : [];
-                  const show = prev.slice(0, 10);
-                  return (
-                    <div className="taxonomy-card" key={`bank-tax-${cat.id}`}>
-                      <div className="taxonomy-card-head">
-                        <span className="taxonomy-card-title">{cat.label_ka || cat.id}</span>
-                        <code className="taxonomy-card-id">{cat.id}</code>
-                      </div>
-                      <div className="taxonomy-card-stats">
-                        <span
-                          className={
-                            cat.id === 'other_unclassified' ? 'amount-negative' : 'amount-neutral'
-                          }
-                        >
-                          {formatNumber(cat.total_ge)}
-                        </span>
-                        <span className="taxonomy-meta">{cat.line_count || 0} ხაზი</span>
-                        <span className={confidenceBadgeClass(cat.confidence)}>
-                          {String(cat.confidence || 'low').toUpperCase()}
-                        </span>
-                      </div>
-                      <details className="taxonomy-details">
-                        <summary>
-                          ნიმუშის ხაზები ({show.length}
-                          {prev.length > 10 ? ` / ${prev.length}` : ''})
-                        </summary>
-                        <div className="taxonomy-preview-list">
-                          {show.length === 0 && (
-                            <div className="taxonomy-preview-empty">პრევიუ არ არის</div>
-                          )}
-                          {show.map((r, idx) => (
-                            <div className="taxonomy-preview-row" key={`bank-${cat.id}-${idx}`}>
-                              <div className="taxonomy-preview-top">
-                                <span className="taxonomy-preview-date">{r.თარიღი || '—'}</span>
-                                {r.ბანკი ? (
-                                  <span className="taxonomy-preview-bank">{r.ბანკი}</span>
-                                ) : null}
-                                <span className="taxonomy-preview-amt amount-negative">
-                                  {formatNumber(r.თანხა)}
-                                </span>
-                              </div>
-                              <span className="taxonomy-preview-desc">
-                                {previewSnippet(
-                                  r.ოპერაციის_შინაარსი || r.მიმღები_სახელი || r.მიზეზი,
-                                  120,
-                                )}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </details>
-                    </div>
-                  );
-                })}
-              </div>
-              {bankTaxonomyCategories.length === 0 && (
-                <p className="taxonomy-empty">არამიბმული კატეგორიები ცარიელია.</p>
-              )}
-            </div>
-
-            <div className="table-wrapper cashflow-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>არამიბმული კატეგორია (ავტომატური)</th>
-                    <th>სანდოობა</th>
-                    <th>ხაზები</th>
-                    <th>ჯამი</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {unmatchedCategories.map((cat) => (
-                    <tr key={cat.id}>
-                      <td>{cat.label_ka || cat.id}</td>
-                      <td>
-                        <span className={confidenceBadgeClass(cat.confidence)}>
-                          {String(cat.confidence || 'low').toUpperCase()}
-                        </span>
-                      </td>
-                      <td>{cat.line_count || 0}</td>
-                      <td className={cat.id === 'other_unclassified' ? 'amount-negative' : 'amount-neutral'}>
-                        {formatNumber(cat.total_ge)}
-                      </td>
-                    </tr>
-                  ))}
-                  {unmatchedCategories.length === 0 && (
-                    <tr>
-                      <td colSpan="4" style={{ textAlign: 'center' }}>
-                        არამიბმული ავტომატური კატეგორიები ჯერ არ არის
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="table-wrapper cashflow-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>TOP „სხვა“ პატერნი</th>
-                    <th>ხაზები</th>
-                    <th>ჯამი</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {unmatchedTop.map((r, idx) => (
-                    <tr key={`${r.signature}-${idx}`}>
-                      <td>{r.signature}</td>
-                      <td>{r.line_count || 0}</td>
-                      <td className="amount-negative">{formatNumber(r.total_ge)}</td>
-                    </tr>
-                  ))}
-                  {unmatchedTop.length === 0 && (
-                    <tr>
-                      <td colSpan="3" style={{ textAlign: 'center' }}>
-                        TOP პატერნები ჯერ არ არის
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
             </div>
 
             <div className="cashflow-note">
@@ -1113,10 +1540,26 @@ function App() {
           </div>
         ) : (
           <>
+            {/* Tab Hero */}
+            <div className="tab-hero">
+              {activeTab === 'suppliers' ? (
+                <>
+                  <span className="tab-hero-title">🏢 მომწოდებლები</span>
+                  <span className="tab-hero-desc">RS ზედნადებების აგრეგაცია, ვალი და გადახდა</span>
+                </>
+              ) : (
+                <>
+                  <span className="tab-hero-title">📄 ზედნადებები</span>
+                  <span className="tab-hero-desc">RS ზედნადებების დეტალური სია</span>
+                </>
+              )}
+            </div>
+
             {activeTab === 'suppliers' ? (
               <div className="local-pay-banner local-pay-banner--short" role="status">
-                ერთი კომპანია ძებნაში → თანხა → <strong>გადახდის ჩაწერა</strong>. სამუდამოდ:{' '}
-                <strong>CSV ჩამოტვირთვა</strong> და ჩაამატე ფაილში, შემდეგ გენერაცია.
+                ერთი კომპანია ძებნაში → თანხა → <strong>გადახდის ჩაწერა</strong>. strict ბანკი და manual/off-bank
+                journal ახლა ცალ-ცალკეა ნაჩვენები. სამუდამოდ: <strong>CSV ჩამოტვირთვა</strong> და ჩაამატე
+                ფაილში, შემდეგ გენერაცია.
               </div>
             ) : null}
 
@@ -1127,7 +1570,7 @@ function App() {
               </div>
             ) : null}
 
-            <div className="table-wrapper">
+            <div className="table-wrapper table-premium">
               {activeTab === 'suppliers' ? (
                 <table>
               <thead>
@@ -1144,16 +1587,25 @@ function App() {
                   <th title="ფაქტობრივი ვალდებულება RS-ის მიხედვით: გაუქმებული = 0, უკან დაბრუნება = უარყოფითი. ამიტომ ხშირად ნაკლებია ნომინალზე — ეს ნორმაა.">
                     რეალური ჯამი
                   </th>
+                  <th title="მხოლოდ strict bank reconciliation-ით დამტკიცებული supplier payment">
+                    strict ბანკით გადახდა
+                  </th>
                   <th title="manual_payments.csv + ამ ბრაუზერში ჩაწერილი გადახდები">ნაღდით გადახდა</th>
                   <th>სულ გადახდილი</th>
                   <th>დავალიანება</th>
+                  <th>scope</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredSuppliers.map((sup, idx) => {
                   const d = getDisplay(sup);
                   return (
-                    <tr key={`${d.tid || 'x'}-${idx}`}>
+                    <tr
+                      key={`${d.tid || 'x'}-${idx}`}
+                      onClick={() => setSelectedSupplier(sup)}
+                      style={{ cursor: 'pointer' }}
+                      title="კლიკი — დეტალები"
+                    >
                       <td>{idx + 1}</td>
                       <td>{sup['ორგანიზაცია']}</td>
                       <td>{sup.waybills_count}</td>
@@ -1170,15 +1622,26 @@ function App() {
                         {Number(sup.total_returned) !== 0 ? formatNumber(sup.total_returned) : '—'}
                       </td>
                       <td className="amount-positive">{formatNumber(sup.total_effective)}</td>
+                      <td className="amount-positive">{formatNumber(d.strictBankPaid ?? 0)}</td>
                       <td className="amount-neutral">{formatNumber(d.manualTotal ?? 0)}</td>
                       <td className="amount-positive">{formatNumber(d.paid)}</td>
-                      <td className="amount-negative">{formatNumber(d.debt)}</td>
+                      <td
+                        className="amount-negative"
+                        style={d.debt > 0 ? { background: 'rgba(239,68,68,0.06)', fontWeight: 700 } : undefined}
+                      >
+                        {formatNumber(d.debt)}
+                      </td>
+                      <td>
+                        <span className="badge muted" title={d.paymentScopeNote}>
+                          {d.paymentScope}
+                        </span>
+                      </td>
                     </tr>
                   );
                 })}
                 {filteredSuppliers.length === 0 && (
                   <tr>
-                    <td colSpan="9" style={{ textAlign: 'center' }}>
+                    <td colSpan="11" style={{ textAlign: 'center' }}>
                       მონაცემები არ მოიძებნა
                     </td>
                   </tr>
@@ -1197,7 +1660,7 @@ function App() {
                 </tr>
               </thead>
               <tbody>
-                {filteredWaybills.slice(0, 1000).map((wb, idx) => {
+                {filteredWaybills.map((wb, idx) => {
                   let badgeClass = 'badge active';
                   let badgeText = 'აქტიური';
 
@@ -1223,7 +1686,7 @@ function App() {
                               : 'amount-positive'
                         }
                       >
-                        {formatNumber(wb.effective_amount || wb.nominal_amount)}
+                        {formatNumber(getWaybillAmount(wb))}
                       </td>
                       <td>
                         <span className={badgeClass}>{badgeText}</span>
@@ -1231,10 +1694,11 @@ function App() {
                     </tr>
                   );
                 })}
-                {filteredWaybills.length > 1000 && (
+                {waybillsSummary.has_more && (
                   <tr>
                     <td colSpan="5" style={{ textAlign: 'center', color: 'var(--warning)' }}>
-                      ჩაიტვირთა მხოლოდ პირველი 1000 ჩანაწერი
+                      ჩაიტვირთა მხოლოდ პირველი {formatNumber(waybillsSummary.returned_count || filteredWaybills.length)} ჩანაწერი
+                      {' '}({formatNumber(waybillsSummary.total_count || filteredWaybills.length)} შედეგიდან)
                     </td>
                   </tr>
                 )}
@@ -1253,6 +1717,16 @@ function App() {
         )}
       </div>
         </>
+      )}
+      {selectedSupplier && (
+        <Suspense fallback={tabSuspenseFallback}>
+          <SupplierModal
+            supplier={selectedSupplier}
+            agingData={supplierAging}
+            truthBoundarySummary={truthBoundarySummary}
+            onClose={() => setSelectedSupplier(null)}
+          />
+        </Suspense>
       )}
     </div>
   );

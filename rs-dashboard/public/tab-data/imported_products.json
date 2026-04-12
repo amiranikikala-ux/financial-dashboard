@@ -1,0 +1,6229 @@
+{
+  "meta": {
+    "manual_payments_total": 0.0,
+    "manual_payments_rows_with_amount": 0,
+    "suppliers_only_journal_or_bank": 4,
+    "bank_orphan_total_ge": 135350.0,
+    "bank_unmatched_total_ge": 13109.980000000003,
+    "bank_unmatched_line_count": 238,
+    "bank_unmatched_categorized_total_ge": 4823.35,
+    "bank_unmatched_uncategorized_total_ge": 8286.63,
+    "bank_unmatched_dynamic_promoted_total_ge": 154.6,
+    "bank_unmatched_confidence_high_ge": 4087.7300000000005,
+    "bank_unmatched_confidence_medium_ge": 310.88,
+    "bank_unmatched_confidence_low_ge": 8711.369999999999,
+    "bank_unmatched_manual_override_approved_lines": 0,
+    "bank_unmatched_manual_override_rejected_lines": 0,
+    "bank_recon_total_outgoing_amount": 5386780.86,
+    "bank_recon_matched_high_amount": 4516386.97,
+    "bank_recon_ambiguous_amount": 0.0,
+    "bank_recon_non_supplier_amount": 857283.9100000069,
+    "bank_recon_unmatched_amount": 13109.980000000003,
+    "bank_recon_skipped_amount": 0.0,
+    "tbc_card_income_total_ge": 3176399.880000085,
+    "tbc_card_income_line_count": 42419,
+    "pos_terminal_income_total_ge": 4657442.760000097,
+    "pos_terminal_income_tbc_total_ge": 3176399.880000085,
+    "pos_terminal_income_bog_total_ge": 1481042.880000011,
+    "tbc_expenses_grand_total_ge": 3758916.0900000003,
+    "tbc_expenses_operating_total_ge": 3732246.58,
+    "tbc_expenses_treasury_total_ge": 26669.51,
+    "tbc_expenses_total_lines": 7572,
+    "tbc_samurneo_expense_total_ge": 197973.95,
+    "tbc_samurneo_return_total_ge": 244400.0,
+    "tbc_samurneo_net_ge": 46426.04999999999,
+    "tax_out_total_ge": 112675.41,
+    "tax_in_total_ge": 46071.98,
+    "tax_treasury_in_total_ge": 46071.98,
+    "tax_treasury_in_line_count": 12,
+    "tax_net_ge": -66603.43,
+    "tbc_foodmart_cashback_total_ge": 313725.75000000006,
+    "tbc_foodmart_cashback_line_count": 33,
+    "retail_sales_row_count": 1462967,
+    "retail_sales_total_quantity": 1585003.5629000014,
+    "retail_sales_revenue_ge": 5039708.479997783,
+    "retail_sales_cost_ge": 4277066.030001483,
+    "retail_sales_profit_ge": 648931.6441000304,
+    "retail_sales_gross_margin_pct": 12.876372644877982,
+    "retail_sales_distinct_object_count": 2,
+    "retail_sales_distinct_category_count": 645,
+    "retail_sales_distinct_product_count": 9095,
+    "retail_sales_duplicate_excluded_file_count": 1,
+    "generated_at": "2026-04-12T19:16:02Z",
+    "source_manifest_summary": {
+      "group_count": 6,
+      "total_files": 25,
+      "total_size_bytes": 353489830,
+      "missing_groups": [],
+      "groups": {
+        "bog_bank_statement": {
+          "label_ka": "BOG ბანკის ამონაწერი",
+          "file_count": 4,
+          "total_size_bytes": 24608869,
+          "latest_modified_at": "2026-04-11T09:33:54.065151Z"
+        },
+        "tbc_bank_statement": {
+          "label_ka": "TBC ბანკის ამონაწერი",
+          "file_count": 5,
+          "total_size_bytes": 6326178,
+          "latest_modified_at": "2026-04-11T09:31:03.247878Z"
+        },
+        "rs_waybills": {
+          "label_ka": "RS ზედნადები",
+          "file_count": 5,
+          "total_size_bytes": 7957504,
+          "latest_modified_at": "2026-04-07T12:56:24.832216Z"
+        },
+        "imported_products": {
+          "label_ka": "შემოტანილი პროდუქცია",
+          "file_count": 4,
+          "total_size_bytes": 109031509,
+          "latest_modified_at": "2026-04-11T09:08:39.628083Z"
+        },
+        "retail_sales_dvabzu": {
+          "label_ka": "გაყიდული პროდუქცია — დვაბზუ",
+          "file_count": 3,
+          "total_size_bytes": 78578486,
+          "latest_modified_at": "2026-04-11T00:49:03.317474Z"
+        },
+        "retail_sales_ozurgeti": {
+          "label_ka": "გაყიდული პროდუქცია — ოზურგეთი",
+          "file_count": 4,
+          "total_size_bytes": 126987284,
+          "latest_modified_at": "2026-04-09T22:39:30.970313Z"
+        }
+      }
+    },
+    "config_validation": {
+      "ok": true,
+      "warning_count": 0,
+      "error_count": 0
+    },
+    "payment_scope_summary": {
+      "strict_bank_only_total": 4516386.97,
+      "manual_journal_total": 0,
+      "combined_supplier_paid_total": 4516386.97,
+      "strict_supplier_count": 192,
+      "manual_supplier_count": 0,
+      "combined_supplier_count": 192,
+      "strict_and_manual_overlap_count": 0,
+      "manual_only_supplier_count": 0,
+      "strict_only_supplier_count": 192,
+      "scope_notes": [
+        "strict_bank_only_total ითვლის მხოლოდ მაღალი სანდოობის bank-reconciled supplier matches-ს.",
+        "manual_journal_total ითვლის მხოლოდ manual/off-bank journal adjustments-ს.",
+        "combined_supplier_paid_total არის supplier-level total_paid მეტრიკების წყარო."
+      ],
+      "manual_only_suppliers_preview": [],
+      "strict_only_suppliers_preview": [
+        {
+          "tax_id": "01001006813",
+          "supplier_name": "მერაბ ჯაფარიძე",
+          "strict_bank_paid": 1400.0,
+          "manual_paid": 0.0,
+          "combined_paid": 1400.0,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "01016006672",
+          "supplier_name": "ლია ეჯოშვილი",
+          "strict_bank_paid": 190.0,
+          "manual_paid": 0.0,
+          "combined_paid": 190.0,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "01025003711",
+          "supplier_name": "01025003711",
+          "strict_bank_paid": 10100.0,
+          "manual_paid": 0.0,
+          "combined_paid": 10100.0,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "200040222",
+          "supplier_name": "შპს ასკანელი ძმები",
+          "strict_bank_paid": 550.0,
+          "manual_paid": 0.0,
+          "combined_paid": 550.0,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "200140267",
+          "supplier_name": "შპს კანტი",
+          "strict_bank_paid": 67885.21,
+          "manual_paid": 0.0,
+          "combined_paid": 67885.21,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "200172785",
+          "supplier_name": "შპს ტკბილი ქვეყანა",
+          "strict_bank_paid": 18115.359999999997,
+          "manual_paid": 0.0,
+          "combined_paid": 18115.359999999997,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "200179118",
+          "supplier_name": "შპს იფქლი",
+          "strict_bank_paid": 133140.43,
+          "manual_paid": 0.0,
+          "combined_paid": 133140.43,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "201948063",
+          "supplier_name": "სს კოკა-კოლა ბოთლერს ჯორჯია",
+          "strict_bank_paid": 20416.760000000002,
+          "manual_paid": 0.0,
+          "combined_paid": 20416.760000000002,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202061053",
+          "supplier_name": "შპს ზახარ",
+          "strict_bank_paid": 8600.0,
+          "manual_paid": 0.0,
+          "combined_paid": 8600.0,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202163292",
+          "supplier_name": "შპს ორიენტი",
+          "strict_bank_paid": 945.0,
+          "manual_paid": 0.0,
+          "combined_paid": 945.0,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202196426",
+          "supplier_name": "შპს ბი ემ ესი",
+          "strict_bank_paid": 4228.16,
+          "manual_paid": 0.0,
+          "combined_paid": 4228.16,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202227134",
+          "supplier_name": "შპს ევროპროდუქტი",
+          "strict_bank_paid": 1371.0,
+          "manual_paid": 0.0,
+          "combined_paid": 1371.0,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202230790",
+          "supplier_name": "შპს კომპანია ორბიტა",
+          "strict_bank_paid": 18532.8,
+          "manual_paid": 0.0,
+          "combined_paid": 18532.8,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202243401",
+          "supplier_name": "შპს ჯეოსტარი",
+          "strict_bank_paid": 4937.1,
+          "manual_paid": 0.0,
+          "combined_paid": 4937.1,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202246097",
+          "supplier_name": "შპს ალგანი",
+          "strict_bank_paid": 4514.84,
+          "manual_paid": 0.0,
+          "combined_paid": 4514.84,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202282369",
+          "supplier_name": "შპს ქართული სადისტრიბუციო-მარკეტინგული კომპანია",
+          "strict_bank_paid": 33243.89,
+          "manual_paid": 0.0,
+          "combined_paid": 33243.89,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202311738",
+          "supplier_name": "სს თ & რ დისტრიბუშენ",
+          "strict_bank_paid": 61533.200000000004,
+          "manual_paid": 0.0,
+          "combined_paid": 61533.200000000004,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "204487616",
+          "supplier_name": "შპს ნატახტარი 2005",
+          "strict_bank_paid": 20176.739999999998,
+          "manual_paid": 0.0,
+          "combined_paid": 20176.739999999998,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "204490390",
+          "supplier_name": "შპს კუმისი XXI",
+          "strict_bank_paid": 2757.75,
+          "manual_paid": 0.0,
+          "combined_paid": 2757.75,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "204516194",
+          "supplier_name": "შპს დილის პროდუქტები",
+          "strict_bank_paid": 4225.02,
+          "manual_paid": 0.0,
+          "combined_paid": 4225.02,
+          "source": "strict_bank_only"
+        }
+      ],
+      "strict_and_manual_overlap_preview": [],
+      "largest_manual_adjustments_preview": []
+    },
+    "truth_source_breakdown": {
+      "bank_tax_id": {
+        "rows": 4338,
+        "amount": 3193013.2800000007
+      },
+      "rs_legal_name_backstop": {
+        "rows": 2243,
+        "amount": 1027227.1200000002
+      },
+      "registry_iban": {
+        "rows": 453,
+        "amount": 295346.5699999998
+      },
+      "registry_alias": {
+        "rows": 2,
+        "amount": 800.0
+      }
+    },
+    "truth_boundary_summary": {
+      "summary_ka": "Strict supplier matching-ში `supplier_matching_registry.json` არის primary truth. RS supplier names რჩება exact-name backstop-ად, ხოლო legacy IBAN/alias რუკები audit-only truth-assist layer-ია და strict supplier totals-ში არ ერთვება.",
+      "badges_ka": [
+        "registry primary",
+        "RS backstop",
+        "legacy audit-only"
+      ],
+      "primary_supplier_truth_path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\Financial_Analysis\\supplier_matching_registry.json",
+      "registry_primary_supplier_count": 16,
+      "rs_backstop_supplier_count": 262,
+      "legacy_truth_assist_supplier_count": 10,
+      "strict_layers": [
+        "bank.raw_tax_id",
+        "bank.extracted_tax_id",
+        "supplier_matching_registry.official_name",
+        "supplier_matching_registry.alias",
+        "supplier_matching_registry.person_alias",
+        "supplier_matching_registry.iban",
+        "supplier_matching_registry.account_hint",
+        "rs_waybills.organization_name",
+        "rs_waybills.waybill_reference"
+      ],
+      "legacy_audit_only_layers": [
+        "legacy_truth_assist.partner_iban_map",
+        "legacy_truth_assist.known_aliases"
+      ]
+    },
+    "strict_bank_only_total": 4516386.97,
+    "combined_supplier_paid_total": 4516386.97,
+    "manual_vs_bank_gap_total": 0.0,
+    "reproducibility_report": {
+      "generated_at": "2026-04-12T19:16:02Z",
+      "source_manifest_summary": {
+        "group_count": 6,
+        "total_files": 25,
+        "total_size_bytes": 353489830,
+        "missing_groups": [],
+        "groups": {
+          "bog_bank_statement": {
+            "label_ka": "BOG ბანკის ამონაწერი",
+            "file_count": 4,
+            "total_size_bytes": 24608869,
+            "latest_modified_at": "2026-04-11T09:33:54.065151Z"
+          },
+          "tbc_bank_statement": {
+            "label_ka": "TBC ბანკის ამონაწერი",
+            "file_count": 5,
+            "total_size_bytes": 6326178,
+            "latest_modified_at": "2026-04-11T09:31:03.247878Z"
+          },
+          "rs_waybills": {
+            "label_ka": "RS ზედნადები",
+            "file_count": 5,
+            "total_size_bytes": 7957504,
+            "latest_modified_at": "2026-04-07T12:56:24.832216Z"
+          },
+          "imported_products": {
+            "label_ka": "შემოტანილი პროდუქცია",
+            "file_count": 4,
+            "total_size_bytes": 109031509,
+            "latest_modified_at": "2026-04-11T09:08:39.628083Z"
+          },
+          "retail_sales_dvabzu": {
+            "label_ka": "გაყიდული პროდუქცია — დვაბზუ",
+            "file_count": 3,
+            "total_size_bytes": 78578486,
+            "latest_modified_at": "2026-04-11T00:49:03.317474Z"
+          },
+          "retail_sales_ozurgeti": {
+            "label_ka": "გაყიდული პროდუქცია — ოზურგეთი",
+            "file_count": 4,
+            "total_size_bytes": 126987284,
+            "latest_modified_at": "2026-04-09T22:39:30.970313Z"
+          }
+        }
+      },
+      "config_validation": {
+        "ok": true,
+        "warning_count": 0,
+        "error_count": 0
+      },
+      "bank_unmatched_total_ge": 13109.980000000003,
+      "bank_recon_ambiguous_amount": 0.0,
+      "bank_recon_unmatched_amount": 13109.980000000003,
+      "truth_source_breakdown": {
+        "bank_tax_id": {
+          "rows": 4338,
+          "amount": 3193013.2800000007
+        },
+        "rs_legal_name_backstop": {
+          "rows": 2243,
+          "amount": 1027227.1200000002
+        },
+        "registry_iban": {
+          "rows": 453,
+          "amount": 295346.5699999998
+        },
+        "registry_alias": {
+          "rows": 2,
+          "amount": 800.0
+        }
+      },
+      "truth_boundary_summary": {
+        "summary_ka": "Strict supplier matching-ში `supplier_matching_registry.json` არის primary truth. RS supplier names რჩება exact-name backstop-ად, ხოლო legacy IBAN/alias რუკები audit-only truth-assist layer-ია და strict supplier totals-ში არ ერთვება.",
+        "badges_ka": [
+          "registry primary",
+          "RS backstop",
+          "legacy audit-only"
+        ],
+        "primary_supplier_truth_path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\Financial_Analysis\\supplier_matching_registry.json",
+        "registry_primary_supplier_count": 16,
+        "rs_backstop_supplier_count": 262,
+        "legacy_truth_assist_supplier_count": 10,
+        "strict_layers": [
+          "bank.raw_tax_id",
+          "bank.extracted_tax_id",
+          "supplier_matching_registry.official_name",
+          "supplier_matching_registry.alias",
+          "supplier_matching_registry.person_alias",
+          "supplier_matching_registry.iban",
+          "supplier_matching_registry.account_hint",
+          "rs_waybills.organization_name",
+          "rs_waybills.waybill_reference"
+        ],
+        "legacy_audit_only_layers": [
+          "legacy_truth_assist.partner_iban_map",
+          "legacy_truth_assist.known_aliases"
+        ]
+      },
+      "imported_products_truncation_suspected": false,
+      "retail_sales_duplicate_policy_mode": "exclude_suspected_until_explicit_policy",
+      "retail_sales_duplicate_excluded_file_count": 1
+    }
+  },
+  "download_files": [
+    "POS_ტერმინალი_TBC_BOG.xlsx",
+    "TBC_ბარათის_შემოსავალი.xlsx",
+    "TBC_დარჩენილი_არამიბმული_ანალიზი.xlsx",
+    "TBC_სამეურნეო_მოძრაობა.xlsx",
+    "TBC_ფუდმარტი_ქეშბექი.xlsx",
+    "TBC_ხარჯები_კატეგორიები.xlsx",
+    "ბანკი_non_supplier_ხაზები.xlsx",
+    "ბანკი_overrides_audit.xlsx",
+    "ბანკი_არამიბმული_კატეგორიები.xlsx",
+    "ბანკი_არამიბმული_ხაზები.xlsx",
+    "ბანკი_ბუნდოვანი_მიბმები.xlsx",
+    "ბანკი_მაღალი_სანდოობის_მიბმები.xlsx",
+    "ბანკი_სხვა_top20.xlsx",
+    "მომწოდებლები_RS.xlsx",
+    "საგადასახადო_მოძრაობა.xlsx",
+    "სახელმწიფო_ხაზინა_ჩარიცხვები.xlsx"
+  ],
+  "download_zip_file": "ყველა_ანგარიში.xlsx.zip",
+  "imported_products": {
+    "label_ka": "შემოტანილი პროდუქცია (reference)",
+    "notes_ka": "Reference/product-line წყარო imported-products export-იდან. CSV არის preferred source, legacy Excel reader fallback-ად რჩება. ეს ბლოკი არ ერთვება supplier debt-ში, RS truth totals-ში, bank reconciliation-ში და არსებულ AP ლოგიკაში. ფაილი, რომელსაც ზუსტად 20,000 ხაზი აქვს, შესაძლოა truncate/export limit იყოს, ამიტომ სრულობა გარანტირებული არ არის.",
+    "source_glob": "Financial_Analysis/შემოტანილი პროდუქცია/*.csv",
+    "source_format": "csv",
+    "sheet_name": null,
+    "date_basis_ka": "თვე/პერიოდი ითვლება ჯერ `გააქტიურების თარიღი`-ით, fallback — `ტრანსპორტირების დაწყების თარიღი`.",
+    "amount_basis_ka": "`საქონლის ფასი` — თანხა, `რაოდ.` — რაოდენობა.",
+    "files_found_count": 4,
+    "files_read_count": 4,
+    "files_error_count": 0,
+    "overall": {
+      "row_count": 176535,
+      "total_quantity": 2519488.006,
+      "total_amount_ge": 7438192.959999938,
+      "distinct_waybill_count": 21240,
+      "distinct_supplier_count": 267,
+      "distinct_product_count": 13344,
+      "date_range": {
+        "min": "2022-05-18",
+        "max": "2026-02-28"
+      }
+    },
+    "truncation_threshold_rows": 20000,
+    "truncation_suspected_any": false,
+    "truncation_suspected_file_count": 0,
+    "supplier_top_products_limit": 10,
+    "by_status": [
+      {
+        "status": "დასრულებული",
+        "row_count": 110543,
+        "total_ge": 5803015.359999881
+      },
+      {
+        "status": "აქტიური",
+        "row_count": 60646,
+        "total_ge": 1488363.1999999767
+      },
+      {
+        "status": "გაუქმებული",
+        "row_count": 4568,
+        "total_ge": 146814.40000000002
+      },
+      {
+        "status": "(400333858) შპს ჯეო ფუდთაიმი",
+        "row_count": 75,
+        "total_ge": 0.0
+      },
+      {
+        "status": "0",
+        "row_count": 26,
+        "total_ge": 0.0
+      },
+      {
+        "status": "404888528_1",
+        "row_count": 15,
+        "total_ge": 0.0
+      },
+      {
+        "status": "GE83BG0000000602521509",
+        "row_count": 2,
+        "total_ge": 0.0
+      },
+      {
+        "status": "GE83BG0000000602521509GEL",
+        "row_count": 4,
+        "total_ge": 0.0
+      },
+      {
+        "status": "უცნობი სტატუსი",
+        "row_count": 656,
+        "total_ge": 0.0
+      }
+    ],
+    "by_month": [
+      {
+        "month": "2022-05",
+        "row_count": 28,
+        "total_ge": 1074.9
+      },
+      {
+        "month": "2022-06",
+        "row_count": 21,
+        "total_ge": 5253.299999999999
+      },
+      {
+        "month": "2022-07",
+        "row_count": 1463,
+        "total_ge": 56549.35999999997
+      },
+      {
+        "month": "2022-08",
+        "row_count": 334,
+        "total_ge": 10138.670000000007
+      },
+      {
+        "month": "2022-09",
+        "row_count": 474,
+        "total_ge": -13009.189999999995
+      },
+      {
+        "month": "2022-10",
+        "row_count": 3773,
+        "total_ge": 79619.85999999994
+      },
+      {
+        "month": "2022-11",
+        "row_count": 1620,
+        "total_ge": 42868.82000000008
+      },
+      {
+        "month": "2022-12",
+        "row_count": 1753,
+        "total_ge": 56308.45000000013
+      },
+      {
+        "month": "2023-01",
+        "row_count": 1304,
+        "total_ge": 40361.97000000003
+      },
+      {
+        "month": "2023-02",
+        "row_count": 1557,
+        "total_ge": 43352.820000000145
+      },
+      {
+        "month": "2023-03",
+        "row_count": 1714,
+        "total_ge": 50003.79
+      },
+      {
+        "month": "2023-04",
+        "row_count": 1537,
+        "total_ge": 60273.070000000174
+      },
+      {
+        "month": "2023-05",
+        "row_count": 1833,
+        "total_ge": 58470.0300000001
+      },
+      {
+        "month": "2023-06",
+        "row_count": 3112,
+        "total_ge": 112749.63000000028
+      },
+      {
+        "month": "2023-07",
+        "row_count": 2924,
+        "total_ge": 106573.42000000019
+      },
+      {
+        "month": "2023-08",
+        "row_count": 3274,
+        "total_ge": 127534.95999999982
+      },
+      {
+        "month": "2023-09",
+        "row_count": 3350,
+        "total_ge": 116977.44000000009
+      },
+      {
+        "month": "2023-10",
+        "row_count": 2941,
+        "total_ge": 94184.92999999992
+      },
+      {
+        "month": "2023-11",
+        "row_count": 2935,
+        "total_ge": 95329.09999999989
+      },
+      {
+        "month": "2023-12",
+        "row_count": 3069,
+        "total_ge": 119898.85000000017
+      },
+      {
+        "month": "2024-01",
+        "row_count": 2295,
+        "total_ge": 83922.27999999997
+      },
+      {
+        "month": "2024-02",
+        "row_count": 2301,
+        "total_ge": 77322.63000000015
+      },
+      {
+        "month": "2024-03",
+        "row_count": 2840,
+        "total_ge": 102651.01000000037
+      },
+      {
+        "month": "2024-04",
+        "row_count": 3698,
+        "total_ge": 138589.4499999998
+      },
+      {
+        "month": "2024-05",
+        "row_count": 4261,
+        "total_ge": 109906.35000000008
+      },
+      {
+        "month": "2024-06",
+        "row_count": 3453,
+        "total_ge": 110627.1300000004
+      },
+      {
+        "month": "2024-07",
+        "row_count": 4219,
+        "total_ge": 177090.86999999933
+      },
+      {
+        "month": "2024-08",
+        "row_count": 4837,
+        "total_ge": 241404.0999999982
+      },
+      {
+        "month": "2024-09",
+        "row_count": 3865,
+        "total_ge": 178746.08999999927
+      },
+      {
+        "month": "2024-10",
+        "row_count": 3244,
+        "total_ge": 132863.44999999966
+      },
+      {
+        "month": "2024-11",
+        "row_count": 3340,
+        "total_ge": 124779.76999999996
+      },
+      {
+        "month": "2024-12",
+        "row_count": 3064,
+        "total_ge": 142868.86999999994
+      },
+      {
+        "month": "2025-01",
+        "row_count": 5794,
+        "total_ge": 241646.09999999974
+      },
+      {
+        "month": "2025-02",
+        "row_count": 5500,
+        "total_ge": 246536.39999999924
+      },
+      {
+        "month": "2025-03",
+        "row_count": 5912,
+        "total_ge": 212841.02000000043
+      },
+      {
+        "month": "2025-04",
+        "row_count": 6406,
+        "total_ge": 270361.8000000006
+      },
+      {
+        "month": "2025-05",
+        "row_count": 6488,
+        "total_ge": 269562.7999999992
+      },
+      {
+        "month": "2025-06",
+        "row_count": 7810,
+        "total_ge": 450717.11999999534
+      },
+      {
+        "month": "2025-07",
+        "row_count": 10416,
+        "total_ge": 445004.1399999989
+      },
+      {
+        "month": "2025-08",
+        "row_count": 9712,
+        "total_ge": 603928.4199999982
+      },
+      {
+        "month": "2025-09",
+        "row_count": 8032,
+        "total_ge": 410770.1999999973
+      },
+      {
+        "month": "2025-10",
+        "row_count": 8402,
+        "total_ge": 420151.51999999816
+      },
+      {
+        "month": "2025-11",
+        "row_count": 6656,
+        "total_ge": 305848.2199999995
+      },
+      {
+        "month": "2025-12",
+        "row_count": 7552,
+        "total_ge": 373803.16000000073
+      },
+      {
+        "month": "2026-01",
+        "row_count": 3223,
+        "total_ge": 151012.6499999997
+      },
+      {
+        "month": "2026-02",
+        "row_count": 2932,
+        "total_ge": 136038.2499999995
+      },
+      {
+        "month": "უცნობი თვე",
+        "row_count": 1267,
+        "total_ge": 14684.979999999998
+      }
+    ],
+    "suppliers": [
+      {
+        "supplier": "შპს ჯიდიაი",
+        "tax_id": "406181616",
+        "distinct_product_count": 103,
+        "distinct_waybill_count": 633,
+        "total_amount_ge": 1279469.8299999887,
+        "date_range": {
+          "min": "2022-07-20",
+          "max": "2026-02-28"
+        }
+      },
+      {
+        "supplier": "შპს ელიზი ჯგუფი",
+        "tax_id": "204920381",
+        "distinct_product_count": 77,
+        "distinct_waybill_count": 331,
+        "total_amount_ge": 833560.3799999974,
+        "date_range": {
+          "min": "2022-07-15",
+          "max": "2026-02-27"
+        }
+      },
+      {
+        "supplier": "შპს კოკა-კოლა გურია",
+        "tax_id": "405152953",
+        "distinct_product_count": 84,
+        "distinct_waybill_count": 474,
+        "total_amount_ge": 599835.1999999945,
+        "date_range": {
+          "min": "2023-06-05",
+          "max": "2026-02-23"
+        }
+      },
+      {
+        "supplier": "შპს ინტერნეიშნლ მარკეტინგ ენდ თრეიდინგ",
+        "tax_id": "420424393",
+        "distinct_product_count": 10,
+        "distinct_waybill_count": 339,
+        "total_amount_ge": 267595.5499999988,
+        "date_range": {
+          "min": "2022-11-08",
+          "max": "2026-02-24"
+        }
+      },
+      {
+        "supplier": "შპს ზედაზენი აჭარა",
+        "tax_id": "445404232",
+        "distinct_product_count": 60,
+        "distinct_waybill_count": 386,
+        "total_amount_ge": 253786.52999999945,
+        "date_range": {
+          "min": "2023-06-13",
+          "max": "2026-02-25"
+        }
+      },
+      {
+        "supplier": "შპს ვასაძის პური",
+        "tax_id": "237077961",
+        "distinct_product_count": 187,
+        "distinct_waybill_count": 3550,
+        "total_amount_ge": 226789.56999999966,
+        "date_range": {
+          "min": "2023-06-14",
+          "max": "2026-02-28"
+        }
+      },
+      {
+        "supplier": "სს იბერია რეფრეშმენტსი",
+        "tax_id": "204968730",
+        "distinct_product_count": 157,
+        "distinct_waybill_count": 343,
+        "total_amount_ge": 186230.17000000319,
+        "date_range": {
+          "min": "2022-07-12",
+          "max": "2026-02-26"
+        }
+      },
+      {
+        "supplier": "შპს იფქლი",
+        "tax_id": "200179118",
+        "distinct_product_count": 37,
+        "distinct_waybill_count": 4641,
+        "total_amount_ge": 183655.16999999294,
+        "date_range": {
+          "min": "2022-07-24",
+          "max": "2026-02-28"
+        }
+      },
+      {
+        "supplier": "შპს შრომა - 2023",
+        "tax_id": "437078485",
+        "distinct_product_count": 1381,
+        "distinct_waybill_count": 118,
+        "total_amount_ge": 167561.73000000085,
+        "date_range": {
+          "min": "2024-07-30",
+          "max": "2026-02-24"
+        }
+      },
+      {
+        "supplier": "შპს ენგადი",
+        "tax_id": "242005888",
+        "distinct_product_count": 143,
+        "distinct_waybill_count": 204,
+        "total_amount_ge": 129042.84000000014,
+        "date_range": {
+          "min": "2022-07-18",
+          "max": "2026-02-27"
+        }
+      },
+      {
+        "supplier": "შპს სტარდი",
+        "tax_id": "212921926",
+        "distinct_product_count": 90,
+        "distinct_waybill_count": 139,
+        "total_amount_ge": 128307.85000000056,
+        "date_range": {
+          "min": "2023-12-26",
+          "max": "2026-02-04"
+        }
+      },
+      {
+        "supplier": "შპს კანტი",
+        "tax_id": "200140267",
+        "distinct_product_count": 134,
+        "distinct_waybill_count": 192,
+        "total_amount_ge": 115796.36,
+        "date_range": {
+          "min": "2022-07-14",
+          "max": "2026-02-25"
+        }
+      },
+      {
+        "supplier": "შპს პარტნიორი",
+        "tax_id": "400132192",
+        "distinct_product_count": 227,
+        "distinct_waybill_count": 396,
+        "total_amount_ge": 108735.5299999998,
+        "date_range": {
+          "min": "2022-07-13",
+          "max": "2026-02-26"
+        }
+      },
+      {
+        "supplier": "შპს სევენთისევენ",
+        "tax_id": "405623204",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 101052.0,
+        "date_range": {
+          "min": "2025-06-11",
+          "max": "2025-06-11"
+        }
+      },
+      {
+        "supplier": "შპს კადევე საქართველო",
+        "tax_id": "405159180",
+        "distinct_product_count": 495,
+        "distinct_waybill_count": 147,
+        "total_amount_ge": 100016.70999999974,
+        "date_range": {
+          "min": "2022-07-15",
+          "max": "2026-02-23"
+        }
+      },
+      {
+        "supplier": "შპს ფუდმარტი",
+        "tax_id": "404460187",
+        "distinct_product_count": 428,
+        "distinct_waybill_count": 62,
+        "total_amount_ge": 99473.3199999997,
+        "date_range": {
+          "min": "2022-07-19",
+          "max": "2025-11-11"
+        }
+      },
+      {
+        "supplier": "შპს საქართველოს დისტრიბუცია და ლოგისტიკა",
+        "tax_id": "205116088",
+        "distinct_product_count": 129,
+        "distinct_waybill_count": 270,
+        "total_amount_ge": 95472.0300000002,
+        "date_range": {
+          "min": "2022-07-08",
+          "max": "2025-07-31"
+        }
+      },
+      {
+        "supplier": "თამილა ხარაბაძე",
+        "tax_id": "33001015885",
+        "distinct_product_count": 159,
+        "distinct_waybill_count": 99,
+        "total_amount_ge": 89220.1,
+        "date_range": {
+          "min": "2024-01-20",
+          "max": "2025-09-10"
+        }
+      },
+      {
+        "supplier": "შპს თოლია ქუთაისი",
+        "tax_id": "412731281",
+        "distinct_product_count": 41,
+        "distinct_waybill_count": 137,
+        "total_amount_ge": 88960.54999999984,
+        "date_range": {
+          "min": "2023-06-12",
+          "max": "2025-09-23"
+        }
+      },
+      {
+        "supplier": "შპს ფუდსერვისი",
+        "tax_id": "406254146",
+        "distinct_product_count": 297,
+        "distinct_waybill_count": 98,
+        "total_amount_ge": 84401.8999999997,
+        "date_range": {
+          "min": "2022-07-12",
+          "max": "2026-02-12"
+        }
+      },
+      {
+        "supplier": "სს თ & რ დისტრიბუშენ",
+        "tax_id": "202311738",
+        "distinct_product_count": 68,
+        "distinct_waybill_count": 153,
+        "total_amount_ge": 77725.11000000029,
+        "date_range": {
+          "min": "2022-07-26",
+          "max": "2026-02-26"
+        }
+      },
+      {
+        "supplier": "შპს ლაქტალის ჯორჯია",
+        "tax_id": "404898973",
+        "distinct_product_count": 135,
+        "distinct_waybill_count": 508,
+        "total_amount_ge": 77577.74000000102,
+        "date_range": {
+          "min": "2022-07-22",
+          "max": "2026-02-26"
+        }
+      },
+      {
+        "supplier": "შპს გეოდისტრიბუცია",
+        "tax_id": "401958271",
+        "distinct_product_count": 21,
+        "distinct_waybill_count": 165,
+        "total_amount_ge": 71841.94999999995,
+        "date_range": {
+          "min": "2022-07-14",
+          "max": "2026-02-27"
+        }
+      },
+      {
+        "supplier": "შპს ლავაზა",
+        "tax_id": "412726448",
+        "distinct_product_count": 26,
+        "distinct_waybill_count": 206,
+        "total_amount_ge": 71481.8,
+        "date_range": {
+          "min": "2023-06-09",
+          "max": "2026-02-27"
+        }
+      },
+      {
+        "supplier": "შპს შავნაბადა",
+        "tax_id": "454406651",
+        "distinct_product_count": 23,
+        "distinct_waybill_count": 74,
+        "total_amount_ge": 69477.07999999993,
+        "date_range": {
+          "min": "2023-12-21",
+          "max": "2026-02-05"
+        }
+      },
+      {
+        "supplier": "შპს აიდიეს ბორჯომი თბილისი",
+        "tax_id": "404888528",
+        "distinct_product_count": 39,
+        "distinct_waybill_count": 195,
+        "total_amount_ge": 69035.3399999997,
+        "date_range": {
+          "min": "2025-01-06",
+          "max": "2026-02-11"
+        }
+      },
+      {
+        "supplier": "შპს გაგრა პლუსი",
+        "tax_id": "250723971",
+        "distinct_product_count": 93,
+        "distinct_waybill_count": 123,
+        "total_amount_ge": 67413.60999999968,
+        "date_range": {
+          "min": "2022-07-22",
+          "max": "2026-02-26"
+        }
+      },
+      {
+        "supplier": "შპს პარტნიორი 2010",
+        "tax_id": "215149523",
+        "distinct_product_count": 124,
+        "distinct_waybill_count": 160,
+        "total_amount_ge": 67065.5500000002,
+        "date_range": {
+          "min": "2023-06-03",
+          "max": "2025-09-18"
+        }
+      },
+      {
+        "supplier": "შპს 3ჯი-ჯორჯიან გლობალ გრუპ",
+        "tax_id": "400029036",
+        "distinct_product_count": 208,
+        "distinct_waybill_count": 127,
+        "total_amount_ge": 64819.49999999973,
+        "date_range": {
+          "min": "2022-07-21",
+          "max": "2026-02-09"
+        }
+      },
+      {
+        "supplier": "შპს VIVA",
+        "tax_id": "404440119",
+        "distinct_product_count": 208,
+        "distinct_waybill_count": 104,
+        "total_amount_ge": 58886.22000000013,
+        "date_range": {
+          "min": "2024-04-23",
+          "max": "2026-02-23"
+        }
+      },
+      {
+        "supplier": "შპს ზახარ",
+        "tax_id": "202061053",
+        "distinct_product_count": 304,
+        "distinct_waybill_count": 46,
+        "total_amount_ge": 55981.189999999995,
+        "date_range": {
+          "min": "2023-12-01",
+          "max": "2026-02-27"
+        }
+      },
+      {
+        "supplier": "შპს კორიდა",
+        "tax_id": "215133193",
+        "distinct_product_count": 111,
+        "distinct_waybill_count": 150,
+        "total_amount_ge": 54282.979999999785,
+        "date_range": {
+          "min": "2023-05-31",
+          "max": "2025-05-29"
+        }
+      },
+      {
+        "supplier": "შპს ლიდერი-ფუდი",
+        "tax_id": "206337052",
+        "distinct_product_count": 65,
+        "distinct_waybill_count": 184,
+        "total_amount_ge": 53099.47999999998,
+        "date_range": {
+          "min": "2022-07-23",
+          "max": "2025-12-26"
+        }
+      },
+      {
+        "supplier": "შპს ქართული სადისტრიბუციო-მარკეტინგული კომპანია",
+        "tax_id": "202282369",
+        "distinct_product_count": 184,
+        "distinct_waybill_count": 127,
+        "total_amount_ge": 50599.32000000015,
+        "date_range": {
+          "min": "2022-07-15",
+          "max": "2026-01-14"
+        }
+      },
+      {
+        "supplier": "შპს კოკა-კოლა დისტრიბუცია",
+        "tax_id": "246954176",
+        "distinct_product_count": 75,
+        "distinct_waybill_count": 106,
+        "total_amount_ge": 45566.6599999999,
+        "date_range": {
+          "min": "2022-07-15",
+          "max": "2023-10-30"
+        }
+      },
+      {
+        "supplier": "შპს ჯეო ფუდთაიმი",
+        "tax_id": "400333858",
+        "distinct_product_count": 1288,
+        "distinct_waybill_count": 9,
+        "total_amount_ge": 43174.15,
+        "date_range": {
+          "min": "2022-10-18",
+          "max": "2024-05-02"
+        }
+      },
+      {
+        "supplier": "შპს დიპლომატ ჰოლდინგი",
+        "tax_id": "204987862",
+        "distinct_product_count": 234,
+        "distinct_waybill_count": 138,
+        "total_amount_ge": 39770.200000000084,
+        "date_range": {
+          "min": "2022-10-31",
+          "max": "2025-12-12"
+        }
+      },
+      {
+        "supplier": "შპს მეგაკო",
+        "tax_id": "204875108",
+        "distinct_product_count": 181,
+        "distinct_waybill_count": 71,
+        "total_amount_ge": 37297.71000000003,
+        "date_range": {
+          "min": "2022-07-13",
+          "max": "2024-07-03"
+        }
+      },
+      {
+        "supplier": "შპს თისო",
+        "tax_id": "442573118",
+        "distinct_product_count": 44,
+        "distinct_waybill_count": 211,
+        "total_amount_ge": 34924.52000000001,
+        "date_range": {
+          "min": "2024-02-08",
+          "max": "2026-02-28"
+        }
+      },
+      {
+        "supplier": "შპს ჯიბე",
+        "tax_id": "206335223",
+        "distinct_product_count": 131,
+        "distinct_waybill_count": 69,
+        "total_amount_ge": 34547.21000000001,
+        "date_range": {
+          "min": "2022-10-31",
+          "max": "2026-02-27"
+        }
+      },
+      {
+        "supplier": "კახაბერ აროშიძე",
+        "tax_id": "33001062062",
+        "distinct_product_count": 24,
+        "distinct_waybill_count": 132,
+        "total_amount_ge": 33211.250000000015,
+        "date_range": {
+          "min": "2024-06-06",
+          "max": "2026-02-24"
+        }
+      },
+      {
+        "supplier": "შპს თი-აი-დი ფუდს",
+        "tax_id": "400093974",
+        "distinct_product_count": 167,
+        "distinct_waybill_count": 115,
+        "total_amount_ge": 31815.039999999946,
+        "date_range": {
+          "min": "2023-05-31",
+          "max": "2026-02-18"
+        }
+      },
+      {
+        "supplier": "ბადრი გამრეკელიძე",
+        "tax_id": "61003004078",
+        "distinct_product_count": 47,
+        "distinct_waybill_count": 359,
+        "total_amount_ge": 30788.739999999932,
+        "date_range": {
+          "min": "2023-06-12",
+          "max": "2024-12-30"
+        }
+      },
+      {
+        "supplier": "შპს დ&ლ სერვისი",
+        "tax_id": "204557461",
+        "distinct_product_count": 306,
+        "distinct_waybill_count": 67,
+        "total_amount_ge": 29931.38999999996,
+        "date_range": {
+          "min": "2022-07-11",
+          "max": "2025-11-13"
+        }
+      },
+      {
+        "supplier": "შპს იო 2022",
+        "tax_id": "412771219",
+        "distinct_product_count": 48,
+        "distinct_waybill_count": 133,
+        "total_amount_ge": 29726.50000000002,
+        "date_range": {
+          "min": "2023-08-11",
+          "max": "2026-02-24"
+        }
+      },
+      {
+        "supplier": "კახა ავჯიშვილი",
+        "tax_id": "61006050796",
+        "distinct_product_count": 21,
+        "distinct_waybill_count": 133,
+        "total_amount_ge": 29308.80000000003,
+        "date_range": {
+          "min": "2024-03-07",
+          "max": "2026-02-26"
+        }
+      },
+      {
+        "supplier": "შპს მასტერ თრეიდი",
+        "tax_id": "205217941",
+        "distinct_product_count": 97,
+        "distinct_waybill_count": 132,
+        "total_amount_ge": 29215.21999999995,
+        "date_range": {
+          "min": "2022-10-14",
+          "max": "2026-02-19"
+        }
+      },
+      {
+        "supplier": "შპს სალი 2009",
+        "tax_id": "237113333",
+        "distinct_product_count": 29,
+        "distinct_waybill_count": 53,
+        "total_amount_ge": 26113.49999999999,
+        "date_range": {
+          "min": "2023-06-16",
+          "max": "2025-06-06"
+        }
+      },
+      {
+        "supplier": "შპს ბაგრატი",
+        "tax_id": "412672807",
+        "distinct_product_count": 62,
+        "distinct_waybill_count": 236,
+        "total_amount_ge": 24597.129999999997,
+        "date_range": {
+          "min": "2024-04-26",
+          "max": "2026-02-25"
+        }
+      },
+      {
+        "supplier": "შპს ნიუსერვის გრუპი888",
+        "tax_id": "406376746",
+        "distinct_product_count": 37,
+        "distinct_waybill_count": 12,
+        "total_amount_ge": 24532.6,
+        "date_range": {
+          "min": "2024-08-07",
+          "max": "2025-04-12"
+        }
+      },
+      {
+        "supplier": "შპს ტკბილი ქვეყანა",
+        "tax_id": "200172785",
+        "distinct_product_count": 93,
+        "distinct_waybill_count": 98,
+        "total_amount_ge": 23210.469999999987,
+        "date_range": {
+          "min": "2022-07-20",
+          "max": "2026-02-12"
+        }
+      },
+      {
+        "supplier": "შპს ნატახტარი 2005",
+        "tax_id": "204487616",
+        "distinct_product_count": 48,
+        "distinct_waybill_count": 87,
+        "total_amount_ge": 23057.990000000013,
+        "date_range": {
+          "min": "2022-07-11",
+          "max": "2023-12-26"
+        }
+      },
+      {
+        "supplier": "შპს მეგაკო თრეიდი",
+        "tax_id": "404953528",
+        "distinct_product_count": 85,
+        "distinct_waybill_count": 82,
+        "total_amount_ge": 22551.280000000002,
+        "date_range": {
+          "min": "2022-11-30",
+          "max": "2026-02-23"
+        }
+      },
+      {
+        "supplier": "შპს კომპანია ორბიტა",
+        "tax_id": "202230790",
+        "distinct_product_count": 148,
+        "distinct_waybill_count": 54,
+        "total_amount_ge": 22196.579999999976,
+        "date_range": {
+          "min": "2022-07-12",
+          "max": "2024-12-17"
+        }
+      },
+      {
+        "supplier": "შპს G & A GROUP",
+        "tax_id": "404943683",
+        "distinct_product_count": 83,
+        "distinct_waybill_count": 102,
+        "total_amount_ge": 20198.860000000026,
+        "date_range": {
+          "min": "2022-10-18",
+          "max": "2024-12-09"
+        }
+      },
+      {
+        "supplier": "შპს კ. და კ.",
+        "tax_id": "412711935",
+        "distinct_product_count": 18,
+        "distinct_waybill_count": 24,
+        "total_amount_ge": 19996.87,
+        "date_range": {
+          "min": "2025-07-22",
+          "max": "2026-02-28"
+        }
+      },
+      {
+        "supplier": "შპს კოსტ-კასტლ გეო",
+        "tax_id": "406203638",
+        "distinct_product_count": 27,
+        "distinct_waybill_count": 61,
+        "total_amount_ge": 19994.110000000004,
+        "date_range": {
+          "min": "2024-04-18",
+          "max": "2026-02-25"
+        }
+      },
+      {
+        "supplier": "შპს ჯიეს გრუპი",
+        "tax_id": "445542752",
+        "distinct_product_count": 178,
+        "distinct_waybill_count": 11,
+        "total_amount_ge": 19167.34999999998,
+        "date_range": {
+          "min": "2024-06-29",
+          "max": "2025-07-16"
+        }
+      },
+      {
+        "supplier": "შპს ბესთ გრუპი",
+        "tax_id": "400152703",
+        "distinct_product_count": 137,
+        "distinct_waybill_count": 57,
+        "total_amount_ge": 18353.540000000048,
+        "date_range": {
+          "min": "2024-05-07",
+          "max": "2025-03-05"
+        }
+      },
+      {
+        "supplier": "სს კოკა-კოლა ბოთლერს ჯორჯია",
+        "tax_id": "201948063",
+        "distinct_product_count": 61,
+        "distinct_waybill_count": 32,
+        "total_amount_ge": 18072.089999999975,
+        "date_range": {
+          "min": "2023-11-02",
+          "max": "2024-05-20"
+        }
+      },
+      {
+        "supplier": "ნიკა ბახტაძე",
+        "tax_id": "33001075063",
+        "distinct_product_count": 104,
+        "distinct_waybill_count": 16,
+        "total_amount_ge": 17674.0,
+        "date_range": {
+          "min": "2025-07-19",
+          "max": "2026-01-09"
+        }
+      },
+      {
+        "supplier": "შპს ბიდი კომპანი",
+        "tax_id": "205295296",
+        "distinct_product_count": 70,
+        "distinct_waybill_count": 76,
+        "total_amount_ge": 17098.660000000014,
+        "date_range": {
+          "min": "2022-11-24",
+          "max": "2025-11-28"
+        }
+      },
+      {
+        "supplier": "შპს ჯიელსი",
+        "tax_id": "406308570",
+        "distinct_product_count": 22,
+        "distinct_waybill_count": 49,
+        "total_amount_ge": 16780.83,
+        "date_range": {
+          "min": "2024-04-02",
+          "max": "2026-02-04"
+        }
+      },
+      {
+        "supplier": "ლევან თორდია",
+        "tax_id": "33001001739",
+        "distinct_product_count": 9,
+        "distinct_waybill_count": 39,
+        "total_amount_ge": 16530.0,
+        "date_range": {
+          "min": "2025-08-12",
+          "max": "2025-12-30"
+        }
+      },
+      {
+        "supplier": "შპს მარტინ პამაჩ",
+        "tax_id": "424067618",
+        "distinct_product_count": 25,
+        "distinct_waybill_count": 75,
+        "total_amount_ge": 16479.140000000003,
+        "date_range": {
+          "min": "2022-07-09",
+          "max": "2026-02-24"
+        }
+      },
+      {
+        "supplier": "შპს ბაჭია",
+        "tax_id": "429325526",
+        "distinct_product_count": 20,
+        "distinct_waybill_count": 90,
+        "total_amount_ge": 14991.810000000005,
+        "date_range": {
+          "min": "2023-06-09",
+          "max": "2026-02-04"
+        }
+      },
+      {
+        "supplier": "შპს ჯი დი სი სი",
+        "tax_id": "406175936",
+        "distinct_product_count": 178,
+        "distinct_waybill_count": 182,
+        "total_amount_ge": 14762.390000000018,
+        "date_range": {
+          "min": "2022-08-15",
+          "max": "2026-01-14"
+        }
+      },
+      {
+        "supplier": "შპს ვიჯი",
+        "tax_id": "406024127",
+        "distinct_product_count": 110,
+        "distinct_waybill_count": 88,
+        "total_amount_ge": 14553.29999999999,
+        "date_range": {
+          "min": "2022-07-12",
+          "max": "2025-03-11"
+        }
+      },
+      {
+        "supplier": "შპს კინგ ჯგუფი",
+        "tax_id": "445436779",
+        "distinct_product_count": 180,
+        "distinct_waybill_count": 26,
+        "total_amount_ge": 14370.119999999988,
+        "date_range": {
+          "min": "2023-06-20",
+          "max": "2025-09-03"
+        }
+      },
+      {
+        "supplier": "შპს ექსტრამითი",
+        "tax_id": "412670550",
+        "distinct_product_count": 42,
+        "distinct_waybill_count": 59,
+        "total_amount_ge": 14328.77999999998,
+        "date_range": {
+          "min": "2025-10-08",
+          "max": "2026-02-25"
+        }
+      },
+      {
+        "supplier": "შპს სანდომი 2020",
+        "tax_id": "437374173",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 14000.0,
+        "date_range": {
+          "min": "2025-08-04",
+          "max": "2025-08-04"
+        }
+      },
+      {
+        "supplier": "ლევანი ჯაველიძე",
+        "tax_id": "33001026494",
+        "distinct_product_count": 57,
+        "distinct_waybill_count": 93,
+        "total_amount_ge": 12841.399999999998,
+        "date_range": {
+          "min": "2023-06-19",
+          "max": "2026-02-26"
+        }
+      },
+      {
+        "supplier": "შპს მშენებელი 777",
+        "tax_id": "437060984",
+        "distinct_product_count": 13,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 12445.32,
+        "date_range": {
+          "min": "2025-02-27",
+          "max": "2025-08-22"
+        }
+      },
+      {
+        "supplier": "შპს პოულტრი ჯორჯია",
+        "tax_id": "226530448",
+        "distinct_product_count": 4,
+        "distinct_waybill_count": 127,
+        "total_amount_ge": 12362.549999999992,
+        "date_range": {
+          "min": "2022-07-25",
+          "max": "2024-05-28"
+        }
+      },
+      {
+        "supplier": "შპს დაფნა",
+        "tax_id": "206337604",
+        "distinct_product_count": 125,
+        "distinct_waybill_count": 38,
+        "total_amount_ge": 12298.210000000006,
+        "date_range": {
+          "min": "2022-07-13",
+          "max": "2026-02-13"
+        }
+      },
+      {
+        "supplier": "შპს პირამიდა 2022",
+        "tax_id": "402203110",
+        "distinct_product_count": 36,
+        "distinct_waybill_count": 65,
+        "total_amount_ge": 12177.500000000015,
+        "date_range": {
+          "min": "2022-07-15",
+          "max": "2025-12-15"
+        }
+      },
+      {
+        "supplier": "შპს აპაჩი",
+        "tax_id": "404621959",
+        "distinct_product_count": 72,
+        "distinct_waybill_count": 34,
+        "total_amount_ge": 11991.720000000003,
+        "date_range": {
+          "min": "2025-03-14",
+          "max": "2026-02-23"
+        }
+      },
+      {
+        "supplier": "შპს თარო პოს ჯორჯია",
+        "tax_id": "400209341",
+        "distinct_product_count": 19,
+        "distinct_waybill_count": 5,
+        "total_amount_ge": 11927.1,
+        "date_range": {
+          "min": "2023-04-15",
+          "max": "2024-03-27"
+        }
+      },
+      {
+        "supplier": "შპს ხორცპროდუქტების ქარხანა-ვაკე",
+        "tax_id": "205264284",
+        "distinct_product_count": 27,
+        "distinct_waybill_count": 230,
+        "total_amount_ge": 11668.319999999962,
+        "date_range": {
+          "min": "2022-07-21",
+          "max": "2024-09-18"
+        }
+      },
+      {
+        "supplier": "შპს ვემედინა",
+        "tax_id": "415118535",
+        "distinct_product_count": 35,
+        "distinct_waybill_count": 7,
+        "total_amount_ge": 11661.599999999999,
+        "date_range": {
+          "min": "2025-05-23",
+          "max": "2025-12-03"
+        }
+      },
+      {
+        "supplier": "შპს ჯ ჯ 2011",
+        "tax_id": "406051971",
+        "distinct_product_count": 25,
+        "distinct_waybill_count": 37,
+        "total_amount_ge": 11407.81,
+        "date_range": {
+          "min": "2022-10-31",
+          "max": "2024-04-15"
+        }
+      },
+      {
+        "supplier": "შპს სოლარი",
+        "tax_id": "400090450",
+        "distinct_product_count": 8,
+        "distinct_waybill_count": 70,
+        "total_amount_ge": 11393.299999999994,
+        "date_range": {
+          "min": "2022-10-12",
+          "max": "2026-02-05"
+        }
+      },
+      {
+        "supplier": "შპს არგო",
+        "tax_id": "250724337",
+        "distinct_product_count": 41,
+        "distinct_waybill_count": 40,
+        "total_amount_ge": 11353.019999999997,
+        "date_range": {
+          "min": "2022-07-08",
+          "max": "2025-07-02"
+        }
+      },
+      {
+        "supplier": "შპს ბი ემ ესი",
+        "tax_id": "202196426",
+        "distinct_product_count": 66,
+        "distinct_waybill_count": 41,
+        "total_amount_ge": 10127.889999999994,
+        "date_range": {
+          "min": "2022-12-01",
+          "max": "2026-02-25"
+        }
+      },
+      {
+        "supplier": "შპს ტრენდ 222",
+        "tax_id": "437077529",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 9996.0,
+        "date_range": {
+          "min": "2025-08-31",
+          "max": "2025-08-31"
+        }
+      },
+      {
+        "supplier": "შპს შარმ ტრეიდინგი",
+        "tax_id": "211397004",
+        "distinct_product_count": 142,
+        "distinct_waybill_count": 80,
+        "total_amount_ge": 9906.98,
+        "date_range": {
+          "min": "2022-07-20",
+          "max": "2025-07-24"
+        }
+      },
+      {
+        "supplier": "შპს ზედაზენი 2012",
+        "tax_id": "404932258",
+        "distinct_product_count": 33,
+        "distinct_waybill_count": 33,
+        "total_amount_ge": 9757.560000000005,
+        "date_range": {
+          "min": "2022-07-22",
+          "max": "2023-11-22"
+        }
+      },
+      {
+        "supplier": "შპს ელიტ ფუდი 2",
+        "tax_id": "412761097",
+        "distinct_product_count": 26,
+        "distinct_waybill_count": 29,
+        "total_amount_ge": 9555.590000000002,
+        "date_range": {
+          "min": "2024-03-02",
+          "max": "2024-12-25"
+        }
+      },
+      {
+        "supplier": "შპს დიპლომატ ჯორჯია",
+        "tax_id": "204557121",
+        "distinct_product_count": 134,
+        "distinct_waybill_count": 6,
+        "total_amount_ge": 9240.309999999998,
+        "date_range": {
+          "min": "2022-07-21",
+          "max": "2023-11-02"
+        }
+      },
+      {
+        "supplier": "შპს მზიური",
+        "tax_id": "205025079",
+        "distinct_product_count": 141,
+        "distinct_waybill_count": 89,
+        "total_amount_ge": 8673.800000000003,
+        "date_range": {
+          "min": "2022-07-19",
+          "max": "2025-01-22"
+        }
+      },
+      {
+        "supplier": "შპს გ.დ. ალკო",
+        "tax_id": "205047091",
+        "distinct_product_count": 34,
+        "distinct_waybill_count": 23,
+        "total_amount_ge": 8232.699999999999,
+        "date_range": {
+          "min": "2022-10-17",
+          "max": "2025-07-15"
+        }
+      },
+      {
+        "supplier": "შპს პრემიუმ ტრეიდი",
+        "tax_id": "412742082",
+        "distinct_product_count": 26,
+        "distinct_waybill_count": 148,
+        "total_amount_ge": 8174.319999999998,
+        "date_range": {
+          "min": "2025-01-20",
+          "max": "2026-02-23"
+        }
+      },
+      {
+        "supplier": "შპს ბარამბო 2011",
+        "tax_id": "404885184",
+        "distinct_product_count": 26,
+        "distinct_waybill_count": 31,
+        "total_amount_ge": 7939.68,
+        "date_range": {
+          "min": "2022-07-18",
+          "max": "2024-04-30"
+        }
+      },
+      {
+        "supplier": "შპს ლეთრე",
+        "tax_id": "404867818",
+        "distinct_product_count": 23,
+        "distinct_waybill_count": 13,
+        "total_amount_ge": 7250.400000000001,
+        "date_range": {
+          "min": "2025-06-06",
+          "max": "2026-01-27"
+        }
+      },
+      {
+        "supplier": "შპს ბითიჯი 2025",
+        "tax_id": "445525959",
+        "distinct_product_count": 40,
+        "distinct_waybill_count": 4,
+        "total_amount_ge": 7128.659999999993,
+        "date_range": {
+          "min": "2025-05-22",
+          "max": "2025-09-23"
+        }
+      },
+      {
+        "supplier": "ნატალია მეტრეველი",
+        "tax_id": "35001056468",
+        "distinct_product_count": 199,
+        "distinct_waybill_count": 37,
+        "total_amount_ge": 6361.299999999989,
+        "date_range": {
+          "min": "2022-11-29",
+          "max": "2024-04-26"
+        }
+      },
+      {
+        "supplier": "სს ტრეიდ პარტნერი",
+        "tax_id": "404612594",
+        "distinct_product_count": 126,
+        "distinct_waybill_count": 40,
+        "total_amount_ge": 6178.019999999995,
+        "date_range": {
+          "min": "2023-02-10",
+          "max": "2025-07-15"
+        }
+      },
+      {
+        "supplier": "შპს ჯეოსტარი",
+        "tax_id": "202243401",
+        "distinct_product_count": 54,
+        "distinct_waybill_count": 74,
+        "total_amount_ge": 5974.910000000001,
+        "date_range": {
+          "min": "2022-10-27",
+          "max": "2025-07-15"
+        }
+      },
+      {
+        "supplier": "შპს ზგგ ალკო",
+        "tax_id": "425370797",
+        "distinct_product_count": 12,
+        "distinct_waybill_count": 6,
+        "total_amount_ge": 5830.0,
+        "date_range": {
+          "min": "2025-10-16",
+          "max": "2026-02-17"
+        }
+      },
+      {
+        "supplier": "შპს ევერესტი 2010",
+        "tax_id": "400008629",
+        "distinct_product_count": 92,
+        "distinct_waybill_count": 63,
+        "total_amount_ge": 5666.699999999994,
+        "date_range": {
+          "min": "2022-07-13",
+          "max": "2024-05-22"
+        }
+      },
+      {
+        "supplier": "შპს სავანეთი 99",
+        "tax_id": "225372708",
+        "distinct_product_count": 2,
+        "distinct_waybill_count": 22,
+        "total_amount_ge": 5615.099999999999,
+        "date_range": {
+          "min": "2024-10-23",
+          "max": "2025-04-03"
+        }
+      },
+      {
+        "supplier": "შპს ალფა",
+        "tax_id": "401943929",
+        "distinct_product_count": 28,
+        "distinct_waybill_count": 37,
+        "total_amount_ge": 5374.350000000002,
+        "date_range": {
+          "min": "2022-07-21",
+          "max": "2024-03-05"
+        }
+      },
+      {
+        "supplier": "შპს SAH & Co",
+        "tax_id": "404995680",
+        "distinct_product_count": 8,
+        "distinct_waybill_count": 44,
+        "total_amount_ge": 5372.399999999999,
+        "date_range": {
+          "min": "2022-07-19",
+          "max": "2024-01-16"
+        }
+      },
+      {
+        "supplier": "შპს ღალიძგა",
+        "tax_id": "215135066",
+        "distinct_product_count": 118,
+        "distinct_waybill_count": 31,
+        "total_amount_ge": 5270.9800000000005,
+        "date_range": {
+          "min": "2023-03-15",
+          "max": "2024-08-29"
+        }
+      },
+      {
+        "supplier": "შპს ფორტუ",
+        "tax_id": "405233527",
+        "distinct_product_count": 15,
+        "distinct_waybill_count": 9,
+        "total_amount_ge": 5075.6,
+        "date_range": {
+          "min": "2022-10-12",
+          "max": "2026-02-06"
+        }
+      },
+      {
+        "supplier": "შპს სიმა",
+        "tax_id": "445478144",
+        "distinct_product_count": 3,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 5000.0,
+        "date_range": {
+          "min": "2024-03-01",
+          "max": "2024-04-09"
+        }
+      },
+      {
+        "supplier": "შპს ჯინვენტორი",
+        "tax_id": "404589682",
+        "distinct_product_count": 30,
+        "distinct_waybill_count": 48,
+        "total_amount_ge": 4709.5,
+        "date_range": {
+          "min": "2022-11-04",
+          "max": "2026-02-13"
+        }
+      },
+      {
+        "supplier": "შპს გართალ",
+        "tax_id": "426529090",
+        "distinct_product_count": 35,
+        "distinct_waybill_count": 10,
+        "total_amount_ge": 4598.000000000001,
+        "date_range": {
+          "min": "2024-04-29",
+          "max": "2025-07-21"
+        }
+      },
+      {
+        "supplier": "შპს ვკ უმალი",
+        "tax_id": "440895845",
+        "distinct_product_count": 19,
+        "distinct_waybill_count": 55,
+        "total_amount_ge": 4501.029999999996,
+        "date_range": {
+          "min": "2024-05-16",
+          "max": "2025-05-29"
+        }
+      },
+      {
+        "supplier": "შპს მოდუსი",
+        "tax_id": "245565669",
+        "distinct_product_count": 46,
+        "distinct_waybill_count": 14,
+        "total_amount_ge": 4479.450000000001,
+        "date_range": {
+          "min": "2023-12-06",
+          "max": "2024-02-22"
+        }
+      },
+      {
+        "supplier": "შპს ბინსი",
+        "tax_id": "406184114",
+        "distinct_product_count": 39,
+        "distinct_waybill_count": 68,
+        "total_amount_ge": 4304.190000000002,
+        "date_range": {
+          "min": "2023-03-06",
+          "max": "2024-05-22"
+        }
+      },
+      {
+        "supplier": "შპს დილის პროდუქტები",
+        "tax_id": "204516194",
+        "distinct_product_count": 5,
+        "distinct_waybill_count": 38,
+        "total_amount_ge": 4236.09,
+        "date_range": {
+          "min": "2022-07-21",
+          "max": "2024-04-27"
+        }
+      },
+      {
+        "supplier": "შპს როშენ ჯორჯია",
+        "tax_id": "400223904",
+        "distinct_product_count": 55,
+        "distinct_waybill_count": 5,
+        "total_amount_ge": 4168.800000000001,
+        "date_range": {
+          "min": "2023-06-10",
+          "max": "2023-11-18"
+        }
+      },
+      {
+        "supplier": "შპს 2020",
+        "tax_id": "402163564",
+        "distinct_product_count": 30,
+        "distinct_waybill_count": 45,
+        "total_amount_ge": 3891.100000000001,
+        "date_range": {
+          "min": "2022-10-20",
+          "max": "2024-05-23"
+        }
+      },
+      {
+        "supplier": "შპს კუმისი XXI",
+        "tax_id": "204490390",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 21,
+        "total_amount_ge": 3841.500000000001,
+        "date_range": {
+          "min": "2024-10-23",
+          "max": "2025-02-12"
+        }
+      },
+      {
+        "supplier": "შპს დანი 23",
+        "tax_id": "405604724",
+        "distinct_product_count": 18,
+        "distinct_waybill_count": 26,
+        "total_amount_ge": 3537.950000000003,
+        "date_range": {
+          "min": "2024-02-16",
+          "max": "2025-10-15"
+        }
+      },
+      {
+        "supplier": "შპს ლორგო",
+        "tax_id": "209480239",
+        "distinct_product_count": 30,
+        "distinct_waybill_count": 26,
+        "total_amount_ge": 3328.34,
+        "date_range": {
+          "min": "2022-07-21",
+          "max": "2024-06-07"
+        }
+      },
+      {
+        "supplier": "შპს ასკანა პლიუსი",
+        "tax_id": "437080695",
+        "distinct_product_count": 8,
+        "distinct_waybill_count": 7,
+        "total_amount_ge": 3320.2400000000002,
+        "date_range": {
+          "min": null,
+          "max": null
+        }
+      },
+      {
+        "supplier": "შპს ჯორჯიან სერვის ნეთვორკი",
+        "tax_id": "406049823",
+        "distinct_product_count": 11,
+        "distinct_waybill_count": 15,
+        "total_amount_ge": 3275.0,
+        "date_range": {
+          "min": "2022-07-22",
+          "max": "2026-02-09"
+        }
+      },
+      {
+        "supplier": "შპს ბარამბო და კომპანია",
+        "tax_id": "400052287",
+        "distinct_product_count": 56,
+        "distinct_waybill_count": 7,
+        "total_amount_ge": 3263.589999999999,
+        "date_range": {
+          "min": "2022-07-18",
+          "max": "2023-05-05"
+        }
+      },
+      {
+        "supplier": "შპს გი-შო+",
+        "tax_id": "425057788",
+        "distinct_product_count": 24,
+        "distinct_waybill_count": 41,
+        "total_amount_ge": 3236.09,
+        "date_range": {
+          "min": "2023-07-13",
+          "max": "2024-06-18"
+        }
+      },
+      {
+        "supplier": "გოჩა ჯინჭარაძე",
+        "tax_id": "61004069647",
+        "distinct_product_count": 21,
+        "distinct_waybill_count": 13,
+        "total_amount_ge": 3205.0,
+        "date_range": {
+          "min": "2024-12-23",
+          "max": "2025-05-26"
+        }
+      },
+      {
+        "supplier": "შპს მინიმარტს",
+        "tax_id": "402050819",
+        "distinct_product_count": 10,
+        "distinct_waybill_count": 6,
+        "total_amount_ge": 3013.0,
+        "date_range": {
+          "min": "2022-07-12",
+          "max": "2023-05-05"
+        }
+      },
+      {
+        "supplier": "შპს სპარ ვესთი",
+        "tax_id": "415113763",
+        "distinct_product_count": 3,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 3000.0,
+        "date_range": {
+          "min": "2024-02-14",
+          "max": "2024-02-14"
+        }
+      },
+      {
+        "supplier": "თამარი გოგმაჩაძე",
+        "tax_id": "33001075347",
+        "distinct_product_count": 19,
+        "distinct_waybill_count": 27,
+        "total_amount_ge": 2891.7999999999997,
+        "date_range": {
+          "min": "2023-06-29",
+          "max": "2024-02-29"
+        }
+      },
+      {
+        "supplier": "სს არგო",
+        "tax_id": "400194222",
+        "distinct_product_count": 24,
+        "distinct_waybill_count": 34,
+        "total_amount_ge": 2760.59,
+        "date_range": {
+          "min": "2022-07-21",
+          "max": "2024-05-21"
+        }
+      },
+      {
+        "supplier": "შპს სანო დისტრიბიუშენი",
+        "tax_id": "212919742",
+        "distinct_product_count": 6,
+        "distinct_waybill_count": 7,
+        "total_amount_ge": 2718.2000000000003,
+        "date_range": {
+          "min": "2025-08-12",
+          "max": "2026-01-23"
+        }
+      },
+      {
+        "supplier": "შპს ნიკა ლუკა 69",
+        "tax_id": "443863598",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 2700.0,
+        "date_range": {
+          "min": "2026-01-06",
+          "max": "2026-01-06"
+        }
+      },
+      {
+        "supplier": "შპს სიმეტრა",
+        "tax_id": "204567174",
+        "distinct_product_count": 24,
+        "distinct_waybill_count": 8,
+        "total_amount_ge": 2584.96,
+        "date_range": {
+          "min": "2022-10-12",
+          "max": "2024-07-12"
+        }
+      },
+      {
+        "supplier": "შპს თ.ზ.დ.",
+        "tax_id": "401945632",
+        "distinct_product_count": 10,
+        "distinct_waybill_count": 3,
+        "total_amount_ge": 2500.4,
+        "date_range": {
+          "min": "2025-09-13",
+          "max": "2025-10-12"
+        }
+      },
+      {
+        "supplier": "კახაბერი მექოშვილი",
+        "tax_id": "35001049544",
+        "distinct_product_count": 2,
+        "distinct_waybill_count": 14,
+        "total_amount_ge": 2468.0,
+        "date_range": {
+          "min": "2025-02-11",
+          "max": "2025-11-17"
+        }
+      },
+      {
+        "supplier": "შპს ალექს ტრეიდ კორპორაცია",
+        "tax_id": "445702801",
+        "distinct_product_count": 89,
+        "distinct_waybill_count": 22,
+        "total_amount_ge": 2367.3900000000017,
+        "date_range": {
+          "min": "2024-06-12",
+          "max": "2024-12-20"
+        }
+      },
+      {
+        "supplier": "მეხრიბან გუსეინოვა",
+        "tax_id": "28001020360",
+        "distinct_product_count": 8,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 2345.0,
+        "date_range": {
+          "min": "2023-07-25",
+          "max": "2023-07-25"
+        }
+      },
+      {
+        "supplier": "შპს გრეიდი",
+        "tax_id": "443866069",
+        "distinct_product_count": 33,
+        "distinct_waybill_count": 41,
+        "total_amount_ge": 2321.1500000000005,
+        "date_range": {
+          "min": "2022-07-09",
+          "max": "2024-12-30"
+        }
+      },
+      {
+        "supplier": "შპს TRG Group",
+        "tax_id": "245558793",
+        "distinct_product_count": 12,
+        "distinct_waybill_count": 4,
+        "total_amount_ge": 2208.0,
+        "date_range": {
+          "min": "2023-06-12",
+          "max": "2025-06-19"
+        }
+      },
+      {
+        "supplier": "ნოდარ მაისურაძე",
+        "tax_id": "33001059627",
+        "distinct_product_count": 10,
+        "distinct_waybill_count": 4,
+        "total_amount_ge": 2200.0,
+        "date_range": {
+          "min": "2024-09-30",
+          "max": "2025-11-24"
+        }
+      },
+      {
+        "supplier": "შპს რთველისი",
+        "tax_id": "405356680",
+        "distinct_product_count": 10,
+        "distinct_waybill_count": 3,
+        "total_amount_ge": 2140.8,
+        "date_range": {
+          "min": "2025-05-19",
+          "max": "2026-01-26"
+        }
+      },
+      {
+        "supplier": "შპს გეო ტრანსპორტ კომპანი",
+        "tax_id": "415103792",
+        "distinct_product_count": 4,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 2100.0,
+        "date_range": {
+          "min": "2022-06-09",
+          "max": "2022-06-09"
+        }
+      },
+      {
+        "supplier": "ნესტან ქარცივაძე",
+        "tax_id": "61008002307",
+        "distinct_product_count": 6,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 2016.0,
+        "date_range": {
+          "min": "2025-06-01",
+          "max": "2025-06-01"
+        }
+      },
+      {
+        "supplier": "შპს RS Line",
+        "tax_id": "404395463",
+        "distinct_product_count": 12,
+        "distinct_waybill_count": 3,
+        "total_amount_ge": 1942.8000000000002,
+        "date_range": {
+          "min": "2022-06-17",
+          "max": "2024-04-25"
+        }
+      },
+      {
+        "supplier": "რაშიდ იშიგოვი",
+        "tax_id": "61001070418",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 1940.0,
+        "date_range": {
+          "min": "2025-10-16",
+          "max": "2025-10-16"
+        }
+      },
+      {
+        "supplier": "შპს შაპიტო",
+        "tax_id": "405401097",
+        "distinct_product_count": 2,
+        "distinct_waybill_count": 26,
+        "total_amount_ge": 1853.25,
+        "date_range": {
+          "min": "2022-10-18",
+          "max": "2024-05-22"
+        }
+      },
+      {
+        "supplier": "შპს ლიგა +",
+        "tax_id": "406172617",
+        "distinct_product_count": 3,
+        "distinct_waybill_count": 150,
+        "total_amount_ge": 1834.1999999999994,
+        "date_range": {
+          "min": "2022-12-12",
+          "max": "2025-06-12"
+        }
+      },
+      {
+        "supplier": "შპს ახალი თევზი",
+        "tax_id": "417885284",
+        "distinct_product_count": 23,
+        "distinct_waybill_count": 24,
+        "total_amount_ge": 1813.2599999999998,
+        "date_range": {
+          "min": "2023-02-15",
+          "max": "2024-04-30"
+        }
+      },
+      {
+        "supplier": "შპს გვირილა რითეილი",
+        "tax_id": "405536317",
+        "distinct_product_count": 3,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 1786.0,
+        "date_range": {
+          "min": "2025-08-19",
+          "max": "2025-08-19"
+        }
+      },
+      {
+        "supplier": "შპს ST LOGISTICS",
+        "tax_id": "445406347",
+        "distinct_product_count": 20,
+        "distinct_waybill_count": 6,
+        "total_amount_ge": 1739.0,
+        "date_range": {
+          "min": "2023-12-17",
+          "max": "2025-09-19"
+        }
+      },
+      {
+        "supplier": "შპს ლიბო გრუპ",
+        "tax_id": "206314898",
+        "distinct_product_count": 35,
+        "distinct_waybill_count": 7,
+        "total_amount_ge": 1716.3599999999997,
+        "date_range": {
+          "min": "2022-07-11",
+          "max": "2023-09-27"
+        }
+      },
+      {
+        "supplier": "შპს გორგია",
+        "tax_id": "245621288",
+        "distinct_product_count": 39,
+        "distinct_waybill_count": 14,
+        "total_amount_ge": 1639.39,
+        "date_range": {
+          "min": "2022-07-23",
+          "max": "2024-10-13"
+        }
+      },
+      {
+        "supplier": "შპს ეიჩქიუდი ჯორჯია",
+        "tax_id": "405451513",
+        "distinct_product_count": 20,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 1626.7999999999995,
+        "date_range": {
+          "min": "2024-07-18",
+          "max": "2024-07-18"
+        }
+      },
+      {
+        "supplier": "სს მარუსია ბევერიჯის ჯორჯია",
+        "tax_id": "404392885",
+        "distinct_product_count": 13,
+        "distinct_waybill_count": 19,
+        "total_amount_ge": 1511.4699999999993,
+        "date_range": {
+          "min": "2022-07-14",
+          "max": "2024-07-22"
+        }
+      },
+      {
+        "supplier": "შპს ესპრესო ჯორჯია",
+        "tax_id": "205083416",
+        "distinct_product_count": 9,
+        "distinct_waybill_count": 15,
+        "total_amount_ge": 1505.12,
+        "date_range": {
+          "min": "2022-07-22",
+          "max": "2024-05-29"
+        }
+      },
+      {
+        "supplier": "შპს დანი",
+        "tax_id": "405352675",
+        "distinct_product_count": 4,
+        "distinct_waybill_count": 29,
+        "total_amount_ge": 1472.349999999999,
+        "date_range": {
+          "min": "2022-10-26",
+          "max": "2023-12-08"
+        }
+      },
+      {
+        "supplier": "შპს ტიტე 2024",
+        "tax_id": "445757814",
+        "distinct_product_count": 3,
+        "distinct_waybill_count": 13,
+        "total_amount_ge": 1433.7199999999998,
+        "date_range": {
+          "min": "2024-12-27",
+          "max": "2025-03-27"
+        }
+      },
+      {
+        "supplier": "მერაბ ჯაფარიძე",
+        "tax_id": "01001006813",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 1400.0,
+        "date_range": {
+          "min": "2024-04-28",
+          "max": "2024-04-28"
+        }
+      },
+      {
+        "supplier": "შპს არტ ალიანს ირიდა",
+        "tax_id": "215147543",
+        "distinct_product_count": 2,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 1370.0,
+        "date_range": {
+          "min": "2022-06-20",
+          "max": "2023-12-28"
+        }
+      },
+      {
+        "supplier": "შპს ევროპროდუქტი",
+        "tax_id": "202227134",
+        "distinct_product_count": 16,
+        "distinct_waybill_count": 12,
+        "total_amount_ge": 1367.9500000000003,
+        "date_range": {
+          "min": "2023-03-15",
+          "max": "2024-08-06"
+        }
+      },
+      {
+        "supplier": "ზაზა ინაიშვილი",
+        "tax_id": "61004021459",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 1350.0,
+        "date_range": {
+          "min": "2024-01-16",
+          "max": "2024-01-16"
+        }
+      },
+      {
+        "supplier": "შპს რითეილერ",
+        "tax_id": "404921572",
+        "distinct_product_count": 15,
+        "distinct_waybill_count": 5,
+        "total_amount_ge": 1338.21,
+        "date_range": {
+          "min": "2022-12-29",
+          "max": "2024-07-16"
+        }
+      },
+      {
+        "supplier": "შპს ასკანელი ძმები",
+        "tax_id": "200040222",
+        "distinct_product_count": 7,
+        "distinct_waybill_count": 9,
+        "total_amount_ge": 1266.1099999999997,
+        "date_range": {
+          "min": "2022-07-12",
+          "max": "2024-04-18"
+        }
+      },
+      {
+        "supplier": "თემურ ირემაძე",
+        "tax_id": "61009014283",
+        "distinct_product_count": 3,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 1260.0,
+        "date_range": {
+          "min": "2023-12-07",
+          "max": "2023-12-07"
+        }
+      },
+      {
+        "supplier": "შპს ჯორჯიან ვეიპ გრუპ",
+        "tax_id": "405570591",
+        "distinct_product_count": 15,
+        "distinct_waybill_count": 4,
+        "total_amount_ge": 1249.3400000000001,
+        "date_range": {
+          "min": "2023-10-27",
+          "max": "2024-02-02"
+        }
+      },
+      {
+        "supplier": "შპს ვე-ვე-ეს პლიუსი",
+        "tax_id": "447863580",
+        "distinct_product_count": 15,
+        "distinct_waybill_count": 4,
+        "total_amount_ge": 1206.2900000000002,
+        "date_range": {
+          "min": "2022-07-08",
+          "max": "2023-02-21"
+        }
+      },
+      {
+        "supplier": "შპს პალმ ქოლორი",
+        "tax_id": "426554668",
+        "distinct_product_count": 10,
+        "distinct_waybill_count": 4,
+        "total_amount_ge": 1190.0,
+        "date_range": {
+          "min": "2024-12-30",
+          "max": "2025-10-17"
+        }
+      },
+      {
+        "supplier": "შპს მე-ვა",
+        "tax_id": "437066103",
+        "distinct_product_count": 21,
+        "distinct_waybill_count": 9,
+        "total_amount_ge": 1182.0,
+        "date_range": {
+          "min": "2023-06-22",
+          "max": "2025-06-26"
+        }
+      },
+      {
+        "supplier": "შპს NBN",
+        "tax_id": "445394662",
+        "distinct_product_count": 3,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 1161.0,
+        "date_range": {
+          "min": "2023-12-18",
+          "max": "2023-12-18"
+        }
+      },
+      {
+        "supplier": "შპს ბრავო-ს",
+        "tax_id": "400163461",
+        "distinct_product_count": 7,
+        "distinct_waybill_count": 7,
+        "total_amount_ge": 1129.4000000000005,
+        "date_range": {
+          "min": "2022-07-16",
+          "max": "2026-02-19"
+        }
+      },
+      {
+        "supplier": "შპს მერმისი",
+        "tax_id": "405347478",
+        "distinct_product_count": 5,
+        "distinct_waybill_count": 14,
+        "total_amount_ge": 1100.09,
+        "date_range": {
+          "min": "2023-07-02",
+          "max": "2026-01-13"
+        }
+      },
+      {
+        "supplier": "შპს ქალაქური",
+        "tax_id": "400079669",
+        "distinct_product_count": 32,
+        "distinct_waybill_count": 44,
+        "total_amount_ge": 1096.5000000000007,
+        "date_range": {
+          "min": "2022-07-13",
+          "max": "2024-05-30"
+        }
+      },
+      {
+        "supplier": "ბადრი მგალობლიშვილი",
+        "tax_id": "33001025755",
+        "distinct_product_count": 32,
+        "distinct_waybill_count": 13,
+        "total_amount_ge": 1078.0,
+        "date_range": {
+          "min": "2023-12-07",
+          "max": "2024-02-10"
+        }
+      },
+      {
+        "supplier": "შპს ელე+",
+        "tax_id": "415592004",
+        "distinct_product_count": 26,
+        "distinct_waybill_count": 3,
+        "total_amount_ge": 1078.0,
+        "date_range": {
+          "min": "2022-05-31",
+          "max": "2023-08-12"
+        }
+      },
+      {
+        "supplier": "შპს ლორდი",
+        "tax_id": "404503079",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 1000.0,
+        "date_range": {
+          "min": "2023-12-16",
+          "max": "2023-12-16"
+        }
+      },
+      {
+        "supplier": "შპს მასტერ კოფი",
+        "tax_id": "405624178",
+        "distinct_product_count": 11,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 989.0,
+        "date_range": {
+          "min": "2024-05-17",
+          "max": "2024-08-26"
+        }
+      },
+      {
+        "supplier": "შპს ჯეო მარკი",
+        "tax_id": "205239053",
+        "distinct_product_count": 8,
+        "distinct_waybill_count": 18,
+        "total_amount_ge": 975.85,
+        "date_range": {
+          "min": "2022-07-21",
+          "max": "2024-06-06"
+        }
+      },
+      {
+        "supplier": "შპს ორიენტი",
+        "tax_id": "202163292",
+        "distinct_product_count": 21,
+        "distinct_waybill_count": 18,
+        "total_amount_ge": 936.9099999999997,
+        "date_range": {
+          "min": "2022-07-16",
+          "max": "2024-07-26"
+        }
+      },
+      {
+        "supplier": "შპს კარგო",
+        "tax_id": "237071887",
+        "distinct_product_count": 35,
+        "distinct_waybill_count": 13,
+        "total_amount_ge": 930.8,
+        "date_range": {
+          "min": "2023-12-15",
+          "max": "2025-03-24"
+        }
+      },
+      {
+        "supplier": "სს თბილღვინო",
+        "tax_id": "209437242",
+        "distinct_product_count": 11,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 930.8,
+        "date_range": {
+          "min": "2022-07-13",
+          "max": "2023-05-30"
+        }
+      },
+      {
+        "supplier": "ზვიად ვაშალომიძე",
+        "tax_id": "33001035254",
+        "distinct_product_count": 7,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 796.0,
+        "date_range": {
+          "min": "2025-07-06",
+          "max": "2025-07-06"
+        }
+      },
+      {
+        "supplier": "თამაზი შარაშიძე",
+        "tax_id": "12001095781",
+        "distinct_product_count": 3,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 780.0,
+        "date_range": {
+          "min": "2025-10-22",
+          "max": "2025-10-22"
+        }
+      },
+      {
+        "supplier": "შპს ჯ3",
+        "tax_id": "445585037",
+        "distinct_product_count": 9,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 750.06,
+        "date_range": {
+          "min": "2023-12-20",
+          "max": "2023-12-20"
+        }
+      },
+      {
+        "supplier": "შპს ბექარიონი",
+        "tax_id": "404425216",
+        "distinct_product_count": 3,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 700.0,
+        "date_range": {
+          "min": "2022-06-22",
+          "max": "2022-09-29"
+        }
+      },
+      {
+        "supplier": "შპს ბაო",
+        "tax_id": "445404553",
+        "distinct_product_count": 9,
+        "distinct_waybill_count": 5,
+        "total_amount_ge": 698.5,
+        "date_range": {
+          "min": "2022-07-23",
+          "max": "2024-05-01"
+        }
+      },
+      {
+        "supplier": "შპს გიო 2016",
+        "tax_id": "446964688",
+        "distinct_product_count": 6,
+        "distinct_waybill_count": 9,
+        "total_amount_ge": 664.6,
+        "date_range": {
+          "min": "2023-07-11",
+          "max": "2024-07-09"
+        }
+      },
+      {
+        "supplier": "შპს ლეგი",
+        "tax_id": "445394564",
+        "distinct_product_count": 3,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 617.0,
+        "date_range": {
+          "min": "2023-12-29",
+          "max": "2023-12-29"
+        }
+      },
+      {
+        "supplier": "შპს მინოვანი",
+        "tax_id": "437059399",
+        "distinct_product_count": 5,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 616.0,
+        "date_range": {
+          "min": "2025-06-30",
+          "max": "2025-06-30"
+        }
+      },
+      {
+        "supplier": "ნათელა მდინარაძე",
+        "tax_id": "33001021729",
+        "distinct_product_count": 13,
+        "distinct_waybill_count": 10,
+        "total_amount_ge": 537.8,
+        "date_range": {
+          "min": "2024-05-04",
+          "max": "2025-06-15"
+        }
+      },
+      {
+        "supplier": "მალხაზ კობერიძე",
+        "tax_id": "01025004676",
+        "distinct_product_count": 2,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 530.0,
+        "date_range": {
+          "min": "2022-07-22",
+          "max": "2022-07-26"
+        }
+      },
+      {
+        "supplier": "შპს დაკო ტრეიდ",
+        "tax_id": "404994217",
+        "distinct_product_count": 16,
+        "distinct_waybill_count": 7,
+        "total_amount_ge": 503.35999999999996,
+        "date_range": {
+          "min": "2022-10-31",
+          "max": "2023-07-07"
+        }
+      },
+      {
+        "supplier": "შპს ბაქთათ",
+        "tax_id": "402202273",
+        "distinct_product_count": 2,
+        "distinct_waybill_count": 14,
+        "total_amount_ge": 456.0,
+        "date_range": {
+          "min": "2023-07-26",
+          "max": "2024-03-12"
+        }
+      },
+      {
+        "supplier": "შპს დაბი",
+        "tax_id": "401946392",
+        "distinct_product_count": 30,
+        "distinct_waybill_count": 5,
+        "total_amount_ge": 447.34999999999985,
+        "date_range": {
+          "min": "2023-05-31",
+          "max": "2024-05-22"
+        }
+      },
+      {
+        "supplier": "შპს სუნელი",
+        "tax_id": "405025903",
+        "distinct_product_count": 21,
+        "distinct_waybill_count": 12,
+        "total_amount_ge": 438.49999999999994,
+        "date_range": {
+          "min": "2022-11-09",
+          "max": "2024-05-20"
+        }
+      },
+      {
+        "supplier": "შპს Bau-Tech Georgia",
+        "tax_id": "400003278",
+        "distinct_product_count": 10,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 434.90000000000003,
+        "date_range": {
+          "min": "2022-05-18",
+          "max": "2022-05-18"
+        }
+      },
+      {
+        "supplier": "შპს ოთო¿555",
+        "tax_id": "448382633",
+        "distinct_product_count": 3,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 410.0,
+        "date_range": {
+          "min": "2023-12-18",
+          "max": "2023-12-18"
+        }
+      },
+      {
+        "supplier": "შპს ცისკარი",
+        "tax_id": "445593322",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 380.0,
+        "date_range": {
+          "min": "2023-08-17",
+          "max": "2023-08-17"
+        }
+      },
+      {
+        "supplier": "შპს ხალიბი",
+        "tax_id": "415082760",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 380.0,
+        "date_range": {
+          "min": "2024-08-23",
+          "max": "2024-08-23"
+        }
+      },
+      {
+        "supplier": "შპს მეფუტკრე",
+        "tax_id": "406062022",
+        "distinct_product_count": 7,
+        "distinct_waybill_count": 4,
+        "total_amount_ge": 375.37,
+        "date_range": {
+          "min": "2022-07-13",
+          "max": "2022-12-05"
+        }
+      },
+      {
+        "supplier": "შპს ლენო კომპანია",
+        "tax_id": "437080659",
+        "distinct_product_count": 3,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 372.20000000000005,
+        "date_range": {
+          "min": "2025-06-23",
+          "max": "2025-07-14"
+        }
+      },
+      {
+        "supplier": "შპს ბრენდ მეიქერი",
+        "tax_id": "406352478",
+        "distinct_product_count": 6,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 366.38,
+        "date_range": {
+          "min": "2023-11-05",
+          "max": "2023-11-18"
+        }
+      },
+      {
+        "supplier": "შპს დანკე 2022",
+        "tax_id": "420435513",
+        "distinct_product_count": 15,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 364.8,
+        "date_range": {
+          "min": "2022-11-15",
+          "max": "2022-11-25"
+        }
+      },
+      {
+        "supplier": "შპს ლებაგო",
+        "tax_id": "415109126",
+        "distinct_product_count": 3,
+        "distinct_waybill_count": 3,
+        "total_amount_ge": 345.6,
+        "date_range": {
+          "min": "2024-08-25",
+          "max": "2024-08-29"
+        }
+      },
+      {
+        "supplier": "შპს ბიო პლასტი",
+        "tax_id": "412757994",
+        "distinct_product_count": 2,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 345.1,
+        "date_range": {
+          "min": "2024-11-04",
+          "max": "2024-12-09"
+        }
+      },
+      {
+        "supplier": "შპს Bai Group",
+        "tax_id": "400067315",
+        "distinct_product_count": 3,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 339.0,
+        "date_range": {
+          "min": "2025-03-21",
+          "max": "2025-03-21"
+        }
+      },
+      {
+        "supplier": "შპს თამარი-20",
+        "tax_id": "203855006",
+        "distinct_product_count": 2,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 330.0,
+        "date_range": {
+          "min": "2022-07-28",
+          "max": "2022-11-14"
+        }
+      },
+      {
+        "supplier": "ახმედ თავართქილაძე",
+        "tax_id": "33001051786",
+        "distinct_product_count": 2,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 318.0,
+        "date_range": {
+          "min": "2024-07-03",
+          "max": "2024-07-03"
+        }
+      },
+      {
+        "supplier": "შპს ფუდცენტრი",
+        "tax_id": "406509764",
+        "distinct_product_count": 14,
+        "distinct_waybill_count": 8,
+        "total_amount_ge": 317.6,
+        "date_range": {
+          "min": "2025-11-18",
+          "max": "2025-12-19"
+        }
+      },
+      {
+        "supplier": "შპს ბურგერ ქვინი",
+        "tax_id": "405488501",
+        "distinct_product_count": 2,
+        "distinct_waybill_count": 44,
+        "total_amount_ge": 316.7,
+        "date_range": {
+          "min": "2023-10-11",
+          "max": "2024-03-20"
+        }
+      },
+      {
+        "supplier": "თამარი ჭანკვეტაძე",
+        "tax_id": "21001041185",
+        "distinct_product_count": 12,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 316.0,
+        "date_range": {
+          "min": "2024-03-02",
+          "max": "2024-03-02"
+        }
+      },
+      {
+        "supplier": "შპს დისტრიბუტ2",
+        "tax_id": "400048300",
+        "distinct_product_count": 4,
+        "distinct_waybill_count": 4,
+        "total_amount_ge": 311.95,
+        "date_range": {
+          "min": "2023-09-19",
+          "max": "2024-05-28"
+        }
+      },
+      {
+        "supplier": "შპს ეკონომიური",
+        "tax_id": "406291524",
+        "distinct_product_count": 21,
+        "distinct_waybill_count": 11,
+        "total_amount_ge": 311.55,
+        "date_range": {
+          "min": "2022-10-27",
+          "max": "2023-02-12"
+        }
+      },
+      {
+        "supplier": "გოჩა გუჯაბიძე",
+        "tax_id": "33001005573",
+        "distinct_product_count": 3,
+        "distinct_waybill_count": 3,
+        "total_amount_ge": 306.6,
+        "date_range": {
+          "min": "2025-06-30",
+          "max": "2025-12-15"
+        }
+      },
+      {
+        "supplier": "შპს შვეიცარიელი მცხობელი",
+        "tax_id": "205291735",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 88,
+        "total_amount_ge": 303.99999999999994,
+        "date_range": {
+          "min": "2023-03-13",
+          "max": "2024-05-18"
+        }
+      },
+      {
+        "supplier": "შპს ბიზნეს ჯგუფი 77",
+        "tax_id": "405271897",
+        "distinct_product_count": 5,
+        "distinct_waybill_count": 3,
+        "total_amount_ge": 297.0,
+        "date_range": {
+          "min": "2022-05-28",
+          "max": "2022-06-02"
+        }
+      },
+      {
+        "supplier": "თენგიზ წულაია",
+        "tax_id": "62001025730",
+        "distinct_product_count": 3,
+        "distinct_waybill_count": 3,
+        "total_amount_ge": 290.0,
+        "date_range": {
+          "min": "2023-06-13",
+          "max": "2024-11-14"
+        }
+      },
+      {
+        "supplier": "შპს პლასტიკს საქართველო",
+        "tax_id": "404911681",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 270.0,
+        "date_range": {
+          "min": "2025-07-29",
+          "max": "2025-07-29"
+        }
+      },
+      {
+        "supplier": "შპს ბიგჩოისი",
+        "tax_id": "405484051",
+        "distinct_product_count": 3,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 238.0,
+        "date_range": {
+          "min": "2022-07-21",
+          "max": "2023-02-07"
+        }
+      },
+      {
+        "supplier": "შპს ნათების სამყარო",
+        "tax_id": "441996100",
+        "distinct_product_count": 4,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 235.0,
+        "date_range": {
+          "min": "2022-07-28",
+          "max": "2023-02-07"
+        }
+      },
+      {
+        "supplier": "შპს ჯეოგრუპ ჯი",
+        "tax_id": "448417302",
+        "distinct_product_count": 2,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 228.0,
+        "date_range": {
+          "min": "2023-12-18",
+          "max": "2023-12-18"
+        }
+      },
+      {
+        "supplier": "შპს სხივი 1",
+        "tax_id": "400187445",
+        "distinct_product_count": 4,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 222.0,
+        "date_range": {
+          "min": "2022-10-05",
+          "max": "2022-10-05"
+        }
+      },
+      {
+        "supplier": "ლია ეჯოშვილი",
+        "tax_id": "01016006672",
+        "distinct_product_count": 2,
+        "distinct_waybill_count": 4,
+        "total_amount_ge": 208.0,
+        "date_range": {
+          "min": "2022-11-01",
+          "max": "2023-09-04"
+        }
+      },
+      {
+        "supplier": "შპს GUD Company გუდ კომპანი",
+        "tax_id": "400107406",
+        "distinct_product_count": 3,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 202.88,
+        "date_range": {
+          "min": "2023-06-02",
+          "max": "2023-06-06"
+        }
+      },
+      {
+        "supplier": "შპს ედ პრო 2023",
+        "tax_id": "400371156",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 200.0,
+        "date_range": {
+          "min": "2024-08-10",
+          "max": "2024-08-10"
+        }
+      },
+      {
+        "supplier": "შპს ნატახტარი",
+        "tax_id": "401953515",
+        "distinct_product_count": 5,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 173.39999999999998,
+        "date_range": {
+          "min": "2022-07-31",
+          "max": "2022-07-31"
+        }
+      },
+      {
+        "supplier": "შპს მე-ვა 1",
+        "tax_id": "437074112",
+        "distinct_product_count": 2,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 170.0,
+        "date_range": {
+          "min": "2024-04-24",
+          "max": "2024-04-24"
+        }
+      },
+      {
+        "supplier": "შპს ტექჰაბ",
+        "tax_id": "406332552",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 169.0,
+        "date_range": {
+          "min": "2024-07-12",
+          "max": "2024-07-12"
+        }
+      },
+      {
+        "supplier": "არტურ საფაროვი",
+        "tax_id": "01001019199",
+        "distinct_product_count": 2,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 163.0,
+        "date_range": {
+          "min": "2022-06-29",
+          "max": "2022-07-08"
+        }
+      },
+      {
+        "supplier": "გიორგი კიკნაძე",
+        "tax_id": "33001021066",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 160.0,
+        "date_range": {
+          "min": "2025-02-07",
+          "max": "2025-02-07"
+        }
+      },
+      {
+        "supplier": "შპს ბესო",
+        "tax_id": "445447678",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 150.0,
+        "date_range": {
+          "min": "2023-06-12",
+          "max": "2023-06-12"
+        }
+      },
+      {
+        "supplier": "შპს ბიდი პლიუსი",
+        "tax_id": "400177615",
+        "distinct_product_count": 2,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 142.44,
+        "date_range": {
+          "min": "2023-06-02",
+          "max": "2023-06-02"
+        }
+      },
+      {
+        "supplier": "შპს ლაბლაინი",
+        "tax_id": "402042320",
+        "distinct_product_count": 4,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 128.4,
+        "date_range": {
+          "min": "2022-12-20",
+          "max": "2022-12-20"
+        }
+      },
+      {
+        "supplier": "შპს ზღაპრული ღუმელი",
+        "tax_id": "405424884",
+        "distinct_product_count": 6,
+        "distinct_waybill_count": 3,
+        "total_amount_ge": 123.5,
+        "date_range": {
+          "min": "2022-07-15",
+          "max": "2023-07-19"
+        }
+      },
+      {
+        "supplier": "შპს იგოეთი",
+        "tax_id": "432549361",
+        "distinct_product_count": 9,
+        "distinct_waybill_count": 6,
+        "total_amount_ge": 102.05,
+        "date_range": {
+          "min": "2023-07-04",
+          "max": "2023-10-17"
+        }
+      },
+      {
+        "supplier": "შპს ვინილი",
+        "tax_id": "404613227",
+        "distinct_product_count": 4,
+        "distinct_waybill_count": 6,
+        "total_amount_ge": 101.29999999999998,
+        "date_range": {
+          "min": "2023-12-09",
+          "max": "2024-02-13"
+        }
+      },
+      {
+        "supplier": "შპს ალგანი",
+        "tax_id": "202246097",
+        "distinct_product_count": 2,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 100.0,
+        "date_range": {
+          "min": "2022-10-25",
+          "max": "2022-10-25"
+        }
+      },
+      {
+        "supplier": "შპს ამბარი",
+        "tax_id": "401981129",
+        "distinct_product_count": 2,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 86.2,
+        "date_range": {
+          "min": "2022-07-14",
+          "max": "2022-07-14"
+        }
+      },
+      {
+        "supplier": "ელგუჯა ლაცუზბაია",
+        "tax_id": "62005018351",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 85.0,
+        "date_range": {
+          "min": "2023-06-14",
+          "max": "2023-06-14"
+        }
+      },
+      {
+        "supplier": "შპს წალკა +",
+        "tax_id": "448394684",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 85.0,
+        "date_range": {
+          "min": "2023-09-13",
+          "max": "2023-09-13"
+        }
+      },
+      {
+        "supplier": "შპს დომეინ სვანიძე",
+        "tax_id": "406308133",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 84.0,
+        "date_range": {
+          "min": "2022-07-13",
+          "max": "2022-07-13"
+        }
+      },
+      {
+        "supplier": "გურამ ქათამაძე",
+        "tax_id": "61009022233",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 80.0,
+        "date_range": {
+          "min": "2023-06-23",
+          "max": "2023-06-23"
+        }
+      },
+      {
+        "supplier": "შპს კომპიუტექსი",
+        "tax_id": "405215397",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 80.0,
+        "date_range": {
+          "min": "2022-07-23",
+          "max": "2022-07-23"
+        }
+      },
+      {
+        "supplier": "შპს რანინა",
+        "tax_id": "402112192",
+        "distinct_product_count": 4,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 79.60000000000001,
+        "date_range": {
+          "min": "2022-07-22",
+          "max": "2022-07-22"
+        }
+      },
+      {
+        "supplier": "შპს შაომი საქართველო",
+        "tax_id": "405445727",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 79.0,
+        "date_range": {
+          "min": "2022-06-28",
+          "max": "2022-06-28"
+        }
+      },
+      {
+        "supplier": "შპს ჯასტინი",
+        "tax_id": "406294987",
+        "distinct_product_count": 2,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 77.0,
+        "date_range": {
+          "min": "2022-07-26",
+          "max": "2022-07-26"
+        }
+      },
+      {
+        "supplier": "ნუნუ სიმონიშვილი",
+        "tax_id": "33001018491",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 75.0,
+        "date_range": {
+          "min": "2023-06-14",
+          "max": "2023-06-14"
+        }
+      },
+      {
+        "supplier": "შპს ვიტამინი 2017",
+        "tax_id": "400184910",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 75.0,
+        "date_range": {
+          "min": "2022-10-30",
+          "max": "2022-10-30"
+        }
+      },
+      {
+        "supplier": "შპს კულინარა",
+        "tax_id": "400281510",
+        "distinct_product_count": 3,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 72.5,
+        "date_range": {
+          "min": "2022-10-19",
+          "max": "2022-10-19"
+        }
+      },
+      {
+        "supplier": "შპს ალბატროს შიპინგ ენდ ფორვარდინგ",
+        "tax_id": "215139464",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 72.5,
+        "date_range": {
+          "min": "2024-04-26",
+          "max": "2024-04-26"
+        }
+      },
+      {
+        "supplier": "შპს პროტექი",
+        "tax_id": "438117477",
+        "distinct_product_count": 2,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 60.0,
+        "date_range": {
+          "min": "2023-04-07",
+          "max": "2023-04-07"
+        }
+      },
+      {
+        "supplier": "შპს თი თი სი",
+        "tax_id": "205200815",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 56.0,
+        "date_range": {
+          "min": "2022-10-27",
+          "max": "2022-10-27"
+        }
+      },
+      {
+        "supplier": "ნინო ტიბუა",
+        "tax_id": "01017051888",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 55.0,
+        "date_range": {
+          "min": "2022-06-29",
+          "max": "2022-06-29"
+        }
+      },
+      {
+        "supplier": "შპს ალკო-ჯი",
+        "tax_id": "406296743",
+        "distinct_product_count": 2,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 45.36,
+        "date_range": {
+          "min": "2022-11-29",
+          "max": "2023-03-20"
+        }
+      },
+      {
+        "supplier": "ნატო ხორავა",
+        "tax_id": "42001014841",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 45.0,
+        "date_range": {
+          "min": "2024-04-30",
+          "max": "2024-04-30"
+        }
+      },
+      {
+        "supplier": "დავითი ყურაშვილი",
+        "tax_id": "01003003858",
+        "distinct_product_count": 6,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 44.0,
+        "date_range": {
+          "min": "2022-07-28",
+          "max": "2022-07-28"
+        }
+      },
+      {
+        "supplier": "შპს სამი ძმა",
+        "tax_id": "405194427",
+        "distinct_product_count": 4,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 42.0,
+        "date_range": {
+          "min": "2022-10-19",
+          "max": "2022-10-19"
+        }
+      },
+      {
+        "supplier": "შპს თომა",
+        "tax_id": "415596769",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 40.0,
+        "date_range": {
+          "min": "2022-05-31",
+          "max": "2022-05-31"
+        }
+      },
+      {
+        "supplier": "შპს ლაზი გლასს",
+        "tax_id": "436052236",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 38.0,
+        "date_range": {
+          "min": "2022-11-17",
+          "max": "2022-11-17"
+        }
+      },
+      {
+        "supplier": "შპს იკა ფრუტი",
+        "tax_id": "402165090",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 35.0,
+        "date_range": {
+          "min": "2022-10-30",
+          "max": "2022-10-30"
+        }
+      },
+      {
+        "supplier": "ბიძინა მჟავანაძე",
+        "tax_id": "33001006666",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 32.0,
+        "date_range": {
+          "min": "2026-01-06",
+          "max": "2026-01-06"
+        }
+      },
+      {
+        "supplier": "ნოდარ ბრეკაშვილი",
+        "tax_id": "01030017691",
+        "distinct_product_count": 3,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 31.0,
+        "date_range": {
+          "min": "2022-05-21",
+          "max": "2022-05-21"
+        }
+      },
+      {
+        "supplier": "შპს რიდექს ჯორჯია",
+        "tax_id": "404987804",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 29.7,
+        "date_range": {
+          "min": "2023-07-31",
+          "max": "2023-07-31"
+        }
+      },
+      {
+        "supplier": "შპს ონოგურისი",
+        "tax_id": "401990903",
+        "distinct_product_count": 2,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 27.0,
+        "date_range": {
+          "min": "2022-07-28",
+          "max": "2022-07-28"
+        }
+      },
+      {
+        "supplier": "შპს კირიბი",
+        "tax_id": "205272603",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 18.0,
+        "date_range": {
+          "min": "2022-10-21",
+          "max": "2022-10-21"
+        }
+      },
+      {
+        "supplier": "გოჩა გაბოძე",
+        "tax_id": "01001042837",
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 8.0,
+        "date_range": {
+          "min": "2022-10-19",
+          "max": "2022-10-19"
+        }
+      },
+      {
+        "supplier": "უცნობი მომწოდებელი",
+        "tax_id": null,
+        "distinct_product_count": 30,
+        "distinct_waybill_count": 7,
+        "total_amount_ge": 0.0,
+        "date_range": {
+          "min": null,
+          "max": null
+        }
+      },
+      {
+        "supplier": "ტრანსპორტირებით",
+        "tax_id": null,
+        "distinct_product_count": 9,
+        "distinct_waybill_count": 0,
+        "total_amount_ge": 0.0,
+        "date_range": {
+          "min": "2022-06-17",
+          "max": "2026-02-24"
+        }
+      },
+      {
+        "supplier": "ქ. დ.",
+        "tax_id": null,
+        "distinct_product_count": 3,
+        "distinct_waybill_count": 7,
+        "total_amount_ge": 0.0,
+        "date_range": {
+          "min": null,
+          "max": null
+        }
+      },
+      {
+        "supplier": "შპს ქარელის ხილი",
+        "tax_id": "405088569",
+        "distinct_product_count": 5,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 0.0,
+        "date_range": {
+          "min": "2022-07-12",
+          "max": "2022-09-05"
+        }
+      },
+      {
+        "supplier": "ტრანსპორტირების გარეშე",
+        "tax_id": null,
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 0,
+        "total_amount_ge": 0.0,
+        "date_range": {
+          "min": "2023-07-31",
+          "max": "2023-07-31"
+        }
+      },
+      {
+        "supplier": "ქვე-ზედნადები",
+        "tax_id": null,
+        "distinct_product_count": 1,
+        "distinct_waybill_count": 0,
+        "total_amount_ge": 0.0,
+        "date_range": {
+          "min": "2024-05-07",
+          "max": "2024-05-07"
+        }
+      }
+    ],
+    "products": [
+      {
+        "product_code": "1002",
+        "product_name": "შეფუთული ქვის პური",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 3391,
+        "total_amount_ge": 178008.79999999996,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2165",
+        "product_name": "ვინსტონ კომპაქტ ექსელ ბლუ  (PP)*",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 123,
+        "total_amount_ge": 127865.50000000003,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5449000000286",
+        "product_name": "2ლ  კოკა-კოლა (6ც.)",
+        "distinct_supplier_count": 3,
+        "distinct_waybill_count": 499,
+        "total_amount_ge": 122199.51999999999,
+        "top_supplier_share_pct": 87.45887054220836
+      },
+      {
+        "product_code": "2157",
+        "product_name": "ქემელი 1913 ორიგინალ იელოუ  (PP)*",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 119,
+        "total_amount_ge": 117382.99999999997,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2158",
+        "product_name": "ქემელი 1913 ორიგინალ ბლუ  (PP)*",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 113,
+        "total_amount_ge": 107140.99999999997,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "7306192",
+        "product_name": "ლითონის პროფილი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 101052.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48504355",
+        "product_name": "სიგარეტი \"Vip Blue Slims\"",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 304,
+        "total_amount_ge": 91420.69999999991,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48602952",
+        "product_name": "პარლამენტი აქვა ბლუ (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 376,
+        "total_amount_ge": 87849.50000000001,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48509848",
+        "product_name": "სიგარეტი \"Black Tip Compact Brown\"",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 318,
+        "total_amount_ge": 84699.00000000001,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48605366",
+        "product_name": "ელ ენდ ემი ფერსტ ქათ რედ (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 362,
+        "total_amount_ge": 77511.09999999989,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2126",
+        "product_name": "ქემელი 1913 ორიგინალ იელოუ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 172,
+        "total_amount_ge": 77342.30000000002,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48605489",
+        "product_name": "პარლამენტი აქვა ბლუ (PP)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 184,
+        "total_amount_ge": 74554.59999999987,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48602945",
+        "product_name": "პარლამენტი ნაით ბლუ (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 343,
+        "total_amount_ge": 66551.89999999997,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "54491472",
+        "product_name": "0.500ლ  კოკა-კოლა",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 357,
+        "total_amount_ge": 65815.7999999999,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48605472",
+        "product_name": "პარლამენტი ნაით ბლუ (PP)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 176,
+        "total_amount_ge": 64969.900000000045,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860101500702",
+        "product_name": "ეკო ბატონი ქაღალდში",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 3136,
+        "total_amount_ge": 64682.43000000063,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2127",
+        "product_name": "ქემელი 1913 ორიგინალ ბლუ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 178,
+        "total_amount_ge": 62054.000000000015,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48605908",
+        "product_name": "ელ ენდ ემი  რედ (PP)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 177,
+        "total_amount_ge": 60952.29999999998,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48604062",
+        "product_name": "მალბორო ბლექ გოლდ (10ც) NEW",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 370,
+        "total_amount_ge": 59154.099999999904,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4865602000027",
+        "product_name": "ნაბეღლავი 1 ლ. პეტი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 175,
+        "total_amount_ge": 55648.55999999999,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48606622",
+        "product_name": "მალბორო ქრაფთიდ რედი (PP)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 181,
+        "total_amount_ge": 50078.79999999996,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48606639",
+        "product_name": "მალბორო ქრაფთიდ გოლდი (PP)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 181,
+        "total_amount_ge": 49452.99999999996,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48606646",
+        "product_name": "მალბორო ქრაფთიდ კომპაქტ გოლდი (PP)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 174,
+        "total_amount_ge": 47530.999999999985,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860101500016",
+        "product_name": "ბატონი დაჭრილი  ქართო",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 2162,
+        "total_amount_ge": 47494.98999999974,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48606653",
+        "product_name": "მალბორო ქრაფთიდ ფორესტ მიქსი (PP)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 166,
+        "total_amount_ge": 41344.799999999974,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48605359",
+        "product_name": "ელ ენდ ემი ფერსტ ქათ ბლუ (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 294,
+        "total_amount_ge": 38134.44999999989,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "45",
+        "product_name": "ყავა თურქული",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 161,
+        "total_amount_ge": 35554.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48605557",
+        "product_name": "მალბორო ბლექ გოლდ (PP)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 155,
+        "total_amount_ge": 35459.09999999994,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48602587",
+        "product_name": "მალბორო (წითელი FWD) (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 281,
+        "total_amount_ge": 35004.599999999875,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48511094",
+        "product_name": "სიგარეტი \"Modena Black\"",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 263,
+        "total_amount_ge": 34747.89999999999,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48605915",
+        "product_name": "ელ ენდ ემი  ბლუ (PP)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 148,
+        "total_amount_ge": 32982.299999999996,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2148",
+        "product_name": "სობრანიე ბლექი  (PP)*",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 102,
+        "total_amount_ge": 31807.99999999999,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "0001",
+        "product_name": "ხინკალი ხორცის 20ც 4860101980023",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 35,
+        "total_amount_ge": 29036.7,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48605533",
+        "product_name": "მალბორო (წითელი FWD) (PP)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 140,
+        "total_amount_ge": 27833.800000000007,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2149",
+        "product_name": "სობრანიე ბლუ  (PP)*",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 95,
+        "total_amount_ge": 27216.399999999994,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860104288843",
+        "product_name": "330 მლ ენერგეტიკული სასმელი \"16TH\" (მეთექვსმეტე) , 12 ც/ყ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 85,
+        "total_amount_ge": 26514.21999999998,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5060466511705",
+        "product_name": "ბერნი (12 ცალი)",
+        "distinct_supplier_count": 3,
+        "distinct_waybill_count": 359,
+        "total_amount_ge": 26413.210000000014,
+        "top_supplier_share_pct": 91.2170841787121
+      },
+      {
+        "product_code": "5449000000996",
+        "product_name": "0.330ლ  კოკა-კოლა  ქილა",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 314,
+        "total_amount_ge": 25807.559999999838,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "1020",
+        "product_name": "შაქარი   50კგ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 75,
+        "total_amount_ge": 25164.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860103352217",
+        "product_name": "ლუდი ბავარია 2.50 ლ პეტი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 131,
+        "total_amount_ge": 24756.950000000033,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48603553",
+        "product_name": "სიგარეტი \"Vip Blue King Size\"",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 223,
+        "total_amount_ge": 24368.899999999878,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5449000000439",
+        "product_name": "1.500ლ  კოკა-კოლა (6ც.)",
+        "distinct_supplier_count": 3,
+        "distinct_waybill_count": 338,
+        "total_amount_ge": 23462.189999999973,
+        "top_supplier_share_pct": 85.62499920084183
+      },
+      {
+        "product_code": "4860103350046",
+        "product_name": "ლუდი ზედაზენი 2.50 ლ პეტი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 142,
+        "total_amount_ge": 22201.560000000016,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48606684",
+        "product_name": "პარლამენტ სოჰო აქვა ბლუ (PP)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 129,
+        "total_amount_ge": 22172.400000000023,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2166",
+        "product_name": "ვინსტონ კომპაქტ ექსელ სილვერ  (PP)*",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 93,
+        "total_amount_ge": 22122.799999999985,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "1021",
+        "product_name": "ფილტრ.სიგარ. \"პირველი\" ლოფტი რედ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 70,
+        "total_amount_ge": 22086.200000000008,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5449000155726",
+        "product_name": "კაპი ფორთოხალი პალპი 0,5ლ.(12ც.)",
+        "distinct_supplier_count": 3,
+        "distinct_waybill_count": 321,
+        "total_amount_ge": 21629.28000000006,
+        "top_supplier_share_pct": 93.65526730432083
+      },
+      {
+        "product_code": "5449000004840",
+        "product_name": "2ლ ფანტა (6ც.)",
+        "distinct_supplier_count": 3,
+        "distinct_waybill_count": 347,
+        "total_amount_ge": 21042.09999999987,
+        "top_supplier_share_pct": 91.87970782383883
+      },
+      {
+        "product_code": "5906485301012",
+        "product_name": "XL - ენერგეტიკული სასმელი - 250 მლ*24ც/ყ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 77,
+        "total_amount_ge": 21023.09000000003,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48511100",
+        "product_name": "სიგარეტი \"Modena White\"",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 161,
+        "total_amount_ge": 20950.750000000004,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2018",
+        "product_name": "სობრანიე ბლექი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 160,
+        "total_amount_ge": 20836.699999999993,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "1020",
+        "product_name": "ფილტრ.სიგარ. \"პირველი\" პრემიუმ ლოფტი ბლუ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 62,
+        "total_amount_ge": 19272.60000000001,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "90338243",
+        "product_name": "0,250ლ კოკა-კოლა PET",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 257,
+        "total_amount_ge": 18891.599999999988,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "14",
+        "product_name": "\"იტალი\" მარცვალი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 83,
+        "total_amount_ge": 18236.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48606677",
+        "product_name": "პარლამენტ სოჰო ნაით ბლუ (PP)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 113,
+        "total_amount_ge": 18198.85,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48605960",
+        "product_name": "მალბორო ქრაფთიდ რედი (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 157,
+        "total_amount_ge": 17963.199999999983,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4865602001079",
+        "product_name": "ბუღა 0.33 ლ ალუმინი ენერგეტიკული სასმელი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 120,
+        "total_amount_ge": 17898.07999999999,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860001000319",
+        "product_name": "ნაყინი თოლია ვანილი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 130,
+        "total_amount_ge": 17794.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860103355553",
+        "product_name": "ლუდი რავი 2.50 ლ პეტი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 122,
+        "total_amount_ge": 17413.37999999997,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5449000131843",
+        "product_name": "2ლ  კოკა-კოლა შაქრის გარეშე (6ც.)",
+        "distinct_supplier_count": 3,
+        "distinct_waybill_count": 325,
+        "total_amount_ge": 17352.379999999954,
+        "top_supplier_share_pct": 89.02467557764408
+      },
+      {
+        "product_code": "48605977",
+        "product_name": "მალბორო ქრაფთიდ გოლდი (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 167,
+        "total_amount_ge": 17139.9,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860009781715",
+        "product_name": "ნაყინი ჭიქის (ვანილი)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 96,
+        "total_amount_ge": 17137.5,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860103356628",
+        "product_name": "2.5ლ ლუდი (მილერი) miller  პეტი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 93,
+        "total_amount_ge": 17083.220000000005,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48605564",
+        "product_name": "მალბორო თაჩი 6მგ (PP)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 97,
+        "total_amount_ge": 17004.399999999998,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860101500825",
+        "product_name": "ეკონომ ბატონი დაჭრილი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 1490,
+        "total_amount_ge": 16860.369999999988,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5449000050533",
+        "product_name": "1ლ  კოკა-კოლა",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 254,
+        "total_amount_ge": 16577.460000000025,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860103357441",
+        "product_name": "ლუდი შტარნბერგერი 2.50 ლ პეტი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 71,
+        "total_amount_ge": 16481.34000000002,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860101500054",
+        "product_name": "ბატონი ქაღალდში ქართო",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 1889,
+        "total_amount_ge": 16300.589999999613,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48603157",
+        "product_name": "მალბორო თაჩი 6მგ (10ც) NEW",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 171,
+        "total_amount_ge": 16085.499999999985,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "90162718",
+        "product_name": "რედბული 0.25ლ  ენერგეტიკული",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 65,
+        "total_amount_ge": 16068.900000000012,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "000000000246",
+        "product_name": "პრემიო \"მონადირული\"",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 133,
+        "total_amount_ge": 15954.720000000007,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860103355898",
+        "product_name": "ბელგიური ლუდი სტანდარტი 3,0 ლ პეტი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 91,
+        "total_amount_ge": 15310.799999999987,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "11",
+        "product_name": "ლუდი ბათუმური",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 34,
+        "total_amount_ge": 14880.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5449000292650",
+        "product_name": "0,5ლ მინერ. წყალი მთის",
+        "distinct_supplier_count": 2,
+        "distinct_waybill_count": 234,
+        "total_amount_ge": 14280.059999999969,
+        "top_supplier_share_pct": 97.04833172969862
+      },
+      {
+        "product_code": "1-",
+        "product_name": "დახლი ევოკ ჰოტ 150-მეტალის სტელაჟით",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 14000.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2162",
+        "product_name": "ქემელი სლიმს ბლუ LSS  (PP)*",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 94,
+        "total_amount_ge": 13895.000000000002,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860103352378",
+        "product_name": "0.25 ლ ქილა ენერგეტიკა Rad Rain",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 165,
+        "total_amount_ge": 13472.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860103354440",
+        "product_name": "ლუდი სანაპირო 2.5 ლ პეტი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 65,
+        "total_amount_ge": 13032.039999999997,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2142",
+        "product_name": "ვინსტონი XS ბლუ  (PP)*",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 71,
+        "total_amount_ge": 12869.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48209977",
+        "product_name": "Kent Navi Blue",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 89,
+        "total_amount_ge": 12739.700000000006,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48603997",
+        "product_name": "მალბორო გოლდი (3,0 ორიჯინალი) (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 131,
+        "total_amount_ge": 12651.099999999982,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5449000131836",
+        "product_name": "0.500ლ  კოკა-კოლა შაქრის გარეშე",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 273,
+        "total_amount_ge": 12093.599999999924,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860007050356",
+        "product_name": "კვერცხი მარკეტი საქართველო(10)ც",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 53,
+        "total_amount_ge": 12081.199999999999,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48605946",
+        "product_name": "ელ ენდ ემ ლოფტ იქს ელ ფერსტ ქათ ნაით ბლუ (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 172,
+        "total_amount_ge": 12064.600000000022,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48606585",
+        "product_name": "ელ ენდ ემ ლოფტ იქს ელ ფერსტ ქათ ნაით ბლუ (PP)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 100,
+        "total_amount_ge": 11931.099999999975,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48605502",
+        "product_name": "პარლამენტი რეზერვი (PP)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 76,
+        "total_amount_ge": 11842.40000000001,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860111651012",
+        "product_name": "ლუდი კაიაკი - პეტი 2.5ლ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 75,
+        "total_amount_ge": 11665.95,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2138",
+        "product_name": "ვინსტონ კომპაქტ ექსელ ბლუ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 39,
+        "total_amount_ge": 11631.2,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5449000189325",
+        "product_name": "ცივი ჩაი ატამი 0,5ლ(12ც.)",
+        "distinct_supplier_count": 3,
+        "distinct_waybill_count": 287,
+        "total_amount_ge": 11626.080000000029,
+        "top_supplier_share_pct": 90.45662854547707
+      },
+      {
+        "product_code": "4860111651142",
+        "product_name": "ლუდი ჰაინეკენი - მინის ბოთლი 0,50ლ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 76,
+        "total_amount_ge": 11574.95,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5449000083128",
+        "product_name": "2ლ ფანტა ტროპიკი (6ც.)",
+        "distinct_supplier_count": 3,
+        "distinct_waybill_count": 266,
+        "total_amount_ge": 11513.219999999965,
+        "top_supplier_share_pct": 91.65237874373976
+      },
+      {
+        "product_code": "112100",
+        "product_name": "ბორჯომი 1.0 პეტი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 137,
+        "total_amount_ge": 11454.000000000002,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5449000185259",
+        "product_name": "კაპი ატამი  0,5ლ.(12ც.)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 199,
+        "total_amount_ge": 11197.440000000051,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2154",
+        "product_name": "სობრანიე კასტერი  (PP)*",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 59,
+        "total_amount_ge": 11101.400000000005,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48606660",
+        "product_name": "პარლამენტ სოჰო აქვა სუპერ სლიმსი (PP)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 75,
+        "total_amount_ge": 10966.649999999983,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48606219",
+        "product_name": "მალბორო ქრაფთიდ ფორესტ ჩილი (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 118,
+        "total_amount_ge": 10894.050000000008,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5449000243003",
+        "product_name": "0,250ლ  კოკა-კოლა +ყავა (12ც.)",
+        "distinct_supplier_count": 3,
+        "distinct_waybill_count": 201,
+        "total_amount_ge": 10886.87999999997,
+        "top_supplier_share_pct": 95.26255456108636
+      },
+      {
+        "product_code": "40822938",
+        "product_name": "0.500ლ ფანტა",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 248,
+        "total_amount_ge": 10794.119999999944,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860051004237",
+        "product_name": "მაწონი 400 გრ",
+        "distinct_supplier_count": 2,
+        "distinct_waybill_count": 362,
+        "total_amount_ge": 10621.280000000017,
+        "top_supplier_share_pct": 60.033630598195344
+      },
+      {
+        "product_code": "48509855",
+        "product_name": "სიგარეტი \"Black Tip Compact White\"",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 126,
+        "total_amount_ge": 10369.3,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48602983",
+        "product_name": "პარლამენტი რეზერვი (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 110,
+        "total_amount_ge": 10260.299999999987,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2019",
+        "product_name": "სობრანიე ბლუ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 97,
+        "total_amount_ge": 10070.700000000004,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "40",
+        "product_name": "პროფილირებული თუნუქი 0,5  3005",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 9996.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2151",
+        "product_name": "სობრანიე ბლექს (KS SS)  (PP)*",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 43,
+        "total_amount_ge": 9954.199999999993,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48606240",
+        "product_name": "პარლამენტ სოჰო აქვა ბლუ (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 88,
+        "total_amount_ge": 9654.250000000013,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48606202",
+        "product_name": "მალბორო ქრაფთიდ კომპაქტი (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 103,
+        "total_amount_ge": 9627.300000000005,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "122100",
+        "product_name": "ლიკანი 1.00 პეტი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 127,
+        "total_amount_ge": 9611.400000000001,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "142050",
+        "product_name": "ბაკურიანი 0.5 პეტი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 112,
+        "total_amount_ge": 9610.800000000003,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2006",
+        "product_name": "ვინსტონი ბლუ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 104,
+        "total_amount_ge": 9482.300000000001,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2047",
+        "product_name": "სობრანიე ბლექს (KS SS)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 92,
+        "total_amount_ge": 9453.349999999997,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2104",
+        "product_name": "ვინსტონ კომპაქტი ბლუ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 102,
+        "total_amount_ge": 9448.599999999999,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48605298",
+        "product_name": "მალბორო გოლდ თაჩი (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 123,
+        "total_amount_ge": 9447.450000000015,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860111650756",
+        "product_name": "ლუდი ყაზბეგი - პეტი 2.50ლ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 67,
+        "total_amount_ge": 9412.140000000001,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "54490451",
+        "product_name": "0.330ლ  კოკა-კოლა შუშის ბ.",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 196,
+        "total_amount_ge": 9368.40000000002,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48602969",
+        "product_name": "პარლამენტი სილვერ ბლუ (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 94,
+        "total_amount_ge": 9297.400000000001,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2141",
+        "product_name": "ვინსტონი ბლუ  (PP)*",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 52,
+        "total_amount_ge": 9222.399999999998,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5449000052926",
+        "product_name": "1.500ლ ფანტა (6ც.)",
+        "distinct_supplier_count": 3,
+        "distinct_waybill_count": 241,
+        "total_amount_ge": 8873.970000000018,
+        "top_supplier_share_pct": 88.03072356566453
+      },
+      {
+        "product_code": "4860009781722",
+        "product_name": "ნაყინი ჭიქის (შოკოლადი)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 89,
+        "total_amount_ge": 8862.5,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4690388111359",
+        "product_name": "ლეისი ნატურალური კარტოფილის ჩიფსი ყველის გემოთი 140გ 19X",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 114,
+        "total_amount_ge": 8843.410000000002,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5449000288813",
+        "product_name": "კაპი ტყის კენკრა 0,5ლ (12ც.)",
+        "distinct_supplier_count": 3,
+        "distinct_waybill_count": 184,
+        "total_amount_ge": 8842.680000000018,
+        "top_supplier_share_pct": 92.5009160118878
+      },
+      {
+        "product_code": "2015",
+        "product_name": "ვინსტონი ბლუ სუპერ სლიმი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 97,
+        "total_amount_ge": 8811.949999999995,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2004",
+        "product_name": "შეფუთული ქვის პური რუხი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 1371,
+        "total_amount_ge": 8788.899999999992,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48606592",
+        "product_name": "ელ ენდ ემ ლოფტ იქს ელ ფერსტ ქათ ბლუ (PP)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 71,
+        "total_amount_ge": 8664.049999999994,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5901559951162",
+        "product_name": "ლუდი ჰეინეკენი 0.5 ლ შუშა",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 50,
+        "total_amount_ge": 8452.5,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48605953",
+        "product_name": "ელ ენდ ემ ლოფტ იქს ელ ფერსტ ქათ ბლუ (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 134,
+        "total_amount_ge": 8439.45000000001,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860001122899",
+        "product_name": "ლუდი ქარვა პეტი 2.5 ლ.",
+        "distinct_supplier_count": 2,
+        "distinct_waybill_count": 48,
+        "total_amount_ge": 8317.140000000001,
+        "top_supplier_share_pct": 70.39366897755718
+      },
+      {
+        "product_code": "48605540",
+        "product_name": "მალბორო გოლდი (3,0 ორიჯინალი) (PP)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 51,
+        "total_amount_ge": 8201.400000000001,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860009781784",
+        "product_name": "ნაყინი ესკიმო პრემიუმი (ვანილი, თხილი მინანქარში)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 68,
+        "total_amount_ge": 8100.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5449000189394",
+        "product_name": "ცივი ჩაი ტყის კენკრა 0,5ლ (12ც.)",
+        "distinct_supplier_count": 3,
+        "distinct_waybill_count": 223,
+        "total_amount_ge": 8040.960000000027,
+        "top_supplier_share_pct": 90.42651623686727
+      },
+      {
+        "product_code": "5449000185242",
+        "product_name": "კაპი ალუბალი  0,5ლ.(12ც.)",
+        "distinct_supplier_count": 3,
+        "distinct_waybill_count": 189,
+        "total_amount_ge": 8028.6000000000295,
+        "top_supplier_share_pct": 92.91831701666544
+      },
+      {
+        "product_code": "4860051004961",
+        "product_name": "არაჟანი ნაღებით 400 გრ",
+        "distinct_supplier_count": 2,
+        "distinct_waybill_count": 274,
+        "total_amount_ge": 8024.560000000001,
+        "top_supplier_share_pct": 54.1825346187205
+      },
+      {
+        "product_code": "8325215",
+        "product_name": "გენერატორი ბენზინზე მომუშავე 7 KW / 8,8 KVA (RODEX)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 8000.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4865602001185",
+        "product_name": "ბუღა 0.25 ლ ალუმინი ენერგეტიკული სასმელი",
+        "distinct_supplier_count": 2,
+        "distinct_waybill_count": 93,
+        "total_amount_ge": 7983.020000000014,
+        "top_supplier_share_pct": 99.66804542641758
+      },
+      {
+        "product_code": "2009",
+        "product_name": "ვინსტონი XS ბლუ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 97,
+        "total_amount_ge": 7957.349999999992,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860001122899",
+        "product_name": "ქარვა შეკვრა 2.5ლ პეტი 1*6",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 25,
+        "total_amount_ge": 7898.259999999998,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48606615",
+        "product_name": "მალბორო ტროპიკალ მიქს (PP)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 50,
+        "total_amount_ge": 7893.2999999999965,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2146",
+        "product_name": "ვინსტონი ბლუ სუპერ სლიმი  (PP)*",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 44,
+        "total_amount_ge": 7861.600000000003,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2086",
+        "product_name": "ვინსტონი ბლუ 100S",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 80,
+        "total_amount_ge": 7844.999999999996,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860020002400",
+        "product_name": "0,150ლ  კოკა-კოლა (12ც.) ქილა",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 120,
+        "total_amount_ge": 7782.600000000005,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "46",
+        "product_name": "ყავა გოლდი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 94,
+        "total_amount_ge": 7776.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48603300",
+        "product_name": "ფილიპ მორის კომპაქტ ბლექი (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 108,
+        "total_amount_ge": 7745.999999999983,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5999884034483",
+        "product_name": "HELL ENERGY CLASSIC 0.25",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 49,
+        "total_amount_ge": 7741.24,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860001000449",
+        "product_name": "ნაყინი ესკიმო ვანილის ნაყინი რძიანი შოკოლადის სარკალში (60)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 101,
+        "total_amount_ge": 7724.999999999985,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860051004237",
+        "product_name": "სანტე მაწონი 3.2% 400 გ.",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 130,
+        "total_amount_ge": 7624.619999999994,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5449000011527",
+        "product_name": "0.330ლ ფანტა ქილა",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 178,
+        "total_amount_ge": 7620.89999999998,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860103350015",
+        "product_name": "ლუდი ზედაზენი 0.50 ლ შუშა",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 84,
+        "total_amount_ge": 7609.199999999984,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "42094579",
+        "product_name": "0.500ლ ფანტა ტროპიკი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 198,
+        "total_amount_ge": 7520.879999999962,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2102",
+        "product_name": "სობრანიე კასტერი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 75,
+        "total_amount_ge": 7494.500000000002,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48606264",
+        "product_name": "ტერეა სან ფერლი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 74,
+        "total_amount_ge": 7452.000000000007,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48605496",
+        "product_name": "პარლამენტი სილვერ ბლუ (PP)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 43,
+        "total_amount_ge": 7427.100000000004,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860001882137",
+        "product_name": "0.33 ლ MAX Power",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 85,
+        "total_amount_ge": 7375.080000000003,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2400747",
+        "product_name": "შაქარი 50 კგ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 20,
+        "total_amount_ge": 7278.060000000001,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2122",
+        "product_name": "სობრანიე რიჩი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 58,
+        "total_amount_ge": 7151.750000000001,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "8690624103069",
+        "product_name": "ლეისი პაპრიკა 155გ 12X",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 115,
+        "total_amount_ge": 7063.05,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "90376504",
+        "product_name": "რედბული 0.355ლ  ენერგეტიკული",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 55,
+        "total_amount_ge": 7035.249999999994,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860001123551",
+        "product_name": "ლუდი ლოვენბრაუ 2.5 ლ პეტი",
+        "distinct_supplier_count": 2,
+        "distinct_waybill_count": 50,
+        "total_amount_ge": 6960.480000000001,
+        "top_supplier_share_pct": 52.04727260188952
+      },
+      {
+        "product_code": "48604543",
+        "product_name": "ჰითს სილვერ სელექშენ (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 79,
+        "total_amount_ge": 6932.949999999996,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "02570",
+        "product_name": "პილმენი ციმბირული 800გრ 4860101980320",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 33,
+        "total_amount_ge": 6912.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48606257",
+        "product_name": "პარლამენტ სოჰო ნაით ბლუ (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 67,
+        "total_amount_ge": 6860.5000000000055,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860103355898",
+        "product_name": "ბელგიური სტანდარტი 3,0 ლ პეტი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 74,
+        "total_amount_ge": 6858.240000000006,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860009783450",
+        "product_name": "ნაყინი ჭიქის  \"ბარამბინო\"–ვანილი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 66,
+        "total_amount_ge": 6762.5,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "8690624101874",
+        "product_name": "ლეისი კლასიკი 117გ 12X",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 110,
+        "total_amount_ge": 6713.22,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860009781746",
+        "product_name": "ნაყინი ჭიქის (მარწყვი)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 77,
+        "total_amount_ge": 6700.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860001000326",
+        "product_name": "ნაყინი თოლია შოკოლადი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 105,
+        "total_amount_ge": 6408.5,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860111651166",
+        "product_name": "ლუდი ჰაინეკენი - ალუმინის ქილა 0,50ლ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 54,
+        "total_amount_ge": 6336.080000000003,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860051001298",
+        "product_name": "რძე 2.5% 1ლ",
+        "distinct_supplier_count": 2,
+        "distinct_waybill_count": 123,
+        "total_amount_ge": 6336.070000000003,
+        "top_supplier_share_pct": 60.70182305435389
+      },
+      {
+        "product_code": "48605038",
+        "product_name": "ჰითს რასეტ სელექშენ (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 82,
+        "total_amount_ge": 6258.80000000001,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48603782",
+        "product_name": "ფილიპ მორის კომპაქტ მიქს (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 95,
+        "total_amount_ge": 6185.499999999991,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860103350145",
+        "product_name": "ლიმონათი მსხალი 2.00 პეტი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 128,
+        "total_amount_ge": 6142.700000000009,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4794331880115",
+        "product_name": "ფახლავა ბემბი 3კგ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 125,
+        "total_amount_ge": 6119.209999999999,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5449000027450",
+        "product_name": "ცივი ჩაი მანგო-გვირილა 0,5ლ(12ც.)",
+        "distinct_supplier_count": 3,
+        "distinct_waybill_count": 189,
+        "total_amount_ge": 6063.600000000008,
+        "top_supplier_share_pct": 88.7789432020582
+      },
+      {
+        "product_code": "4860103352170",
+        "product_name": "ლუდი ბავარია 0.50 ლ შუშა",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 63,
+        "total_amount_ge": 6030.899999999996,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860001000333",
+        "product_name": "ნაყინი თოლია ჯემით მარწყვის ჯემით",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 93,
+        "total_amount_ge": 5995.5,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5449000189349",
+        "product_name": "ცივი ჩაი მანგო-ანანასი 0,5ლ(12ც.)",
+        "distinct_supplier_count": 4,
+        "distinct_waybill_count": 180,
+        "total_amount_ge": 5971.400000000006,
+        "top_supplier_share_pct": 87.03486619553206
+      },
+      {
+        "product_code": "5449000133335",
+        "product_name": "1.500ლ  კოკა-კოლა შაქრის გარეშე (6ც.)",
+        "distinct_supplier_count": 3,
+        "distinct_waybill_count": 187,
+        "total_amount_ge": 5890.590000000003,
+        "top_supplier_share_pct": 88.98361624217608
+      },
+      {
+        "product_code": "4860112001052",
+        "product_name": "ენერგეტიკული სასმელი MERO ENERGY 0,33 ლ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 26,
+        "total_amount_ge": 5841.6,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860001000913",
+        "product_name": "ნაყინი სენდვიჩი (50)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 57,
+        "total_amount_ge": 5744.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860001883059",
+        "product_name": "0.25 ლ MAX Power (geo) NEW",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 70,
+        "total_amount_ge": 5715.3600000000015,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4680036910298",
+        "product_name": "ლუდი ჟიგული მსუბუქი 0.9 ლ შუშა",
+        "distinct_supplier_count": 2,
+        "distinct_waybill_count": 33,
+        "total_amount_ge": 5647.160000000001,
+        "top_supplier_share_pct": 63.408863924521356
+      },
+      {
+        "product_code": "48606226",
+        "product_name": "პარლამენტ სოჰო აქვა სუპერ სლიმსი (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 57,
+        "total_amount_ge": 5642.600000000003,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4600958003083",
+        "product_name": "არაყი პარლამენტი კლასიკი 1 ლ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 27,
+        "total_amount_ge": 5623.260000000002,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48605779",
+        "product_name": "ტერეა ფარფლ ვეივი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 57,
+        "total_amount_ge": 5549.3,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860009625583",
+        "product_name": "მონადირული 400გ \"კორიდა\" დაფასოვებული (ცალი)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 103,
+        "total_amount_ge": 5523.76,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860103820860",
+        "product_name": "0.პრემიო სერველადი \"ექსტრა\" 450გრ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 108,
+        "total_amount_ge": 5485.299999999999,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4690388120931",
+        "product_name": "ლეისი ნატურალური კარტოფილის ჩიფსი ყველის გემოთი 70გ 25Х",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 90,
+        "total_amount_ge": 5457.079999999999,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860008130033",
+        "product_name": "შავი ბატონი დაჭრილი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 1303,
+        "total_amount_ge": 5434.13999999998,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "1",
+        "product_name": "მოხალული მიწის თხილი (2კგ)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 81,
+        "total_amount_ge": 5400.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "01 44",
+        "product_name": "კვერცხი \"ეს\" 0 მარკეტი(10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 58,
+        "total_amount_ge": 5378.25,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860103353412",
+        "product_name": "ლუდი რაგნარი 2.50 ლ პეტი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 49,
+        "total_amount_ge": 5338.799999999998,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48604840",
+        "product_name": "ტერეა სილვერი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 60,
+        "total_amount_ge": 5333.600000000004,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860007050035",
+        "product_name": "კვერცხი პირ. Მარკეტი(10)ც",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 18,
+        "total_amount_ge": 5312.499999999997,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "BLOCK RAF 40*95   ANT",
+        "product_name": "თარო 40*95",
+        "distinct_supplier_count": 2,
+        "distinct_waybill_count": 4,
+        "total_amount_ge": 5264.0,
+        "top_supplier_share_pct": 63.829787234042556
+      },
+      {
+        "product_code": "2400820",
+        "product_name": "შაქარი ევროპული/ 50კგ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 24,
+        "total_amount_ge": 5239.5,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2",
+        "product_name": "მოხალული მიწის თხილი (100გრ)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 98,
+        "total_amount_ge": 5238.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860102370021",
+        "product_name": "თეთრი კვერცხი მარკეტი 10ც. I კატეგ.",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 19,
+        "total_amount_ge": 5229.9,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4820192682114",
+        "product_name": "(Promo)PM SSB",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 57,
+        "total_amount_ge": 5195.700000000004,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48606271",
+        "product_name": "ტერეა თვაილაით ფერლი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 56,
+        "total_amount_ge": 5137.000000000002,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860009786239",
+        "product_name": "ნაყინი–TWINS–ესკიმო",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 57,
+        "total_amount_ge": 5132.399999999993,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860051003872",
+        "product_name": "მაწონი სანტინო 400 გრ",
+        "distinct_supplier_count": 2,
+        "distinct_waybill_count": 266,
+        "total_amount_ge": 5092.589999999998,
+        "top_supplier_share_pct": 55.096915322065975
+      },
+      {
+        "product_code": "5449000147417",
+        "product_name": "კაპი ფორთოხალი პალპი 1ლ.(6ც)",
+        "distinct_supplier_count": 3,
+        "distinct_waybill_count": 137,
+        "total_amount_ge": 5078.880000000003,
+        "top_supplier_share_pct": 86.63406105283055
+      },
+      {
+        "product_code": "2003",
+        "product_name": "ქემელი იელოუ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 56,
+        "total_amount_ge": 5067.8000000000075,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "122150",
+        "product_name": "ლიკანი 1.5 პეტი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 92,
+        "total_amount_ge": 5048.4000000000015,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5449000292667",
+        "product_name": "1,5ლ მინერ. წყალი მთის (6ც)",
+        "distinct_supplier_count": 3,
+        "distinct_waybill_count": 182,
+        "total_amount_ge": 5043.480000000005,
+        "top_supplier_share_pct": 92.21370958147946
+      },
+      {
+        "product_code": "5449000083142",
+        "product_name": "1.500ლ ფანტა ტროპიკი(6ც.)",
+        "distinct_supplier_count": 3,
+        "distinct_waybill_count": 166,
+        "total_amount_ge": 5042.939999999995,
+        "top_supplier_share_pct": 88.57452200502087
+      },
+      {
+        "product_code": "5788686123514",
+        "product_name": "DANZKA - არაყი \"დანზკა\" 40% - 1ლ (12ც/ყ)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 22,
+        "total_amount_ge": 5038.84,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2132",
+        "product_name": "ქემელი სლიმს ბლუ LSS",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 72,
+        "total_amount_ge": 5022.6,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2155",
+        "product_name": "ქემელ კომპაქტ კასტერი   (PP)*",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 31,
+        "total_amount_ge": 4969.300000000001,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4262396148988",
+        "product_name": "8988-WASH & FREE უნივერსალური სარეცხი გელი საზამთროს არომატით 5000გ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 1,
+        "total_amount_ge": 4953.6,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "47606029",
+        "product_name": "სიგარეტი kent core",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 4950.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4032900165080",
+        "product_name": "სიგარეტი winston classic blue",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 4950.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860051004961",
+        "product_name": "სანტე არაჟანი ნაღებით 12% 400 გ.",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 89,
+        "total_amount_ge": 4928.0100000000075,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2002",
+        "product_name": "შეფუთული მრგვალი შავი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 893,
+        "total_amount_ge": 4902.800000000002,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860105420099",
+        "product_name": "ყველი სანაქებო 60გრ",
+        "distinct_supplier_count": 2,
+        "distinct_waybill_count": 67,
+        "total_amount_ge": 4898.5,
+        "top_supplier_share_pct": 85.72011840359293
+      },
+      {
+        "product_code": "48605823",
+        "product_name": "ტერეა რასეტი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 55,
+        "total_amount_ge": 4854.35,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860009783467",
+        "product_name": "ნაყინი ჭიქის  \"ბარამბინო\"–კარამელი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 57,
+        "total_amount_ge": 4850.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5449000131805",
+        "product_name": "0.330ლ  კოკა-კოლა შაქრის გარეშე",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 142,
+        "total_amount_ge": 4833.659999999995,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5906485301630",
+        "product_name": "XL - 500 მლ ენერგეტიკული სასმელი -24ც/ყ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 23,
+        "total_amount_ge": 4822.380000000001,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "10-2",
+        "product_name": "კვერცხი  საქ.0კატეგორია",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 20,
+        "total_amount_ge": 4819.8,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2153",
+        "product_name": "ვინსტონი ბლუ 100S  (PP)*",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 30,
+        "total_amount_ge": 4806.399999999996,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48605373",
+        "product_name": "ჰითს სიენა სელექშენ (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 56,
+        "total_amount_ge": 4727.900000000003,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48605571",
+        "product_name": "მალბორო გოლდ თაჩი (PP)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 33,
+        "total_amount_ge": 4710.000000000001,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "6412700140001",
+        "product_name": "კოშკენკორვა არაყი 40% 1ლ - 12ც/ყ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 19,
+        "total_amount_ge": 4703.419999999999,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "02599",
+        "product_name": "პილმენი საოჯახო 800 გრ 4860101980078",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 25,
+        "total_amount_ge": 4696.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5449000133328",
+        "product_name": "1ლ  კოკა-კოლა შაქრის გარეშე",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 138,
+        "total_amount_ge": 4667.760000000015,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4600958003083",
+        "product_name": "არაყი პარლამენტი \\40% 1ლ (6)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 19,
+        "total_amount_ge": 4645.050000000001,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860001123490",
+        "product_name": "ლუდი სტაროპრამენი 2.5 ლ პეტი",
+        "distinct_supplier_count": 2,
+        "distinct_waybill_count": 32,
+        "total_amount_ge": 4628.800000000001,
+        "top_supplier_share_pct": 55.856809540269616
+      },
+      {
+        "product_code": "20000127",
+        "product_name": "პეჩენია ბემბი 2კგ",
+        "distinct_supplier_count": 2,
+        "distinct_waybill_count": 119,
+        "total_amount_ge": 4587.239999999999,
+        "top_supplier_share_pct": 94.80471917754467
+      },
+      {
+        "product_code": "4860009781760",
+        "product_name": "ნაყინი ესკიმო პატარა (ვანილი)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 61,
+        "total_amount_ge": 4586.5,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860001000364",
+        "product_name": "ნაყინი თოლია კრემბრიულე",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 78,
+        "total_amount_ge": 4539.5,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "142150",
+        "product_name": "ბაკურიანი 1.5 პეტი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 102,
+        "total_amount_ge": 4528.860000000002,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4865602000058",
+        "product_name": "ნაბეღლავი 0.5 ლ. პეტი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 108,
+        "total_amount_ge": 4523.320000000003,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "47605312",
+        "product_name": "სიგარეტი lusky strike classic",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 4500.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48604994",
+        "product_name": "სიგარეტი philip morris expert red",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 2,
+        "total_amount_ge": 4500.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860103357427",
+        "product_name": "ლუდი შტარნბერგერი 0.50 ლ შუშა",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 40,
+        "total_amount_ge": 4477.639999999998,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "2200005",
+        "product_name": "ივერია სოსისი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 89,
+        "total_amount_ge": 4475.299999999999,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "5449000006271",
+        "product_name": "1ლ.  ფანტა",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 122,
+        "total_amount_ge": 4428.810000000008,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48210010",
+        "product_name": "Kent Switch",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 41,
+        "total_amount_ge": 4399.1,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48604550",
+        "product_name": "ჰითს ფარპლ ვეივ (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 59,
+        "total_amount_ge": 4394.9000000000015,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "8690624203783",
+        "product_name": "დორიტოსი ტაგო 70გ 26X",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 62,
+        "total_amount_ge": 4373.839999999998,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4690388095758",
+        "product_name": "ლეისი ნატურალური კარტოფილის ჩიფსი „წითელი წიწაკის“ გემოთი 140გ 19X",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 55,
+        "total_amount_ge": 4336.710000000002,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860101501150",
+        "product_name": "შავი პრემიუმ ხარისხის პური",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 498,
+        "total_amount_ge": 4335.060000000012,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "8690624203820",
+        "product_name": "დორიტოსი აკილი 70გ 26X",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 63,
+        "total_amount_ge": 4330.549999999999,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4850005203953",
+        "product_name": "მარილიანი მზესუმზირა შეფუთული 160 გრ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 37,
+        "total_amount_ge": 4320.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48604789",
+        "product_name": "ტერეა ამბერი",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 49,
+        "total_amount_ge": 4290.799999999999,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "8690624203806",
+        "product_name": "დორიტოსი ნაჩო 70გ 26X",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 61,
+        "total_amount_ge": 4264.609999999999,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860009781777",
+        "product_name": "ნაყინი ესკიმო პატარა (შოკოლადი)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 57,
+        "total_amount_ge": 4245.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860001000951",
+        "product_name": "ნაყინი სენდვიჩი ვანილი ნამცხვრის ფირფიტებით",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 40,
+        "total_amount_ge": 4241.0,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4690388111441",
+        "product_name": "ლეისი ნატურალური კარტოფილის ჩიფსი \"არაჟნის და ხახვის\" გემოთი 140გ 19X",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 67,
+        "total_amount_ge": 4194.710000000002,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "48602266",
+        "product_name": "პარლამენტი კარატი (მუქი ლურჯი) (10ც)",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 51,
+        "total_amount_ge": 4193.499999999997,
+        "top_supplier_share_pct": 100.0
+      },
+      {
+        "product_code": "4860111650725",
+        "product_name": "ლუდი ამსტელი - პეტი 2.5ლ",
+        "distinct_supplier_count": 1,
+        "distinct_waybill_count": 49,
+        "total_amount_ge": 4173.72,
+        "top_supplier_share_pct": 100.0
+      }
+    ],
+    "top_suppliers_by_amount": [
+      {
+        "supplier": "შპს ჯიდიაი",
+        "row_count": 11135,
+        "total_ge": 1279469.8299999887,
+        "distinct_waybill_count": 633
+      },
+      {
+        "supplier": "შპს ელიზი ჯგუფი",
+        "row_count": 4428,
+        "total_ge": 833560.3799999974,
+        "distinct_waybill_count": 331
+      },
+      {
+        "supplier": "შპს კოკა-კოლა გურია",
+        "row_count": 14193,
+        "total_ge": 599835.1999999945,
+        "distinct_waybill_count": 474
+      },
+      {
+        "supplier": "შპს ინტერნეიშნლ მარკეტინგ ენდ თრეიდინგ",
+        "row_count": 2024,
+        "total_ge": 267595.5499999988,
+        "distinct_waybill_count": 339
+      },
+      {
+        "supplier": "შპს ზედაზენი აჭარა",
+        "row_count": 3974,
+        "total_ge": 253786.52999999945,
+        "distinct_waybill_count": 386
+      },
+      {
+        "supplier": "შპს ვასაძის პური",
+        "row_count": 10679,
+        "total_ge": 226789.56999999966,
+        "distinct_waybill_count": 3550
+      },
+      {
+        "supplier": "სს იბერია რეფრეშმენტსი",
+        "row_count": 5630,
+        "total_ge": 186230.17000000319,
+        "distinct_waybill_count": 343
+      },
+      {
+        "supplier": "შპს იფქლი",
+        "row_count": 25010,
+        "total_ge": 183655.16999999294,
+        "distinct_waybill_count": 4641
+      },
+      {
+        "supplier": "შპს შრომა - 2023",
+        "row_count": 6812,
+        "total_ge": 167561.73000000085,
+        "distinct_waybill_count": 118
+      },
+      {
+        "supplier": "შპს ენგადი",
+        "row_count": 2510,
+        "total_ge": 129042.84000000014,
+        "distinct_waybill_count": 204
+      },
+      {
+        "supplier": "შპს სტარდი",
+        "row_count": 2736,
+        "total_ge": 128307.85000000056,
+        "distinct_waybill_count": 139
+      },
+      {
+        "supplier": "შპს კანტი",
+        "row_count": 1405,
+        "total_ge": 115796.36,
+        "distinct_waybill_count": 192
+      },
+      {
+        "supplier": "შპს პარტნიორი",
+        "row_count": 3379,
+        "total_ge": 108735.5299999998,
+        "distinct_waybill_count": 396
+      },
+      {
+        "supplier": "შპს სევენთისევენ",
+        "row_count": 2,
+        "total_ge": 101052.0,
+        "distinct_waybill_count": 1
+      },
+      {
+        "supplier": "შპს კადევე საქართველო",
+        "row_count": 7038,
+        "total_ge": 100016.70999999974,
+        "distinct_waybill_count": 147
+      },
+      {
+        "supplier": "შპს ფუდმარტი",
+        "row_count": 1664,
+        "total_ge": 99473.3199999997,
+        "distinct_waybill_count": 62
+      },
+      {
+        "supplier": "შპს საქართველოს დისტრიბუცია და ლოგისტიკა",
+        "row_count": 1900,
+        "total_ge": 95472.0300000002,
+        "distinct_waybill_count": 270
+      },
+      {
+        "supplier": "თამილა ხარაბაძე",
+        "row_count": 1231,
+        "total_ge": 89220.1,
+        "distinct_waybill_count": 99
+      },
+      {
+        "supplier": "შპს თოლია ქუთაისი",
+        "row_count": 1712,
+        "total_ge": 88960.54999999984,
+        "distinct_waybill_count": 137
+      },
+      {
+        "supplier": "შპს ფუდსერვისი",
+        "row_count": 1711,
+        "total_ge": 84401.8999999997,
+        "distinct_waybill_count": 98
+      }
+    ],
+    "top_products_by_amount": [
+      {
+        "product_code": "1002",
+        "product_name": "შეფუთული ქვის პური",
+        "unit": "ცალი",
+        "quantity": 196741.0,
+        "total_ge": 178008.79999999996,
+        "distinct_waybill_count": 3391
+      },
+      {
+        "product_code": "2165",
+        "product_name": "ვინსტონ კომპაქტ ექსელ ბლუ  (PP)*",
+        "unit": "ბლოკი",
+        "quantity": 2095.0,
+        "total_ge": 127865.50000000003,
+        "distinct_waybill_count": 123
+      },
+      {
+        "product_code": "5449000000286",
+        "product_name": "2ლ  კოკა-კოლა (6ც.)",
+        "unit": "ცალი",
+        "quantity": 32443.0,
+        "total_ge": 122199.51999999984,
+        "distinct_waybill_count": 499
+      },
+      {
+        "product_code": "2157",
+        "product_name": "ქემელი 1913 ორიგინალ იელოუ  (PP)*",
+        "unit": "ბლოკი",
+        "quantity": 1996.0,
+        "total_ge": 117382.99999999997,
+        "distinct_waybill_count": 119
+      },
+      {
+        "product_code": "2158",
+        "product_name": "ქემელი 1913 ორიგინალ ბლუ  (PP)*",
+        "unit": "ბლოკი",
+        "quantity": 1824.0,
+        "total_ge": 107140.99999999997,
+        "distinct_waybill_count": 113
+      },
+      {
+        "product_code": "7306192",
+        "product_name": "ლითონის პროფილი",
+        "unit": "კგ",
+        "quantity": 48120.0,
+        "total_ge": 101052.0,
+        "distinct_waybill_count": 1
+      },
+      {
+        "product_code": "48504355",
+        "product_name": "სიგარეტი \"Vip Blue Slims\"",
+        "unit": "ცალი",
+        "quantity": 17240.0,
+        "total_ge": 91420.69999999991,
+        "distinct_waybill_count": 304
+      },
+      {
+        "product_code": "48602952",
+        "product_name": "პარლამენტი აქვა ბლუ (10ც)",
+        "unit": "ცალი",
+        "quantity": 10550.0,
+        "total_ge": 87849.50000000001,
+        "distinct_waybill_count": 376
+      },
+      {
+        "product_code": "48509848",
+        "product_name": "სიგარეტი \"Black Tip Compact Brown\"",
+        "unit": "ცალი",
+        "quantity": 17020.0,
+        "total_ge": 84699.00000000001,
+        "distinct_waybill_count": 318
+      },
+      {
+        "product_code": "48605366",
+        "product_name": "ელ ენდ ემი ფერსტ ქათ რედ (10ც)",
+        "unit": "ცალი",
+        "quantity": 14880.0,
+        "total_ge": 77511.09999999989,
+        "distinct_waybill_count": 362
+      },
+      {
+        "product_code": "2126",
+        "product_name": "ქემელი 1913 ორიგინალ იელოუ",
+        "unit": "ბლოკი",
+        "quantity": 1450.0,
+        "total_ge": 77342.30000000002,
+        "distinct_waybill_count": 172
+      },
+      {
+        "product_code": "48605489",
+        "product_name": "პარლამენტი აქვა ბლუ (PP)",
+        "unit": "ცალი",
+        "quantity": 8180.0,
+        "total_ge": 74554.59999999987,
+        "distinct_waybill_count": 184
+      },
+      {
+        "product_code": "48602945",
+        "product_name": "პარლამენტი ნაით ბლუ (10ც)",
+        "unit": "ცალი",
+        "quantity": 7980.0,
+        "total_ge": 66551.89999999997,
+        "distinct_waybill_count": 343
+      },
+      {
+        "product_code": "54491472",
+        "product_name": "0.500ლ  კოკა-კოლა",
+        "unit": "ცალი",
+        "quantity": 45072.0,
+        "total_ge": 65815.7999999999,
+        "distinct_waybill_count": 357
+      },
+      {
+        "product_code": "48605472",
+        "product_name": "პარლამენტი ნაით ბლუ (PP)",
+        "unit": "ცალი",
+        "quantity": 7130.0,
+        "total_ge": 64969.900000000045,
+        "distinct_waybill_count": 176
+      },
+      {
+        "product_code": "4860101500702",
+        "product_name": "ეკო ბატონი ქაღალდში",
+        "unit": "ცალი",
+        "quantity": 70215.0,
+        "total_ge": 64682.43000000063,
+        "distinct_waybill_count": 3136
+      },
+      {
+        "product_code": "2127",
+        "product_name": "ქემელი 1913 ორიგინალ ბლუ",
+        "unit": "ბლოკი",
+        "quantity": 1161.0,
+        "total_ge": 62054.000000000015,
+        "distinct_waybill_count": 178
+      },
+      {
+        "product_code": "48605908",
+        "product_name": "ელ ენდ ემი  რედ (PP)",
+        "unit": "ცალი",
+        "quantity": 10830.0,
+        "total_ge": 60952.29999999998,
+        "distinct_waybill_count": 177
+      },
+      {
+        "product_code": "48604062",
+        "product_name": "მალბორო ბლექ გოლდ (10ც) NEW",
+        "unit": "ცალი",
+        "quantity": 8010.0,
+        "total_ge": 59154.099999999904,
+        "distinct_waybill_count": 370
+      },
+      {
+        "product_code": "4865602000027",
+        "product_name": "ნაბეღლავი 1 ლ. პეტი",
+        "unit": "ცალი",
+        "quantity": 31830.0,
+        "total_ge": 55648.55999999999,
+        "distinct_waybill_count": 175
+      }
+    ],
+    "top_supplier_product_pairs": [
+      {
+        "supplier": "შპს ვასაძის პური",
+        "product_code": "1002",
+        "product_name": "შეფუთული ქვის პური",
+        "unit": "ცალი",
+        "quantity": 196741.0,
+        "total_amount_ge": 178008.79999999996,
+        "distinct_waybill_count": 3391
+      },
+      {
+        "supplier": "შპს ელიზი ჯგუფი",
+        "product_code": "2165",
+        "product_name": "ვინსტონ კომპაქტ ექსელ ბლუ  (PP)*",
+        "unit": "ბლოკი",
+        "quantity": 2095.0,
+        "total_amount_ge": 127865.50000000003,
+        "distinct_waybill_count": 123
+      },
+      {
+        "supplier": "შპს ელიზი ჯგუფი",
+        "product_code": "2157",
+        "product_name": "ქემელი 1913 ორიგინალ იელოუ  (PP)*",
+        "unit": "ბლოკი",
+        "quantity": 1996.0,
+        "total_amount_ge": 117382.99999999997,
+        "distinct_waybill_count": 119
+      },
+      {
+        "supplier": "შპს ელიზი ჯგუფი",
+        "product_code": "2158",
+        "product_name": "ქემელი 1913 ორიგინალ ბლუ  (PP)*",
+        "unit": "ბლოკი",
+        "quantity": 1824.0,
+        "total_amount_ge": 107140.99999999997,
+        "distinct_waybill_count": 113
+      },
+      {
+        "supplier": "შპს კოკა-კოლა გურია",
+        "product_code": "5449000000286",
+        "product_name": "2ლ  კოკა-კოლა (6ც.)",
+        "unit": "ცალი",
+        "quantity": 28138.0,
+        "total_amount_ge": 106874.31999999999,
+        "distinct_waybill_count": 376
+      },
+      {
+        "supplier": "შპს სევენთისევენ",
+        "product_code": "7306192",
+        "product_name": "ლითონის პროფილი",
+        "unit": "კგ",
+        "quantity": 48120.0,
+        "total_amount_ge": 101052.0,
+        "distinct_waybill_count": 1
+      },
+      {
+        "supplier": "შპს ინტერნეიშნლ მარკეტინგ ენდ თრეიდინგ",
+        "product_code": "48504355",
+        "product_name": "სიგარეტი \"Vip Blue Slims\"",
+        "unit": "ცალი",
+        "quantity": 17240.0,
+        "total_amount_ge": 91420.69999999991,
+        "distinct_waybill_count": 304
+      },
+      {
+        "supplier": "შპს ჯიდიაი",
+        "product_code": "48602952",
+        "product_name": "პარლამენტი აქვა ბლუ (10ც)",
+        "unit": "ცალი",
+        "quantity": 10550.0,
+        "total_amount_ge": 87849.50000000001,
+        "distinct_waybill_count": 376
+      },
+      {
+        "supplier": "შპს ინტერნეიშნლ მარკეტინგ ენდ თრეიდინგ",
+        "product_code": "48509848",
+        "product_name": "სიგარეტი \"Black Tip Compact Brown\"",
+        "unit": "ცალი",
+        "quantity": 17020.0,
+        "total_amount_ge": 84699.00000000001,
+        "distinct_waybill_count": 318
+      },
+      {
+        "supplier": "შპს ჯიდიაი",
+        "product_code": "48605366",
+        "product_name": "ელ ენდ ემი ფერსტ ქათ რედ (10ც)",
+        "unit": "ცალი",
+        "quantity": 14880.0,
+        "total_amount_ge": 77511.09999999989,
+        "distinct_waybill_count": 362
+      },
+      {
+        "supplier": "შპს ელიზი ჯგუფი",
+        "product_code": "2126",
+        "product_name": "ქემელი 1913 ორიგინალ იელოუ",
+        "unit": "ბლოკი",
+        "quantity": 1450.0,
+        "total_amount_ge": 77342.30000000002,
+        "distinct_waybill_count": 172
+      },
+      {
+        "supplier": "შპს ჯიდიაი",
+        "product_code": "48605489",
+        "product_name": "პარლამენტი აქვა ბლუ (PP)",
+        "unit": "ცალი",
+        "quantity": 8180.0,
+        "total_amount_ge": 74554.59999999987,
+        "distinct_waybill_count": 184
+      },
+      {
+        "supplier": "შპს ჯიდიაი",
+        "product_code": "48602945",
+        "product_name": "პარლამენტი ნაით ბლუ (10ც)",
+        "unit": "ცალი",
+        "quantity": 7980.0,
+        "total_amount_ge": 66551.89999999997,
+        "distinct_waybill_count": 343
+      },
+      {
+        "supplier": "შპს კოკა-კოლა გურია",
+        "product_code": "54491472",
+        "product_name": "0.500ლ  კოკა-კოლა",
+        "unit": "ცალი",
+        "quantity": 45072.0,
+        "total_amount_ge": 65815.7999999999,
+        "distinct_waybill_count": 357
+      },
+      {
+        "supplier": "შპს ჯიდიაი",
+        "product_code": "48605472",
+        "product_name": "პარლამენტი ნაით ბლუ (PP)",
+        "unit": "ცალი",
+        "quantity": 7130.0,
+        "total_amount_ge": 64969.900000000045,
+        "distinct_waybill_count": 176
+      },
+      {
+        "supplier": "შპს იფქლი",
+        "product_code": "4860101500702",
+        "product_name": "ეკო ბატონი ქაღალდში",
+        "unit": "ცალი",
+        "quantity": 70215.0,
+        "total_amount_ge": 64682.43000000063,
+        "distinct_waybill_count": 3136
+      },
+      {
+        "supplier": "შპს ელიზი ჯგუფი",
+        "product_code": "2127",
+        "product_name": "ქემელი 1913 ორიგინალ ბლუ",
+        "unit": "ბლოკი",
+        "quantity": 1161.0,
+        "total_amount_ge": 62054.000000000015,
+        "distinct_waybill_count": 178
+      },
+      {
+        "supplier": "შპს ჯიდიაი",
+        "product_code": "48605908",
+        "product_name": "ელ ენდ ემი  რედ (PP)",
+        "unit": "ცალი",
+        "quantity": 10830.0,
+        "total_amount_ge": 60952.29999999998,
+        "distinct_waybill_count": 177
+      },
+      {
+        "supplier": "შპს ჯიდიაი",
+        "product_code": "48604062",
+        "product_name": "მალბორო ბლექ გოლდ (10ც) NEW",
+        "unit": "ცალი",
+        "quantity": 8010.0,
+        "total_amount_ge": 59154.099999999904,
+        "distinct_waybill_count": 370
+      },
+      {
+        "supplier": "შპს ენგადი",
+        "product_code": "4865602000027",
+        "product_name": "ნაბეღლავი 1 ლ. პეტი",
+        "unit": "ცალი",
+        "quantity": 31830.0,
+        "total_amount_ge": 55648.55999999999,
+        "distinct_waybill_count": 175
+      }
+    ]
+  },
+  "response_meta": {
+    "tab": "imported_products",
+    "trust_label": "reference-only",
+    "trust_badge_ka": "Reference-only",
+    "scope_ka": "Imported-products reference view for supplier/product analysis.",
+    "notes_ka": [
+      "supplier debt/AP და bank reconciliation totals-ში არ ერთვება."
+    ],
+    "generated_at": "2026-04-12T19:16:02Z",
+    "source_manifest_summary": {
+      "group_count": 6,
+      "total_files": 25,
+      "total_size_bytes": 353489830,
+      "missing_groups": [],
+      "groups": {
+        "bog_bank_statement": {
+          "label_ka": "BOG ბანკის ამონაწერი",
+          "file_count": 4,
+          "total_size_bytes": 24608869,
+          "latest_modified_at": "2026-04-11T09:33:54.065151Z"
+        },
+        "tbc_bank_statement": {
+          "label_ka": "TBC ბანკის ამონაწერი",
+          "file_count": 5,
+          "total_size_bytes": 6326178,
+          "latest_modified_at": "2026-04-11T09:31:03.247878Z"
+        },
+        "rs_waybills": {
+          "label_ka": "RS ზედნადები",
+          "file_count": 5,
+          "total_size_bytes": 7957504,
+          "latest_modified_at": "2026-04-07T12:56:24.832216Z"
+        },
+        "imported_products": {
+          "label_ka": "შემოტანილი პროდუქცია",
+          "file_count": 4,
+          "total_size_bytes": 109031509,
+          "latest_modified_at": "2026-04-11T09:08:39.628083Z"
+        },
+        "retail_sales_dvabzu": {
+          "label_ka": "გაყიდული პროდუქცია — დვაბზუ",
+          "file_count": 3,
+          "total_size_bytes": 78578486,
+          "latest_modified_at": "2026-04-11T00:49:03.317474Z"
+        },
+        "retail_sales_ozurgeti": {
+          "label_ka": "გაყიდული პროდუქცია — ოზურგეთი",
+          "file_count": 4,
+          "total_size_bytes": 126987284,
+          "latest_modified_at": "2026-04-09T22:39:30.970313Z"
+        }
+      }
+    },
+    "partial": false,
+    "partial_reason": ""
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "sector": "საცალო ვაჭრობა (სასურსათო მაღაზია)",
+  "country": "საქართველო",
+  "notes": "ბენჩმარკები ტიპიური მცირე/საშუალო სასურსათო ქსელისთვის. ციფრები მიახლოებითია — ზუსტი სექტორული კვლევა საჭიროებს ადგილობრივ სპეციალისტს.",
+  "benchmarks": {
+    "gross_margin_pct": {
+      "low": 15,
+      "median": 25,
+      "high": 40,
+      "unit": "%"
+    },
+    "net_margin_pct": {
+      "low": 2,
+      "median": 5,
+      "high": 12,
+      "unit": "%"
+    },
+    "payment_ratio_pct": {
+      "low": 70,
+      "median": 85,
+      "high": 95,
+      "unit": "%"
+    },
+    "ap_days": {
+      "good": 30,
+      "median": 45,
+      "high_risk": 90,
+      "unit": "დღე"
+    },
+    "revenue_growth_yoy_pct": {
+      "low": 3,
+      "median": 8,
+      "high": 20,
+      "unit": "%"
+    },
+    "inventory_turnover_days": {
+      "good": 15,
+      "median": 25,
+      "high_risk": 45,
+      "unit": "დღე"
+    }
+  },
+  "valuation_multiples": {
+    "ev_to_revenue": {
+      "low": 0.3,
+      "median": 0.5,
+      "high": 1.0
+    },
+    "ev_to_ebitda": {
+      "low": 3,
+      "median": 5,
+      "high": 8
+    },
+    "price_to_earnings": {
+      "low": 5,
+      "median": 8,
+      "high": 15
+    }
+  }
+}

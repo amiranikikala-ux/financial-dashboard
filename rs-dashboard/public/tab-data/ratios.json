@@ -1,0 +1,749 @@
+{
+  "meta": {
+    "manual_payments_total": 0.0,
+    "manual_payments_rows_with_amount": 0,
+    "suppliers_only_journal_or_bank": 4,
+    "bank_orphan_total_ge": 135350.0,
+    "bank_unmatched_total_ge": 13109.980000000003,
+    "bank_unmatched_line_count": 238,
+    "bank_unmatched_categorized_total_ge": 4823.35,
+    "bank_unmatched_uncategorized_total_ge": 8286.63,
+    "bank_unmatched_dynamic_promoted_total_ge": 154.6,
+    "bank_unmatched_confidence_high_ge": 4087.7300000000005,
+    "bank_unmatched_confidence_medium_ge": 310.88,
+    "bank_unmatched_confidence_low_ge": 8711.369999999999,
+    "bank_unmatched_manual_override_approved_lines": 0,
+    "bank_unmatched_manual_override_rejected_lines": 0,
+    "bank_recon_total_outgoing_amount": 5386780.86,
+    "bank_recon_matched_high_amount": 4516386.97,
+    "bank_recon_ambiguous_amount": 0.0,
+    "bank_recon_non_supplier_amount": 857283.9100000069,
+    "bank_recon_unmatched_amount": 13109.980000000003,
+    "bank_recon_skipped_amount": 0.0,
+    "tbc_card_income_total_ge": 3176399.880000085,
+    "tbc_card_income_line_count": 42419,
+    "pos_terminal_income_total_ge": 4657442.760000097,
+    "pos_terminal_income_tbc_total_ge": 3176399.880000085,
+    "pos_terminal_income_bog_total_ge": 1481042.880000011,
+    "tbc_expenses_grand_total_ge": 3758916.0900000003,
+    "tbc_expenses_operating_total_ge": 3732246.58,
+    "tbc_expenses_treasury_total_ge": 26669.51,
+    "tbc_expenses_total_lines": 7572,
+    "tbc_samurneo_expense_total_ge": 197973.95,
+    "tbc_samurneo_return_total_ge": 244400.0,
+    "tbc_samurneo_net_ge": 46426.04999999999,
+    "tax_out_total_ge": 112675.41,
+    "tax_in_total_ge": 46071.98,
+    "tax_treasury_in_total_ge": 46071.98,
+    "tax_treasury_in_line_count": 12,
+    "tax_net_ge": -66603.43,
+    "tbc_foodmart_cashback_total_ge": 313725.75000000006,
+    "tbc_foodmart_cashback_line_count": 33,
+    "retail_sales_row_count": 1462967,
+    "retail_sales_total_quantity": 1585003.5629000014,
+    "retail_sales_revenue_ge": 5039708.479997783,
+    "retail_sales_cost_ge": 4277066.030001483,
+    "retail_sales_profit_ge": 648931.6441000304,
+    "retail_sales_gross_margin_pct": 12.876372644877982,
+    "retail_sales_distinct_object_count": 2,
+    "retail_sales_distinct_category_count": 645,
+    "retail_sales_distinct_product_count": 9095,
+    "retail_sales_duplicate_excluded_file_count": 1,
+    "generated_at": "2026-04-12T19:16:02Z",
+    "source_manifest_summary": {
+      "group_count": 6,
+      "total_files": 25,
+      "total_size_bytes": 353489830,
+      "missing_groups": [],
+      "groups": {
+        "bog_bank_statement": {
+          "label_ka": "BOG ბანკის ამონაწერი",
+          "file_count": 4,
+          "total_size_bytes": 24608869,
+          "latest_modified_at": "2026-04-11T09:33:54.065151Z"
+        },
+        "tbc_bank_statement": {
+          "label_ka": "TBC ბანკის ამონაწერი",
+          "file_count": 5,
+          "total_size_bytes": 6326178,
+          "latest_modified_at": "2026-04-11T09:31:03.247878Z"
+        },
+        "rs_waybills": {
+          "label_ka": "RS ზედნადები",
+          "file_count": 5,
+          "total_size_bytes": 7957504,
+          "latest_modified_at": "2026-04-07T12:56:24.832216Z"
+        },
+        "imported_products": {
+          "label_ka": "შემოტანილი პროდუქცია",
+          "file_count": 4,
+          "total_size_bytes": 109031509,
+          "latest_modified_at": "2026-04-11T09:08:39.628083Z"
+        },
+        "retail_sales_dvabzu": {
+          "label_ka": "გაყიდული პროდუქცია — დვაბზუ",
+          "file_count": 3,
+          "total_size_bytes": 78578486,
+          "latest_modified_at": "2026-04-11T00:49:03.317474Z"
+        },
+        "retail_sales_ozurgeti": {
+          "label_ka": "გაყიდული პროდუქცია — ოზურგეთი",
+          "file_count": 4,
+          "total_size_bytes": 126987284,
+          "latest_modified_at": "2026-04-09T22:39:30.970313Z"
+        }
+      }
+    },
+    "config_validation": {
+      "ok": true,
+      "warning_count": 0,
+      "error_count": 0
+    },
+    "payment_scope_summary": {
+      "strict_bank_only_total": 4516386.97,
+      "manual_journal_total": 0,
+      "combined_supplier_paid_total": 4516386.97,
+      "strict_supplier_count": 192,
+      "manual_supplier_count": 0,
+      "combined_supplier_count": 192,
+      "strict_and_manual_overlap_count": 0,
+      "manual_only_supplier_count": 0,
+      "strict_only_supplier_count": 192,
+      "scope_notes": [
+        "strict_bank_only_total ითვლის მხოლოდ მაღალი სანდოობის bank-reconciled supplier matches-ს.",
+        "manual_journal_total ითვლის მხოლოდ manual/off-bank journal adjustments-ს.",
+        "combined_supplier_paid_total არის supplier-level total_paid მეტრიკების წყარო."
+      ],
+      "manual_only_suppliers_preview": [],
+      "strict_only_suppliers_preview": [
+        {
+          "tax_id": "01001006813",
+          "supplier_name": "მერაბ ჯაფარიძე",
+          "strict_bank_paid": 1400.0,
+          "manual_paid": 0.0,
+          "combined_paid": 1400.0,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "01016006672",
+          "supplier_name": "ლია ეჯოშვილი",
+          "strict_bank_paid": 190.0,
+          "manual_paid": 0.0,
+          "combined_paid": 190.0,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "01025003711",
+          "supplier_name": "01025003711",
+          "strict_bank_paid": 10100.0,
+          "manual_paid": 0.0,
+          "combined_paid": 10100.0,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "200040222",
+          "supplier_name": "შპს ასკანელი ძმები",
+          "strict_bank_paid": 550.0,
+          "manual_paid": 0.0,
+          "combined_paid": 550.0,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "200140267",
+          "supplier_name": "შპს კანტი",
+          "strict_bank_paid": 67885.21,
+          "manual_paid": 0.0,
+          "combined_paid": 67885.21,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "200172785",
+          "supplier_name": "შპს ტკბილი ქვეყანა",
+          "strict_bank_paid": 18115.359999999997,
+          "manual_paid": 0.0,
+          "combined_paid": 18115.359999999997,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "200179118",
+          "supplier_name": "შპს იფქლი",
+          "strict_bank_paid": 133140.43,
+          "manual_paid": 0.0,
+          "combined_paid": 133140.43,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "201948063",
+          "supplier_name": "სს კოკა-კოლა ბოთლერს ჯორჯია",
+          "strict_bank_paid": 20416.760000000002,
+          "manual_paid": 0.0,
+          "combined_paid": 20416.760000000002,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202061053",
+          "supplier_name": "შპს ზახარ",
+          "strict_bank_paid": 8600.0,
+          "manual_paid": 0.0,
+          "combined_paid": 8600.0,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202163292",
+          "supplier_name": "შპს ორიენტი",
+          "strict_bank_paid": 945.0,
+          "manual_paid": 0.0,
+          "combined_paid": 945.0,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202196426",
+          "supplier_name": "შპს ბი ემ ესი",
+          "strict_bank_paid": 4228.16,
+          "manual_paid": 0.0,
+          "combined_paid": 4228.16,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202227134",
+          "supplier_name": "შპს ევროპროდუქტი",
+          "strict_bank_paid": 1371.0,
+          "manual_paid": 0.0,
+          "combined_paid": 1371.0,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202230790",
+          "supplier_name": "შპს კომპანია ორბიტა",
+          "strict_bank_paid": 18532.8,
+          "manual_paid": 0.0,
+          "combined_paid": 18532.8,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202243401",
+          "supplier_name": "შპს ჯეოსტარი",
+          "strict_bank_paid": 4937.1,
+          "manual_paid": 0.0,
+          "combined_paid": 4937.1,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202246097",
+          "supplier_name": "შპს ალგანი",
+          "strict_bank_paid": 4514.84,
+          "manual_paid": 0.0,
+          "combined_paid": 4514.84,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202282369",
+          "supplier_name": "შპს ქართული სადისტრიბუციო-მარკეტინგული კომპანია",
+          "strict_bank_paid": 33243.89,
+          "manual_paid": 0.0,
+          "combined_paid": 33243.89,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "202311738",
+          "supplier_name": "სს თ & რ დისტრიბუშენ",
+          "strict_bank_paid": 61533.200000000004,
+          "manual_paid": 0.0,
+          "combined_paid": 61533.200000000004,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "204487616",
+          "supplier_name": "შპს ნატახტარი 2005",
+          "strict_bank_paid": 20176.739999999998,
+          "manual_paid": 0.0,
+          "combined_paid": 20176.739999999998,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "204490390",
+          "supplier_name": "შპს კუმისი XXI",
+          "strict_bank_paid": 2757.75,
+          "manual_paid": 0.0,
+          "combined_paid": 2757.75,
+          "source": "strict_bank_only"
+        },
+        {
+          "tax_id": "204516194",
+          "supplier_name": "შპს დილის პროდუქტები",
+          "strict_bank_paid": 4225.02,
+          "manual_paid": 0.0,
+          "combined_paid": 4225.02,
+          "source": "strict_bank_only"
+        }
+      ],
+      "strict_and_manual_overlap_preview": [],
+      "largest_manual_adjustments_preview": []
+    },
+    "truth_source_breakdown": {
+      "bank_tax_id": {
+        "rows": 4338,
+        "amount": 3193013.2800000007
+      },
+      "rs_legal_name_backstop": {
+        "rows": 2243,
+        "amount": 1027227.1200000002
+      },
+      "registry_iban": {
+        "rows": 453,
+        "amount": 295346.5699999998
+      },
+      "registry_alias": {
+        "rows": 2,
+        "amount": 800.0
+      }
+    },
+    "truth_boundary_summary": {
+      "summary_ka": "Strict supplier matching-ში `supplier_matching_registry.json` არის primary truth. RS supplier names რჩება exact-name backstop-ად, ხოლო legacy IBAN/alias რუკები audit-only truth-assist layer-ია და strict supplier totals-ში არ ერთვება.",
+      "badges_ka": [
+        "registry primary",
+        "RS backstop",
+        "legacy audit-only"
+      ],
+      "primary_supplier_truth_path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\Financial_Analysis\\supplier_matching_registry.json",
+      "registry_primary_supplier_count": 16,
+      "rs_backstop_supplier_count": 262,
+      "legacy_truth_assist_supplier_count": 10,
+      "strict_layers": [
+        "bank.raw_tax_id",
+        "bank.extracted_tax_id",
+        "supplier_matching_registry.official_name",
+        "supplier_matching_registry.alias",
+        "supplier_matching_registry.person_alias",
+        "supplier_matching_registry.iban",
+        "supplier_matching_registry.account_hint",
+        "rs_waybills.organization_name",
+        "rs_waybills.waybill_reference"
+      ],
+      "legacy_audit_only_layers": [
+        "legacy_truth_assist.partner_iban_map",
+        "legacy_truth_assist.known_aliases"
+      ]
+    },
+    "strict_bank_only_total": 4516386.97,
+    "combined_supplier_paid_total": 4516386.97,
+    "manual_vs_bank_gap_total": 0.0,
+    "reproducibility_report": {
+      "generated_at": "2026-04-12T19:16:02Z",
+      "source_manifest_summary": {
+        "group_count": 6,
+        "total_files": 25,
+        "total_size_bytes": 353489830,
+        "missing_groups": [],
+        "groups": {
+          "bog_bank_statement": {
+            "label_ka": "BOG ბანკის ამონაწერი",
+            "file_count": 4,
+            "total_size_bytes": 24608869,
+            "latest_modified_at": "2026-04-11T09:33:54.065151Z"
+          },
+          "tbc_bank_statement": {
+            "label_ka": "TBC ბანკის ამონაწერი",
+            "file_count": 5,
+            "total_size_bytes": 6326178,
+            "latest_modified_at": "2026-04-11T09:31:03.247878Z"
+          },
+          "rs_waybills": {
+            "label_ka": "RS ზედნადები",
+            "file_count": 5,
+            "total_size_bytes": 7957504,
+            "latest_modified_at": "2026-04-07T12:56:24.832216Z"
+          },
+          "imported_products": {
+            "label_ka": "შემოტანილი პროდუქცია",
+            "file_count": 4,
+            "total_size_bytes": 109031509,
+            "latest_modified_at": "2026-04-11T09:08:39.628083Z"
+          },
+          "retail_sales_dvabzu": {
+            "label_ka": "გაყიდული პროდუქცია — დვაბზუ",
+            "file_count": 3,
+            "total_size_bytes": 78578486,
+            "latest_modified_at": "2026-04-11T00:49:03.317474Z"
+          },
+          "retail_sales_ozurgeti": {
+            "label_ka": "გაყიდული პროდუქცია — ოზურგეთი",
+            "file_count": 4,
+            "total_size_bytes": 126987284,
+            "latest_modified_at": "2026-04-09T22:39:30.970313Z"
+          }
+        }
+      },
+      "config_validation": {
+        "ok": true,
+        "warning_count": 0,
+        "error_count": 0
+      },
+      "bank_unmatched_total_ge": 13109.980000000003,
+      "bank_recon_ambiguous_amount": 0.0,
+      "bank_recon_unmatched_amount": 13109.980000000003,
+      "truth_source_breakdown": {
+        "bank_tax_id": {
+          "rows": 4338,
+          "amount": 3193013.2800000007
+        },
+        "rs_legal_name_backstop": {
+          "rows": 2243,
+          "amount": 1027227.1200000002
+        },
+        "registry_iban": {
+          "rows": 453,
+          "amount": 295346.5699999998
+        },
+        "registry_alias": {
+          "rows": 2,
+          "amount": 800.0
+        }
+      },
+      "truth_boundary_summary": {
+        "summary_ka": "Strict supplier matching-ში `supplier_matching_registry.json` არის primary truth. RS supplier names რჩება exact-name backstop-ად, ხოლო legacy IBAN/alias რუკები audit-only truth-assist layer-ია და strict supplier totals-ში არ ერთვება.",
+        "badges_ka": [
+          "registry primary",
+          "RS backstop",
+          "legacy audit-only"
+        ],
+        "primary_supplier_truth_path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\Financial_Analysis\\supplier_matching_registry.json",
+        "registry_primary_supplier_count": 16,
+        "rs_backstop_supplier_count": 262,
+        "legacy_truth_assist_supplier_count": 10,
+        "strict_layers": [
+          "bank.raw_tax_id",
+          "bank.extracted_tax_id",
+          "supplier_matching_registry.official_name",
+          "supplier_matching_registry.alias",
+          "supplier_matching_registry.person_alias",
+          "supplier_matching_registry.iban",
+          "supplier_matching_registry.account_hint",
+          "rs_waybills.organization_name",
+          "rs_waybills.waybill_reference"
+        ],
+        "legacy_audit_only_layers": [
+          "legacy_truth_assist.partner_iban_map",
+          "legacy_truth_assist.known_aliases"
+        ]
+      },
+      "imported_products_truncation_suspected": false,
+      "retail_sales_duplicate_policy_mode": "exclude_suspected_until_explicit_policy",
+      "retail_sales_duplicate_excluded_file_count": 1
+    }
+  },
+  "download_files": [
+    "POS_ტერმინალი_TBC_BOG.xlsx",
+    "TBC_ბარათის_შემოსავალი.xlsx",
+    "TBC_დარჩენილი_არამიბმული_ანალიზი.xlsx",
+    "TBC_სამეურნეო_მოძრაობა.xlsx",
+    "TBC_ფუდმარტი_ქეშბექი.xlsx",
+    "TBC_ხარჯები_კატეგორიები.xlsx",
+    "ბანკი_non_supplier_ხაზები.xlsx",
+    "ბანკი_overrides_audit.xlsx",
+    "ბანკი_არამიბმული_კატეგორიები.xlsx",
+    "ბანკი_არამიბმული_ხაზები.xlsx",
+    "ბანკი_ბუნდოვანი_მიბმები.xlsx",
+    "ბანკი_მაღალი_სანდოობის_მიბმები.xlsx",
+    "ბანკი_სხვა_top20.xlsx",
+    "მომწოდებლები_RS.xlsx",
+    "საგადასახადო_მოძრაობა.xlsx",
+    "სახელმწიფო_ხაზინა_ჩარიცხვები.xlsx"
+  ],
+  "download_zip_file": "ყველა_ანგარიში.xlsx.zip",
+  "financial_ratios": {
+    "company": {
+      "net_margin_pct": -15.24,
+      "gross_margin_pct": -15.24,
+      "payment_ratio_pct": 82.29,
+      "strict_bank_payment_ratio_pct": 82.29,
+      "manual_payment_ratio_pct": 0.0,
+      "ap_days": 163,
+      "avg_monthly_net": -16128.14,
+      "total_income": 4657442.76,
+      "total_expenses": 5367080.86,
+      "total_net": -709638.1,
+      "total_debt": 859952.55,
+      "total_paid": 3995335.23,
+      "total_strict_bank_paid": 3995335.23,
+      "total_manual_paid": 0.0,
+      "total_effective": 4855287.78
+    },
+    "objects": {
+      "ოზურგეთი": {
+        "net_margin_pct": -80.65,
+        "gross_margin_pct": -80.65,
+        "avg_monthly_net": -33113.0,
+        "share_of_income_pct": 38.79,
+        "share_of_expenses_pct": 60.81,
+        "total_income": 1806548.6,
+        "total_expenses": 3263520.67,
+        "total_net": -1456972.07
+      },
+      "დვაბზუ": {
+        "net_margin_pct": 85.08,
+        "gross_margin_pct": 85.08,
+        "avg_monthly_net": 33470.91,
+        "share_of_income_pct": 37.17,
+        "share_of_expenses_pct": 4.81,
+        "total_income": 1731028.71,
+        "total_expenses": 258308.76,
+        "total_net": 1472719.95
+      }
+    },
+    "monthly_trend": [
+      {
+        "month": "2025-03",
+        "net_margin_pct": -4.98,
+        "gross_margin_pct": -4.98,
+        "net_amount": -5536.24,
+        "income_amount": 111224.77,
+        "expenses_amount": 116761.01
+      },
+      {
+        "month": "2025-04",
+        "net_margin_pct": -17.17,
+        "gross_margin_pct": -17.17,
+        "net_amount": -20287.44,
+        "income_amount": 118170.4,
+        "expenses_amount": 138457.84
+      },
+      {
+        "month": "2025-05",
+        "net_margin_pct": -3.26,
+        "gross_margin_pct": -3.26,
+        "net_amount": -4245.18,
+        "income_amount": 130126.75,
+        "expenses_amount": 134371.93
+      },
+      {
+        "month": "2025-06",
+        "net_margin_pct": -17.2,
+        "gross_margin_pct": -17.2,
+        "net_amount": -25880.95,
+        "income_amount": 150446.79,
+        "expenses_amount": 176327.74
+      },
+      {
+        "month": "2025-07",
+        "net_margin_pct": -13.64,
+        "gross_margin_pct": -13.64,
+        "net_amount": -25222.59,
+        "income_amount": 184897.27,
+        "expenses_amount": 210119.86
+      },
+      {
+        "month": "2025-08",
+        "net_margin_pct": -6.15,
+        "gross_margin_pct": -6.15,
+        "net_amount": -15889.88,
+        "income_amount": 258230.65,
+        "expenses_amount": 274120.53
+      },
+      {
+        "month": "2025-09",
+        "net_margin_pct": -16.52,
+        "gross_margin_pct": -16.52,
+        "net_amount": -31503.17,
+        "income_amount": 190700.5,
+        "expenses_amount": 222203.67
+      },
+      {
+        "month": "2025-10",
+        "net_margin_pct": -11.49,
+        "gross_margin_pct": -11.49,
+        "net_amount": -20912.86,
+        "income_amount": 182082.75,
+        "expenses_amount": 202995.61
+      },
+      {
+        "month": "2025-11",
+        "net_margin_pct": -11.36,
+        "gross_margin_pct": -11.36,
+        "net_amount": -17097.56,
+        "income_amount": 150567.4,
+        "expenses_amount": 167664.96
+      },
+      {
+        "month": "2025-12",
+        "net_margin_pct": -27.35,
+        "gross_margin_pct": -27.35,
+        "net_amount": -44252.66,
+        "income_amount": 161811.98,
+        "expenses_amount": 206064.64
+      },
+      {
+        "month": "2026-01",
+        "net_margin_pct": -11.48,
+        "gross_margin_pct": -11.48,
+        "net_amount": -15643.42,
+        "income_amount": 136241.49,
+        "expenses_amount": 151884.91
+      },
+      {
+        "month": "2026-02",
+        "net_margin_pct": -12.4,
+        "gross_margin_pct": -12.4,
+        "net_amount": -15266.08,
+        "income_amount": 123083.15,
+        "expenses_amount": 138349.23
+      }
+    ],
+    "top_risk_suppliers": [
+      {
+        "tax_id": "406181616",
+        "org": "(406181616-დღგ) შპს  ჯიდიაი",
+        "total_debt": 313922.1,
+        "days_since_last": 43,
+        "aging_bucket": "31-60",
+        "payment_ratio_pct": 65.0,
+        "strict_bank_paid": 583120.98,
+        "manual_paid": 0.0,
+        "combined_paid": 583120.98,
+        "strict_bank_share_of_paid_pct": 100.0,
+        "manual_share_of_paid_pct": 0.0,
+        "payment_scope": "strict_bank_only",
+        "payment_scope_note": "მომწოდებლის გადახდა სრულად strict bank reconciliation-ით არის დაფარული.",
+        "supplier_truth_summary": "official name: RS backstop",
+        "supplier_truth_sources": [
+          "rs_waybills.organization_name"
+        ],
+        "official_name_truth_source": "rs_waybills.organization_name"
+      },
+      {
+        "tax_id": "205116088",
+        "org": "(205116088-დღგ) შპს საქართველოს დისტრიბუცია და ლოგისტიკა ",
+        "total_debt": 62515.95,
+        "days_since_last": 255,
+        "aging_bucket": "180+",
+        "payment_ratio_pct": 35.99,
+        "strict_bank_paid": 35147.77,
+        "manual_paid": 0.0,
+        "combined_paid": 35147.77,
+        "strict_bank_share_of_paid_pct": 100.0,
+        "manual_share_of_paid_pct": 0.0,
+        "payment_scope": "strict_bank_only",
+        "payment_scope_note": "მომწოდებლის გადახდა სრულად strict bank reconciliation-ით არის დაფარული.",
+        "supplier_truth_summary": "official name: RS backstop",
+        "supplier_truth_sources": [
+          "rs_waybills.organization_name"
+        ],
+        "official_name_truth_source": "rs_waybills.organization_name"
+      },
+      {
+        "tax_id": "404460187",
+        "org": "(404460187-დღგ) შპს ფუდმარტი",
+        "total_debt": 53314.25,
+        "days_since_last": 152,
+        "aging_bucket": "91-180",
+        "payment_ratio_pct": 0.0,
+        "strict_bank_paid": 0.0,
+        "manual_paid": 0.0,
+        "combined_paid": 0.0,
+        "strict_bank_share_of_paid_pct": 0.0,
+        "manual_share_of_paid_pct": 0.0,
+        "payment_scope": "unpaid_or_unmatched",
+        "payment_scope_note": "დადასტურებული supplier payment ამ მომწოდებელზე არ ჩანს.",
+        "supplier_truth_summary": "official name: RS backstop",
+        "supplier_truth_sources": [
+          "rs_waybills.organization_name"
+        ],
+        "official_name_truth_source": "rs_waybills.organization_name"
+      },
+      {
+        "tax_id": "405623204",
+        "org": "(405623204-დღგ) შპს სევენთისევენ",
+        "total_debt": 50526.0,
+        "days_since_last": 305,
+        "aging_bucket": "180+",
+        "payment_ratio_pct": 0.0,
+        "strict_bank_paid": 0.0,
+        "manual_paid": 0.0,
+        "combined_paid": 0.0,
+        "strict_bank_share_of_paid_pct": 0.0,
+        "manual_share_of_paid_pct": 0.0,
+        "payment_scope": "unpaid_or_unmatched",
+        "payment_scope_note": "დადასტურებული supplier payment ამ მომწოდებელზე არ ჩანს.",
+        "supplier_truth_summary": "official name: RS backstop",
+        "supplier_truth_sources": [
+          "rs_waybills.organization_name"
+        ],
+        "official_name_truth_source": "rs_waybills.organization_name"
+      },
+      {
+        "tax_id": "202061053",
+        "org": "(202061053-დღგ) შპს ზახარ",
+        "total_debt": 22143.86,
+        "days_since_last": 44,
+        "aging_bucket": "31-60",
+        "payment_ratio_pct": 27.97,
+        "strict_bank_paid": 8600.0,
+        "manual_paid": 0.0,
+        "combined_paid": 8600.0,
+        "strict_bank_share_of_paid_pct": 100.0,
+        "manual_share_of_paid_pct": 0.0,
+        "payment_scope": "strict_bank_only",
+        "payment_scope_note": "მომწოდებლის გადახდა სრულად strict bank reconciliation-ით არის დაფარული.",
+        "supplier_truth_summary": "official name: RS backstop",
+        "supplier_truth_sources": [
+          "rs_waybills.organization_name"
+        ],
+        "official_name_truth_source": "rs_waybills.organization_name"
+      }
+    ]
+  },
+  "response_meta": {
+    "tab": "ratios",
+    "trust_label": "derived",
+    "trust_badge_ka": "Derived",
+    "scope_ka": "Ratios derived from P&L and AP views.",
+    "notes_ka": [],
+    "generated_at": "2026-04-12T19:16:02Z",
+    "source_manifest_summary": {
+      "group_count": 6,
+      "total_files": 25,
+      "total_size_bytes": 353489830,
+      "missing_groups": [],
+      "groups": {
+        "bog_bank_statement": {
+          "label_ka": "BOG ბანკის ამონაწერი",
+          "file_count": 4,
+          "total_size_bytes": 24608869,
+          "latest_modified_at": "2026-04-11T09:33:54.065151Z"
+        },
+        "tbc_bank_statement": {
+          "label_ka": "TBC ბანკის ამონაწერი",
+          "file_count": 5,
+          "total_size_bytes": 6326178,
+          "latest_modified_at": "2026-04-11T09:31:03.247878Z"
+        },
+        "rs_waybills": {
+          "label_ka": "RS ზედნადები",
+          "file_count": 5,
+          "total_size_bytes": 7957504,
+          "latest_modified_at": "2026-04-07T12:56:24.832216Z"
+        },
+        "imported_products": {
+          "label_ka": "შემოტანილი პროდუქცია",
+          "file_count": 4,
+          "total_size_bytes": 109031509,
+          "latest_modified_at": "2026-04-11T09:08:39.628083Z"
+        },
+        "retail_sales_dvabzu": {
+          "label_ka": "გაყიდული პროდუქცია — დვაბზუ",
+          "file_count": 3,
+          "total_size_bytes": 78578486,
+          "latest_modified_at": "2026-04-11T00:49:03.317474Z"
+        },
+        "retail_sales_ozurgeti": {
+          "label_ka": "გაყიდული პროდუქცია — ოზურგეთი",
+          "file_count": 4,
+          "total_size_bytes": 126987284,
+          "latest_modified_at": "2026-04-09T22:39:30.970313Z"
+        }
+      }
+    },
+    "partial": false,
+    "partial_reason": ""
+  }
+}

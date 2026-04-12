@@ -1,0 +1,82 @@
+{
+  "generated_at": "2026-04-12T19:40:08.790121Z",
+  "artifact_count": 19,
+  "artifacts": {
+    "analytics": {
+      "path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\rs-dashboard\\public\\tab-data\\analytics.json",
+      "size_bytes": 260885
+    },
+    "budget": {
+      "path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\rs-dashboard\\public\\tab-data\\budget.json",
+      "size_bytes": 49454
+    },
+    "cashflow_bank_unmatched_detail": {
+      "path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\rs-dashboard\\public\\tab-data\\cashflow_bank_unmatched_detail.json",
+      "size_bytes": 268435
+    },
+    "cashflow_summary": {
+      "path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\rs-dashboard\\public\\tab-data\\cashflow_summary.json",
+      "size_bytes": 249683
+    },
+    "cashflow_tbc_expenses_detail": {
+      "path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\rs-dashboard\\public\\tab-data\\cashflow_tbc_expenses_detail.json",
+      "size_bytes": 943784
+    },
+    "executive": {
+      "path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\rs-dashboard\\public\\tab-data\\executive.json",
+      "size_bytes": 28505
+    },
+    "executive_export": {
+      "path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\rs-dashboard\\public\\tab-data\\executive_export.json",
+      "size_bytes": 2238943
+    },
+    "forecast": {
+      "path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\rs-dashboard\\public\\tab-data\\forecast.json",
+      "size_bytes": 66754
+    },
+    "imported_products": {
+      "path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\rs-dashboard\\public\\tab-data\\imported_products.json",
+      "size_bytes": 213167
+    },
+    "imported_products_full": {
+      "path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\rs-dashboard\\public\\tab-data\\imported_products_full.json",
+      "size_bytes": 1359212
+    },
+    "imported_products_source": {
+      "path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\rs-dashboard\\public\\tab-data\\imported_products_source.json",
+      "size_bytes": 1357145
+    },
+    "pnl_summary": {
+      "path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\rs-dashboard\\public\\tab-data\\pnl_summary.json",
+      "size_bytes": 57191
+    },
+    "ratios": {
+      "path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\rs-dashboard\\public\\tab-data\\ratios.json",
+      "size_bytes": 29157
+    },
+    "retail_sales": {
+      "path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\rs-dashboard\\public\\tab-data\\retail_sales.json",
+      "size_bytes": 251299
+    },
+    "retail_sales_source": {
+      "path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\rs-dashboard\\public\\tab-data\\retail_sales_source.json",
+      "size_bytes": 597812
+    },
+    "suppliers": {
+      "path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\rs-dashboard\\public\\tab-data\\suppliers.json",
+      "size_bytes": 261173
+    },
+    "valuation": {
+      "path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\rs-dashboard\\public\\tab-data\\valuation.json",
+      "size_bytes": 26120
+    },
+    "waybills_source": {
+      "path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\rs-dashboard\\public\\tab-data\\waybills_source.json",
+      "size_bytes": 7503706
+    },
+    "working_capital": {
+      "path": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\rs-dashboard\\public\\tab-data\\working_capital.json",
+      "size_bytes": 224214
+    }
+  }
+}

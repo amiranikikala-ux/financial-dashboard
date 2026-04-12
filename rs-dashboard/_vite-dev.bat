@@ -4,6 +4,7 @@ cd /d "%~dp0"
 echo Vite dev server: http://127.0.0.1:5173/
 echo Close this window to stop the server.
 echo.
+rem --open ზოგ Windows-ზე არ იხსნის; Run_Dashboard*.bat ასევე იძახის start http://...
 npm run dev -- --host 127.0.0.1 --port 5173 --strictPort --open
 if errorlevel 1 (
   echo.

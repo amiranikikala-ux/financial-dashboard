@@ -1,11 +1,11 @@
 ---
-description: სად არის ბანკის/RS Excel ფაილები პროექტში (ფესვიდან ფარდობითი გზები)
+description: სად არის ბანკის/RS/imported-products წყარო ფაილები პროექტში
 alwaysApply: true
 ---
 
-# ფინანსური მონაცემების Excel-ების მდებარეობა
+# ფინანსური მონაცემების წყარო ფაილების მდებარეობა
 
-პროექტის **ფესვში** (საქაღალდე, სადაც `generate_dashboard_data.py` ზის — მაგ. `AI აგენტი/`) ყველა წყარო Excel აქ არის — **არ ეძებოთ სხვა საქაღალდეში**.
+პროექტის **ფესვში** (საქაღალდე, სადაც `generate_dashboard_data.py` ზის — მაგ. `AI აგენტი/`) ყველა წყარო ფაილი აქ არის — **არ ეძებოთ სხვა საქაღალდეში**.
 
 ## საქაღალდეები, გაფართოებები და ფაილების გზები (ფესვიდან)
 
@@ -14,12 +14,18 @@ alwaysApply: true
 | **BOG ბანკის ამონაწერი** | `Financial_Analysis/ბოგ ბანკი ამონაწერი/` | ყველა `*.xlsx` | `Financial_Analysis/ბოგ ბანკი ამონაწერი/*.xlsx` |
 | **TBC / თბს ბანკის ამონაწერი** | `Financial_Analysis/თბს ბანკი ამონაწერი/` | ყველა `*.xlsx` | `Financial_Analysis/თბს ბანკი ამონაწერი/*.xlsx` |
 | **RS ზედნადები** | `Financial_Analysis/რს ზედნადები/` | ყველა `*.xlsx` და `*.xls` | `Financial_Analysis/რს ზედნადები/*.xlsx` და `Financial_Analysis/რს ზედნადები/*.xls` |
+| **შემოტანილი პროდუქცია** | `Financial_Analysis/შემოტანილი პროდუქცია/` | reference/product-line წყარო; preferred არის `*.csv`, legacy fallback — `*.xls`/`*.xlsx` | `Financial_Analysis/შემოტანილი პროდუქცია/*.csv` |
+| **გაყიდული პროდუქტები — დვაბზუ** | `Financial_Analysis/გაყიდული პროდუქტები სოფ დვაბზუ/` | retail sales line export; ჯერ dedicated loader არ დგას | `Financial_Analysis/გაყიდული პროდუქტები სოფ დვაბზუ/*.xlsx` |
+| **გაყიდული პროდუქტები — ოზურგეთი** | `Financial_Analysis/გაყიდული პროდუქტები სოფ ოზურგეთი/` | retail sales line export; ჯერ dedicated loader არ დგას | `Financial_Analysis/გაყიდული პროდუქტები სოფ ოზურგეთი/*.xlsx` |
 
 სრული ნიმუშები Windows-ისთვის (ფესვიდან, PowerShell/CMD):
 
 - `Financial_Analysis\ბოგ ბანკი ამონაწერი\*.xlsx`
 - `Financial_Analysis\თბს ბანკი ამონაწერი\*.xlsx`
 - `Financial_Analysis\რს ზედნადები\*.xlsx` — და — `Financial_Analysis\რს ზედნადები\*.xls`
+- `Financial_Analysis\შემოტანილი პროდუქცია\*.csv`
+- `Financial_Analysis\გაყიდული პროდუქტები სოფ დვაბზუ\*.xlsx`
+- `Financial_Analysis\გაყიდული პროდუქტები სოფ ოზურგეთი\*.xlsx`
 
 ## კოდი (`generate_dashboard_data.py`)
 
@@ -27,6 +33,11 @@ alwaysApply: true
 - `list_bog_bank_statement_xlsx()` — BOG ყველა `.xlsx`.
 - `list_tbc_bank_statement_xlsx()` — TBC ყველა `.xlsx`.
 - `list_rs_waybill_files()` — RS ყველა `.xlsx` + `.xls` (ერთ სიაში, დუბლიკატების გარეშე).
+- `list_imported_product_files()` — ჯერ ეძებს `Financial_Analysis/შემოტანილი პროდუქცია/*.csv`; თუ არ არის, legacy fallback-ად იღებს `*.xls` / `*.xlsx`.
+- imported products წყარო გამოიყენე როგორც პროდუქციის-reference წყარო: seller/product line analysis, supplier-product mapping, top items review.
+- გაყიდული პროდუქტების Excel-ები ჯერ pipeline-ში ავტომატურად ჩართული არაა; ეს არის source-only retail sales exports შემდგომი ანალიზისთვის.
+- გაყიდული პროდუქტების line-level schema ამჟამად შეიცავს სვეტებს: `P_ID`, `კოდი`, `შტრიხკოდი`, `დასახელება`, `ერთეული`, `რაოდენობა`, `ფასი`, `თვითღირებულება`, `დრო`, `ობიექტი`, `მოგება`, `ქვეჯგუფი`, `ცვლა`.
+- ამ sales exports-ზე `openpyxl` `read_only`/dimension მეტამონაცემი ზოგჯერ ცრუ `max_row=1` შედეგს იძლევა; გამოიყენე `pandas.read_excel()` ან full workbook read, არა მხოლოდ `openpyxl` `max_row`/`max_column`.
 
 ## სვეტები და `get_bank_payments`-ის ფოკუსი
 
@@ -36,4 +47,6 @@ alwaysApply: true
 ## აგენტისთვის
 
 - Excel-ების ანალიზი/შემოწმება: **ჯერ** გადაამოწმე ზემოთ ქვესაქაღალდეები; თუ ფაილი არ ჩანს, გამოიყენე ტერმინალი `Get-ChildItem` / `dir` ამ გზებზე.
+- თუ მოთხოვნა ეხება „რომელმა მომწოდებელმა რა პროდუქცია შემოიტანა“, ჯერ გადაამოწმე `Financial_Analysis/შემოტანილი პროდუქცია/*.csv`.
+- თუ მოთხოვნა ეხება გაყიდვებს / sell-through / assortment / category / margin ანალიზს ობიექტების მიხედვით, ჯერ გადაამოწმე `Financial_Analysis/გაყიდული პროდუქტები სოფ დვაბზუ/*.xlsx` და `Financial_Analysis/გაყიდული პროდუქტები სოფ ოზურგეთი/*.xlsx`.
 - არ გამოიგონო მონაცემები — მხოლოდ ამ ფოლდერებში არსებული ფაილები.

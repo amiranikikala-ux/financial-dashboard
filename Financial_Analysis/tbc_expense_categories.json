@@ -43,7 +43,9 @@
         "ucc",
         "GE59TB0000000450109787"
       ],
-      "iban_hints": ["GE59TB0000000450109787"]
+      "iban_hints": [
+        "GE59TB0000000450109787"
+      ]
     },
     {
       "id": "utility_telecom_bank_commission",
@@ -70,7 +72,9 @@
         "magti",
         "GE70TB0000000450109783"
       ],
-      "iban_hints": ["GE70TB0000000450109783"]
+      "iban_hints": [
+        "GE70TB0000000450109783"
+      ]
     },
     {
       "id": "pos_terminal_service_fee",
@@ -81,7 +85,9 @@
         "ტერმინალების მომსახურების",
         "GE30TB0000025013100015"
       ],
-      "iban_hints": ["GE30TB0000025013100015"]
+      "iban_hints": [
+        "GE30TB0000025013100015"
+      ]
     },
     {
       "id": "incoming_packages_fee",
@@ -92,7 +98,9 @@
         "ნაკრებების საკომისიო",
         "GE62TB0000025013100021"
       ],
-      "iban_hints": ["GE62TB0000025013100021"]
+      "iban_hints": [
+        "GE62TB0000025013100021"
+      ]
     },
     {
       "id": "incasso_cash_handling",
@@ -111,7 +119,12 @@
       "match_substrings": [
         "ერთიანი სახაზინო",
         "საბიუჯეტო გადასახად",
-        "სახაზინო კოდი"
+        "სახაზინო კოდი",
+        "ანგარიში: 101001000"
+      ],
+      "match_all_substrings": [
+        "გადასახადების ერთიანი კოდი",
+        "ხაზინის ერთიანი ანგარიში"
       ],
       "iban_hints": []
     },
@@ -139,21 +152,27 @@
       "id": "card_mcc_groceries_5411",
       "label_ka": "ბარათით შეძენა — სასურსაო/საკვები (MCC 5411)",
       "accounting_role": "operating_expense",
-      "match_substrings": ["mcc:5411"],
+      "match_substrings": [
+        "mcc:5411"
+      ],
       "iban_hints": []
     },
     {
       "id": "card_mcc_misc_retail_5943",
       "label_ka": "ბარათით შეძენა — ოფისი/საჩუქრები (MCC 5943)",
       "accounting_role": "operating_expense",
-      "match_substrings": ["mcc:5943"],
+      "match_substrings": [
+        "mcc:5943"
+      ],
       "iban_hints": []
     },
     {
       "id": "card_mcc_building_supplies_5039",
       "label_ka": "ბარათით შეძენა — მასალა/აღჭურვილობა (MCC 5039)",
       "accounting_role": "operating_expense",
-      "match_substrings": ["mcc:5039"],
+      "match_substrings": [
+        "mcc:5039"
+      ],
       "iban_hints": []
     },
     {
@@ -164,6 +183,447 @@
         "ხელფასი",
         "ხელფასი ოზურგეთი",
         "ხელფასი დვაბზუ"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "cleaning_service_tbc_pay",
+      "label_ka": "დასუფთავების მომსახურება (თიბისი ფეი)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "Ozurgeti cleaning"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "pension_agency",
+      "label_ka": "საპენსიო სააგენტო",
+      "accounting_role": "state_treasury",
+      "match_substrings": [
+        "საპენსიო სააგენტო",
+        "საპენსიო ფონდი",
+        "GE88TB7458336020100010"
+      ],
+      "iban_hints": [
+        "GE88TB7458336020100010"
+      ]
+    },
+    {
+      "id": "card_mcc_restaurants_5462",
+      "label_ka": "ბარათით შეძენა — რესტორანი/კაფე (MCC 5462)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "mcc:5462"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_shopping_5999",
+      "label_ka": "ბარათით შეძენა — საყიდლები (MCC 5999)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "mcc:5999"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_electronics_5065",
+      "label_ka": "ბარათით შეძენა — ელექტრონიკა (MCC 5065)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "mcc:5065"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_appliances_5722",
+      "label_ka": "ბარათით შეძენა — საყოფაცხოვრებო ტექნიკა (MCC 5722)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "mcc:5722"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "business_expense_kikalishvili",
+      "label_ka": "სამეურნეო ხარჯი (ამირან კიკალიშვილი)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "კიკალიშვილი ამირან",
+        "ამირან კიკალიშვილი"
+      ],
+      "iban_hints": [
+        "GE38BG0000000048998900GEL",
+        "GE86TB7923645064300036",
+        "GE90TB7923645064300061"
+      ]
+    },
+    {
+      "id": "rent_expense",
+      "label_ka": "იჯარა / ქირა",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "იჯარა",
+        "ქირა",
+        "იჯარა თბილისი",
+        "იჯარა ოზურგეთი"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "service_fee_mega_plus",
+      "label_ka": "მომსახურების საფასური (მეგა პლიუს)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "მეგა პლიუს"
+      ],
+      "iban_hints": [
+        "GE52TB7886536020100006"
+      ]
+    },
+    {
+      "id": "repair_maintenance",
+      "label_ka": "რემონტი / ხელოსანი",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "ხელოსანი",
+        "კონდიციონერის დაყენება",
+        "მაცივრის ხელოსანი",
+        "ელექტრიკი ხელოსანი"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "charity_donation",
+      "label_ka": "ქველმოქმედება / შემოწირულობა",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "ქველმოქმედება",
+        "შემოწირულობა"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "transport_evacuator",
+      "label_ka": "ტრანსპორტირება / ევაკუატორი",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "ევაკუატორი გადაზიდვა",
+        "ევაკუატორი"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "salary_payments_additional",
+      "label_ka": "ხელფასები (დამატებითი)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "ხელფასის გადახდა",
+        "ხელფასის დარიცხვა",
+        "ზელფასი",
+        "თანამშრომელი(თებერვალი)"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "rent_expense_additional",
+      "label_ka": "იჯარა / ქირა (დამატებითი)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "იჯარა",
+        "ქირა"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "salary_payments_additional2",
+      "label_ka": "ხელფასები (დამატებითი 2)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "ხელფასის გადახდა",
+        "ხელფასის დარიცხვა",
+        "ზელფასი",
+        "თანამშრომელი(თებერვალი)",
+        "ხელფასი ოზურგეთი",
+        "ხელფასი დვაბზუ",
+        "ხელფასი"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "inventory_shelves",
+      "label_ka": "ინვენტარი (თაროები)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "მესხი ფიქრია",
+        "თაროების შეძენა"
+      ],
+      "iban_hints": [
+        "GE48BG0000000581196010GEL"
+      ]
+    },
+    {
+      "id": "street_food_125",
+      "label_ka": "საქონლის შეძენა (შპს სთრით ფუდ 125)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "შპს სთრით ფუდ 125"
+      ],
+      "iban_hints": [
+        "GE92TB7257136020100007"
+      ]
+    },
+    {
+      "id": "salary_payments_additional3",
+      "label_ka": "ხელფასები (დამატებითი 3)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "ხელფასის დაფარვა",
+        "ხელფასი ( 10.12.22 )",
+        "ხელფასი (თებერვალი)",
+        "ხელფასი წინასწარ",
+        "ხელფასი მანქ.",
+        "ხელფასი სეს.",
+        "ხელფასი დუჟოკი"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_foodtime",
+      "label_ka": "ბარათით შეძენა — GEO FOODTIME",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "GEO FOODTIME LLC"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_foodtime_additional",
+      "label_ka": "ბარათით შეძენა — GEO FOODTIME (დამატებითი)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "GEO FOODTIME LLC"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_foodtime_additional2",
+      "label_ka": "ბარათით შეძენა — GEO FOODTIME (დამატებითი 2)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "GEO FOODTIME LLC",
+        "GEO FOODTIME"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_jibe",
+      "label_ka": "ბარათით შეძენა — ჯიბე (JIBE LTD)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "JIBE  LTD",
+        "JIBE LTD"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_ekonomiuri",
+      "label_ka": "ბარათით შეძენა — ეკონომიური (EKONOMIURI LTD)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "EKONOMIURI LTD"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_foodtime_additional4",
+      "label_ka": "ბარათით შეძენა — GEO FOODTIME (დამატებითი 4)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "GEO FOODTIME LLC",
+        "GEO FOODTIME",
+        "GEO FOODTIME LLC, Bank Liberty",
+        "GEO FOODTIME LLC, TBC",
+        "GEO FOODTIME LLC, Domestic",
+        "GEO FOODTIME LLC, CREDO"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_foodtime_additional5",
+      "label_ka": "ბარათით შეძენა — GEO FOODTIME (დამატებითი 5)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "GEO FOODTIME LLC",
+        "GEO FOODTIME",
+        "GEO FOODTIME LLC, Bank Liberty",
+        "GEO FOODTIME LLC, TBC",
+        "GEO FOODTIME LLC, Domestic",
+        "GEO FOODTIME LLC, CREDO"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_foodtime_additional6",
+      "label_ka": "ბარათით შეძენა — GEO FOODTIME (დამატებითი 6)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "GEO FOODTIME LLC",
+        "GEO FOODTIME",
+        "GEO FOODTIME LLC, Bank Liberty",
+        "GEO FOODTIME LLC, TBC",
+        "GEO FOODTIME LLC, Domestic",
+        "GEO FOODTIME LLC, CREDO"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_jibe_additional",
+      "label_ka": "ბარათით შეძენა — ჯიბე (JIBE LTD) (დამატებითი)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "JIBE  LTD",
+        "JIBE LTD"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_ekonomiuri_additional",
+      "label_ka": "ბარათით შეძენა — ეკონომიური (EKONOMIURI LTD) (დამატებითი)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "EKONOMIURI LTD"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_foodtime_additional7",
+      "label_ka": "ბარათით შეძენა — GEO FOODTIME (დამატებითი 7)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "GEO FOODTIME LLC",
+        "GEO FOODTIME",
+        "GEO FOODTIME LLC, Bank Liberty",
+        "GEO FOODTIME LLC, TBC",
+        "GEO FOODTIME LLC, Domestic",
+        "GEO FOODTIME LLC, CREDO"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_foodtime_additional8",
+      "label_ka": "ბარათით შეძენა — GEO FOODTIME (დამატებითი 8)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "GEO FOODTIME LLC",
+        "GEO FOODTIME",
+        "GEO FOODTIME LLC, Bank Liberty",
+        "GEO FOODTIME LLC, TBC",
+        "GEO FOODTIME LLC, Domestic",
+        "GEO FOODTIME LLC, CREDO",
+        "8046038 GEO FOODTIME LLC"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_foodtime_additional9",
+      "label_ka": "ბარათით შეძენა — GEO FOODTIME (დამატებითი 9)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "GEO FOODTIME LLC",
+        "GEO FOODTIME",
+        "GEO FOODTIME LLC, Bank Liberty",
+        "GEO FOODTIME LLC, TBC",
+        "GEO FOODTIME LLC, Domestic",
+        "GEO FOODTIME LLC, CREDO",
+        "8046038 GEO FOODTIME LLC",
+        "GEO FOODTIME LLC, Bank Liberty ,  MC",
+        "GEO FOODTIME LLC, Bank Liberty, MasterCard"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_foodtime_additional10",
+      "label_ka": "ბარათით შეძენა — GEO FOODTIME (დამატებითი 10)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "GEO FOODTIME LLC",
+        "GEO FOODTIME",
+        "GEO FOODTIME LLC, Bank Liberty",
+        "GEO FOODTIME LLC, TBC",
+        "GEO FOODTIME LLC, Domestic",
+        "GEO FOODTIME LLC, CREDO",
+        "8046038 GEO FOODTIME LLC",
+        "GEO FOODTIME LLC, Bank Liberty ,  MC",
+        "GEO FOODTIME LLC, Bank Liberty, MasterCard"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_foodtime_additional11",
+      "label_ka": "ბარათით შეძენა — GEO FOODTIME (დამატებითი 11)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "GEO FOODTIME LLC",
+        "GEO FOODTIME",
+        "GEO FOODTIME LLC, Bank Liberty",
+        "GEO FOODTIME LLC, TBC",
+        "GEO FOODTIME LLC, Domestic",
+        "GEO FOODTIME LLC, CREDO",
+        "8046038 GEO FOODTIME LLC",
+        "GEO FOODTIME LLC, Bank Liberty ,  MC",
+        "GEO FOODTIME LLC, Bank Liberty, MasterCard"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_foodtime_additional12",
+      "label_ka": "ბარათით შეძენა — GEO FOODTIME (დამატებითი 12)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "GEO FOODTIME LLC",
+        "GEO FOODTIME",
+        "GEO FOODTIME LLC, Bank Liberty",
+        "GEO FOODTIME LLC, TBC",
+        "GEO FOODTIME LLC, Domestic",
+        "GEO FOODTIME LLC, CREDO",
+        "8046038 GEO FOODTIME LLC",
+        "GEO FOODTIME LLC, Bank Liberty ,  MC",
+        "GEO FOODTIME LLC, Bank Liberty, MasterCard"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_foodtime_additional13",
+      "label_ka": "ბარათით შეძენა — GEO FOODTIME (დამატებითი 13)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "GEO FOODTIME LLC",
+        "GEO FOODTIME",
+        "GEO FOODTIME LLC, Bank Liberty",
+        "GEO FOODTIME LLC, TBC",
+        "GEO FOODTIME LLC, Domestic",
+        "GEO FOODTIME LLC, CREDO",
+        "8046038 GEO FOODTIME LLC",
+        "GEO FOODTIME LLC, Bank Liberty ,  MC",
+        "GEO FOODTIME LLC, Bank Liberty, MasterCard"
+      ],
+      "iban_hints": []
+    },
+    {
+      "id": "card_mcc_foodtime_additional14",
+      "label_ka": "ბარათით შეძენა — GEO FOODTIME (დამატებითი 14)",
+      "accounting_role": "operating_expense",
+      "match_substrings": [
+        "GEO FOODTIME LLC",
+        "GEO FOODTIME",
+        "GEO FOODTIME LLC, Bank Liberty",
+        "GEO FOODTIME LLC, TBC",
+        "GEO FOODTIME LLC, Domestic",
+        "GEO FOODTIME LLC, CREDO",
+        "8046038 GEO FOODTIME LLC",
+        "GEO FOODTIME LLC, Bank Liberty ,  MC",
+        "GEO FOODTIME LLC, Bank Liberty, MasterCard"
       ],
       "iban_hints": []
     }

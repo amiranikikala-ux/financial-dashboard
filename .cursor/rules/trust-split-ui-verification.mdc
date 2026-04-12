@@ -1,0 +1,35 @@
+---
+description: Reuse verified trust/split UI baseline unless related files changed
+globs: "{generate_dashboard_data.py,server.py,rs-dashboard/src/App.jsx,rs-dashboard/src/WorkingCapital.jsx,rs-dashboard/src/SupplierModal.jsx,rs-dashboard/src/components/TrustBanner.jsx,rs-dashboard/src/index.css}"
+alwaysApply: false
+---
+
+# Trust/Split UI Verification Baseline
+
+თუ ამ scope-ში მუშაობ, უკვე დადასტურებული trust/split UI baseline თავიდან აღარ გადაამოწმო, სანამ recheck-ის trigger არ დადგება.
+
+## Verified baseline — 2026-04-11
+
+- `working_capital` desktop/mobile view დადასტურებულია.
+- `SupplierModal` desktop/mobile view დადასტურებულია.
+- დადასტურებულია: `Payment split` cards, `payment_scope` badges, `truth` badges და imported-products reference detail.
+- runtime health იმ მომენტში იყო: backend `http://127.0.0.1:8000` -> `200`, frontend `http://127.0.0.1:5173` -> `200`.
+
+## როდის არის საჭირო ხელახალი verification
+
+- თუ შეიცვალა ამ rule-ის scope-ში მოხვედრილი UI/backend ფაილებიდან რომელიმე.
+- თუ შეიცვალა trust/split data contract ან API keys.
+- თუ თავიდან გაეშვა `generate_dashboard_data.py` და data artifact-ები მნიშვნელოვნად განახლდა.
+- თუ მომხმარებელი პირდაპირ ითხოვს ხელახალ browser/UI შემოწმებას.
+
+## Default behavior
+
+- summary-ში მიუთითე, რომ trust/split UI baseline უკვე verified-ია.
+- browser verification თავიდან არ გაიმეორო მხოლოდ იმიტომ, რომ სესია ახალია.
+- თუ recheck trigger არ არის, დრო და რესურსი არ დახარჯო იმავე desktop/mobile walkthrough-ზე.
+- თუ არსებობს რეალური საჭიროება: ახალი ცვლილება, regression suspicion, runtime anomaly, contradictory evidence, user request ან debugging მიზანი, verification აუცილებლად გაუშვი.
+- verified baseline არის default shortcut, არა აკრძალვა; evidence ყოველთვის baseline-ზე მაღლა დგას.
+
+## Known caveat
+
+- `SupplierModal` title cleanup-ზე შეიძლება ზოგ supplier name-ში დარჩეს `დღგ)` prefix; ეს ცნობილია და ცალკე fix-ია, არა სრული trust/split regression.

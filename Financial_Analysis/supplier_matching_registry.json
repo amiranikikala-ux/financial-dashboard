@@ -1,0 +1,220 @@
+{
+  "notes": [
+    "Optional strict-matching overrides for supplier reconciliation.",
+    "Add aliases/IBANs only when evidence is explicit and auditable.",
+    "Do not add fuzzy shortcuts that can mis-assign payments.",
+    "Match aids are trusted only when the supplier entry has a non-empty `evidence` array."
+  ],
+  "explicit_skip_keywords": [],
+  "suppliers": [
+    {
+      "tax_id": "404885184",
+      "official_name": "შპს ბარამბო 2011",
+      "aliases": [
+        "შ.პ.ს. ბარამბო 2011"
+      ],
+      "ibans": [
+        "GE34TB7095636020100008"
+      ],
+      "evidence": [
+        "Same IBAN appears on matched_exact_id rows with raw_tax_id 404885184 and counterparty text 'შპს ბარამბო 2011' / 'შ.პ.ს. ბარამბო 2011'.",
+        "Ambiguous rows on the same IBAN omit tax_id but keep the same counterparty text and 'დავალიანების დაფარვა' purpose."
+      ]
+    },
+    {
+      "tax_id": "406049823",
+      "official_name": "შპს ჯორჯიან სერვის ნეთვორკი",
+      "aliases": [
+        "შპს ”ჯორჯიან სერვის ნეთვორკი”"
+      ],
+      "ibans": [
+        "GE70TB7114436080100001"
+      ],
+      "evidence": [
+        "Same IBAN appears on matched_exact_id rows with raw_tax_id 406049823 and counterparty text 'შპს ჯორჯიან სერვის ნეთვორკი'.",
+        "The remaining ambiguous row on the same IBAN uses the curly-quote bank label 'შპს ”ჯორჯიან სერვის ნეთვორკი”'."
+      ]
+    },
+    {
+      "tax_id": "250724337",
+      "official_name": "შპს არგო",
+      "aliases": [
+        "შპს \"არგო\""
+      ],
+      "ibans": [
+        "GE54BG0000000161842592"
+      ],
+      "evidence": [
+        "Same IBAN appears on matched_exact_id rows with raw_tax_id 250724337 and receiver 'შპს არგო'.",
+        "Unresolved rows on the same IBAN use partner text 'შპს \"არგო\"' without raw tax_id."
+      ]
+    },
+    {
+      "tax_id": "437078485",
+      "official_name": "შპს შრომა - 2023",
+      "aliases": [
+        "შრომა",
+        "შპს შრომა"
+      ],
+      "ibans": [
+        "GE15BG0000000599718463"
+      ],
+      "evidence": [
+        "Same IBAN appears on matched_exact_id rows with raw_tax_id 437078485 and receiver 'შპს შრომა - 2023'.",
+        "Current unresolved/non_supplier rows on the same IBAN use the shortened bank label 'შპს შრომა'."
+      ]
+    },
+    {
+      "tax_id": "412731281",
+      "official_name": "შპს თოლია ქუთაისი",
+      "aliases": [
+        "თოლია",
+        "შპს თოლია"
+      ],
+      "ibans": [
+        "GE76BG0000000221607000"
+      ],
+      "evidence": [
+        "Same IBAN appears on matched_exact_name rows whose receiver is 'შპს თოლია ქუთაისი'.",
+        "Current unresolved rows on the same IBAN use shortened partner text 'შპს თოლია'."
+      ]
+    },
+    {
+      "tax_id": "237113333",
+      "official_name": "შპს სალი 2009",
+      "aliases": [
+        "სალი",
+        "შპს სალი"
+      ],
+      "ibans": [
+        "GE84BG0000000514988400"
+      ],
+      "evidence": [
+        "Same IBAN appears on matched_exact_id rows for tax_id 237113333.",
+        "Current unresolved rows on the same IBAN use shortened partner text 'შპს სალი'."
+      ]
+    },
+    {
+      "tax_id": "420424393",
+      "official_name": "შპს ინტერნეიშნლ მარკეტინგ ენდ თრეიდინგ",
+      "aliases": [
+        "ინტერნეიშენალ მარკეტინგ ენდ თრეიდინგი",
+        "შპს ინტერნეიშენალ მარკეტინგ ენდ თრეიდინგი"
+      ],
+      "ibans": [
+        "GE17BG0000000761466800",
+        "GE17BG000000076146680"
+      ],
+      "evidence": [
+        "Same IBAN appears on matched_exact_id rows with raw_tax_id 420424393 and official receiver 'შპს ინტერნეიშნლ მარკეტინგ ენდ თრეიდინგ'.",
+        "Current unresolved/non_supplier rows on the same IBAN use the alternative spelling 'ინტერნეიშენალ მარკეტინგ ენდ თრეიდინგი'."
+      ]
+    },
+    {
+      "tax_id": "206314898",
+      "official_name": "შპს ლიბო გრუპ",
+      "aliases": [
+        "ლიბო გრუპი"
+      ],
+      "ibans": [
+        "GE42BG0000000236904900"
+      ],
+      "evidence": [
+        "All current rows on IBAN GE42BG0000000236904900 use partner text 'ლიბო გრუპი' (or the same text plus BAGAGE22/IBAN suffix).",
+        "The scored supplier candidate on those rows is uniquely tax_id 206314898 with official name 'შპს ლიბო გრუპ'."
+      ]
+    },
+    {
+      "tax_id": "205239053",
+      "official_name": "შპს ჯეო მარკი",
+      "aliases": [
+        "ჯეომარკი"
+      ],
+      "ibans": [
+        "GE40BG0000000249564600"
+      ],
+      "evidence": [
+        "Current rows on IBAN GE40BG0000000249564600 use partner text 'ჯეომარკი' (with or without BAGAGE22/IBAN suffix).",
+        "That bank label is a direct spacing variant of the unique RS supplier 'შპს ჯეო მარკი' (tax_id 205239053)."
+      ]
+    },
+    {
+      "tax_id": "404995680",
+      "official_name": "შპს SAH & Co",
+      "aliases": [
+        "შპს SAH&CO",
+        "sah&co"
+      ],
+      "ibans": [
+        "GE73BS0000000005736787"
+      ],
+      "evidence": [
+        "Current rows on IBAN GE73BS0000000005736787 use counterparty text 'შპს SAH&CO' (with or without bank suffixes).",
+        "That bank label is a direct punctuation/spacing variant of the unique RS supplier 'შპს SAH & Co' (tax_id 404995680)."
+      ]
+    },
+    {
+      "tax_id": "415117929",
+      "official_name": "შპს ოლდენ ვესთ",
+      "evidence": [
+        "BOG outgoing rows in 2024.xlsx on 2024-08-26 (2,000.00), 2024-08-29 (1,300.00 and 1,500.00), and 2024-08-30 (1,000.00) carry raw_tax_id 415117929 with counterparty text 'შპს ოლდენ ვესთ'.",
+        "The same four rows carry the same receiver account GE38BG0000000601743312GEL in bank description/account fields.",
+        "The same rows have business-expense purposes ('სამეურნეო', 'სამეურნეო ხარჯი') and no competing supplier candidate on reconciliation."
+      ]
+    },
+    {
+      "tax_id": "202282369",
+      "official_name": "შპს ქართული სადისტრიბუციო-მარკეტინგული კომპანია",
+      "account_hints": [
+        "GE90TB7436136060100004"
+      ],
+      "evidence": [
+        "TBC outgoing rows on account GE90TB7436136060100004 carry raw_tax_id 202282369 with counterparty text 'შპს ქართული სადისტრიბუციო-მარკეტინგული კომპანია' and debt-repayment purposes.",
+        "Current unresolved BOG outgoing transfer rows (7 lines, 6,180.00 GEL total) use the same account GE90TB7436136060100004 and the same supplier name spelling without hyphen.",
+        "Those unresolved rows have no raw_tax_id but keep explicit debt-repayment purposes ('დავალიანების დაფარვა ოზურგეთი' / 'დავალიანების დაფარვ თბილისი')."
+      ]
+    },
+    {
+      "tax_id": "206337052",
+      "official_name": "შპს ლიდერი-ფუდი",
+      "account_hints": [
+        "GE81TB7125136060100002"
+      ],
+      "evidence": [
+        "TBC outgoing rows on account GE81TB7125136060100002 carry raw_tax_id 206337052 with partner text 'შპს ლიდერი-ფუდი' / 'შპს ლიდერ-ფუდი' and debt-repayment purposes.",
+        "Current unresolved BOG outgoing transfer rows on the same account use receiver text 'შპს ლიდერ-ფუდი' without raw_tax_id and with explicit debt-repayment purposes ('დავალიანების დაფარვა ოზურგეთი' / 'დავალიანების დაფარვა ოზურგეთი დვაბზუ')."
+      ]
+    },
+    {
+      "tax_id": "412761097",
+      "official_name": "შპს ელიტ ფუდი 2",
+      "account_hints": [
+        "GE35BG0000000499465014"
+      ],
+      "evidence": [
+        "BOG outgoing rows in 2024.xlsx on account GE35BG0000000499465014 carry raw_tax_id 412761097 with counterparty text 'შპს ელიტ ფუდი 2' and debt-repayment purpose.",
+        "Current unresolved TBC outgoing rows on the same account use counterparty text 'ელიტფუდი 2' without raw_tax_id and with explicit debt-repayment purposes ('დავალიანების დაფარვა ოზურგეთი' / 'დავალიანების დაფარვა ოზურგეთი დვაბზუ')."
+      ]
+    },
+    {
+      "tax_id": "204557461",
+      "official_name": "შპს დ&ლ სერვისი",
+      "account_hints": [
+        "GE46TB1830136020100003"
+      ],
+      "evidence": [
+        "TBC outgoing rows on account GE46TB1830136020100003 carry raw_tax_id 204557461 with counterparty text შპს დ&ლ სერვისი / შპს დ & ლ სერვისი and debt-repayment purposes.",
+        "Current unresolved BOG outgoing transfer rows on the same account use counterparty text შპს დ & ლ სერვისი without raw_tax_id and with explicit debt-repayment purpose დავალიანების დაფარვა ოზურგეთი."
+      ]
+    },
+    {
+      "tax_id": "425057788",
+      "official_name": "შპს გი-შო+",
+      "aliases": [
+        "შპს გი-შო +"
+      ],
+      "ibans": [],
+      "evidence": "Exact name match in bank unmatched lines (შპს გი-შო +) to RS supplier (425057788-დღგ) შპს გი-შო+"
+    }
+  ]
+}

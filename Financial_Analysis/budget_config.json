@@ -1,0 +1,17 @@
+{
+  "notes": "ბიუჯეტის კონფიგურაცია. annual_target — წლიური სამიზნე (ხელით იცვლება). auto_mode: true = პროგნოზის საფუძველზე ავტომატური გეგმა; false = მხოლოდ annual_target-ს იყენებს.",
+  "auto_mode": true,
+  "annual_targets": {
+    "2025": {
+      "income": null,
+      "expenses": null,
+      "net": null
+    },
+    "2026": {
+      "income": null,
+      "expenses": null,
+      "net": null
+    }
+  },
+  "expense_growth_cap_pct": 10.0
+}
