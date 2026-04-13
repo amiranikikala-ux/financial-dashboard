@@ -81,8 +81,6 @@ const WAYBILL_SORT_OPTIONS = [
   { value: 'date_desc', label: 'თარიღი ახლიდან' },
   { value: 'date_asc', label: 'თარიღი ძველიდან' },
 ];
-const WAYBILL_SERVER_LIMIT = 5000;
-
 const SUPPLIER_SORT_OPTIONS = [
   { value: 'debt_asc', label: 'დავალიანება ზრდადობით' },
   { value: 'debt_desc', label: 'დავალიანება კლებადობით' },
@@ -218,7 +216,6 @@ function App() {
       const params = new URLSearchParams({
         tab: 'waybills',
         sort: waybillSortKey,
-        limit: String(WAYBILL_SERVER_LIMIT),
       });
       const needle = searchName.trim();
       if (needle) params.set('q', needle);

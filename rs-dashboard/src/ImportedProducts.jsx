@@ -8,8 +8,6 @@ const GEL = new Intl.NumberFormat('ka-GE', {
 const COUNT = new Intl.NumberFormat('ka-GE', { maximumFractionDigits: 0 });
 const QUANTITY = new Intl.NumberFormat('ka-GE', { maximumFractionDigits: 2 });
 const EMPTY_LIST = [];
-const DEFAULT_SUPPLIER_LIMIT = 120;
-const SEARCH_SUPPLIER_LIMIT = 250;
 const MONTH_PREVIEW_LIMIT = 12;
 
 function formatMoney(value) {
@@ -101,12 +99,7 @@ export default function ImportedProducts({ response, loading, error, onRetry }) 
     });
   })();
 
-  const visibleSuppliers = (() => {
-    const limit = supplierQuery.trim() ? SEARCH_SUPPLIER_LIMIT : DEFAULT_SUPPLIER_LIMIT;
-    return filteredSuppliers.slice(0, limit);
-  })();
-
-  const hiddenSupplierCount = Math.max(0, filteredSuppliers.length - visibleSuppliers.length);
+  const visibleSuppliers = filteredSuppliers;
 
   const filteredProducts = (() => {
     const needle = normalizeText(productQuery);
@@ -118,12 +111,7 @@ export default function ImportedProducts({ response, loading, error, onRetry }) 
     });
   })();
 
-  const visibleProducts = (() => {
-    const limit = productQuery.trim() ? SEARCH_SUPPLIER_LIMIT : DEFAULT_SUPPLIER_LIMIT;
-    return filteredProducts.slice(0, limit);
-  })();
-
-  const hiddenProductCount = Math.max(0, filteredProducts.length - visibleProducts.length);
+  const visibleProducts = filteredProducts;
 
   const recentMonths = (() => {
     return byMonth
@@ -403,7 +391,7 @@ export default function ImportedProducts({ response, loading, error, onRetry }) 
             <div className="chart-card-header">
               <h3>პროდუქტების reference სია</h3>
               <span className="chart-card-header-desc">
-                ძებნის გარეშე: TOP {DEFAULT_SUPPLIER_LIMIT} თანხით
+                სრული სია ფილტრის მიხედვით (თანხით დალაგებული მონაცემიდან)
               </span>
             </div>
 
@@ -421,7 +409,6 @@ export default function ImportedProducts({ response, loading, error, onRetry }) 
               </label>
               <div className="imported-products-count">
                 ნაპოვნია {formatCount(filteredProducts.length)} პროდუქტი
-                {hiddenProductCount > 0 ? ` · ეკრანზე ${formatCount(visibleProducts.length)}` : ''}
               </div>
             </div>
 
@@ -475,10 +462,7 @@ export default function ImportedProducts({ response, loading, error, onRetry }) 
             </div>
 
             <div className="imported-table-note">
-              თუ ძებნა ცარიელია, სია თანხით დალაგებულ TOP პროდუქტებს აჩვენებს.
-              {hiddenProductCount > 0
-                ? ` კიდევ ${formatCount(hiddenProductCount)} ჩანაწერი დამალულია, რომ view კომპაქტური დარჩეს.`
-                : ''}
+              ძებნა ცარიელია — ნაჩვენებია სრული პროდუქტების სია (თანხით დალაგებული).
             </div>
           </div>
 
@@ -486,7 +470,7 @@ export default function ImportedProducts({ response, loading, error, onRetry }) 
             <div className="chart-card-header">
               <h3>მომწოდებლების reference სია</h3>
               <span className="chart-card-header-desc">
-                ძებნის გარეშე: TOP {DEFAULT_SUPPLIER_LIMIT} თანხით
+                სრული სია ფილტრის მიხედვით (თანხით დალაგებული მონაცემიდან)
               </span>
             </div>
 
@@ -504,7 +488,6 @@ export default function ImportedProducts({ response, loading, error, onRetry }) 
               </label>
               <div className="imported-products-count">
                 ნაპოვნია {formatCount(filteredSuppliers.length)} supplier
-                {hiddenSupplierCount > 0 ? ` · ეკრანზე ${formatCount(visibleSuppliers.length)}` : ''}
               </div>
             </div>
 
@@ -545,10 +528,7 @@ export default function ImportedProducts({ response, loading, error, onRetry }) 
             </div>
 
             <div className="imported-table-note">
-              თუ ძებნა ცარიელია, სია თანხით დალაგებულ TOP მომწოდებლებს აჩვენებს.
-              {hiddenSupplierCount > 0
-                ? ` კიდევ ${formatCount(hiddenSupplierCount)} ჩანაწერი დამალულია, რომ view კომპაქტური დარჩეს.`
-                : ''}
+              ძებნა ცარიელია — ნაჩვენებია სრული მომწოდებლების სია (თანხით დალაგებული).
             </div>
           </div>
         </>

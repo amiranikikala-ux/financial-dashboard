@@ -87,20 +87,24 @@ TBC_OTHER_EXPENSE_ID = "tbc_other_expense"
 TBC_OTHER_EXPENSE_LABEL_KA = "TBC — სხვა ხარჯი"
 AGING_BUCKET_ORDER = ["0-30", "31-60", "61-90", "91-180", "180+"]
 IMPORTED_PRODUCTS_SHEET_NAME = "Grid"
-IMPORTED_PRODUCTS_ROWS_PREVIEW_LIMIT = 120
-IMPORTED_PRODUCTS_TOP_LIMIT = 20
-IMPORTED_PRODUCTS_SUPPLIER_TOP_PRODUCTS_LIMIT = 10
-IMPORTED_PRODUCTS_PRODUCT_TOP_SUPPLIERS_LIMIT = 12
-IMPORTED_PRODUCTS_PRODUCTS_LIMIT = 250
-IMPORTED_PRODUCTS_TOP_SUPPLIER_PRODUCT_PAIRS_LIMIT = 300
-IMPORTED_PRODUCTS_TRUNCATION_ROW_COUNT = 20000
+# დიდი მოცულობის rollup-ები: ერთი ჭერი (გენერაციის შემდეგ data.json იზრდება).
+FULL_ROLLUP_ROW_CAP = 10_000_000
+
+IMPORTED_PRODUCTS_ROWS_PREVIEW_LIMIT = 50_000
+IMPORTED_PRODUCTS_TOP_LIMIT = FULL_ROLLUP_ROW_CAP
+IMPORTED_PRODUCTS_SUPPLIER_TOP_PRODUCTS_LIMIT = FULL_ROLLUP_ROW_CAP
+IMPORTED_PRODUCTS_PRODUCT_TOP_SUPPLIERS_LIMIT = FULL_ROLLUP_ROW_CAP
+IMPORTED_PRODUCTS_PRODUCTS_LIMIT = FULL_ROLLUP_ROW_CAP
+IMPORTED_PRODUCTS_TOP_SUPPLIER_PRODUCT_PAIRS_LIMIT = FULL_ROLLUP_ROW_CAP
+# ზუსტად ამ რიგების რაოდენობა = Excel-ის ცნობილი ზედა ზღვარი → შესაძლო truncate.
+IMPORTED_PRODUCTS_TRUNCATION_ROW_COUNT = 1_048_576
 IMPORTED_PRODUCTS_READ_ERROR_LIMIT = 20
 IMPORTED_PRODUCTS_CSV_ENCODINGS = ("utf-8-sig", "utf-8", "cp1251", "cp1252")
 RETAIL_SALES_READ_ERROR_LIMIT = 20
-RETAIL_SALES_TOP_LIMIT = 20
-RETAIL_SALES_CATEGORY_LIMIT = 80
-RETAIL_SALES_PRODUCT_LIMIT = 250
-RETAIL_SALES_ROWS_PREVIEW_LIMIT = 120
+RETAIL_SALES_TOP_LIMIT = FULL_ROLLUP_ROW_CAP
+RETAIL_SALES_CATEGORY_LIMIT = FULL_ROLLUP_ROW_CAP
+RETAIL_SALES_PRODUCT_LIMIT = FULL_ROLLUP_ROW_CAP
+RETAIL_SALES_ROWS_PREVIEW_LIMIT = 50_000
 RETAIL_SALES_DUPLICATE_POLICY_MODE = "exclude_suspected_until_explicit_policy"
 RETAIL_SALES_DUPLICATE_SUSPECTED_FILES = {
     "გაყიდული პროდუქტები სოფ ოზურგეთი/2026-01-02.xlsx": {
@@ -5873,8 +5877,8 @@ def empty_imported_products_bundle():
             "Reference/product-line წყარო imported-products export-იდან. CSV არის preferred source, "
             "legacy Excel reader fallback-ად რჩება. ეს ბლოკი არ ერთვება supplier debt-ში, "
             "RS truth totals-ში, bank reconciliation-ში და არსებულ AP ლოგიკაში. "
-            "ფაილი, რომელსაც ზუსტად 20,000 ხაზი აქვს, შესაძლოა truncate/export limit იყოს, "
-            "ამიტომ სრულობა გარანტირებული არ არის."
+            "ფაილი, რომელსაც ზუსტად Excel-ის მაქსიმალური რიგების რაოდენობა (1,048,576) აქვს, "
+            "შესაძლოა truncate/export limit იყოს — სრულობა გარანტირებული არ არის."
         ),
         "source_glob": "Financial_Analysis/შემოტანილი პროდუქცია/*.csv (preferred), legacy fallback: *.xls / *.xlsx",
         "source_format": None,

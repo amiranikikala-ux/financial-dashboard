@@ -29,11 +29,14 @@ FIELD_DEFAULTS = {
     "executive_summary": {},
 }
 
-IMPORTED_PRODUCTS_SUMMARY_TOP_SUPPLIER_PRODUCT_PAIRS_LIMIT = 20
-RETAIL_SALES_SUMMARY_CATEGORY_LIMIT = 200
-RETAIL_SALES_SUMMARY_PRODUCT_LIMIT = 500
-RETAIL_SALES_SUMMARY_MONTH_LIMIT = 24
-WAYBILLS_MAX_RESPONSE_LIMIT = 5000
+# ერთი ჭერი: სრული rollup/API პასუხები დიდი მოცულობისას (OOM-ისგან დასაცავად ზედა საზღვარი).
+FULL_VIEW_ROW_CAP = 10_000_000
+
+IMPORTED_PRODUCTS_SUMMARY_TOP_SUPPLIER_PRODUCT_PAIRS_LIMIT = FULL_VIEW_ROW_CAP
+RETAIL_SALES_SUMMARY_CATEGORY_LIMIT = FULL_VIEW_ROW_CAP
+RETAIL_SALES_SUMMARY_PRODUCT_LIMIT = FULL_VIEW_ROW_CAP
+RETAIL_SALES_SUMMARY_MONTH_LIMIT = 600
+WAYBILLS_MAX_RESPONSE_LIMIT = FULL_VIEW_ROW_CAP
 WAYBILL_ALLOWED_SORTS = {"amount_asc", "amount_desc", "date_asc", "date_desc"}
 
 TAB_ALLOWLIST = {
@@ -521,14 +524,15 @@ def _project_retail_sales_summary(bundle):
 
 
 def _coerce_waybill_limit(value):
+    """None ან <=0 = ყველა ხაზი (სერვერის ზედა ჭერამდე); დადებითი = min(limit, cap)."""
     if value is None:
         return None
     try:
         limit = int(value)
     except (TypeError, ValueError):
-        return WAYBILLS_MAX_RESPONSE_LIMIT
+        return None
     if limit <= 0:
-        return WAYBILLS_MAX_RESPONSE_LIMIT
+        return None
     return min(limit, WAYBILLS_MAX_RESPONSE_LIMIT)
 
 
