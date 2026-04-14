@@ -1,0 +1,46 @@
+# DateTimeCalendarPicker — ინტეგრაციის პროგრესი
+
+## რა გაკეთდა ✅
+
+### 1. კომპონენტი მზადაა
+- `src/components/DateTimeCalendarPicker.jsx` — სრულად აწყობილი
+- Props: `fromDate`, `fromTime`, `toDate`, `toTime` + onChange handlers
+- ფუნქციონალი: 2-თვიანი კალენდარი, range selection, hover preview, quick presets (დღეს/გუშინ/7დ/30დ/90დ), დროის არჩევა 15-წუთიანი ინტერვალით, "გამოყენება" ღილაკი
+
+### 2. CSS სტილები დამატებულია
+- `src/styles/components.css` — `dtcp-*` კლასები (ხაზი ~1165–1543)
+- არსებული `crp-*` სტილების ანალოგიური + დამატებითი:
+  - `.dtcp-time-row` — date input + time select row
+  - `.dtcp-day--today` — დღეს marker (inset box-shadow)
+  - Mobile responsive (640px breakpoint)
+
+## რა დარჩა (სამომავლო) 📋
+
+### 4. ფილტრაციის ლოგიკა (optional)
+- არსებული POS daily table-ის ფილტრი (posDateFrom/posDateTo) შეიძლება გადაებას datetime picker-ზე
+- ან ცალკე ფილტრაცია datetime-ით (ბანკის ტრანზაქციებისთვის თუ API-ს აქვს დროის ველი)
+
+### 5. API integration (თუ საჭიროა)
+- `/api/data?tab=cashflow_summary` endpoint-ს შეიძლება `from`, `to`, `fromTime`, `toTime` query params დაემატოს
+
+---
+
+## ✅ გაკეთდა: Cashflow ინტეგრაცია (ნაბიჯი 3)
+
+### 3. Cashflow გვერდზე ინტეგრაცია — ზედა მხარეს ✅
+1. **State დამატებულია** `Cashflow.jsx`-ში (ხაზი ~88–91):
+   - `cashflowFromDate` / `cashflowToDate` — "YYYY-MM-DD"
+   - `cashflowFromTime` / `cashflowToTime` — "HH:MM" (default 00:00 / 23:59)
+2. **Import** — `DateTimeCalendarPicker` ხაზი 4
+3. **JSX** — tab-hero-სა და kpi-grid-ს შორის (ხაზი ~348–358)
+4. **ინიციალიზაცია** — POS daily_summary-ის პირველი/ბოლო დღით (useEffect, ხაზი ~171–172)
+
+## ფაილების რუკა
+- `src/components/DateTimeCalendarPicker.jsx` — კომპონენტი ✅
+- `src/styles/components.css` (dtcp-* ბლოკი) — სტილები ✅
+- `src/Cashflow.jsx` — ინტეგრაცია დასრულებულია ✅
+- `src/App.jsx` — Cashflow-ს data/reloadKey/formatNumber prop-ებით აძლევს
+
+## არსებული CalendarRangePicker გამოყენება
+- `Cashflow.jsx:680` — POS დღიური ცხრილის ზემოთ (availableDays-ზე დაფუძნებული)
+- DateTimeCalendarPicker ეს არ ჩაანაცვლებს — ცალკე გლობალური ფილტრია ზედა მხარეს

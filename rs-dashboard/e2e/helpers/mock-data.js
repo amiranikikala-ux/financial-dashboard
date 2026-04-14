@@ -16,20 +16,36 @@ export const MOCK_META = {
 export const MOCK_SUPPLIERS = {
   suppliers: [
     {
-      normalized_supplier: 'ტესტ მომწოდებელი',
+      'ორგანიზაცია': '(111111111) ტესტ მომწოდებელი',
       tax_id: '111111111',
-      total_amount: 50000,
-      paid_amount: 45000,
-      balance: 5000,
-      waybill_count: 12,
+      normalized_supplier: 'ტესტ მომწოდებელი',
+      waybills_count: 12,
+      total_nominal: 55000,
+      total_returned: -5000,
+      total_effective: 50000,
+      total_paid: 45000,
+      total_debt: 5000,
+      bank_paid: 40000,
+      manual_paid: 5000,
+      strict_bank_paid: 40000,
+      payment_scope: 'bank_matched',
+      payment_scope_note: 'ბანკით დამთხვეული',
     },
     {
-      normalized_supplier: 'მეორე მომწოდებელი',
+      'ორგანიზაცია': '(222222222) მეორე მომწოდებელი',
       tax_id: '222222222',
-      total_amount: 30000,
-      paid_amount: 30000,
-      balance: 0,
-      waybill_count: 8,
+      normalized_supplier: 'მეორე მომწოდებელი',
+      waybills_count: 8,
+      total_nominal: 30000,
+      total_returned: 0,
+      total_effective: 30000,
+      total_paid: 30000,
+      total_debt: 0,
+      bank_paid: 30000,
+      manual_paid: 0,
+      strict_bank_paid: 30000,
+      payment_scope: 'bank_matched',
+      payment_scope_note: '',
     },
   ],
   meta: MOCK_META,
@@ -141,12 +157,21 @@ export const MOCK_IMPORTED_PRODUCTS = {
 
 export const MOCK_RETAIL_SALES = {
   retail_sales: {
-    summary: { total_sales: 150000, transaction_count: 3000 },
-    monthly: [
-      { month: '2025-01', amount: 50000 },
-      { month: '2025-02', amount: 50000 },
-      { month: '2025-03', amount: 50000 },
+    overall: { row_count: 100, total_revenue: 150000, total_cost: 90000, total_profit: 60000 },
+    by_object: [
+      { object: 'დვაბზუ', revenue: 80000, cost: 48000, profit: 32000 },
+      { object: 'ოზურგეთი', revenue: 70000, cost: 42000, profit: 28000 },
     ],
+    by_month: [
+      { month: '2025-01', object: 'დვაბზუ', revenue: 50000, cost: 30000, profit: 20000, margin_pct: 40 },
+      { month: '2025-02', object: 'დვაბზუ', revenue: 50000, cost: 30000, profit: 20000, margin_pct: 40 },
+      { month: '2025-03', object: 'ოზურგეთი', revenue: 50000, cost: 30000, profit: 20000, margin_pct: 40 },
+    ],
+    top_products_by_revenue: [
+      { product: 'ტესტ პროდუქტი', revenue: 30000, profit: 12000 },
+    ],
+    top_products_by_profit: [],
+    top_categories_by_profit: [],
   },
   meta: MOCK_META,
   response_meta: { tab: 'retail_sales', row_count: 3, source: 'artifact' },
@@ -166,6 +191,29 @@ export const MOCK_STATUS = {
   server_time: new Date().toISOString(),
 };
 
+export const MOCK_IMPORTED_SUPPLIER_DETAIL = {
+  imported_products_supplier_detail: {
+    match_type: 'tax_id',
+    has_source: true,
+    ambiguous: false,
+    truncation_suspected_any: false,
+    supplier_top_products_limit: 5,
+    label_ka: 'შემოტანილი პროდუქცია (reference)',
+    entry: {
+      total_amount_ge: 42000,
+      distinct_product_count: 3,
+      distinct_waybill_count: 7,
+      date_range: { start: '2025-01-05', end: '2025-03-15' },
+      top_products: [
+        { product_name: 'ტესტ პროდუქტი A', product_code: 'PA01', total_amount_ge: 20000, total_quantity: 500, unit: 'კგ', distinct_waybill_count: 3 },
+        { product_name: 'ტესტ პროდუქტი B', product_code: 'PB02', total_amount_ge: 15000, total_quantity: 300, unit: 'ლ', distinct_waybill_count: 2 },
+      ],
+    },
+  },
+  meta: MOCK_META,
+  response_meta: { tab: 'imported_products_supplier_detail', row_count: 1, source: 'artifact' },
+};
+
 /** Map tab query param → mock response */
 export function getMockForTab(tab) {
   const map = {
@@ -180,6 +228,7 @@ export function getMockForTab(tab) {
     valuation: MOCK_VALUATION,
     executive: MOCK_EXECUTIVE,
     imported_products: MOCK_IMPORTED_PRODUCTS,
+    imported_products_supplier_detail: MOCK_IMPORTED_SUPPLIER_DETAIL,
     retail_sales: MOCK_RETAIL_SALES,
   };
   return map[tab] || MOCK_SUPPLIERS;

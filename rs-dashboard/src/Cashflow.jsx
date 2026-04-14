@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { fetchApiJson } from './lib/api.js';
+import CalendarRangePicker from './components/CalendarRangePicker.jsx';
 
 /** TBC ხარჯები — tbc_expense_categories.json რიგით */
 const TBC_TAXONOMY_ORDER = [
@@ -170,6 +171,11 @@ export default function Cashflow({ data, reloadKey, formatNumber }) {
     const rows = Array.isArray(raw) ? raw : [];
     return [...rows].sort((a, b) => String(a.day || '').localeCompare(String(b.day || '')));
   }, [data.pos_terminal_income]);
+
+  const posDailyAvailableDays = useMemo(
+    () => posDailySorted.map((r) => r.day).filter(Boolean),
+    [posDailySorted],
+  );
 
   const posDailyFiltered = useMemo(() => {
     if (!posDailySorted.length) return [];
@@ -671,56 +677,26 @@ export default function Cashflow({ data, reloadKey, formatNumber }) {
 
       {showPosDailyTable && (
         <div className="pos-daily-panel">
-          <div className="pos-date-range">
-            <span className="pos-date-range-label">POS დღიური — აირჩიე პერიოდი</span>
-            <label className="pos-date-field">
-              <span>დან</span>
-              <input
-                type="date"
-                value={posDateFrom}
-                onChange={(e) => setPosDateFrom(e.target.value)}
-                min={posDailySorted[0]?.day}
-                max={posDailySorted[posDailySorted.length - 1]?.day}
-              />
-            </label>
-            <label className="pos-date-field">
-              <span>მდე</span>
-              <input
-                type="date"
-                value={posDateTo}
-                onChange={(e) => setPosDateTo(e.target.value)}
-                min={posDailySorted[0]?.day}
-                max={posDailySorted[posDailySorted.length - 1]?.day}
-              />
-            </label>
-            <button
-              type="button"
-              className="btn-pos-range-full"
-              onClick={() => {
-                if (!posDailySorted.length) return;
-                const days = posDailySorted.map((r) => r.day).filter(Boolean);
-                if (!days.length) return;
-                setPosDateFrom(days[0]);
-                setPosDateTo(days[days.length - 1]);
-              }}
-            >
-              მთელი პერიოდი
-            </button>
-          </div>
-          <div className="pos-range-totals">
-            <span>
-              არჩეულ პერიოდში: <strong>{posRangeTotals.days}</strong> დღე
-            </span>
-            <span>
-              TBC: <span className="amount-positive">{formatNumber(posRangeTotals.tbc)}</span>
-            </span>
-            <span>
-              BOG: <span className="amount-positive">{formatNumber(posRangeTotals.bog)}</span>
-            </span>
-            <span>
-              ჯამი: <span className="amount-positive">{formatNumber(posRangeTotals.total)}</span>
-            </span>
-          </div>
+          <CalendarRangePicker
+            availableDays={posDailyAvailableDays}
+            from={posDateFrom}
+            to={posDateTo}
+            onFromChange={setPosDateFrom}
+            onToChange={setPosDateTo}
+            label="POS დღიური — აირჩიე პერიოდი"
+          >
+            <div className="pos-range-totals">
+              <span>
+                TBC: <span className="amount-positive">{formatNumber(posRangeTotals.tbc)}</span>
+              </span>
+              <span>
+                BOG: <span className="amount-positive">{formatNumber(posRangeTotals.bog)}</span>
+              </span>
+              <span>
+                ჯამი: <span className="amount-positive">{formatNumber(posRangeTotals.total)}</span>
+              </span>
+            </div>
+          </CalendarRangePicker>
           <div className="table-wrapper cashflow-table">
             <table>
               <thead>

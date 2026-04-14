@@ -26,10 +26,22 @@ Python (pandas) + FastAPI (`server.py`) | React 19 + Vite (`rs-dashboard/`) | Ex
 - [x] API auth — ApiKeyMiddleware (DASHBOARD_API_KEY env), X-API-Key header
 - [x] PWA offline — manifest.json + sw.js (stale-while-revalidate + network-first API)
 
-## შემდეგი (არასავალდებულო)
+## ფაზა 6: Performance Optimization (დასრულებული)
 - [x] PNG იკონები PWA-სთვის (192x192, 512x512) — session #30
-- [ ] Performance optimization (bundle size ანალიზი)
+- [x] Bundle size ანალიზი და ოპტიმიზაცია — session #31
+  - manualChunks: vendor-react (190KB), vendor-recharts (432KB) ცალკე ჩანქებში
+  - Build target: esnext (modern browsers)
+  - Bundle analyzer: rollup-plugin-visualizer (`npm run build:analyze`)
+  - App core: 199KB → 17KB (gzip 5.8KB)
+  - საწყისი ჩატვირთვა (gzip): ~87KB
+
+## ფაზა 7: დამატებითი E2E ტესტები (დასრულებული)
+- [x] export.spec.js — 9 ტესტი: ExportButton 7 ტაბზე + CSV ბათონი — session #32
+- [x] supplier-modal.spec.js — 16 ტესტი: open/close/content/keyboard/backdrop — session #32
+- [x] mock-data.js განახლება: supplier ველები + retail_sales სტრუქტურა + imported_supplier_detail
+- [x] 63/63 E2E, 125/125 unit, Vite build clean
+
+## შემდეგი (არასავალდებულო)
 - [ ] Production deploy
-- [ ] დამატებითი E2E ტესტები (export, supplier modal)
 
 ## წესი: სესიის ბოლოს HANDOFF.md განახლება

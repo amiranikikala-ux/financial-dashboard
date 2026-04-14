@@ -9,6 +9,7 @@ import LiveClock from './components/LiveClock.jsx';
 import RefreshButton from './components/RefreshButton.jsx';
 import MobileNav from './components/MobileNav.jsx';
 import useDataStatus from './hooks/useDataStatus.js';
+import DateTimeCalendarPicker from './components/DateTimeCalendarPicker.jsx';
 
 const Analytics = lazy(() => import('./Analytics.jsx'));
 const PnL = lazy(() => import('./PnL.jsx'));
@@ -39,6 +40,10 @@ function App() {
   const [importedProductsError, setImportedProductsError] = useState(null);
   const [importedProductsLoadedKey, setImportedProductsLoadedKey] = useState(-1);
   const { status: dataStatus, refreshing, triggerRefresh } = useDataStatus();
+  const [globalFromDate, setGlobalFromDate] = useState('');
+  const [globalToDate, setGlobalToDate] = useState('');
+  const [globalFromTime, setGlobalFromTime] = useState('00:00');
+  const [globalToTime, setGlobalToTime] = useState('23:59');
 
   useEffect(() => {
     const POLLING_INTERVAL = 5 * 60 * 1000;
@@ -251,10 +256,17 @@ function App() {
           <div className="header-center">
             {currentMeta != null && (
               <>
-                <span className="header-period-badge">
-                  <span className="period-icon">📅</span>
-                  {currentMeta.data_period_label || 'პერიოდი'}
-                </span>
+                <DateTimeCalendarPicker
+                  fromDate={globalFromDate}
+                  fromTime={globalFromTime}
+                  toDate={globalToDate}
+                  toTime={globalToTime}
+                  onFromDateChange={setGlobalFromDate}
+                  onFromTimeChange={setGlobalFromTime}
+                  onToDateChange={setGlobalToDate}
+                  onToTimeChange={setGlobalToTime}
+                  label={currentMeta.data_period_label || 'პერიოდი'}
+                />
                 <span className="header-stats-compact">
                   ბანკი: <span className="stat-val">{formatNumber(currentMeta.strict_bank_only_total)}</span>
                   &nbsp;·&nbsp;გადახდილი: <span className="stat-val">{formatNumber(currentMeta.combined_supplier_paid_total)}</span>

@@ -1,23 +1,24 @@
 # HANDOFF
 
-> Updated: 2026-04-14 (session #30)
+> Updated: 2026-04-14 (session #32)
 
 ## ⚡ ახალი სესიის ინსტრუქცია
 1. წაიკითხე PLAN.md — დასრულებული ფაზები + შემდეგი ნაბიჯი
 2. წაიკითხე ეს ფაილი მთლიანად — არქიტექტურა + ფაილები + Known Issues
 3. შეამოწმე ტესტები: `python -m pytest tests/ -q` (უნდა იყოს 125/125)
 4. შეამოწმე ბილდი: `cd rs-dashboard && npx vite build` (0 errors)
-5. შეამოწმე E2E: `cd rs-dashboard && npx playwright test` (38 pass)
-6. ფაზა 1-5 დასრულებულია. პროექტი production-ready.
-7. ნებისმიერი ცვლილებისას: `impact({target, direction: "upstream"})` GitNexus-ით
+5. შეამოწმე E2E: `cd rs-dashboard && npx playwright test` (63 pass)
+6. ფაზა 1-7 დასრულებულია. პროექტი production-ready.
+7. Bundle ანალიზი: `cd rs-dashboard && npm run build:analyze` (opens treemap)
+8. ნებისმიერი ცვლილებისას: `impact({target, direction: "upstream"})` GitNexus-ით
 
 ## Current Status
 - Pipeline works: Excel -> data.json -> FastAPI -> React dashboard
 - 11 pipeline modules in dashboard_pipeline/ (all verified)
 - 125 unit tests passing (waybill_amounts + supplier_matching + bank_reconciliation)
-- 38 E2E tests passing (Playwright: dashboard, navigation, mobile, refresh, errors)
+- 63 E2E tests passing (Playwright: dashboard, navigation, mobile, refresh, errors, export, supplier-modal)
 - 4 audit scripts passing (audit_all, full_audit, audit_bog_rs_id, verify_supplier)
-- Frontend: 14 tabs, lazy-loaded components, Vite build clean
+- Frontend: 14 tabs, lazy-loaded components, Vite build clean (gzip ~87KB initial)
 - API rate limiting: slowapi 60/min per IP on /api/data
 - API auth: X-API-Key middleware (optional, env: DASHBOARD_API_KEY)
 - CSS organized: 4698-line index.css → 7 files in styles/
@@ -25,6 +26,20 @@
 - Export: universal ExportButton on 11/14 tabs (was 4)
 - Mobile: bottom nav bar, tab sheet, 44px touch targets, safe area insets
 - PWA: manifest.json + Service Worker + PNG icons 192/512 (stale-while-revalidate + network-first API)
+- Bundle optimization: manualChunks (vendor-react 190KB, vendor-recharts 432KB), esnext target, app core 17KB
+
+## Session #32 ფაილები
+```
+rs-dashboard/e2e/export.spec.js               # NEW — 9 tests: ExportButton on 7 tabs (suppliers, analytics, ratios, forecast, budget, working_capital, retail_sales)
+rs-dashboard/e2e/supplier-modal.spec.js       # NEW — 16 tests: open/close/content/keyboard/backdrop/truth/imported
+rs-dashboard/e2e/helpers/mock-data.js         # UPD — proper supplier fields (ორგანიზაცია, debt, aging), retail_sales structure, imported_supplier_detail
+```
+
+## Session #31 ფაილები
+```
+rs-dashboard/vite.config.js                   # +manualChunks, +esnext target, +visualizer
+rs-dashboard/package.json                     # +build:analyze script, +rollup-plugin-visualizer
+```
 
 ## Session #30 ფაილები
 ```
@@ -75,6 +90,22 @@ rs-dashboard/src/styles/components.css     # +tab-hero .btn-download-xlsx
 rs-dashboard/src/styles/responsive.css     # +mobile bottom nav CSS (≤768px)
 rs-dashboard/src/styles/base.css           # +touch targets, tap-highlight, text-size-adjust
 ```
+
+## Session #32 - E2E Tests: Export + Supplier Modal
+1. export.spec.js: 9 tests — ExportButton visibility on suppliers, analytics, ratios, forecast, budget, working_capital, retail_sales tabs; CSV button state
+2. supplier-modal.spec.js: 16 tests — row click opens modal, supplier name/taxID display, 3 KPIs, payment split, aging, ratio gauge, close (✕/button/Escape/backdrop), second supplier, imported products reference, truth section
+3. mock-data.js: suppliers now have ორგანიზაცია/waybills_count/total_effective/bank_paid/payment_scope; retail_sales has overall/by_month/by_object/top_products; added MOCK_IMPORTED_SUPPLIER_DETAIL
+4. 63/63 E2E tests pass, 125/125 unit tests, Vite build clean
+
+## Session #31 - Performance Optimization: Bundle Size
+1. Analyzed bundle: xlsx (415KB), recharts (375KB), index (199KB) as top chunks
+2. Already good: lazy loading on all 15 tabs, dynamic xlsx import
+3. manualChunks: separated vendor-react (190KB) and vendor-recharts (432KB)
+4. App core chunk: 199KB → 17KB (gzip 5.8KB)
+5. Build target: esnext for modern browser optimization
+6. Added rollup-plugin-visualizer + `npm run build:analyze` script
+7. Initial page load (gzip): ~87KB (react 60KB + app 5.8KB + CSS 13KB + components ~8KB)
+8. 125/125 unit tests pass, Vite build clean
 
 ## Session #30 - PWA Icons
 1. Generated PNG icons (192x192, 512x512) from favicon.svg using sharp
@@ -145,11 +176,10 @@ sources, truth_boundary, export_artifacts, logging_config, waybill_amounts
 - run() function is ~211 lines (well-structured with 8 helpers)
 - APScheduler default 30min (env: DASHBOARD_REFRESH_MINUTES)
 - PWA icons: SVG + PNG 192/512 generated ✓
+- Bundle: vendor-react 190KB, vendor-recharts 432KB, xlsx 425KB (all deferred except react)
 
 ## Next Steps (priority order)
-1. Performance optimization (code splitting analysis, bundle size)
-2. Deploy to production
-3. Add more E2E tests (export, supplier modal)
+1. Deploy to production
 
 ## Run
 `
