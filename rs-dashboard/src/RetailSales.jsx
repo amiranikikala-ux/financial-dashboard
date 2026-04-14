@@ -1,3 +1,6 @@
+import CollapsibleSection from './components/CollapsibleSection.jsx';
+import ExportButton from './components/ExportButton.jsx';
+
 const GEL = new Intl.NumberFormat('ka-GE', {
   style: 'currency',
   currency: 'GEL',
@@ -86,6 +89,30 @@ export default function RetailSales({ retailSales }) {
           {summary.notes_ka ||
             'დვაბზუ + ოზურგეთი retail sales source: revenue / cost / profit / margin.'}
         </span>
+        <ExportButton
+          filename={`RetailSales_${new Date().toISOString().slice(0, 10)}.xlsx`}
+          sheets={[
+            {
+              name: 'თვიური',
+              rows: byMonth.map((m) => ({
+                თვე: m.month || '',
+                ობიექტი: m.object || '',
+                შემოსავალი: Number(m.revenue) || 0,
+                თვითთვალი: Number(m.cost) || 0,
+                მოგება: Number(m.profit) || 0,
+                margin_pct: Number(m.margin_pct) || 0,
+              })),
+            },
+            {
+              name: 'Top Products',
+              rows: topProductsByRevenue.map((p) => ({
+                პროდუქტი: p.product || '',
+                შემოსავალი: Number(p.revenue) || 0,
+                მოგება: Number(p.profit) || 0,
+              })),
+            },
+          ]}
+        />
       </div>
 
       <div className="local-pay-banner imported-products-reference-note" role="note">
@@ -251,8 +278,10 @@ export default function RetailSales({ retailSales }) {
       </div>
 
       <div className="retail-sales-grid-2">
-        <div className="chart-card">
-          <h3>TOP კატეგორიები — მოგებით</h3>
+        <CollapsibleSection
+          title="TOP კატეგორიები — მოგებით"
+          badge={`${topCategoriesByProfit.length}`}
+        >
           <div className="table-wrapper cashflow-table retail-sales-table-scroll">
             <table>
               <thead>
@@ -284,10 +313,12 @@ export default function RetailSales({ retailSales }) {
               </tbody>
             </table>
           </div>
-        </div>
+        </CollapsibleSection>
 
-        <div className="chart-card">
-          <h3>TOP პროდუქტები — შემოსავლით</h3>
+        <CollapsibleSection
+          title="TOP პროდუქტები — შემოსავლით"
+          badge={`${topProductsByRevenue.length}`}
+        >
           <div className="table-wrapper cashflow-table retail-sales-table-scroll">
             <table>
               <thead>
@@ -321,11 +352,13 @@ export default function RetailSales({ retailSales }) {
               </tbody>
             </table>
           </div>
-        </div>
+        </CollapsibleSection>
       </div>
 
-      <div className="chart-card">
-        <h3>TOP პროდუქტები — მოგებით</h3>
+      <CollapsibleSection
+        title="TOP პროდუქტები — მოგებით"
+        badge={`${topProductsByProfit.length}`}
+      >
         <div className="table-wrapper cashflow-table retail-sales-table-scroll">
           <table>
             <thead>
@@ -363,7 +396,7 @@ export default function RetailSales({ retailSales }) {
             </tbody>
           </table>
         </div>
-      </div>
+      </CollapsibleSection>
     </div>
   );
 }

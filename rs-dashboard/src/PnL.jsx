@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react';
+import DateRangePicker from './components/DateRangePicker.jsx';
 import {
   Bar,
   BarChart,
@@ -121,11 +122,6 @@ export default function PnL({ monthlyPnl }) {
       return mo >= effectiveFrom && mo <= effectiveTo;
     });
   }, [allRows, effectiveFrom, effectiveTo]);
-
-  const handleResetPeriod = useCallback(() => {
-    setPnlFrom('');
-    setPnlTo('');
-  }, []);
 
   const objectSet = useMemo(() => {
     const seen = new Set();
@@ -277,45 +273,18 @@ export default function PnL({ monthlyPnl }) {
       </div>
 
       {/* ---- პერიოდის ფილტრი ---- */}
-      <div className="pnl-filter-bar">
-        <span className="pos-date-range-label">P&L პერიოდი</span>
-        <label className="pos-date-field">
-          <span>დან</span>
-          <select
-            value={pnlFrom}
-            onChange={(e) => setPnlFrom(e.target.value)}
-            className="pnl-month-select"
-          >
-            <option value="">პირველი</option>
-            {allMonths.map((m) => (
-              <option key={m} value={m}>
-                {monthLabel(m)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="pos-date-field">
-          <span>მდე</span>
-          <select
-            value={pnlTo}
-            onChange={(e) => setPnlTo(e.target.value)}
-            className="pnl-month-select"
-          >
-            <option value="">ბოლო</option>
-            {allMonths.map((m) => (
-              <option key={m} value={m}>
-                {monthLabel(m)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="button" className="btn-pos-range-full" onClick={handleResetPeriod}>
-          მთელი პერიოდი
-        </button>
+      <DateRangePicker
+        allMonths={allMonths}
+        from={pnlFrom}
+        to={pnlTo}
+        onFromChange={setPnlFrom}
+        onToChange={setPnlTo}
+        label="P&L პერიოდი"
+      >
         <button type="button" className="btn-download-xlsx pnl-export-btn" onClick={handleExport}>
           Excel ჩამოტვირთვა
         </button>
-      </div>
+      </DateRangePicker>
 
       {/* ---- KPI ზედა ბარათები ---- */}
       <div className="kpi-grid">

@@ -11,6 +11,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import ExportButton from './components/ExportButton.jsx';
 
 const GEL = new Intl.NumberFormat('ka-GE', {
   style: 'currency',
@@ -170,6 +171,19 @@ export default function Forecast({ forecast, monthlyPnl }) {
       <div className="tab-hero">
         <span className="tab-hero-title">🔮 პროგნოზი — Forecast + სეზონურობა + YoY</span>
         <span className="tab-hero-desc">SMA-6 მოდელი · ბოლო 12 თვის ტრენდის საფუძველზე</span>
+        <ExportButton
+          filename={`Forecast_${new Date().toISOString().slice(0, 10)}.xlsx`}
+          sheets={[{
+            name: 'ფორკასტი',
+            rows: mergedChartData.map((r) => ({
+              თვე: r.month,
+              შემოსავალი: r.income,
+              ხარჯები: r.expenses,
+              net: r.net,
+              ტიპი: r.is_forecast ? 'პროგნოზი' : 'ისტორიული',
+            })),
+          }]}
+        />
       </div>
 
       {/* YoY KPI */}

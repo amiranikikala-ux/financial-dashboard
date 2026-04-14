@@ -10,6 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import ExportButton from './components/ExportButton.jsx';
 
 const GEL = new Intl.NumberFormat('ka-GE', {
   style: 'currency',
@@ -501,6 +502,26 @@ export default function WorkingCapital({
           </select>
         </label>
         <span className="wc-count-hint">{sorted.length} / {aging.length} მომწოდებელი</span>
+        <ExportButton
+          filename={`AP_Aging_${new Date().toISOString().slice(0, 10)}.xlsx`}
+          sheets={[{
+            name: 'AP Aging',
+            rows: sorted.map((r) => ({
+              ორგანიზაცია: r.org || '',
+              ობიექტი: r.object || '',
+              ზედნადები: Number(r.waybill_count) || 0,
+              რეალური_ჯამი: Number(r.rs_total) || 0,
+              strict_ბანკი: Number(r.strict_bank_paid) || 0,
+              manual_paid: Number(r.manual_paid) || 0,
+              გადახდილი: Number(r.total_paid) || 0,
+              დავალიანება: Number(r.total_debt) || 0,
+              ბოლო_ზედნადები: r.last_waybill_date || '',
+              დღეები: Number(r.days_since_last) || 0,
+              aging_bucket: r.aging_bucket || '',
+              scope: r.payment_scope || '',
+            })),
+          }]}
+        />
       </div>
 
       <div className="table-wrapper cashflow-table pnl-table-scroll">

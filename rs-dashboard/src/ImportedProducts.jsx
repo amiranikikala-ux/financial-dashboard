@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import CollapsibleSection from './components/CollapsibleSection.jsx';
 
 const GEL = new Intl.NumberFormat('ka-GE', {
   style: 'currency',
@@ -218,12 +219,12 @@ export default function ImportedProducts({ response, loading, error, onRetry }) 
       {hasRows ? (
         <>
           <div className="charts-grid">
-            <div className="chart-card">
-              <div className="chart-card-header">
-                <h3>TOP მომწოდებლები</h3>
-                <span className="chart-card-header-desc">თანხით დალაგებული</span>
-              </div>
-              <div className="imported-ranking-list">
+            <CollapsibleSection
+              title="TOP მომწოდებლები"
+              subtitle="თანხით დალაგებული"
+              badge={`${topSuppliers.length}`}
+            >
+              <div className="imported-ranking-list" style={{ padding: '0.5rem 1rem 1rem' }}>
                 {topSuppliers.map((item, index) => (
                   <div className="imported-ranking-item" key={`${item.supplier || 'supplier'}-${index}`}>
                     <div className="imported-ranking-main">
@@ -244,14 +245,14 @@ export default function ImportedProducts({ response, loading, error, onRetry }) 
                   <div className="taxonomy-preview-empty">TOP მომწოდებლები ჯერ არ არის.</div>
                 ) : null}
               </div>
-            </div>
+            </CollapsibleSection>
 
-            <div className="chart-card">
-              <div className="chart-card-header">
-                <h3>TOP პროდუქტები</h3>
-                <span className="chart-card-header-desc">თანხით დალაგებული</span>
-              </div>
-              <div className="imported-ranking-list">
+            <CollapsibleSection
+              title="TOP პროდუქტები"
+              subtitle="თანხით დალაგებული"
+              badge={`${topProducts.length}`}
+            >
+              <div className="imported-ranking-list" style={{ padding: '0.5rem 1rem 1rem' }}>
                 {topProducts.map((item, index) => (
                   <div className="imported-ranking-item" key={`${item.product_code || item.product_name || 'product'}-${index}`}>
                     <div className="imported-ranking-main">
@@ -276,7 +277,7 @@ export default function ImportedProducts({ response, loading, error, onRetry }) 
                   <div className="taxonomy-preview-empty">TOP პროდუქტები ჯერ არ არის.</div>
                 ) : null}
               </div>
-            </div>
+            </CollapsibleSection>
 
             <div className="chart-card">
               <div className="chart-card-header">

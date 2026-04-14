@@ -15,6 +15,8 @@ import {
   ZAxis,
 } from 'recharts';
 import { mergeSupplier, shortLabel } from './financeMerge.js';
+import CollapsibleSection from './components/CollapsibleSection.jsx';
+import ExportButton from './components/ExportButton.jsx';
 
 const PALETTE = ['#60a5fa', '#a78bfa', '#34d399', '#fbbf24', '#f87171', '#94a3b8', '#38bdf8'];
 
@@ -143,6 +145,18 @@ export default function Analytics({ suppliers, localPayments }) {
       <div className="tab-hero">
         <span className="tab-hero-title">📊 ანალიტიკა</span>
         <span className="tab-hero-desc">მომწოდებლების ვიზუალური ანალიზი — ვალი, გადახდა, წილი</span>
+        <ExportButton
+          filename={`Analytics_${new Date().toISOString().slice(0, 10)}.xlsx`}
+          sheets={[{
+            name: 'ანალიტიკა',
+            rows: rows.map((r) => ({
+              ორგანიზაცია: r.org || '',
+              რეალური_ჯამი: r.effective || 0,
+              გადახდილი: r.paid || 0,
+              დავალიანება: r.debt || 0,
+            })),
+          }]}
+        />
       </div>
       <div className="analytics-toolbar">
         <label className="analytics-toggle">
@@ -184,73 +198,77 @@ export default function Analytics({ suppliers, localPayments }) {
       </div>
 
       <div className="charts-grid">
-        <div className="chart-card">
-          <div className="chart-card-header">
-            <h3>TOP დავალიანებით</h3>
-            <span className="chart-card-header-desc">ყველაზე მაღალი დარჩენილი ვალი (₾)</span>
+        <CollapsibleSection
+          title="TOP დავალიანებით"
+          subtitle="ყველაზე მაღალი დარჩენილი ვალი (₾)"
+          badge={`${topDebt.length} მომწოდებელი`}
+        >
+          <div className="chart-card" style={{ border: 'none', borderRadius: 0 }}>
+            <div className="chart-area">
+              <ResponsiveContainer width="100%" height={420}>
+                <BarChart
+                  data={topDebt}
+                  layout="vertical"
+                  margin={{ top: 8, right: 24, left: 8, bottom: 8 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
+                  <XAxis
+                    type="number"
+                    tick={{ fill: '#94a3b8', fontSize: 11 }}
+                    tickFormatter={(v) => fmt(v)}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={200}
+                    tick={{ fill: '#cbd5e1', fontSize: 10 }}
+                  />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    formatter={(value) => [fmtFull(value), 'დავალიანება']}
+                  />
+                  <Bar dataKey="debt" name="დავალიანება" fill="#f87171" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-          <div className="chart-area">
-            <ResponsiveContainer width="100%" height={420}>
-              <BarChart
-                data={topDebt}
-                layout="vertical"
-                margin={{ top: 8, right: 24, left: 8, bottom: 8 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
-                <XAxis
-                  type="number"
-                  tick={{ fill: '#94a3b8', fontSize: 11 }}
-                  tickFormatter={(v) => fmt(v)}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  width={200}
-                  tick={{ fill: '#cbd5e1', fontSize: 10 }}
-                />
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  formatter={(value) => [fmtFull(value), 'დავალიანება']}
-                />
-                <Bar dataKey="debt" name="დავალიანება" fill="#f87171" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+        </CollapsibleSection>
 
-        <div className="chart-card">
-          <div className="chart-card-header">
-            <h3>TOP რეალური ბრუნვით</h3>
-            <span className="chart-card-header-desc">ეფექტური ჯამი ზედნადებიდან (₾)</span>
+        <CollapsibleSection
+          title="TOP რეალური ბრუნვით"
+          subtitle="ეფექტური ჯამი ზედნადებიდან (₾)"
+          badge={`${topEffective.length} მომწოდებელი`}
+        >
+          <div className="chart-card" style={{ border: 'none', borderRadius: 0 }}>
+            <div className="chart-area">
+              <ResponsiveContainer width="100%" height={420}>
+                <BarChart
+                  data={topEffective}
+                  layout="vertical"
+                  margin={{ top: 8, right: 24, left: 8, bottom: 8 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
+                  <XAxis
+                    type="number"
+                    tick={{ fill: '#94a3b8', fontSize: 11 }}
+                    tickFormatter={(v) => fmt(v)}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={200}
+                    tick={{ fill: '#cbd5e1', fontSize: 10 }}
+                  />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    formatter={(value) => [fmtFull(value), 'რეალური']}
+                  />
+                  <Bar dataKey="effective" name="რეალური" fill="#34d399" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-          <div className="chart-area">
-            <ResponsiveContainer width="100%" height={420}>
-              <BarChart
-                data={topEffective}
-                layout="vertical"
-                margin={{ top: 8, right: 24, left: 8, bottom: 8 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
-                <XAxis
-                  type="number"
-                  tick={{ fill: '#94a3b8', fontSize: 11 }}
-                  tickFormatter={(v) => fmt(v)}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  width={200}
-                  tick={{ fill: '#cbd5e1', fontSize: 10 }}
-                />
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  formatter={(value) => [fmtFull(value), 'რეალური']}
-                />
-                <Bar dataKey="effective" name="რეალური" fill="#34d399" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+        </CollapsibleSection>
 
         <div className="chart-card chart-card--pie">
           <div className="chart-card-header">

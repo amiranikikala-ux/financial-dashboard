@@ -1,4 +1,12 @@
 const pendingRequests = new Map();
+const API_KEY = import.meta.env.VITE_API_KEY || '';
+
+function withAuthHeaders(init) {
+  if (!API_KEY) return init || {};
+  const headers = new Headers(init?.headers);
+  headers.set('X-API-Key', API_KEY);
+  return { ...init, headers };
+}
 
 window.__apiMetrics = {
   requests: {},
@@ -26,7 +34,7 @@ export async function fetchApiJson(path, init) {
       return pendingRequests.get(cacheKey);
     }
 
-    const promise = fetch(path, init)
+    const promise = fetch(path, withAuthHeaders(init))
       .then(async (res) => {
         if (!res.ok) {
           trackApiRequest(path, true);
@@ -50,7 +58,7 @@ export async function fetchApiJson(path, init) {
   }
 
   try {
-    const res = await fetch(path, init);
+    const res = await fetch(path, withAuthHeaders(init));
     if (!res.ok) {
       trackApiRequest(path, true);
       throw new Error(`API: HTTP ${res.status} — გაუშვი: python server.py`);

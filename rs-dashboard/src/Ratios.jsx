@@ -10,6 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import ExportButton from './components/ExportButton.jsx';
 
 const GEL = new Intl.NumberFormat('ka-GE', {
   style: 'currency',
@@ -150,6 +151,29 @@ export default function Ratios({ financialRatios }) {
       <div className="tab-hero">
         <span className="tab-hero-title">📐 კოეფიციენტები — ფინანსური Ratios</span>
         <span className="tab-hero-desc">Net Margin · Payment Ratio · AP Days · ობიექტების შედარება</span>
+        <ExportButton
+          filename={`Ratios_${new Date().toISOString().slice(0, 10)}.xlsx`}
+          sheets={[
+            {
+              name: 'თვიური ტრენდი',
+              rows: monthlyTrend.map((r) => ({
+                თვე: r.month || '',
+                შემოსავალი: Number(r.income_amount) || 0,
+                ხარჯები: Number(r.expenses_amount) || 0,
+                net_margin_pct: Number(r.net_margin_pct ?? r.gross_margin_pct) || 0,
+              })),
+            },
+            {
+              name: 'Top Risk',
+              rows: topRisk.map((r) => ({
+                ორგანიზაცია: r.org || '',
+                დავალიანება: Number(r.debt) || 0,
+                payment_ratio_pct: Number(r.payment_ratio_pct) || 0,
+                AP_days: Number(r.ap_days) || 0,
+              })),
+            },
+          ]}
+        />
       </div>
 
       {/* ---- A. კომპანიის KPI ---- */}

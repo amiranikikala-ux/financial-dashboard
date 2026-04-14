@@ -22,6 +22,7 @@ export const TAB_GROUPS = [
       { id: 'budget', label: '📋 ბიუჯეტი' },
       { id: 'valuation', label: '🏆 შეფასება' },
       { id: 'executive', label: '👔 Executive' },
+      { id: 'insights', label: '🧠 ინსაითები' },
     ],
   },
 ];

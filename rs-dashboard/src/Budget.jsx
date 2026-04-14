@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import DateRangePicker from './components/DateRangePicker.jsx';
+import ExportButton from './components/ExportButton.jsx';
 import {
   Bar,
   ComposedChart,
@@ -92,11 +94,37 @@ export default function Budget({ budget }) {
     return years.includes(currentYear) ? currentYear : years[years.length - 1] || currentYear;
   });
 
-  // monthly data filtered by selected year
-  const yearMonthly = useMemo(
+  // all months for the selected year
+  const yearMonthlyAll = useMemo(
     () => monthly.filter((m) => String(m.month || '').startsWith(selectedYear)),
     [monthly, selectedYear],
   );
+
+  const yearMonthsList = useMemo(
+    () => yearMonthlyAll.map((m) => m.month).filter(Boolean).sort(),
+    [yearMonthlyAll],
+  );
+
+  const [budgetFrom, setBudgetFrom] = useState('');
+  const [budgetTo, setBudgetTo] = useState('');
+
+  // reset month filter when year changes
+  const [prevYear, setPrevYear] = useState(selectedYear);
+  if (selectedYear !== prevYear) {
+    setPrevYear(selectedYear);
+    setBudgetFrom('');
+    setBudgetTo('');
+  }
+
+  const yearMonthly = useMemo(() => {
+    if (!budgetFrom && !budgetTo) return yearMonthlyAll;
+    const ef = budgetFrom || yearMonthsList[0] || '';
+    const et = budgetTo || yearMonthsList[yearMonthsList.length - 1] || '';
+    return yearMonthlyAll.filter((m) => {
+      const mo = m.month || '';
+      return mo >= ef && mo <= et;
+    });
+  }, [yearMonthlyAll, budgetFrom, budgetTo, yearMonthsList]);
 
   // chart data
   const chartData = useMemo(() => {
@@ -168,6 +196,21 @@ export default function Budget({ budget }) {
       <div className="tab-hero">
         <span className="tab-hero-title">📋 ბიუჯეტი — Plan vs Actual</span>
         <span className="tab-hero-desc">YTD შეფასება · წლიური შედარება · თვიური ანალიზი</span>
+        <ExportButton
+          filename={`Budget_${selectedYear}_${new Date().toISOString().slice(0, 10)}.xlsx`}
+          sheets={[{
+            name: `Plan vs Actual ${selectedYear}`,
+            rows: yearMonthly.map((m) => ({
+              თვე: m.month || '',
+              გეგმა_შემოსავალი: Number(m.plan?.income) || 0,
+              ფაქტიური_შემოსავალი: Number(m.actual?.income) || 0,
+              გეგმა_ხარჯები: Number(m.plan?.expenses) || 0,
+              ფაქტიური_ხარჯები: Number(m.actual?.expenses) || 0,
+              გეგმა_net: Number(m.plan?.net) || 0,
+              ფაქტიური_net: Number(m.actual?.net) || 0,
+            })),
+          }]}
+        />
       </div>
 
       {/* ---- A. YTD KPI ---- */}
@@ -337,6 +380,14 @@ export default function Budget({ budget }) {
             </select>
           </label>
         </div>
+        <DateRangePicker
+          allMonths={yearMonthsList}
+          from={budgetFrom}
+          to={budgetTo}
+          onFromChange={setBudgetFrom}
+          onToChange={setBudgetTo}
+          label={`${selectedYear} თვეები`}
+        />
         {chartData.length > 0 ? (
           <div className="chart-area">
             <ResponsiveContainer width="100%" height="100%">
