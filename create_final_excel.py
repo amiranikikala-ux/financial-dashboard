@@ -1,6 +1,7 @@
 import pandas as pd
 import glob
-import os
+
+from dashboard_pipeline.waybill_amounts import get_nominal, get_effective, get_returned
 
 rs_files = glob.glob('Financial_Analysis/რს ზედნადები/*.xls')
 all_rs = []
@@ -20,22 +21,6 @@ if all_rs:
     df['გაუქმებული (ფლეგი)'] = df['სტატუსი'].astype(str).str.contains('გაუქმებული', case=False, na=False)
     
     # Calculate amounts
-    def get_nominal(row):
-        return pd.to_numeric(row['თანხა'], errors='coerce') if not pd.isna(row['თანხა']) else 0
-
-    def get_effective(row):
-        val = get_nominal(row)
-        if row['გაუქმებული (ფლეგი)']: return 0
-        if row['უკან დაბრუნება (ფლეგი)']:
-            v = float(val) if not pd.isna(val) else 0.0
-            return v if v < 0 else -v
-        return val
-        
-    def get_returned(row):
-        val = get_nominal(row)
-        if row['უკან დაბრუნება (ფლეგი)'] and not row['გაუქმებული (ფლეგი)']: return val
-        return 0
-
     df['ნომინალური თანხა'] = df.apply(get_nominal, axis=1)
     df['ეფექტური თანხა'] = df.apply(get_effective, axis=1)
     df['დაბრუნებული თანხა'] = df.apply(get_returned, axis=1)

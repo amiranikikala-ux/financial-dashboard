@@ -13,6 +13,7 @@ import glob
 import pandas as pd
 
 import generate_dashboard_data as g
+from dashboard_pipeline.waybill_amounts import get_effective
 
 
 def rs_effective_for_tax_id(rs_files, tax_id: str) -> float:
@@ -34,26 +35,6 @@ def rs_effective_for_tax_id(rs_files, tax_id: str) -> float:
     df['გაუქმებული (ფლეგი)'] = df['სტატუსი'].astype(str).str.contains(
         'გაუქმებული', case=False, na=False
     )
-
-    def get_nominal(row):
-        # იგივე ლოგიკა, რაც generate_dashboard_data.run-ში
-        return (
-            pd.to_numeric(row['თანხა'], errors='coerce')
-            if not pd.isna(row['თანხა'])
-            else 0
-        )
-
-    def get_effective(row):
-        val = get_nominal(row)
-        if pd.isna(val):
-            val = 0.0
-        val = float(val)
-        if row['გაუქმებული (ფლეგი)']:
-            return 0.0
-        if row['უკან დაბრუნება (ფლეგი)']:
-            v = float(val) if not pd.isna(val) else 0.0
-            return v if v < 0 else -v
-        return val
 
     return float(df.apply(get_effective, axis=1).sum())
 
@@ -165,7 +146,7 @@ def main():
 
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        payments, _, _ = g.get_bank_payments(rs_files)
+        payments, _, _, _, _ = g.get_bank_payments(rs_files)
 
     bog_receiver_map = g.get_merged_bog_receiver_map(rs_files)
     manual_csv = g.load_manual_payments()

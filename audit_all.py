@@ -15,6 +15,7 @@ import glob
 import pandas as pd
 
 import generate_dashboard_data as g
+from dashboard_pipeline.waybill_amounts import get_nominal, get_effective, get_returned
 
 TOL = 0.02  # ლარის მრგვალი შეცდომა
 
@@ -75,28 +76,6 @@ def main() -> int:
         "გაუქმებული", case=False, na=False
     )
 
-    def get_nominal(row):
-        return (
-            pd.to_numeric(row["თანხა"], errors="coerce")
-            if not pd.isna(row["თანხა"])
-            else 0
-        )
-
-    def get_effective(row):
-        val = get_nominal(row)
-        if row["გაუქმებული (ფლეგი)"]:
-            return 0
-        if row["უკან დაბრუნება (ფლეგი)"]:
-            v = float(val) if not pd.isna(val) else 0.0
-            return v if v < 0 else -v
-        return val
-
-    def get_returned(row):
-        val = get_nominal(row)
-        if row["უკან დაბრუნება (ფლეგი)"] and not row["გაუქმებული (ფლეგი)"]:
-            return val
-        return 0
-
     df["_eff"] = df.apply(get_effective, axis=1)
     df["_nom"] = df.apply(get_nominal, axis=1)
     df["_ret"] = df.apply(get_returned, axis=1)
@@ -145,7 +124,7 @@ def main() -> int:
     hr("5. ბანკი: ხაზების ბალანსი (დაკრეფილი = ID+სახელი+missed)")
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        payments, _, _ = g.get_bank_payments(rs_paths)
+        payments, _, _, _, _ = g.get_bank_payments(rs_paths)
 
     # ერთხელ name map
     nmap = g.build_name_to_id_map(rs_paths)

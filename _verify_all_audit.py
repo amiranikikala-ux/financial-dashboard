@@ -8,6 +8,7 @@ import sys
 import pandas as pd
 
 import generate_dashboard_data as g
+from dashboard_pipeline.waybill_amounts import get_effective
 
 TOL = 0.02
 ERR = []
@@ -39,19 +40,26 @@ def main():
     tbc_files = g.list_tbc_bank_statement_xlsx()
 
     print("\n=== 2) ბანკი: ჯამური რეკონცილიაცია ===")
-    payments, unmatched, rec_ok = g.get_bank_payments(
+    payments, unmatched, rec_ok, _, status_buckets = g.get_bank_payments(
         rs_files, reconciliation_exit_on_fail=False
     )
     matched_sum = sum(float(v) for v in payments.values())
     unmatched_sum = sum(float(r.get("თანხა") or 0) for r in unmatched)
+    non_supplier_sum = sum(
+        float(r.get("amount") or 0) for r in status_buckets.get("non_supplier", [])
+    )
+    skipped_sum = sum(
+        float(r.get("amount") or 0) for r in status_buckets.get("skipped_explicit", [])
+    )
     bank_excel = g._bank_positive_debit_total_ge()
-    delta = bank_excel - (matched_sum + unmatched_sum)
+    accounted = matched_sum + unmatched_sum + non_supplier_sum + skipped_sum
+    delta = bank_excel - accounted
     if abs(delta) > TOL:
         fail(
-            f"რეკონცილიაცია: Excel {bank_excel:.2f} vs მიბმ+არამიბმ {matched_sum + unmatched_sum:.2f}, delta {delta:.2f}"
+            f"რეკონცილიაცია: Excel {bank_excel:.2f} vs მიბმ+არამიბმ+non_supplier+skipped {accounted:.2f}, delta {delta:.2f}"
         )
     else:
-        ok(f"Excel გასავალი {bank_excel:,.2f} = მიბმული+არამიბმული (delta {delta:.4f})")
+        ok(f"Excel გასავალი {bank_excel:,.2f} = მიბმული+არამიბმული+non_supplier+skipped (delta {delta:.4f})")
     if not rec_ok:
         fail("verify_bank_debit_totals დააბრუნა False")
     else:
@@ -269,15 +277,6 @@ def main():
         df["გაუქმებული (ფლეგი)"] = (
             df["სტატუსი"].astype(str).str.contains("გაუქმებული", case=False, na=False)
         )
-
-        def get_effective(row):
-            val = float(pd.to_numeric(row["თანხა"], errors="coerce") or 0)
-            if row["გაუქმებული (ფლეგი)"]:
-                return 0.0
-            if row["უკან დაბრუნება (ფლეგი)"]:
-                v = float(val) if not pd.isna(val) else 0.0
-                return v if v < 0 else -v
-            return val
 
         df["ეფექტური თანხა"] = df.apply(get_effective, axis=1)
         eff_py = float(df["ეფექტური თანხა"].sum())

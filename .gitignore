@@ -25,3 +25,23 @@ Financial_Analysis/**/*.xlsx
 Financial_Analysis/**/*.xls
 Financial_Analysis/manual_payments.csv
 RS_Final_Check.xlsx
+
+# Directory junction-ები (Excel წყაროების ლოკალური ბმულები)
+Financial_Analysis/რს ზედნადები/
+Financial_Analysis/ბოგ ბანკი ამონაწერი/
+Financial_Analysis/თბს ბანკი ამონაწერი/
+Financial_Analysis/გაყიდული პროდუქტები სოფ ოზურგეთი/
+Financial_Analysis/გაყიდული პროდუქტები სოფ დვაბზუ/
+
+# Debug / scratch / temp ფაილები (სამუშაო, არა საბოლოო)
+debug_*.py
+scratch_read*.py
+temp.json
+headers_log.txt
+headers_output.json
+$null
+
+# Tab-data არტეფაქტები (გენერირდება generate_dashboard_data.py-ით)
+rs-dashboard/public/tab-data/
+rs-dashboard/test-results/
+.gitnexus

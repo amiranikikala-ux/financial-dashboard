@@ -1,3 +1,9 @@
 # generate_dashboard_data.py და დამხმარე სკრიპტები
 pandas>=2.0
 openpyxl>=3.1
+
+# server.py (FastAPI backend)
+fastapi>=0.100
+uvicorn>=0.20
+slowapi>=0.1.9
+apscheduler>=3.10
