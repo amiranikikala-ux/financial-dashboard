@@ -1,33 +1,53 @@
-# აგენტისთვის — სად არის Excel წყაროები
+# Financial Dashboard — Agent Instructions
 
-პროექტის **ფესვიდან** (საქაღალდე, სადაც `generate_dashboard_data.py`):
+## სესიის დაწყება
+1. **წაიკითხე HANDOFF.md** — პროექტის სტატუსი, ბოლო სესიის ცვლილებები, ფაილების რუკა, შემდეგი ნაბიჯები
+2. **წაიკითხე PLAN.md** — რა ფაზებია დასრულებული, რა რჩება
+3. **გაუშვი ტესტები**: `python -m pytest tests/ -q` (125 pass expected)
+4. **გაუშვი ბილდი**: `cd rs-dashboard && npx vite build` (0 errors expected)
+5. მომხმარებლის ენა: **ქართული**, კოდი + commit: **ინგლისური**
 
-## სტრუქტურა და გზები
+## Stack
+- **Backend**: Python 3 + FastAPI + pandas + openpyxl + APScheduler
+- **Frontend**: React 19 + Vite, 14 lazy-loaded tabs, Recharts charts, xlsx export
+- **Data**: Excel → `generate_dashboard_data.py` → `data.json` → `/api/data`
+- **Server**: `server.py` (:8000), dev UI: `:5173`
 
+## წესები
+- სესიის ბოლოს **აუცილებლად** განაახლე HANDOFF.md სესიის ნომრით და ცვლილებების ჩამონათვალით
+- ტესტები არ წაშალო/შეასუსტო მომხმარებლის მკაფიო მითითების გარეშე
+- ყველა ახალი ფუნქციის შემდეგ: ბილდის ვერიფიკაცია (`npx vite build`)
 
-| მონაცემი                       | საქაღალდე                                              | Python                                                                   | ფარდობითი glob (ფესვიდან)                                    |
-| ------------------------------ | ------------------------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| BOG ბანკის ამონაწერი           | `Financial_Analysis/ბოგ ბანკი ამონაწერი/`              | `list_bog_bank_statement_xlsx()`                                         | `Financial_Analysis/ბოგ ბანკი ამონაწერი/*.xlsx`              |
-| TBC / თბს ბანკის ამონაწერი     | `Financial_Analysis/თბს ბანკი ამონაწერი/`              | `list_tbc_bank_statement_xlsx()`                                         | `Financial_Analysis/თბს ბანკი ამონაწერი/*.xlsx`              |
-| RS ზედნადები                   | `Financial_Analysis/რს ზედნადები/`                     | `list_rs_waybill_files()`                                                | `Financial_Analysis/რს ზედნადები/*.xlsx` + `*.xls`           |
-| შემოტანილი პროდუქცია           | `Financial_Analysis/შემოტანილი პროდუქცია/`             | `list_imported_product_files()` — ჯერ `*.csv`, fallback `*.xls`/`*.xlsx` | `Financial_Analysis/შემოტანილი პროდუქცია/*.csv`              |
-| გაყიდული პროდუქტები — დვაბზუ   | `Financial_Analysis/გაყიდული პროდუქტები სოფ დვაბზუ/`   | ჯერ dedicated loader არ დგას; source-only line export                    | `Financial_Analysis/გაყიდული პროდუქტები სოფ დვაბზუ/*.xlsx`   |
-| გაყიდული პროდუქტები — ოზურგეთი | `Financial_Analysis/გაყიდული პროდუქტები სოფ ოზურგეთი/` | ჯერ dedicated loader არ დგას; source-only line export                    | `Financial_Analysis/გაყიდული პროდუქტები სოფ ოზურგეთი/*.xlsx` |
+## ⚠️ კონტექსტის მართვა (სავალდებულო)
+როცა ხვდები რომ ჩატი ხანგრძლივია (ბევრი tool call, ბევრი ფაილის კითხვა/რედაქტირება, 15+ მოქმედება):
+1. **შეაჩერე მიმდინარე მუშაობა** მიმდინარე ნაბიჯის დასრულების შემდეგ
+2. **გაუშვი ტესტები და ბილდი** — დარწმუნდი რომ კოდი მუშა მდგომარეობაშია
+3. **განაახლე HANDOFF.md** — სესიის ნომერი, რა გაკეთდა, რა დარჩა, ფაილების რუკა
+4. **განაახლე PLAN.md** — თუ ფაზის სტატუსი შეიცვალა
+5. **შეინახე Memory** — სესიის შეჯამება
+6. **აცნობე მომხმარებელს**: "⚠️ კონტექსტი ივსება. HANDOFF.md განახლებულია. გთხოვ გახსენი ახალი ჩატი და დაწერე 'განაგრძე'."
+7. **ნუ დაიწყებ ახალ თასქს** — მხოლოდ handoff მოამზადე
 
+<!-- gitnexus:start -->
+## GitNexus — Code Intelligence
 
-ახალი პერიოდის ფაილები დაამატე იმავე საქაღალდეებში — სახელი მნიშვნელობას არ აქვს, თუ გაფართოება შეესაბამება ცხრილს.
+Indexed as **financial-dashboard** (827 symbols, 65 execution flows). Stale index? `npx gitnexus analyze`
 
-თუ ამოცანა ეხება supplier -> imported products ანალიზს, პირველ რიგში მოძებნე `Financial_Analysis/შემოტანილი პროდუქცია/*.csv`. ეს არის preferred სრული export; თუ `csv` არ დევს, მხოლოდ მაშინ დაეყრდენი legacy `*.xls` / `*.xlsx` ფაილებს. ამ წყაროში, როგორც წესი, არის line-level ჩანაწერები: `გამყიდველი`, `საქონლის დასახელება`, `რაოდ.`, `ერთეულის ფასი`, `საქონლის ფასი`, `ზედნადების ნომერი`, `სტატუსი`, `გააქტიურების თარიღი`.
+### GitNexus Rules
 
-თუ ამოცანა ეხება retail/product sales ან store-level sell-through ანალიზს, გადაამოწმე:
+- Run `impact({target, direction: "upstream"})` before editing any function/class. Warn user on HIGH/CRITICAL risk.
+- Run `detect_changes()` before committing.
+- Use `query()` to find execution flows, `context()` for symbol details.
+- Rename with `rename()`, never find-and-replace. Preview with `dry_run: true`.
+- After refactor: `detect_changes({scope: "all"})`.
 
-- `Financial_Analysis/გაყიდული პროდუქტები სოფ დვაბზუ/*.xlsx`
-- `Financial_Analysis/გაყიდული პროდუქტები სოფ ოზურგეთი/*.xlsx`
+### Risk: d=1 WILL BREAK | d=2 likely affected | d=3 may need testing
 
-ამ Excel-ებში ამჟამად ჩანს line-level გაყიდვების schema: `P_ID`, `კოდი`, `შტრიხკოდი`, `დასახელება`, `ერთეული`, `რაოდენობა`, `ფასი`, `თვითღირებულება`, `დრო`, `ობიექტი`, `მოგება`, `ქვეჯგუფი`, `ცვლა`.
+### Resources
 
-Parsing caveat: ამ ფაილებში `openpyxl`-ის `read_only`/dimension მეტამონაცემი ზოგჯერ მცდარად აჩვენებს მხოლოდ header row `P_ID`-ს. ამ წყაროსთვის დაეყრდენი `pandas.read_excel()`-ს ან full workbook read-ს; არ დაეყრდნო მარტო `openpyxl` `max_row`/`max_column`-ს.
+- `gitnexus://repo/financial-dashboard/context` — overview
+- `gitnexus://repo/financial-dashboard/processes` — execution flows
+- `gitnexus://repo/financial-dashboard/process/{name}` — step-by-step trace
 
-**სვეტის ასოები (L, V, B …) არ გამოიყენო დოკუმენტაციაში საყრდენად** — ბანკის ექსპორტში მდებარეობა იცვლება. `generate_dashboard_data.py` იყენებს **სათაურის ქართულ სახელებს**. `get_bank_payments` — მხოლოდ **გასავალი** (დებეტი / გასული თანხა), არა მთელი ამონაწერის დებეტი↔კრედიტი.
-
-დეტალურად: `[.cursor/rules/financial-excel-locations.mdc](.cursor/rules/financial-excel-locations.mdc)` · მოკლედ: `[README.md](README.md)`.
+### Index: `npx gitnexus analyze` (add `--embeddings` if needed)
+<!-- gitnexus:end -->

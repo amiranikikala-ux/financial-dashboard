@@ -156,10 +156,15 @@
     {
       "tax_id": "415117929",
       "official_name": "შპს ოლდენ ვესთ",
+      "force_non_supplier_keywords": [
+        "სამეურნეო",
+        "ოლდენ ვესთ"
+      ],
       "evidence": [
         "BOG outgoing rows in 2024.xlsx on 2024-08-26 (2,000.00), 2024-08-29 (1,300.00 and 1,500.00), and 2024-08-30 (1,000.00) carry raw_tax_id 415117929 with counterparty text 'შპს ოლდენ ვესთ'.",
         "The same four rows carry the same receiver account GE38BG0000000601743312GEL in bank description/account fields.",
-        "The same rows have business-expense purposes ('სამეურნეო', 'სამეურნეო ხარჯი') and no competing supplier candidate on reconciliation."
+        "The same rows have business-expense purposes ('სამეურნეო', 'სამეურნეო ხარჯი') and no competing supplier candidate on reconciliation.",
+        "არ არის RS მომწოდებელი — მხოლოდ სამეურნეო ხარჯი (4 გადარიცხვა, 5800₾). force_non_supplier დაემატა სესია #9-ში."
       ]
     },
     {
