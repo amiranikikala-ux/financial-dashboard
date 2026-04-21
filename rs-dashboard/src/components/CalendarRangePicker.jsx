@@ -1,4 +1,6 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
 /**
  * CalendarRangePicker — ლამაზი კალენდარი დღეების/პერიოდის მოსანიშნად.
@@ -13,31 +15,120 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
  *   children       — extra actions (export buttons, etc.)
  */
 
-const MONTHS_KA = [
-  'იანვარი', 'თებერვალი', 'მარტი', 'აპრილი', 'მაისი', 'ივნისი',
-  'ივლისი', 'აგვისტო', 'სექტემბერი', 'ოქტომბერი', 'ნოემბერი', 'დეკემბერი',
-];
+const MONTHS_KA_SHORT = ['იან', 'თებ', 'მარ', 'აპრ', 'მაი', 'ივნ', 'ივლ', 'აგვ', 'სექ', 'ოქტ', 'ნოე', 'დეკ'];
+const MONTHS_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const WEEKDAYS_KA = {
+  Sunday: 'კვირა',
+  Sun: 'კვირა',
+  Monday: 'ორშ.',
+  Mon: 'ორშ.',
+  Tuesday: 'სამშ.',
+  Tue: 'სამშ.',
+  Wednesday: 'ოთხშ.',
+  Wed: 'ოთხშ.',
+  Thursday: 'ხუთშ.',
+  Thu: 'ხუთშ.',
+  Friday: 'პარ',
+  Fri: 'პარ',
+  Saturday: 'შაბ',
+  Sat: 'შაბ',
+  Su: 'კვირა',
+  Mo: 'ორშ.',
+  Tu: 'სამშ.',
+  We: 'ოთხშ.',
+  Th: 'ხუთშ.',
+  Fr: 'პარ',
+  Sa: 'შაბ',
+};
 
-const WEEKDAYS_KA = ['ორშ', 'სამ', 'ოთხ', 'ხუთ', 'პარ', 'შაბ', 'კვი'];
+function formatWeekDayKa(nameOfDay) {
+  return WEEKDAYS_KA[nameOfDay] || nameOfDay;
+}
+
+function renderDesktopHeader({
+  date,
+  changeMonth,
+  changeYear,
+  decreaseMonth,
+  increaseMonth,
+  prevMonthButtonDisabled,
+  nextMonthButtonDisabled,
+}) {
+  return (
+    <div className="classic-cal__header">
+      <div className="classic-cal__month-box">
+        <select
+          className="classic-cal__month-select"
+          value={date.getMonth()}
+          onChange={(e) => changeMonth(Number(e.target.value))}
+        >
+          {MONTHS_EN.map((month, index) => (
+            <option key={month} value={index}>{month}</option>
+          ))}
+        </select>
+      </div>
+      <div className="classic-cal__spin-group">
+        <button
+          type="button"
+          className="classic-cal__spin-btn"
+          onClick={increaseMonth}
+          disabled={nextMonthButtonDisabled}
+          aria-label="Next month"
+        >
+          ▲
+        </button>
+        <button
+          type="button"
+          className="classic-cal__spin-btn"
+          onClick={decreaseMonth}
+          disabled={prevMonthButtonDisabled}
+          aria-label="Previous month"
+        >
+          ▼
+        </button>
+      </div>
+      <div className="classic-cal__year-box">{date.getFullYear()}</div>
+      <div className="classic-cal__spin-group">
+        <button
+          type="button"
+          className="classic-cal__spin-btn"
+          onClick={() => changeYear(date.getFullYear() + 1)}
+          aria-label="Next year"
+        >
+          ▲
+        </button>
+        <button
+          type="button"
+          className="classic-cal__spin-btn"
+          onClick={() => changeYear(date.getFullYear() - 1)}
+          aria-label="Previous year"
+        >
+          ▼
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function toStr(date) {
+  if (!date) return '';
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function toDate(str) {
+  if (!str) return null;
+  const [y, m, d] = str.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
 
 function formatDateKa(dateStr) {
   if (!dateStr) return '—';
   const [y, m, d] = dateStr.split('-');
   const mi = Number(m) - 1;
-  return `${Number(d)} ${MONTHS_KA[mi]?.slice(0, 3) || m}, ${y}`;
-}
-
-function daysInMonth(year, month) {
-  return new Date(year, month + 1, 0).getDate();
-}
-
-function firstDayOfWeek(year, month) {
-  const d = new Date(year, month, 1).getDay();
-  return d === 0 ? 6 : d - 1; // Monday = 0
-}
-
-function toDateStr(y, m, d) {
-  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  return `${Number(d)} ${MONTHS_KA_SHORT[mi] || m}, ${y}`;
 }
 
 function getPresets(availableDays) {
@@ -71,41 +162,42 @@ export default function CalendarRangePicker({
   children,
 }) {
   const [open, setOpen] = useState(false);
-  const [selectingEnd, setSelectingEnd] = useState(false);
-  const [hoverDay, setHoverDay] = useState(null);
   const popRef = useRef(null);
 
-  const sortedDays = useMemo(() => {
-    const s = [...availableDays].sort();
-    return s;
-  }, [availableDays]);
-
+  const sortedDays = useMemo(() => [...availableDays].sort(), [availableDays]);
   const daySet = useMemo(() => new Set(sortedDays), [sortedDays]);
 
   const firstAvail = sortedDays[0] || '';
   const lastAvail = sortedDays[sortedDays.length - 1] || '';
 
-  // Initialize viewMonth to 'from' or last available
-  const initMonth = useMemo(() => {
-    const ref = from || lastAvail;
-    if (!ref) return { year: new Date().getFullYear(), month: new Date().getMonth() };
-    const [y, m] = ref.split('-').map(Number);
-    return { year: y, month: m - 1 };
-  }, [from, lastAvail]);
-
-  const [viewYear, setViewYear] = useState(initMonth.year);
-  const [viewMonth, setViewMonth] = useState(initMonth.month);
-
   const presets = useMemo(() => getPresets(sortedDays), [sortedDays]);
 
+  const effectiveFrom = from || firstAvail;
+  const effectiveTo = to || lastAvail;
+
+  const [draftFrom, setDraftFrom] = useState(effectiveFrom);
+  const [draftTo, setDraftTo] = useState(effectiveTo);
+
+  const visibleFrom = open ? (draftFrom || effectiveFrom) : effectiveFrom;
+  const visibleTo = open ? (draftTo || draftFrom || effectiveTo) : effectiveTo;
+  const selectedCount = sortedDays.filter((d) => d >= visibleFrom && d <= visibleTo).length;
+
+  const startDate = toDate(draftFrom || effectiveFrom);
+  const endDate = draftTo ? toDate(draftTo) : null;
+
+  // Highlighted available days for react-datepicker
+  const highlightDates = useMemo(() => sortedDays.map((d) => toDate(d)), [sortedDays]);
+
+  // Filter: only allow clicking on available days
+  const filterDate = useCallback((date) => daySet.has(toStr(date)), [daySet]);
+
   const activePreset = useMemo(() => {
-    const ef = from || firstAvail;
-    const et = to || lastAvail;
     for (const p of presets) {
-      if (p.from === ef && p.to === et) return p.id;
+      const targetTo = draftTo || draftFrom || effectiveTo;
+      if (p.from === (draftFrom || effectiveFrom) && p.to === targetTo) return p.id;
     }
     return null;
-  }, [presets, from, to, firstAvail, lastAvail]);
+  }, [presets, draftFrom, draftTo, effectiveFrom, effectiveTo]);
 
   // Close on outside click
   useEffect(() => {
@@ -113,193 +205,59 @@ export default function CalendarRangePicker({
     const handler = (e) => {
       if (popRef.current && !popRef.current.contains(e.target)) {
         setOpen(false);
-        setSelectingEnd(false);
-        setHoverDay(null);
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  const goPrev = useCallback(() => {
-    setViewMonth((m) => {
-      if (m === 0) {
-        setViewYear((y) => y - 1);
-        return 11;
-      }
-      return m - 1;
-    });
-  }, []);
-
-  const goNext = useCallback(() => {
-    setViewMonth((m) => {
-      if (m === 11) {
-        setViewYear((y) => y + 1);
-        return 0;
-      }
-      return m + 1;
-    });
-  }, []);
-
-  const handleDayClick = useCallback(
-    (dayStr) => {
-      if (!selectingEnd) {
-        // Selecting start
-        onFromChange(dayStr);
-        onToChange(dayStr);
-        setSelectingEnd(true);
-      } else {
-        // Selecting end
-        if (dayStr < from) {
-          onFromChange(dayStr);
-          onToChange(from);
-        } else {
-          onToChange(dayStr);
-        }
-        setSelectingEnd(false);
-        setHoverDay(null);
-      }
-    },
-    [selectingEnd, from, onFromChange, onToChange],
-  );
-
   const applyPreset = useCallback(
     (p) => {
-      console.log('[CRP DEBUG] applyPreset called:', p.id, p.from, '→', p.to);
-      onFromChange(p.from);
-      onToChange(p.to);
-      setSelectingEnd(false);
-      setHoverDay(null);
+      setDraftFrom(p.from);
+      setDraftTo(p.to);
     },
-    [onFromChange, onToChange],
+    [],
   );
 
-  // Build calendar grid
-  const calendarDays = useMemo(() => {
-    const total = daysInMonth(viewYear, viewMonth);
-    const startOffset = firstDayOfWeek(viewYear, viewMonth);
-    const cells = [];
+  const handleDateChange = useCallback(
+    ([start, end]) => {
+      if (!start) {
+        setDraftFrom('');
+        setDraftTo('');
+        return;
+      }
 
-    // Empty cells before first day
-    for (let i = 0; i < startOffset; i++) {
-      cells.push({ key: `empty-${i}`, day: null });
-    }
-
-    for (let d = 1; d <= total; d++) {
-      const dateStr = toDateStr(viewYear, viewMonth, d);
-      cells.push({
-        key: dateStr,
-        day: d,
-        dateStr,
-        hasData: daySet.has(dateStr),
-      });
-    }
-
-    return cells;
-  }, [viewYear, viewMonth, daySet]);
-
-  // Second month
-  const nextMonthYear = viewMonth === 11 ? viewYear + 1 : viewYear;
-  const nextMonthIdx = viewMonth === 11 ? 0 : viewMonth + 1;
-
-  const calendarDays2 = useMemo(() => {
-    const total = daysInMonth(nextMonthYear, nextMonthIdx);
-    const startOffset = firstDayOfWeek(nextMonthYear, nextMonthIdx);
-    const cells = [];
-
-    for (let i = 0; i < startOffset; i++) {
-      cells.push({ key: `empty2-${i}`, day: null });
-    }
-
-    for (let d = 1; d <= total; d++) {
-      const dateStr = toDateStr(nextMonthYear, nextMonthIdx, d);
-      cells.push({
-        key: dateStr,
-        day: d,
-        dateStr,
-        hasData: daySet.has(dateStr),
-      });
-    }
-
-    return cells;
-  }, [nextMonthYear, nextMonthIdx, daySet]);
-
-  const effectiveFrom = from || firstAvail;
-  const effectiveTo = to || lastAvail;
-  const selectedCount = sortedDays.filter((d) => d >= effectiveFrom && d <= effectiveTo).length;
-
-  const isInRange = (dateStr) => {
-    if (!dateStr) return false;
-    if (selectingEnd && hoverDay) {
-      const lo = from <= hoverDay ? from : hoverDay;
-      const hi = from <= hoverDay ? hoverDay : from;
-      return dateStr >= lo && dateStr <= hi;
-    }
-    return dateStr >= effectiveFrom && dateStr <= effectiveTo;
-  };
-
-  const isStart = (dateStr) => dateStr === effectiveFrom;
-  const isEnd = (dateStr) => dateStr === effectiveTo;
-
-  const renderMonth = (cells, monthIdx, year) => (
-    <div className="crp-month">
-      <div className="crp-month-title">
-        {MONTHS_KA[monthIdx]} {year}
-      </div>
-      <div className="crp-weekdays">
-        {WEEKDAYS_KA.map((w) => (
-          <div key={w} className="crp-weekday">{w}</div>
-        ))}
-      </div>
-      <div className="crp-days">
-        {cells.map((cell) => {
-          if (!cell.day) {
-            return <div key={cell.key} className="crp-day crp-day--empty" />;
-          }
-          const inRange = isInRange(cell.dateStr);
-          const start = isStart(cell.dateStr);
-          const end = isEnd(cell.dateStr);
-          const cls = [
-            'crp-day',
-            cell.hasData ? 'crp-day--available' : 'crp-day--disabled',
-            inRange ? 'crp-day--in-range' : '',
-            start ? 'crp-day--start' : '',
-            end ? 'crp-day--end' : '',
-          ]
-            .filter(Boolean)
-            .join(' ');
-
-          return (
-            <div
-              key={cell.key}
-              className={cls}
-              onClick={cell.hasData ? () => handleDayClick(cell.dateStr) : undefined}
-              onMouseEnter={
-                cell.hasData && selectingEnd ? () => setHoverDay(cell.dateStr) : undefined
-              }
-              role={cell.hasData ? 'button' : undefined}
-              tabIndex={cell.hasData ? 0 : undefined}
-              onKeyDown={
-                cell.hasData
-                  ? (e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        handleDayClick(cell.dateStr);
-                      }
-                    }
-                  : undefined
-              }
-            >
-              {cell.day}
-              {cell.hasData && <span className="crp-day-dot" />}
-            </div>
-          );
-        })}
-      </div>
-    </div>
+      setDraftFrom(toStr(start));
+      setDraftTo(end ? toStr(end) : '');
+    },
+    [],
   );
 
-  console.log('[CRP DEBUG] render — sortedDays:', sortedDays.length, 'from:', from, 'to:', to, 'open:', open);
+  const handleTriggerClick = useCallback(() => {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+
+    setDraftFrom(effectiveFrom);
+    setDraftTo(effectiveTo);
+    setOpen(true);
+  }, [effectiveFrom, effectiveTo, open]);
+
+  const handleCancel = useCallback(() => {
+    setDraftFrom(effectiveFrom);
+    setDraftTo(effectiveTo);
+    setOpen(false);
+  }, [effectiveFrom, effectiveTo]);
+
+  const applyDraft = useCallback(() => {
+    const nextFrom = draftFrom || effectiveFrom;
+    const nextTo = draftTo || draftFrom || effectiveTo;
+    onFromChange(nextFrom);
+    onToChange(nextTo);
+    setOpen(false);
+  }, [draftFrom, draftTo, effectiveFrom, effectiveTo, onFromChange, onToChange]);
+
   if (!sortedDays.length) return null;
 
   return (
@@ -324,12 +282,7 @@ export default function CalendarRangePicker({
         <button
           type="button"
           className="crp-trigger"
-          onClick={() => {
-            console.log('[CRP DEBUG] trigger button clicked, open:', open);
-            setOpen((v) => !v);
-            setSelectingEnd(false);
-            setHoverDay(null);
-          }}
+          onClick={handleTriggerClick}
         >
           <span className="crp-trigger-icon">📅</span>
           <span className="crp-trigger-range">
@@ -342,57 +295,68 @@ export default function CalendarRangePicker({
         {children && <div className="crp-actions">{children}</div>}
       </div>
 
-      {/* Hint */}
-      {selectingEnd && open && (
-        <div className="crp-hint">აირჩიე პერიოდის ბოლო დღე</div>
-      )}
-
       {/* Calendar popup */}
       {open && (
-        <div className="crp-popup">
-          <div className="crp-nav">
-            <button type="button" className="crp-nav-btn" onClick={goPrev}>
-              ◀
-            </button>
-            <div className="crp-nav-title">
-              {MONTHS_KA[viewMonth]} {viewYear}
-              {' — '}
-              {MONTHS_KA[nextMonthIdx]} {nextMonthYear}
-            </div>
-            <button type="button" className="crp-nav-btn" onClick={goNext}>
-              ▶
-            </button>
+        <div className="crp-popup crp-popup--classic">
+          <button
+            type="button"
+            className="classic-cal__close"
+            onClick={handleCancel}
+            aria-label="Close calendar"
+          >
+            ×
+          </button>
+          <DatePicker
+            selected={startDate}
+            onChange={handleDateChange}
+            startDate={startDate}
+            endDate={endDate}
+            selectsRange
+            inline
+            monthsShown={1}
+            filterDate={filterDate}
+            highlightDates={highlightDates}
+            formatWeekDay={formatWeekDayKa}
+            renderCustomHeader={renderDesktopHeader}
+            calendarClassName="crp-rdp classic-inline-datepicker"
+          />
+
+          <div className="crp-presets crp-presets--classic">
+            {presets.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                className={`crp-preset-btn ${activePreset === p.id ? 'crp-preset-active' : ''}`}
+                onClick={() => applyPreset(p)}
+              >
+                {p.label}
+              </button>
+            ))}
           </div>
 
-          <div className="crp-months-grid">
-            {renderMonth(calendarDays, viewMonth, viewYear)}
-            {renderMonth(calendarDays2, nextMonthIdx, nextMonthYear)}
-          </div>
-
-          <div className="crp-footer">
+          <div className="crp-footer crp-footer--classic">
             <div className="crp-footer-info">
-              {selectingEnd ? (
-                <span className="crp-footer-selecting">
-                  დაწყება: <strong>{formatDateKa(from)}</strong> → აირჩიე ბოლო
-                </span>
-              ) : (
-                <span>
-                  არჩეული: <strong>{formatDateKa(effectiveFrom)}</strong> — <strong>{formatDateKa(effectiveTo)}</strong>
-                  {' '}({selectedCount} დღე)
-                </span>
-              )}
+              <span>
+                არჩეული: <strong>{formatDateKa(visibleFrom)}</strong> — <strong>{formatDateKa(visibleTo)}</strong>
+                {' '}({selectedCount} დღე)
+              </span>
             </div>
-            <button
-              type="button"
-              className="crp-done-btn"
-              onClick={() => {
-                setOpen(false);
-                setSelectingEnd(false);
-                setHoverDay(null);
-              }}
-            >
-              მზადაა ✓
-            </button>
+            <div className="crp-footer-actions">
+              <button
+                type="button"
+                className="crp-cancel-btn"
+                onClick={handleCancel}
+              >
+                არა
+              </button>
+              <button
+                type="button"
+                className="crp-done-btn crp-done-btn--classic"
+                onClick={applyDraft}
+              >
+                კი
+              </button>
+            </div>
           </div>
         </div>
       )}

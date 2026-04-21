@@ -15,9 +15,12 @@ test.describe('Dashboard — Load & Header', () => {
     await expect(page.locator('.subtitle')).toContainText('ფინანსური ანალიზი');
   });
 
-  test('header shows period badge when data loaded', async ({ page }) => {
-    await expect(page.locator('.header-period-badge')).toBeVisible();
-    await expect(page.locator('.header-period-badge')).toContainText('2025');
+  test('header shows period picker when data loaded', async ({ page }) => {
+    // .header-period-badge was replaced by DateTimeCalendarPicker (Packet F).
+    // The new trigger shows "ყველა პერიოდი" by default, with a 📅 icon.
+    const trigger = page.locator('.dtcp-trigger').first();
+    await expect(trigger).toBeVisible();
+    await expect(trigger).toContainText('ყველა პერიოდი');
   });
 
   test('header stats show bank and paid totals', async ({ page }) => {

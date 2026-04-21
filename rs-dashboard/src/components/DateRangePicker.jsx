@@ -1,4 +1,6 @@
 import { useMemo, useCallback } from 'react';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
 /**
  * DateRangePicker — reusable month-range picker with presets.
@@ -13,14 +15,17 @@ import { useMemo, useCallback } from 'react';
  *   children    — extra buttons (e.g. Excel export) rendered at the end
  */
 
-function monthLabel(m) {
-  if (!m) return '—';
-  const [y, mo] = m.split('-');
-  if (!y || !mo) return m;
-  const MONTHS_KA = ['იან', 'თებ', 'მარ', 'აპრ', 'მაი', 'ივნ', 'ივლ', 'აგვ', 'სექ', 'ოქტ', 'ნოე', 'დეკ'];
-  const idx = Number(mo) - 1;
-  const label = MONTHS_KA[idx] || mo;
-  return `${label} ${y}`;
+function toMonthStr(date) {
+  if (!date) return '';
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
+}
+
+function toDate(monthStr) {
+  if (!monthStr) return null;
+  const [y, m] = monthStr.split('-').map(Number);
+  return new Date(y, m - 1, 1);
 }
 
 function getPresets(allMonths) {
@@ -70,10 +75,23 @@ export default function DateRangePicker({
     [allMonths],
   );
 
+  const monthSet = useMemo(() => new Set(months), [months]);
+
   const presets = useMemo(() => getPresets(months), [months]);
 
   const effectiveFrom = from || months[0] || '';
   const effectiveTo = to || months[months.length - 1] || '';
+
+  const startDate = toDate(effectiveFrom);
+  const endDate = toDate(effectiveTo);
+  const minDate = toDate(months[0]);
+  const maxDate = toDate(months[months.length - 1]);
+
+  // Only allow months present in allMonths
+  const filterDate = useCallback(
+    (date) => monthSet.has(toMonthStr(date)),
+    [monthSet],
+  );
 
   // detect active preset
   const activePreset = useMemo(() => {
@@ -91,6 +109,16 @@ export default function DateRangePicker({
       onToChange(p.to);
     },
     [onFromChange, onToChange],
+  );
+
+  const handleFromChange = useCallback(
+    (date) => { if (date) onFromChange(toMonthStr(date)); },
+    [onFromChange],
+  );
+
+  const handleToChange = useCallback(
+    (date) => { if (date) onToChange(toMonthStr(date)); },
+    [onToChange],
   );
 
   if (!months.length) return null;
@@ -120,34 +148,32 @@ export default function DateRangePicker({
       <div className="drp-selects">
         <label className="drp-field">
           <span className="drp-field-label">დან</span>
-          <select
-            value={from}
-            onChange={(e) => onFromChange(e.target.value)}
+          <DatePicker
+            selected={startDate}
+            onChange={handleFromChange}
+            dateFormat="MMM yyyy"
+            showMonthYearPicker
+            minDate={minDate}
+            maxDate={maxDate}
+            filterDate={filterDate}
             className="drp-select"
-          >
-            <option value="">პირველი</option>
-            {months.map((m) => (
-              <option key={m} value={m}>
-                {monthLabel(m)}
-              </option>
-            ))}
-          </select>
+            calendarClassName="drp-rdp"
+          />
         </label>
         <span className="drp-sep">—</span>
         <label className="drp-field">
           <span className="drp-field-label">მდე</span>
-          <select
-            value={to}
-            onChange={(e) => onToChange(e.target.value)}
+          <DatePicker
+            selected={endDate}
+            onChange={handleToChange}
+            dateFormat="MMM yyyy"
+            showMonthYearPicker
+            minDate={minDate}
+            maxDate={maxDate}
+            filterDate={filterDate}
             className="drp-select"
-          >
-            <option value="">ბოლო</option>
-            {months.map((m) => (
-              <option key={m} value={m}>
-                {monthLabel(m)}
-              </option>
-            ))}
-          </select>
+            calendarClassName="drp-rdp"
+          />
         </label>
         <span className="drp-count">{selectedCount} თვე</span>
       </div>
