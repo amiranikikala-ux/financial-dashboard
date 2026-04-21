@@ -20,6 +20,28 @@ download/
 .DS_Store
 Thumbs.db
 
+# Environment secrets (API keys, tokens) — NEVER commit real .env files!
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+
+# Extra belt-and-suspenders: any accidentally-stored key/token files
+claude_key*
+telegram_token*
+*_key.txt
+*_token.txt
+*.pem
+*.key
+secrets/
+.secrets/
+
+# AI Advisor local storage (Phase 1+)
+ai_memory.db
+ai_vectors/
+logs/
+
 # ფინანსური წყარო და ხელით ჟურნალი — Git-ში არა (კონფიდენციალურობა; ფაილები ლოკალურად რჩება)
 Financial_Analysis/**/*.xlsx
 Financial_Analysis/**/*.xls
@@ -36,6 +58,8 @@ Financial_Analysis/გაყიდული პროდუქტები ს�
 # Debug / scratch / temp ფაილები (სამუშაო, არა საბოლოო)
 debug_*.py
 scratch_read*.py
+_scratch_*.py
+_scratch_*.ps1
 temp.json
 headers_log.txt
 headers_output.json
