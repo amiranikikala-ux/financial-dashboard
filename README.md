@@ -1,5 +1,13 @@
 # AI აგენტი — ფინანსური დეშბორდი
 
+**პროექტის სტატუსი:** Phase 4A CLOSED (2026-04-21) — AI Business Advisor ცოცხლად. შემდეგი: Phase 4B prompt tuning (planned).
+**დოკუმენტები:**
+- [`PHASE_STATUS_MATRIX.md`](PHASE_STATUS_MATRIX.md) — ცხრილი ყველა phase-ის მდგომარეობით
+- [`AI_GENIUS_PARTNER_PLAN.md`](AI_GENIUS_PARTNER_PLAN.md) v2.1 — active master roadmap
+- [`PLAN.md`](PLAN.md) — live status tracker
+- [`CONTEXT_HANDOFF.md`](CONTEXT_HANDOFF.md) — ახალი ჩატისთვის მოკლე brief
+- [`AGENTS.md`](AGENTS.md) — agent work rules
+
 ## წყარო Excel-ები (`Financial_Analysis/`)
 
 პროექტის **ფესვიდან** (საქაღალდე, სადაც `generate_dashboard_data.py` ზის):

@@ -1,131 +1,55 @@
 # Financial Dashboard — Agent Instructions
 
 ## სესიის დაწყება
-1. **წაიკითხე HANDOFF.md** — პროექტის სტატუსი, ბოლო სესიის ცვლილებები, ფაილების რუკა, შემდეგი ნაბიჯები
-2. **წაიკითხე PLAN.md** — რა ფაზებია დასრულებული, რა რჩება
-3. **გაუშვი ტესტები**: `python -m pytest tests/ -q` (125 pass expected)
-4. **გაუშვი ბილდი**: `cd rs-dashboard && npx vite build` (0 errors expected)
+1. ჯერ წაიკითხე `PLAN.md`
+2. მერე წაიკითხე root `AGENTS.md`
+3. შემდეგ წაიკითხე `CONTEXT_HANDOFF.md`
+4. `HANDOFF.md` გახსენი მხოლოდ თუ საჭიროა ბოლო ცვლილებები, ზუსტი ისტორია, file-level evidence ან runtime caveat-ები
 5. მომხმარებლის ენა: **ქართული**, კოდი + commit: **ინგლისური**
+6. onboarding-ის გამო თავიდანვე ნუ უშვებ ყველა ტესტს ან build-ს; გაუშვი მხოლოდ task-ის საჭიროების მიხედვით
 
 ## Stack
 - **Backend**: Python 3 + FastAPI + pandas + openpyxl + APScheduler
-- **Frontend**: React 19 + Vite, 14 lazy-loaded tabs, Recharts charts, xlsx export
-- **Data**: Excel → `generate_dashboard_data.py` → `data.json` → `/api/data`
-- **Server**: `server.py` (:8000), dev UI: `:5173`
+- **Frontend**: React + Vite
+- **Data flow**: Excel -> `generate_dashboard_data.py` -> `data.json` -> `/api/data`
+- **Server/UI**: `server.py` (`:8000`), `rs-dashboard` (`:5173` dev)
 
-## წესები
-- სესიის ბოლოს **აუცილებლად** განაახლე HANDOFF.md სესიის ნომრით და ცვლილებების ჩამონათვალით
+## სამუშაო წესები
+- `HANDOFF.md` განაახლე მხოლოდ მაშინ, როცა რეალურად შეიცვალა სტატუსი, caveat-ი ან ბოლო სესიის summary
+- `PLAN.md` განაახლე მხოლოდ მაღალი დონის სტატუსის ცვლილებისას
 - ტესტები არ წაშალო/შეასუსტო მომხმარებლის მკაფიო მითითების გარეშე
-- ყველა ახალი ფუნქციის შემდეგ: ბილდის ვერიფიკაცია (`npx vite build`)
+- build/test ვერიფიკაცია გააკეთე მხოლოდ შესაბამისი ცვლილების შემდეგ, არა onboarding-ის გამო
 
-## ⚠️ კონტექსტის მართვა (სავალდებულო)
-როცა ხვდები რომ ჩატი ხანგრძლივია (ბევრი tool call, ბევრი ფაილის კითხვა/რედაქტირება, 15+ მოქმედება):
-1. **შეაჩერე მიმდინარე მუშაობა** მიმდინარე ნაბიჯის დასრულების შემდეგ
-2. **გაუშვი ტესტები და ბილდი** — დარწმუნდი რომ კოდი მუშა მდგომარეობაშია
-3. **განაახლე HANDOFF.md** — სესიის ნომერი, რა გაკეთდა, რა დარჩა, ფაილების რუკა
-4. **განაახლე PLAN.md** — თუ ფაზის სტატუსი შეიცვალა
-5. **შეინახე Memory** — სესიის შეჯამება
-6. **აცნობე მომხმარებელს**: "⚠️ კონტექსტი ივსება. HANDOFF.md განახლებულია. გთხოვ გახსენი ახალი ჩატი და დაწერე 'განაგრძე'."
-7. **ნუ დაიწყებ ახალ თასქს** — მხოლოდ handoff მოამზადე
+## მომხმარებელთან საუბრის ენა (CRITICAL)
+- მომხმარებელი **არ არის პროგრამისტი** — plain ქართული, არასდროს technical jargon ახსნის გარეშე
+- ფაილის/ფუნქციის სახელი ახსენე მხოლოდ მაშინ, როცა user თვითონ ცალკე იხსენიებს
+- ყოველი feature ახსენი **სამ ფენაში**: რას აკეთებს + რატომ გჭირდება + შედეგი რა იქნება
+- ტექნიკური ცნება (pipeline, tool, cache, deploy, commit, embedding, RAG, schema, endpoint) — ჯერ მაგალითი/ახსნა, მერე სახელი (optional)
+- ცხრილი / bullet list / emoji — თვალსაჩინოდ
+- კოდის block გამოიყენე მხოლოდ: (ა) user-მა თვითონ იხსენია, (ბ) business value ცხადი diff-ია
+- გაგზავნის წინ თავი ჰკითხე: **"თუ user პროგრამისტი არ იყო, გასაგები იქნებოდა?"** — თუ არა, გადაწერე
 
-<!-- gitnexus:start -->
-# GitNexus — Code Intelligence
+## კონტექსტის მართვა
+- თუ ჩატი იზრდება, დაასრულე მიმდინარე ნაბიჯი და მოამზადე მოკლე handoff
+- ახალი ჩატისთვის default წყარო იყოს `CONTEXT_HANDOFF.md`; ნუ აგროვებ ვრცელ session history-ს
+- ახალი task-ის დაწყებამდე ნუ კითხულობ ზედმეტ ფაილებს, თუ მოთხოვნა ამას არ საჭიროებს
 
-This project is indexed by GitNexus as **financial-dashboard** (992 symbols, 2855 relationships, 78 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+## `მოამზადე ახალი ჩატისთვის` — სავალდებულო contract
+- ჯერ განაახლე `CONTEXT_HANDOFF.md`
+- მერე ჩატში დააბრუნე იგივე მოკლე copy/paste brief
+- brief-ში აუცილებლად იყოს:
+  - canonical project path
+  - active packet/status
+  - ამ ჩატში რა შეიცვალა
+  - verified facts only
+  - do-not-touch rules
+  - next recommended step
+  - authoritative files
+  - verification pending / not run
+- სრული ისტორია და დეტალური evidence დატოვე `HANDOFF.md`-ში
 
-> If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
-
-## Always Do
-
-- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
-- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
-- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
-- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
-
-## When Debugging
-
-1. `gitnexus_query({query: "<error or symptom>"})` — find execution flows related to the issue
-2. `gitnexus_context({name: "<suspect function>"})` — see all callers, callees, and process participation
-3. `READ gitnexus://repo/financial-dashboard/process/{processName}` — trace the full execution flow step by step
-4. For regressions: `gitnexus_detect_changes({scope: "compare", base_ref: "main"})` — see what your branch changed
-
-## When Refactoring
-
-- **Renaming**: MUST use `gitnexus_rename({symbol_name: "old", new_name: "new", dry_run: true})` first. Review the preview — graph edits are safe, text_search edits need manual review. Then run with `dry_run: false`.
-- **Extracting/Splitting**: MUST run `gitnexus_context({name: "target"})` to see all incoming/outgoing refs, then `gitnexus_impact({target: "target", direction: "upstream"})` to find all external callers before moving code.
-- After any refactor: run `gitnexus_detect_changes({scope: "all"})` to verify only expected files changed.
-
-## Never Do
-
-- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
-- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
-- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
-- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
-
-## Tools Quick Reference
-
-| Tool | When to use | Command |
-|------|-------------|---------|
-| `query` | Find code by concept | `gitnexus_query({query: "auth validation"})` |
-| `context` | 360-degree view of one symbol | `gitnexus_context({name: "validateUser"})` |
-| `impact` | Blast radius before editing | `gitnexus_impact({target: "X", direction: "upstream"})` |
-| `detect_changes` | Pre-commit scope check | `gitnexus_detect_changes({scope: "staged"})` |
-| `rename` | Safe multi-file rename | `gitnexus_rename({symbol_name: "old", new_name: "new", dry_run: true})` |
-| `cypher` | Custom graph queries | `gitnexus_cypher({query: "MATCH ..."})` |
-
-## Impact Risk Levels
-
-| Depth | Meaning | Action |
-|-------|---------|--------|
-| d=1 | WILL BREAK — direct callers/importers | MUST update these |
-| d=2 | LIKELY AFFECTED — indirect deps | Should test |
-| d=3 | MAY NEED TESTING — transitive | Test if critical path |
-
-## Resources
-
-| Resource | Use for |
-|----------|---------|
-| `gitnexus://repo/financial-dashboard/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/financial-dashboard/clusters` | All functional areas |
-| `gitnexus://repo/financial-dashboard/processes` | All execution flows |
-| `gitnexus://repo/financial-dashboard/process/{name}` | Step-by-step execution trace |
-
-## Self-Check Before Finishing
-
-Before completing any code modification task, verify:
-1. `gitnexus_impact` was run for all modified symbols
-2. No HIGH/CRITICAL risk warnings were ignored
-3. `gitnexus_detect_changes()` confirms changes match expected scope
-4. All d=1 (WILL BREAK) dependents were updated
-
-## Keeping the Index Fresh
-
-After committing code changes, the GitNexus index becomes stale. Re-run analyze to update it:
-
-```bash
-npx gitnexus analyze
-```
-
-If the index previously included embeddings, preserve them by adding `--embeddings`:
-
-```bash
-npx gitnexus analyze --embeddings
-```
-
-To check whether embeddings exist, inspect `.gitnexus/meta.json` — the `stats.embeddings` field shows the count (0 means no embeddings). **Running analyze without `--embeddings` will delete any previously generated embeddings.**
-
-> Claude Code users: A PostToolUse hook handles this automatically after `git commit` and `git merge`.
-
-## CLI
-
-| Task | Read this skill file |
-|------|---------------------|
-| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
-
-<!-- gitnexus:end -->
+## GitNexus — მოკლე წესები
+- უცნობ კოდზე navigation-ისთვის გამოიყენე `query` / `context`
+- shared symbol-ის შეცვლამდე შეამოწმე impact
+- commit-მდე გადაამოწმე ცვლილებების scope
+- თუ index stale-ა, მხოლოდ მაშინ განაახლე
