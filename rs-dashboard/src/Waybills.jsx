@@ -16,12 +16,21 @@ function getWaybillAmount(wb) {
   return Number.isFinite(nominal) ? nominal : 0;
 }
 
-export default function Waybills({ formatNumber, reloadKey }) {
+const COUNT = new Intl.NumberFormat('ka-GE', {
+  maximumFractionDigits: 0,
+});
+
+function formatCount(value) {
+  return COUNT.format(Number(value) || 0);
+}
+
+export default function Waybills({ formatNumber, reloadKey, fromDate, fromTime, toDate, toTime }) {
   const [searchName, setSearchName] = useState('');
   const [waybillSortKey, setWaybillSortKey] = useState('amount_asc');
   const [data, setData] = useState({ waybills: [], waybills_summary: null, response_meta: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const hasActivePeriodFilter = Boolean(fromDate || toDate);
 
   useEffect(() => {
     let active = true;
@@ -41,6 +50,12 @@ export default function Waybills({ formatNumber, reloadKey }) {
       });
       const needle = searchName.trim();
       if (needle) params.set('q', needle);
+      if (hasActivePeriodFilter) {
+        params.set('from_date', fromDate || toDate || '');
+        params.set('to_date', toDate || fromDate || '');
+        params.set('from_time', fromTime || '00:00');
+        params.set('to_time', toTime || '23:59');
+      }
 
       fetchApiJson(`/api/data?${params.toString()}`, { signal: controller.signal })
         .then((json) => {
@@ -65,13 +80,19 @@ export default function Waybills({ formatNumber, reloadKey }) {
       clearTimeout(handle);
       controller.abort();
     };
-  }, [reloadKey, searchName, waybillSortKey]);
+  }, [fromDate, fromTime, hasActivePeriodFilter, reloadKey, searchName, toDate, toTime, waybillSortKey]);
 
   const filteredWaybills = useMemo(() => {
     return Array.isArray(data.waybills) ? data.waybills : [];
   }, [data.waybills]);
 
   const waybillsSummary = data.waybills_summary || {};
+  const statusBreakdown = Array.isArray(waybillsSummary.status_breakdown)
+    ? waybillsSummary.status_breakdown
+    : [];
+  const periodMeta = waybillsSummary.period_meta || {};
+  const periodLabel = periodMeta.label_ka || (hasActivePeriodFilter ? 'არჩეული პერიოდი' : 'პერიოდი');
+  const periodCaveat = data.response_meta?.period_caveat_ka || '';
 
   if (error) {
     return (
@@ -126,8 +147,33 @@ export default function Waybills({ formatNumber, reloadKey }) {
       {/* Tab Hero */}
       <div className="tab-hero">
         <span className="tab-hero-title">📄 ზედნადებები</span>
-        <span className="tab-hero-desc">RS ზედნადებების დეტალური სია</span>
+        <span className="tab-hero-desc">
+          RS ზედნადებების დეტალური სია · {periodMeta.applied ? periodLabel : 'ყველა პერიოდი'}
+        </span>
       </div>
+
+      <div className="controls controls-filters" style={{ marginTop: 12, marginBottom: 12 }}>
+        <span className="badge muted">პერიოდი: {periodMeta.applied ? periodLabel : 'ყველა პერიოდი'}</span>
+        <span className="badge muted">ჩანაწერი: {formatCount(waybillsSummary.total_count || filteredWaybills.length)}</span>
+        <span className="badge muted">ნომინალური: {formatNumber(waybillsSummary.total_nominal_amount || 0)}</span>
+        <span className="badge muted">ეფექტური: {formatNumber(waybillsSummary.total_effective_amount || 0)}</span>
+      </div>
+
+      {statusBreakdown.length > 0 && (
+        <div className="controls controls-filters" style={{ marginTop: -4, marginBottom: 16 }}>
+          {statusBreakdown.map((item) => (
+            <span key={`status-${item.status || 'unknown'}`} className="badge muted">
+              {item.status || 'უცნობი'}: {formatCount(item.row_count)}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {periodCaveat && (
+        <div className="trust-banner-sub trust-banner-sub--warn">
+          {periodCaveat}
+        </div>
+      )}
 
       <div className="table-wrapper table-premium">
         <table>
@@ -178,15 +224,17 @@ export default function Waybills({ formatNumber, reloadKey }) {
             {waybillsSummary.has_more && (
               <tr>
                 <td colSpan="5" style={{ textAlign: 'center', color: 'var(--warning)' }}>
-                  ჩაიტვირთა მხოლოდ პირველი {formatNumber(waybillsSummary.returned_count || filteredWaybills.length)} ჩანაწერი
-                  {' '}({formatNumber(waybillsSummary.total_count || filteredWaybills.length)} შედეგიდან)
+                  ჩაიტვირთა მხოლოდ პირველი {formatCount(waybillsSummary.returned_count || filteredWaybills.length)} ჩანაწერი
+                  {' '}({formatCount(waybillsSummary.total_count || filteredWaybills.length)} შედეგიდან)
                 </td>
               </tr>
             )}
             {filteredWaybills.length === 0 && (
               <tr>
                 <td colSpan="5" style={{ textAlign: 'center' }}>
-                  მონაცემები არ მოიძებნა
+                  {periodMeta.applied
+                    ? `არჩეულ პერიოდში ჩანაწერები ვერ მოიძებნა${searchName.trim() ? ' მოცემული ძებნისთვის' : ''}`
+                    : 'მონაცემები არ მოიძებნა'}
                 </td>
               </tr>
             )}

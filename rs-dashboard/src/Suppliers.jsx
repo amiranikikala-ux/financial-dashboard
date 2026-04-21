@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { STORAGE_KEY, extractTaxId, mergeSupplier } from './financeMerge.js';
+import SupplierConcentrationWidget from './components/SupplierConcentrationWidget.jsx';
 
 const SUPPLIER_SORT_OPTIONS = [
   { value: 'debt_asc', label: 'დავალიანება ზრდადობით' },
@@ -14,9 +15,12 @@ async function loadXlsxModule() {
 export default function Suppliers({
   suppliers,
   localPayments,
+  meta,
   persistLocalPayments,
   formatNumber,
   onSupplierClick,
+  responseMeta,
+  supplierConcentration,
 }) {
   const [searchName, setSearchName] = useState('');
   const [supplierSortKey, setSupplierSortKey] = useState('debt_asc');
@@ -61,6 +65,9 @@ export default function Suppliers({
   }, [suppliers, nameNeedle, supplierSortKey, getDisplay]);
 
   const payVal = parseMoney(payAmount);
+  const periodMeta = meta?.period && typeof meta.period === 'object' ? meta.period : {};
+  const periodLabel = periodMeta.label_ka || (periodMeta.applied ? 'არჩეული პერიოდი' : 'ყველა პერიოდი');
+  const periodCaveat = responseMeta?.period_caveat_ka || meta?.period_caveat_ka || '';
   const canRecord =
     filteredSuppliers.length === 1 &&
     payVal > 0 &&
@@ -124,6 +131,7 @@ export default function Suppliers({
 
   return (
     <>
+      <SupplierConcentrationWidget payload={supplierConcentration} />
       <div className="controls controls-filters">
         <label className="filter-field">
           <span className="filter-label">კომპანია</span>
@@ -226,7 +234,12 @@ export default function Suppliers({
       {/* Tab Hero */}
       <div className="tab-hero">
         <span className="tab-hero-title">🏢 მომწოდებლები</span>
-        <span className="tab-hero-desc">RS ზედნადებების აგრეგაცია, ვალი და გადახდა</span>
+        <span className="tab-hero-desc">RS ზედნადებების აგრეგაცია, ვალი და გადახდა · {periodLabel}</span>
+      </div>
+
+      <div className="controls controls-filters" style={{ marginTop: 12, marginBottom: 12 }}>
+        <span className="badge muted">პერიოდი: {periodLabel}</span>
+        <span className="badge muted">მომწოდებელი: {filteredSuppliers.length}</span>
       </div>
 
       <div className="local-pay-banner local-pay-banner--short" role="status">
@@ -234,6 +247,12 @@ export default function Suppliers({
         journal ახლა ცალ-ცალკეა ნაჩვენები. სამუდამოდ: <strong>CSV ჩამოტვირთვა</strong> და ჩაამატე
         ფაილში, შემდეგ გენერაცია.
       </div>
+
+      {periodCaveat ? (
+        <div className="trust-banner-sub trust-banner-sub--warn">
+          {periodCaveat}
+        </div>
+      ) : null}
 
       {payVal > 0 && filteredSuppliers.length > 1 && nameNeedle ? (
         <div className="filter-warning" role="status">
@@ -313,7 +332,7 @@ export default function Suppliers({
             {filteredSuppliers.length === 0 && (
               <tr>
                 <td colSpan="11" style={{ textAlign: 'center' }}>
-                  მონაცემები არ მოიძებნა
+                  {periodMeta.applied ? 'არჩეულ პერიოდში მონაცემები არ მოიძებნა' : 'მონაცემები არ მოიძებნა'}
                 </td>
               </tr>
             )}

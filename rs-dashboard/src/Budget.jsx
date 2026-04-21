@@ -83,16 +83,31 @@ export default function Budget({ budget }) {
   const ytd = useMemo(() => budget?.ytd_summary || {}, [budget]);
 
   const currentYear = String(ytd.current_year || new Date().getFullYear());
+  const monthlyYears = useMemo(
+    () => Array.from(new Set(monthly.map((m) => String(m.month || '').slice(0, 4)).filter(Boolean))).sort(),
+    [monthly],
+  );
 
   const allYears = useMemo(
     () => Object.keys(annual).sort(),
     [annual],
   );
 
-  const [selectedYear, setSelectedYear] = useState(() => {
-    const years = Object.keys(annual).sort();
-    return years.includes(currentYear) ? currentYear : years[years.length - 1] || currentYear;
-  });
+  const preferredYear = useMemo(() => {
+    if (monthlyYears.includes(currentYear)) return currentYear;
+    if (monthlyYears.length > 0) return monthlyYears[monthlyYears.length - 1];
+    return allYears.includes(currentYear) ? currentYear : allYears[allYears.length - 1] || currentYear;
+  }, [allYears, currentYear, monthlyYears]);
+
+  const [selectedYearPreference, setSelectedYearPreference] = useState(preferredYear);
+
+  const selectedYear = useMemo(() => {
+    if (monthlyYears.includes(selectedYearPreference)) return selectedYearPreference;
+    if (!monthlyYears.length && allYears.includes(selectedYearPreference)) return selectedYearPreference;
+    return preferredYear;
+  }, [allYears, monthlyYears, preferredYear, selectedYearPreference]);
+
+  const selectableYears = monthlyYears.length > 0 ? monthlyYears : allYears;
 
   // all months for the selected year
   const yearMonthlyAll = useMemo(
@@ -108,23 +123,24 @@ export default function Budget({ budget }) {
   const [budgetFrom, setBudgetFrom] = useState('');
   const [budgetTo, setBudgetTo] = useState('');
 
-  // reset month filter when year changes
-  const [prevYear, setPrevYear] = useState(selectedYear);
-  if (selectedYear !== prevYear) {
-    setPrevYear(selectedYear);
+  const effectiveBudgetFrom = budgetFrom && yearMonthsList.includes(budgetFrom) ? budgetFrom : '';
+  const effectiveBudgetTo = budgetTo && yearMonthsList.includes(budgetTo) ? budgetTo : '';
+
+  const handleYearChange = (nextYear) => {
+    setSelectedYearPreference(nextYear);
     setBudgetFrom('');
     setBudgetTo('');
-  }
+  };
 
   const yearMonthly = useMemo(() => {
-    if (!budgetFrom && !budgetTo) return yearMonthlyAll;
-    const ef = budgetFrom || yearMonthsList[0] || '';
-    const et = budgetTo || yearMonthsList[yearMonthsList.length - 1] || '';
+    if (!effectiveBudgetFrom && !effectiveBudgetTo) return yearMonthlyAll;
+    const ef = effectiveBudgetFrom || yearMonthsList[0] || '';
+    const et = effectiveBudgetTo || yearMonthsList[yearMonthsList.length - 1] || '';
     return yearMonthlyAll.filter((m) => {
       const mo = m.month || '';
       return mo >= ef && mo <= et;
     });
-  }, [yearMonthlyAll, budgetFrom, budgetTo, yearMonthsList]);
+  }, [effectiveBudgetFrom, effectiveBudgetTo, yearMonthlyAll, yearMonthsList]);
 
   // chart data
   const chartData = useMemo(() => {
@@ -370,9 +386,9 @@ export default function Budget({ budget }) {
             <select
               className="pnl-month-select"
               value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
+              onChange={(e) => handleYearChange(e.target.value)}
             >
-              {allYears.map((yr) => (
+              {selectableYears.map((yr) => (
                 <option key={yr} value={yr}>
                   {yr}
                 </option>
@@ -382,8 +398,8 @@ export default function Budget({ budget }) {
         </div>
         <DateRangePicker
           allMonths={yearMonthsList}
-          from={budgetFrom}
-          to={budgetTo}
+          from={effectiveBudgetFrom}
+          to={effectiveBudgetTo}
           onFromChange={setBudgetFrom}
           onToChange={setBudgetTo}
           label={`${selectedYear} თვეები`}

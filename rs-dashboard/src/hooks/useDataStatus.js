@@ -22,6 +22,9 @@ export default function useDataStatus() {
   }, []);
 
   useEffect(() => {
+    // fetchStatus is async — setState happens after await, not synchronously in
+    // this effect body. The eslint rule can't see across the async boundary.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchStatus();
     const id = setInterval(fetchStatus, STATUS_POLL_MS);
     return () => clearInterval(id);

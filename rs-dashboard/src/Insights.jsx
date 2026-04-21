@@ -63,25 +63,49 @@ function AlertCard({ type, title, description, value }) {
   );
 }
 
-export default function Insights({ reloadKey }) {
+function buildCanonicalPeriodParams(fromDate, toDate, fromTime, toTime) {
+  const resolvedFromDate = fromDate || toDate;
+  const resolvedToDate = toDate || fromDate;
+  if (!resolvedFromDate && !resolvedToDate) return null;
+  return {
+    from_date: resolvedFromDate,
+    to_date: resolvedToDate,
+    from_time: fromTime || '00:00',
+    to_time: toTime || '23:59',
+  };
+}
+
+export default function Insights({ reloadKey, fromDate, fromTime, toDate, toTime }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [monthlyPnl, setMonthlyPnl] = useState([]);
   const [forecast, setForecast] = useState(null);
   const [ratios, setRatios] = useState(null);
+  const canonicalPeriodParams = useMemo(
+    () => buildCanonicalPeriodParams(fromDate, toDate, fromTime, toTime),
+    [fromDate, fromTime, toDate, toTime],
+  );
 
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
     const opts = { signal: controller.signal };
+    const pnlParams = new URLSearchParams({ tab: 'pnl_summary' });
+    const forecastParams = new URLSearchParams({ tab: 'forecast' });
+    if (canonicalPeriodParams) {
+      Object.entries(canonicalPeriodParams).forEach(([key, value]) => {
+        pnlParams.set(key, value);
+        forecastParams.set(key, value);
+      });
+    }
     setTimeout(() => {
       if (!active) return;
       setLoading(true);
       setError(null);
     }, 0);
     Promise.all([
-      fetchApiJson('/api/data?tab=pnl_summary', opts),
-      fetchApiJson('/api/data?tab=forecast', opts),
+      fetchApiJson(`/api/data?${pnlParams.toString()}`, opts),
+      fetchApiJson(`/api/data?${forecastParams.toString()}`, opts),
       fetchApiJson('/api/data?tab=ratios', opts),
     ])
       .then(([pnlJson, forecastJson, ratiosJson]) => {
@@ -99,7 +123,7 @@ export default function Insights({ reloadKey }) {
       });
 
     return () => { active = false; controller.abort(); };
-  }, [reloadKey]);
+  }, [canonicalPeriodParams, reloadKey]);
 
   // ---- COMPUTED DATA ----
 

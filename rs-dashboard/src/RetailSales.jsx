@@ -33,7 +33,7 @@ function renderDateRange(range) {
   return `${min} → ${max}`;
 }
 
-export default function RetailSales({ retailSales }) {
+export default function RetailSales({ retailSales, responseMeta }) {
   const summary = retailSales && typeof retailSales === 'object' ? retailSales : null;
 
   if (!summary) {
@@ -51,6 +51,9 @@ export default function RetailSales({ retailSales }) {
   }
 
   const overall = summary.overall || {};
+  const periodMeta = summary.period_meta && typeof summary.period_meta === 'object'
+    ? summary.period_meta
+    : {};
   const byObject = asArray(summary.by_object);
   const byMonth = asArray(summary.by_month);
   const topCategoriesByProfit = asArray(summary.top_categories_by_profit).slice(0, 12);
@@ -65,17 +68,30 @@ export default function RetailSales({ retailSales }) {
   const productsShown = asArray(summary.by_product).length;
   const hasRows =
     toNum(overall.row_count) > 0 || byObject.length > 0 || byMonth.length > 0;
+  const periodLabel = periodMeta.label_ka || (periodMeta.applied ? 'არჩეული პერიოდი' : 'ყველა პერიოდი');
+  const periodCaveat = responseMeta?.period_caveat_ka || '';
 
   if (!hasRows) {
     return (
       <div className="cashflow-page pnl-empty">
         <div className="kpi-card" style={{ maxWidth: 560, margin: '48px auto', textAlign: 'center' }}>
-          <div className="kpi-label">Retail Sales წყარო ცარიელია</div>
-          <div className="kpi-sub" style={{ marginTop: 10 }}>
-            გადაამოწმე ფაილები:
+          <div className="kpi-label">
+            {periodMeta.applied ? 'არჩეულ პერიოდში Retail Sales არ მოიძებნა' : 'Retail Sales წყარო ცარიელია'}
           </div>
-          <code className="pnl-code-hint">Financial_Analysis/გაყიდული პროდუქტები სოფ დვაბზუ/*.xlsx</code>
-          <code className="pnl-code-hint">Financial_Analysis/გაყიდული პროდუქტები სოფ ოზურგეთი/*.xlsx</code>
+          <div className="kpi-sub" style={{ marginTop: 10 }}>
+            {periodMeta.applied ? `ფილტრი: ${periodLabel}` : 'გადაამოწმე ფაილები:'}
+          </div>
+          {periodMeta.applied ? (
+            <div className="chart-desc" style={{ marginTop: 12 }}>
+              სულ ნანახი: {fmtInt(periodMeta.total_rows_seen)} · დამთხვეული: {fmtInt(periodMeta.matched_rows)}
+            </div>
+          ) : (
+            <>
+              <code className="pnl-code-hint">Financial_Analysis/გაყიდული პროდუქტები სოფ დვაბზუ/*.xlsx</code>
+              <code className="pnl-code-hint">Financial_Analysis/გაყიდული პროდუქტები სოფ ოზურგეთი/*.xlsx</code>
+            </>
+          )}
+          {periodCaveat ? <div className="chart-desc" style={{ marginTop: 12 }}>{periodCaveat}</div> : null}
         </div>
       </div>
     );
@@ -114,6 +130,21 @@ export default function RetailSales({ retailSales }) {
           ]}
         />
       </div>
+
+      <div className="controls controls-filters" style={{ marginTop: 12, marginBottom: 12 }}>
+        <span className="badge muted">პერიოდი: {periodMeta.applied ? periodLabel : 'ყველა პერიოდი'}</span>
+        <span className="badge muted">ნანახი ხაზები: {fmtInt(periodMeta.total_rows_seen)}</span>
+        <span className="badge muted">დამთხვეული: {fmtInt(periodMeta.matched_rows)}</span>
+        {toNum(periodMeta.excluded_unparseable_count) > 0 && (
+          <span className="badge conf-low">ვერ დაიპარსა: {fmtInt(periodMeta.excluded_unparseable_count)}</span>
+        )}
+      </div>
+
+      {periodCaveat ? (
+        <div className="trust-banner-sub trust-banner-sub--warn">
+          {periodCaveat}
+        </div>
+      ) : null}
 
       <div className="local-pay-banner imported-products-reference-note" role="note">
         Reference-only წყაროა retail-sales export-იდან. ეს ბლოკი არ ერთვება supplier debt/AP,

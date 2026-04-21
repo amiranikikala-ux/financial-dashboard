@@ -64,7 +64,19 @@ async function loadXlsxModule() {
   return xlsxModule.default || xlsxModule;
 }
 
-export default function Cashflow({ data, reloadKey, formatNumber }) {
+function buildCanonicalPeriodParams(fromDate, toDate, fromTime, toTime) {
+  const resolvedFromDate = fromDate || toDate;
+  const resolvedToDate = toDate || fromDate;
+  if (!resolvedFromDate && !resolvedToDate) return null;
+  return {
+    from_date: resolvedFromDate,
+    to_date: resolvedToDate,
+    from_time: fromTime || '00:00',
+    to_time: toTime || '23:59',
+  };
+}
+
+export default function Cashflow({ data, reloadKey, formatNumber, fromDate, fromTime, toDate, toTime }) {
   const [showPosDailyTable, setShowPosDailyTable] = useState(false);
   const [showSalaryBreakdown, setShowSalaryBreakdown] = useState(false);
   const [showUnmatchedBankDetail, setShowUnmatchedBankDetail] = useState(false);
@@ -78,6 +90,19 @@ export default function Cashflow({ data, reloadKey, formatNumber }) {
     error: '',
     loading: false,
   });
+
+  const canonicalPeriodParams = useMemo(
+    () => buildCanonicalPeriodParams(fromDate, toDate, fromTime, toTime),
+    [fromDate, fromTime, toDate, toTime],
+  );
+  const canonicalPeriodQueryString = useMemo(() => {
+    if (!canonicalPeriodParams) return '';
+    const params = new URLSearchParams();
+    Object.entries(canonicalPeriodParams).forEach(([key, value]) => {
+      params.set(key, value);
+    });
+    return params.toString();
+  }, [canonicalPeriodParams]);
   const [cashflowBankUnmatchedDetail, setCashflowBankUnmatchedDetail] = useState({
     key: '',
     detail: null,
@@ -85,7 +110,9 @@ export default function Cashflow({ data, reloadKey, formatNumber }) {
     loading: false,
   });
 
-  const cashflowDetailKey = `cashflow:${reloadKey}`;
+  const cashflowDetailKey = canonicalPeriodQueryString
+    ? `cashflow:${reloadKey}:${canonicalPeriodQueryString}`
+    : `cashflow:${reloadKey}`;
 
   useEffect(() => {
     if (!showTbcExpenseDetailPanel) return undefined;
@@ -94,7 +121,14 @@ export default function Cashflow({ data, reloadKey, formatNumber }) {
     let active = true;
     const controller = new AbortController();
 
-    fetchApiJson('/api/data?tab=cashflow_tbc_expenses_detail', { signal: controller.signal })
+    const params = new URLSearchParams({ tab: 'cashflow_tbc_expenses_detail' });
+    if (canonicalPeriodParams) {
+      Object.entries(canonicalPeriodParams).forEach(([key, value]) => {
+        params.set(key, value);
+      });
+    }
+
+    fetchApiJson(`/api/data?${params.toString()}`, { signal: controller.signal })
       .then((json) => {
         if (!active) return;
         setCashflowTbcExpensesDetail({
@@ -119,7 +153,7 @@ export default function Cashflow({ data, reloadKey, formatNumber }) {
       active = false;
       controller.abort();
     };
-  }, [cashflowDetailKey, cashflowTbcExpensesDetail.key, showTbcExpenseDetailPanel]);
+  }, [canonicalPeriodParams, cashflowDetailKey, cashflowTbcExpensesDetail.key, showTbcExpenseDetailPanel]);
 
   useEffect(() => {
     if (!showUnmatchedBankDetail) return undefined;
@@ -128,7 +162,14 @@ export default function Cashflow({ data, reloadKey, formatNumber }) {
     let active = true;
     const controller = new AbortController();
 
-    fetchApiJson('/api/data?tab=cashflow_bank_unmatched_detail', { signal: controller.signal })
+    const params = new URLSearchParams({ tab: 'cashflow_bank_unmatched_detail' });
+    if (canonicalPeriodParams) {
+      Object.entries(canonicalPeriodParams).forEach(([key, value]) => {
+        params.set(key, value);
+      });
+    }
+
+    fetchApiJson(`/api/data?${params.toString()}`, { signal: controller.signal })
       .then((json) => {
         if (!active) return;
         setCashflowBankUnmatchedDetail({
@@ -153,7 +194,7 @@ export default function Cashflow({ data, reloadKey, formatNumber }) {
       active = false;
       controller.abort();
     };
-  }, [cashflowBankUnmatchedDetail.key, cashflowDetailKey, showUnmatchedBankDetail]);
+  }, [canonicalPeriodParams, cashflowBankUnmatchedDetail.key, cashflowDetailKey, showUnmatchedBankDetail]);
 
   useEffect(() => {
     const raw = data.pos_terminal_income?.daily_summary;

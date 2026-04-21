@@ -21,6 +21,18 @@ async function loadXlsxModule() {
   return xlsxModule.default || xlsxModule;
 }
 
+function buildCanonicalPeriodParams(fromDate, toDate, fromTime, toTime) {
+  const resolvedFromDate = fromDate || toDate;
+  const resolvedToDate = toDate || fromDate;
+  if (!resolvedFromDate && !resolvedToDate) return null;
+  return {
+    from_date: resolvedFromDate,
+    to_date: resolvedToDate,
+    from_time: fromTime || '00:00',
+    to_time: toTime || '23:59',
+  };
+}
+
 function criteriaColor(score) {
   const s = Number(score) || 0;
   if (s >= 80) return '#22c55e';
@@ -95,9 +107,10 @@ function ExecKpiCard({ icon, label, value, sub, bottomColor, bgTint, className =
   );
 }
 
-export default function Executive({ executiveSummary }) {
+export default function Executive({ executiveSummary, fromDate, fromTime, toDate, toTime }) {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState(null);
+  const canonicalPeriodParams = buildCanonicalPeriodParams(fromDate, toDate, fromTime, toTime);
 
   const es = executiveSummary;
 
@@ -142,7 +155,13 @@ export default function Executive({ executiveSummary }) {
     setExporting(true);
     setExportError(null);
     try {
-      const res = await fetch('/api/data?tab=executive_export');
+      const params = new URLSearchParams({ tab: 'executive_export' });
+      if (canonicalPeriodParams) {
+        Object.entries(canonicalPeriodParams).forEach(([key, value]) => {
+          params.set(key, value);
+        });
+      }
+      const res = await fetch(`/api/data?${params.toString()}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const exportData = await res.json();
 
