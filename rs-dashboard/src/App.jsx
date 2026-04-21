@@ -10,8 +10,17 @@ import RefreshButton from './components/RefreshButton.jsx';
 import MobileNav from './components/MobileNav.jsx';
 import useDataStatus from './hooks/useDataStatus.js';
 import DateTimeCalendarPicker from './components/DateTimeCalendarPicker.jsx';
+// ChatAssistant is eager-loaded on purpose: it is a global FAB that must be
+// present on every tab and every route. Lazy-loading it previously caused
+// the FAB to occasionally disappear on tab switches (notably #suppliers)
+// when the Vite dev server re-evaluated the chunk and the Suspense boundary
+// rendered its `null` fallback. Keeping it in the main bundle guarantees
+// the button is always mounted from the first paint.
+import ChatAssistant from './components/ChatAssistant.jsx';
 
 const Analytics = lazy(() => import('./Analytics.jsx'));
+const DeadStock = lazy(() => import('./DeadStock.jsx'));
+const DebtPlan = lazy(() => import('./DebtPlan.jsx'));
 const PnL = lazy(() => import('./PnL.jsx'));
 const WorkingCapital = lazy(() => import('./WorkingCapital.jsx'));
 const Ratios = lazy(() => import('./Ratios.jsx'));
@@ -26,6 +35,33 @@ const SupplierModal = lazy(() => import('./SupplierModal.jsx'));
 const Suppliers = lazy(() => import('./Suppliers.jsx'));
 const Waybills = lazy(() => import('./Waybills.jsx'));
 const Insights = lazy(() => import('./Insights.jsx'));
+
+const SAFE_PERIOD_REQUEST_TABS = new Set([
+  'suppliers',
+  'retail_sales',
+  'imported_products',
+  'working_capital',
+  'forecast',
+  'budget',
+  'valuation',
+  'executive',
+  'pnl_summary',
+]);
+
+const PERIOD_PICKER_TABS = new Set([
+  'suppliers',
+  'waybills',
+  'retail_sales',
+  'imported_products',
+  'working_capital',
+  'forecast',
+  'budget',
+  'valuation',
+  'executive',
+  'insights',
+  'pnl',
+  'analytics',
+]);
 
 function App() {
   const [data, setData] = useState({ suppliers: [], waybills: [], waybills_summary: null, meta: {} });
@@ -44,6 +80,33 @@ function App() {
   const [globalToDate, setGlobalToDate] = useState('');
   const [globalFromTime, setGlobalFromTime] = useState('00:00');
   const [globalToTime, setGlobalToTime] = useState('23:59');
+
+  const buildCanonicalPeriodParams = useCallback((tabKey) => {
+    if (!SAFE_PERIOD_REQUEST_TABS.has(tabKey)) return null;
+    const fromDate = globalFromDate || globalToDate;
+    const toDate = globalToDate || globalFromDate;
+    if (!fromDate && !toDate) return null;
+    return {
+      from_date: fromDate,
+      to_date: toDate,
+      from_time: globalFromTime || '00:00',
+      to_time: globalToTime || '23:59',
+    };
+  }, [globalFromDate, globalFromTime, globalToDate, globalToTime]);
+
+  const appendCanonicalPeriodParams = useCallback((params, tabKey) => {
+    const periodParams = buildCanonicalPeriodParams(tabKey);
+    if (!periodParams) return params;
+    Object.entries(periodParams).forEach(([key, value]) => {
+      params.set(key, value);
+    });
+    return params;
+  }, [buildCanonicalPeriodParams]);
+
+  const importedProductsParams = new URLSearchParams({ tab: 'imported_products' });
+  appendCanonicalPeriodParams(importedProductsParams, 'imported_products');
+  const importedProductsQueryString = importedProductsParams.toString();
+  const importedProductsRequestKey = `${reloadKey}:${importedProductsQueryString}`;
 
   useEffect(() => {
     const POLLING_INTERVAL = 5 * 60 * 1000;
@@ -78,16 +141,18 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'imported_products' || activeTab === 'waybills' || activeTab === 'cashflow' || activeTab === 'insights') return undefined;
+    if (activeTab === 'imported_products' || activeTab === 'waybills' || activeTab === 'cashflow' || activeTab === 'insights' || activeTab === 'debt_plan') return undefined;
     let active = true;
-    const requestTab = activeTab === 'pnl' ? 'pnl_summary' : activeTab;
+    const requestTab = activeTab === 'pnl' ? 'pnl_summary' : activeTab === 'analytics' ? 'suppliers' : activeTab;
+    const params = new URLSearchParams({ tab: requestTab });
+    appendCanonicalPeriodParams(params, requestTab);
     setTimeout(() => {
       if (active) {
         setLoading(true);
         setError(null);
       }
     }, 0);
-    fetchApiJson(`/api/data?tab=${requestTab}`)
+    fetchApiJson(`/api/data?${params.toString()}`)
       .then((json) => {
         if (!active) return;
         setData({
@@ -108,13 +173,15 @@ function App() {
     return () => {
       active = false;
     };
-  }, [activeTab, reloadKey]);
+  }, [activeTab, appendCanonicalPeriodParams, reloadKey]);
 
   useEffect(() => {
     if (activeTab !== 'cashflow') return undefined;
 
     let active = true;
     const controller = new AbortController();
+    const params = new URLSearchParams({ tab: 'cashflow_summary' });
+    appendCanonicalPeriodParams(params, 'cashflow_summary');
     setTimeout(() => {
       if (active) {
         setLoading(true);
@@ -122,7 +189,7 @@ function App() {
       }
     }, 0);
 
-    fetchApiJson('/api/data?tab=cashflow_summary', { signal: controller.signal })
+    fetchApiJson(`/api/data?${params.toString()}`, { signal: controller.signal })
       .then((json) => {
         if (!active) return;
         setData({
@@ -145,11 +212,11 @@ function App() {
       active = false;
       controller.abort();
     };
-  }, [activeTab, reloadKey]);
+  }, [activeTab, appendCanonicalPeriodParams, reloadKey]);
 
   useEffect(() => {
     if (activeTab !== 'imported_products') return undefined;
-    if (importedProductsLoadedKey === reloadKey && importedProductsResponse) return undefined;
+    if (importedProductsLoadedKey === importedProductsRequestKey && importedProductsResponse) return undefined;
 
     let active = true;
     const controller = new AbortController();
@@ -159,11 +226,11 @@ function App() {
       setImportedProductsError(null);
     }, 0);
 
-    fetchApiJson('/api/data?tab=imported_products', { signal: controller.signal })
+    fetchApiJson(`/api/data?${importedProductsQueryString}`, { signal: controller.signal })
       .then((json) => {
         if (!active) return;
         setImportedProductsResponse(json);
-        setImportedProductsLoadedKey(reloadKey);
+        setImportedProductsLoadedKey(importedProductsRequestKey);
         setImportedProductsLoading(false);
       })
       .catch((err) => {
@@ -177,7 +244,7 @@ function App() {
       active = false;
       controller.abort();
     };
-  }, [activeTab, importedProductsLoadedKey, importedProductsResponse, reloadKey]);
+  }, [activeTab, importedProductsLoadedKey, importedProductsQueryString, importedProductsRequestKey, importedProductsResponse]);
 
   useEffect(() => {
     try {
@@ -208,15 +275,27 @@ function App() {
     );
   };
 
-  const expectedTab = activeTab === 'pnl' ? 'pnl_summary' : activeTab === 'cashflow' ? 'cashflow_summary' : activeTab;
+  const expectedTab = activeTab === 'pnl' ? 'pnl_summary' : activeTab === 'cashflow' ? 'cashflow_summary' : activeTab === 'analytics' ? 'suppliers' : activeTab;
   const currentResponseMeta = activeTab === 'imported_products'
     ? importedProductsResponse?.response_meta ?? null
     : data.response_meta?.tab === expectedTab
       ? data.response_meta
       : null;
   const currentMeta = activeTab === 'imported_products'
-    ? importedProductsResponse?.meta ?? data.meta
-    : data.meta;
+    ? importedProductsResponse?.meta ?? null
+    : data.response_meta?.tab === expectedTab
+      ? data.meta ?? null
+      : null;
+  const showPeriodPicker = PERIOD_PICKER_TABS.has(activeTab);
+  const pickerLabel = currentMeta?.data_period_label || ((globalFromDate || globalToDate) ? 'არჩეული პერიოდი' : 'პერიოდი');
+  const showHeaderPaymentStats = Boolean(
+    currentMeta
+    && (
+      currentMeta.strict_bank_only_total != null
+      || currentMeta.combined_supplier_paid_total != null
+      || currentMeta.suppliers_only_journal_or_bank != null
+    )
+  );
   const monthlyPnl = Array.isArray(data.monthly_pnl) ? data.monthly_pnl : [];
   const supplierAging = Array.isArray(data.supplier_aging) ? data.supplier_aging : [];
   const agingSummary = data.aging_summary || {};
@@ -230,7 +309,7 @@ function App() {
   const truthBoundarySummary = currentMeta?.truth_boundary_summary || {};
   const suppliersOnlyJournalOrBank = Number(currentMeta?.suppliers_only_journal_or_bank) || 0;
   const showGlobalError = Boolean(error) && activeTab !== 'imported_products' && activeTab !== 'waybills' && activeTab !== 'insights';
-  const showGlobalLoading = loading && activeTab !== 'imported_products' && activeTab !== 'waybills' && activeTab !== 'insights';
+  const showGlobalLoading = loading && activeTab !== 'imported_products' && activeTab !== 'waybills' && activeTab !== 'insights' && activeTab !== 'debt_plan';
   const tabSuspenseFallback = <div className="loading">იტვირთება გვერდი...</div>;
 
   return (
@@ -254,19 +333,20 @@ function App() {
             <div className="subtitle">ფინანსური ანალიზი და ზედნადებების კონტროლი</div>
           </div>
           <div className="header-center">
-            {currentMeta != null && (
-              <>
-                <DateTimeCalendarPicker
-                  fromDate={globalFromDate}
-                  fromTime={globalFromTime}
-                  toDate={globalToDate}
-                  toTime={globalToTime}
-                  onFromDateChange={setGlobalFromDate}
-                  onFromTimeChange={setGlobalFromTime}
-                  onToDateChange={setGlobalToDate}
-                  onToTimeChange={setGlobalToTime}
-                  label={currentMeta.data_period_label || 'პერიოდი'}
-                />
+            {showPeriodPicker && (
+              <DateTimeCalendarPicker
+                fromDate={globalFromDate}
+                fromTime={globalFromTime}
+                toDate={globalToDate}
+                toTime={globalToTime}
+                onFromDateChange={setGlobalFromDate}
+                onFromTimeChange={setGlobalFromTime}
+                onToDateChange={setGlobalToDate}
+                onToTimeChange={setGlobalToTime}
+                label={pickerLabel}
+              />
+            )}
+            {showHeaderPaymentStats && (
                 <span className="header-stats-compact">
                   ბანკი: <span className="stat-val">{formatNumber(currentMeta.strict_bank_only_total)}</span>
                   &nbsp;·&nbsp;გადახდილი: <span className="stat-val">{formatNumber(currentMeta.combined_supplier_paid_total)}</span>
@@ -274,7 +354,6 @@ function App() {
                     <>&nbsp;·&nbsp;RS-ის გარეშე: <span className="stat-val">{currentMeta.suppliers_only_journal_or_bank}</span></>
                   )}
                 </span>
-              </>
             )}
           </div>
           <div className="header-right-controls">
@@ -301,14 +380,24 @@ function App() {
             <Suppliers
               suppliers={data.suppliers}
               localPayments={localPayments}
+              meta={currentMeta}
               persistLocalPayments={persistLocalPayments}
               formatNumber={formatNumber}
               onSupplierClick={setSelectedSupplier}
+              responseMeta={currentResponseMeta}
+              supplierConcentration={data.supplier_concentration}
             />
           </Suspense>
         ) : activeTab === 'waybills' ? (
           <Suspense fallback={tabSuspenseFallback}>
-            <Waybills formatNumber={formatNumber} reloadKey={reloadKey} />
+            <Waybills
+              formatNumber={formatNumber}
+              reloadKey={reloadKey}
+              fromDate={globalFromDate}
+              fromTime={globalFromTime}
+              toDate={globalToDate}
+              toTime={globalToTime}
+            />
           </Suspense>
         ) : activeTab === 'analytics' ? (
           <Suspense fallback={tabSuspenseFallback}>
@@ -360,15 +449,33 @@ function App() {
           </Suspense>
         ) : activeTab === 'retail_sales' ? (
           <Suspense fallback={tabSuspenseFallback}>
-            <RetailSales retailSales={data.retail_sales} />
+            <RetailSales retailSales={data.retail_sales} responseMeta={currentResponseMeta} />
+          </Suspense>
+        ) : activeTab === 'dead_stock' ? (
+          <Suspense fallback={tabSuspenseFallback}>
+            <DeadStock deadStock={data.dead_stock_summary} />
+          </Suspense>
+        ) : activeTab === 'debt_plan' ? (
+          <Suspense fallback={tabSuspenseFallback}>
+            <DebtPlan />
           </Suspense>
         ) : activeTab === 'cashflow' ? (
           <Suspense fallback={tabSuspenseFallback}>
-            <Cashflow data={data} reloadKey={reloadKey} formatNumber={formatNumber} />
+            <Cashflow
+              data={data}
+              reloadKey={reloadKey}
+              formatNumber={formatNumber}
+            />
           </Suspense>
         ) : activeTab === 'insights' ? (
           <Suspense fallback={tabSuspenseFallback}>
-            <Insights reloadKey={reloadKey} />
+            <Insights
+              reloadKey={reloadKey}
+              fromDate={globalFromDate}
+              fromTime={globalFromTime}
+              toDate={globalToDate}
+              toTime={globalToTime}
+            />
           </Suspense>
         ) : null}
       </div>
@@ -385,6 +492,7 @@ function App() {
         </Suspense>
       )}
       <MobileNav activeTab={activeTab} onTabChange={setActiveTab} />
+      <ChatAssistant />
     </div>
   );
 }

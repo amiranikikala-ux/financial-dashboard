@@ -15,6 +15,8 @@ export const TAB_GROUPS = [
     items: [
       { id: 'imported_products', label: '📦 პროდუქცია' },
       { id: 'retail_sales', label: '🛒 გაყიდვები' },
+      { id: 'dead_stock', label: '💀 Dead Stock' },
+      { id: 'debt_plan', label: '📋 ვალების გეგმა' },
       { id: 'pnl', label: '📈 P&L' },
       { id: 'working_capital', label: '💰 კაპიტალი' },
       { id: 'ratios', label: '📐 კოეფ.' },
