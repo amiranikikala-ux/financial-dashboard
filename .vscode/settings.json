@@ -1,3 +1,4 @@
 {
-  "eslint.workingDirectories": ["rs-dashboard"]
+  "eslint.workingDirectories": ["rs-dashboard"],
+  "python.venvPath": "${workspaceFolder}/.."
 }

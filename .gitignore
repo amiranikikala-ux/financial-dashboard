@@ -68,4 +68,8 @@ $null
 # Tab-data არტეფაქტები (გენერირდება generate_dashboard_data.py-ით)
 rs-dashboard/public/tab-data/
 rs-dashboard/test-results/
+rs-dashboard/playwright-report/
 .gitnexus
+
+# Machine-specific Claude Code settings (per-user overrides)
+.claude/settings.local.json

@@ -1,0 +1,27 @@
+{
+  "mcpServers": {
+    "gitnexus": {
+      "command": "cmd",
+      "args": ["/c", "gitnexus", "mcp"]
+    },
+    "playwright": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@playwright/mcp@latest"]
+    },
+    "filesystem": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\financial-dashboard",
+        "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი"
+      ]
+    },
+    "github": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-github"]
+    }
+  }
+}
