@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import hmac
 import json
@@ -7,16 +8,19 @@ import sys
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from threading import Lock, Thread
+from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from backend_paths import get_dashboard_data_path, get_dashboard_tab_data_path
+from dashboard_pipeline.ai import AIAgent, AIAgentError, load_ai_config
+from dashboard_pipeline.ai.prompts import DEFAULT_MODE, SUPPORTED_MODES
 from dashboard_pipeline.api_contracts import (
     ALLOWED_TABS,
     DYNAMIC_SOURCE_ARTIFACTS,
@@ -260,6 +264,14 @@ def _load_cache_for_tab(tab):
     return load_full_data()
 
 
+def _has_dynamic_input_value(value):
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    return True
+
+
 def get_tab_payload(
     tab: str = "suppliers",
     tax_id: str | None = None,
@@ -269,6 +281,10 @@ def get_tab_payload(
     q: str | None = None,
     sort: str | None = None,
     limit: int | None = None,
+    from_date: str | None = None,
+    to_date: str | None = None,
+    from_time: str | None = None,
+    to_time: str | None = None,
 ):
     """
     Build the same JSON object as GET /api/data (synchronous, for scripts/tests).
@@ -280,7 +296,7 @@ def get_tab_payload(
         raise ValueError(f"Invalid tab '{tab}'. Allowed tabs: {allowed}")
 
     has_dynamic_inputs = any(
-        value is not None
+        _has_dynamic_input_value(value)
         for value in (
             tax_id,
             normalized_supplier,
@@ -289,6 +305,10 @@ def get_tab_payload(
             q,
             sort,
             limit,
+            from_date,
+            to_date,
+            from_time,
+            to_time,
         )
     )
 
@@ -309,6 +329,10 @@ def get_tab_payload(
         q=q,
         sort=sort,
         limit=limit,
+        from_date=from_date,
+        to_date=to_date,
+        from_time=from_time,
+        to_time=to_time,
     )
 
 
@@ -324,6 +348,10 @@ async def get_data(
     q: str | None = None,
     sort: str | None = None,
     limit: int | None = None,
+    from_date: str | None = None,
+    to_date: str | None = None,
+    from_time: str | None = None,
+    to_time: str | None = None,
 ):
     try:
         return get_tab_payload(
@@ -335,6 +363,10 @@ async def get_data(
             q=q,
             sort=sort,
             limit=limit,
+            from_date=from_date,
+            to_date=to_date,
+            from_time=from_time,
+            to_time=to_time,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -378,7 +410,461 @@ async def trigger_refresh(request: Request):
     return {"status": "started", "message": "Pipeline regeneration started in background"}
 
 
+# ---------------------------------------------------------------------------
+# Phase 4A — Debt Repayment Plan (Autonomous Strategist)
+#
+# Direct (non-AI) access to ``build_debt_repayment_plan`` for the dedicated
+# React page. The AI chat path still uses the tool via the Anthropic
+# tool-use loop; this endpoint is for the "Generate Plan" button on the
+# 📋 ვალების გეგმა tab — no LLM tokens consumed, sub-second response.
+# ---------------------------------------------------------------------------
+
+
+def _coerce_optional_int(value: Any, *, field: str) -> int | None:
+    """Accept int / numeric string / None. 400 on anything else."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):  # bool is int — exclude
+        raise HTTPException(
+            status_code=400,
+            detail=f"`{field}` must be integer or null, got bool.",
+        )
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value.strip())
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"`{field}` must be integer; got {value!r}.",
+            ) from exc
+    raise HTTPException(
+        status_code=400,
+        detail=f"`{field}` must be integer or null.",
+    )
+
+
+def _coerce_priority_list(value: Any) -> list[str] | None:
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise HTTPException(
+            status_code=400,
+            detail="`priority_suppliers` must be a list of strings or null.",
+        )
+    cleaned: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "`priority_suppliers` entries must all be strings; "
+                    f"got {type(item).__name__}."
+                ),
+            )
+        token = item.strip()
+        if token:
+            cleaned.append(token)
+    if len(cleaned) > 8:
+        raise HTTPException(
+            status_code=400,
+            detail="`priority_suppliers` is capped at 8 entries.",
+        )
+    return cleaned or None
+
+
+@app.post("/api/debt-plan")
+@limiter.limit("20/minute")
+async def post_debt_plan(request: Request, payload: dict = Body(default={})):
+    """Generate a debt repayment plan directly from ``data.json``.
+
+    Bypasses the AI tool-use loop — used by the React page's "Generate Plan"
+    button for fast, deterministic plan generation. The same
+    ``build_debt_repayment_plan`` helper powers the chat tool, so results
+    are identical regardless of path.
+
+    Request body (all optional):
+        {
+            "priority_suppliers": ["ვასაძე", "406181616"],  # names or tax_ids
+            "plan_duration_months": 2,   # 1-6, default 2
+            "max_priority_count": 5      # 2-8, default 5
+        }
+
+    Response: full plan dict (see ``build_debt_repayment_plan`` docstring).
+    """
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=400,
+            detail="Request body must be a JSON object.",
+        )
+
+    priority = _coerce_priority_list(payload.get("priority_suppliers"))
+    duration = _coerce_optional_int(
+        payload.get("plan_duration_months"), field="plan_duration_months"
+    )
+    max_priority = _coerce_optional_int(
+        payload.get("max_priority_count"), field="max_priority_count"
+    )
+
+    try:
+        from dashboard_pipeline.ai.debt_plan import build_debt_repayment_plan
+        plan = build_debt_repayment_plan(
+            load_full_data,
+            priority_suppliers=priority,
+            plan_duration_months=duration,
+            max_priority_count=max_priority,
+        )
+    except Exception as exc:
+        logger.exception("debt-plan generation failed")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Plan generation failed: {type(exc).__name__}",
+        ) from exc
+
+    return plan
+
+
+@app.post("/api/debt-plan/save")
+@limiter.limit("20/minute")
+async def post_debt_plan_save(request: Request, payload: dict = Body(...)):
+    """Persist a user-approved repayment plan to the journal.
+
+    Stores a summary line in the journal as ``kind='repayment_plan'`` with
+    structured tags. Full plan JSON storage is deferred to Phase 4A v2 —
+    current contract lets the user regenerate any time to see details.
+
+    Request body:
+        {
+            "title": "📋 ვალების გეგმა — 5 priority @ 28,400 ₾/თვე"  (required),
+            "tags": ["phase4a", "duration:2mo", "priority_count:5"]  (optional)
+        }
+
+    Response: ``add_journal_entry`` result (``{ok, entry_id, ...}``).
+    """
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=400,
+            detail="Request body must be a JSON object.",
+        )
+    title = payload.get("title")
+    if not isinstance(title, str) or not title.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="`title` must be a non-empty string.",
+        )
+    tags = payload.get("tags")
+    if tags is not None and not isinstance(tags, list):
+        raise HTTPException(
+            status_code=400,
+            detail="`tags` must be a list of strings or null.",
+        )
+
+    try:
+        from dashboard_pipeline.ai.journal import add_journal_entry
+        result = add_journal_entry(
+            title=title.strip(),
+            kind="repayment_plan",
+            tags=tags,
+        )
+    except Exception as exc:
+        logger.exception("debt-plan save failed")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Journal save failed: {type(exc).__name__}",
+        ) from exc
+
+    if not result.get("ok"):
+        raise HTTPException(
+            status_code=400,
+            detail=result.get("error") or "Unknown journal error.",
+        )
+    return result
+
+
+# ---------------------------------------------------------------------------
+# AI Advisor — Phase 1 MVP Chat
+# ---------------------------------------------------------------------------
+_ai_agent_lock = Lock()
+_ai_agent: AIAgent | None = None
+_ai_config_snapshot = None
+
+
+def _get_ai_agent() -> AIAgent:
+    """Lazily build a cached AIAgent from current .env configuration.
+
+    If AI is not configured, raises HTTPException 503 with a Georgian message.
+    """
+    global _ai_agent, _ai_config_snapshot
+    with _ai_agent_lock:
+        if _ai_agent is None:
+            config = load_ai_config()
+            if not config.is_enabled:
+                raise HTTPException(
+                    status_code=503,
+                    detail=(
+                        "AI Advisor არ არის კონფიგურირებული. "
+                        "გთხოვთ, .env-ში მიუთითოთ ANTHROPIC_API_KEY."
+                    ),
+                )
+            try:
+                _ai_agent = AIAgent(config=config, data_loader=load_full_data)
+                _ai_config_snapshot = config.redacted()
+                logger.info("AI agent initialized: %s", _ai_config_snapshot)
+            except AIAgentError as exc:
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
+        return _ai_agent
+
+
+def _extract_chat_mode(payload: dict) -> str:
+    """Return a validated chat mode from the request body.
+
+    - Missing / ``None`` / empty string → :data:`DEFAULT_MODE` (``"chat"``).
+    - Any string member of :data:`SUPPORTED_MODES` (case-insensitive) is
+      accepted and normalized.
+    - Anything else → :class:`HTTPException` 400 with the list of valid
+      modes, so the frontend fails fast.
+    """
+    raw = payload.get("mode") if isinstance(payload, dict) else None
+    if raw is None:
+        return DEFAULT_MODE
+    if not isinstance(raw, str):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "`mode` must be a string; expected one of "
+                f"{list(SUPPORTED_MODES)}."
+            ),
+        )
+    normalized = raw.strip().lower()
+    if not normalized:
+        return DEFAULT_MODE
+    if normalized not in SUPPORTED_MODES:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Unknown `mode`: {raw!r}. "
+                f"Supported values: {list(SUPPORTED_MODES)}."
+            ),
+        )
+    return normalized
+
+
+def _extract_think_flag(payload: dict) -> bool:
+    """Return a validated ``think`` flag from the request body.
+
+    Phase 0B.1 — Extended Thinking (ღრმა ფიქრი).
+
+    - Missing / ``None`` / falsy → ``False`` (chat mode default).
+    - Explicit ``True`` / ``False`` (boolean) → passed through.
+    - Non-boolean → :class:`HTTPException` 400 so the frontend fails fast
+      rather than silently ignoring a typo like ``{"think": "yes"}``.
+
+    Note: the deployment-level ``AI_ENABLE_THINKING`` env var is the
+    *upstream* gate — if it is ``false``, the agent silently ignores
+    ``think=True``. This helper only validates wire-level shape.
+    """
+    if not isinstance(payload, dict):
+        return False
+    raw = payload.get("think")
+    if raw is None:
+        return False
+    if isinstance(raw, bool):
+        return raw
+    raise HTTPException(
+        status_code=400,
+        detail="`think` must be a boolean (true or false).",
+    )
+
+
+@app.post("/api/chat")
+@limiter.limit("30/minute")
+async def post_chat(
+    request: Request,
+    payload: dict = Body(...),
+):
+    """AI Advisor chat turn.
+
+    Request body:
+        {
+            "message": "<user text>",
+            "history": [...] (optional; prior messages array from last response),
+            "mode": "chat" | "investigate" (optional; default "chat")
+        }
+
+    Response:
+        {
+            "reply": "<assistant text>",
+            "sources": [...],          # tool call trace
+            "usage": {...},            # token counts + model + stop_reason + mode
+            "history": [...]           # updated history for next turn
+        }
+    """
+    message = payload.get("message") if isinstance(payload, dict) else None
+    if not isinstance(message, str) or not message.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="`message` must be a non-empty string.",
+        )
+    if len(message) > 8000:
+        raise HTTPException(
+            status_code=400,
+            detail="`message` too long (max 8000 characters).",
+        )
+
+    history = payload.get("history") if isinstance(payload, dict) else None
+    if history is not None and not isinstance(history, list):
+        raise HTTPException(
+            status_code=400,
+            detail="`history` must be a list of message objects.",
+        )
+
+    mode = _extract_chat_mode(payload)
+    think = _extract_think_flag(payload)
+
+    agent = _get_ai_agent()
+    try:
+        result = agent.chat(
+            message=message, history=history, mode=mode, think=think
+        )
+    except AIAgentError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("AI chat failed")
+        raise HTTPException(
+            status_code=500,
+            detail=f"AI chat failed: {type(exc).__name__}",
+        ) from exc
+    return result
+
+
+# ---------------------------------------------------------------------------
+# AI Advisor — Streaming SSE endpoint (Phase 1 polish follow-up)
+# ---------------------------------------------------------------------------
+_SSE_EVENT_SENTINEL = object()
+
+
+def _format_sse_event(event: dict) -> str:
+    """Encode an event dict as a single SSE message frame.
+
+    Frame format (per W3C SSE spec):
+        event: <type>\n
+        data: <json>\n
+        \n
+
+    The trailing blank line terminates the event.
+    """
+    evt_type = event.get("type") or "message"
+    data = json.dumps(event, ensure_ascii=False, default=str)
+    return f"event: {evt_type}\ndata: {data}\n\n"
+
+
+async def _sse_stream_bridge(sync_gen):
+    """Bridge a synchronous generator into an async byte stream.
+
+    The Anthropic SDK's ``messages.stream()`` is synchronous; each iteration
+    blocks on network I/O. Running ``next()`` in a thread pool lets the
+    FastAPI event loop keep serving other requests while we wait.
+    """
+    loop = asyncio.get_running_loop()
+    try:
+        while True:
+            nxt = await loop.run_in_executor(
+                None, lambda: next(sync_gen, _SSE_EVENT_SENTINEL)
+            )
+            if nxt is _SSE_EVENT_SENTINEL:
+                break
+            yield _format_sse_event(nxt).encode("utf-8")
+    except asyncio.CancelledError:
+        # Client disconnected — close the underlying generator cleanly.
+        try:
+            sync_gen.close()
+        except Exception:  # pragma: no cover — defensive
+            pass
+        raise
+    except Exception as exc:  # pragma: no cover — defensive
+        logger.exception("SSE bridge crashed")
+        yield _format_sse_event(
+            {"type": "error", "error": f"sse bridge failed: {type(exc).__name__}"}
+        ).encode("utf-8")
+
+
+@app.post("/api/chat/stream")
+@limiter.limit("30/minute")
+async def post_chat_stream(
+    request: Request,
+    payload: dict = Body(...),
+):
+    """AI Advisor chat turn streamed as Server-Sent Events.
+
+    Same body contract as ``/api/chat``. Response is ``text/event-stream``
+    with event types: ``delta``, ``tool_call``, ``tool_result``, ``sources``,
+    ``usage``, ``history``, ``done``, ``error``.
+
+    Tool calls still resolve server-side — only the final-text deltas travel
+    to the client. Prompt caching (Phase 1 polish) remains active on the
+    ``system`` + ``tools`` prefix, so streaming stacks cleanly on top of
+    a cache hit for ~2s first-token latency.
+    """
+    message = payload.get("message") if isinstance(payload, dict) else None
+    if not isinstance(message, str) or not message.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="`message` must be a non-empty string.",
+        )
+    if len(message) > 8000:
+        raise HTTPException(
+            status_code=400,
+            detail="`message` too long (max 8000 characters).",
+        )
+
+    history = payload.get("history") if isinstance(payload, dict) else None
+    if history is not None and not isinstance(history, list):
+        raise HTTPException(
+            status_code=400,
+            detail="`history` must be a list of message objects.",
+        )
+
+    mode = _extract_chat_mode(payload)
+    think = _extract_think_flag(payload)
+
+    agent = _get_ai_agent()
+    try:
+        sync_gen = agent.chat_stream(
+            message=message, history=history, mode=mode, think=think
+        )
+    except AIAgentError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("AI chat_stream init failed")
+        raise HTTPException(
+            status_code=500,
+            detail=f"AI chat stream failed: {type(exc).__name__}",
+        ) from exc
+
+    return StreamingResponse(
+        _sse_stream_bridge(sync_gen),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            # Disable proxy buffering (nginx) so chunks flush immediately.
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 if __name__ == "__main__":
     import uvicorn
-
-    uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=False)
+    import sys
+    
+    # Allow port override via command line
+    port = 8000
+    if len(sys.argv) > 1:
+        for arg in sys.argv[1:]:
+            if arg.startswith("--port="):
+                port = int(arg.split("=")[1])
+            elif arg == "--port" and len(sys.argv) > sys.argv.index(arg) + 1:
+                port = int(sys.argv[sys.argv.index(arg) + 1])
+    
+    uvicorn.run("server:app", host="127.0.0.1", port=port, reload=False)
