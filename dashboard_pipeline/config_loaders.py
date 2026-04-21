@@ -7,6 +7,7 @@ import os
 
 from dashboard_pipeline.logging_config import get_logger
 from dashboard_pipeline.file_utils import _financial_analysis_path
+from dashboard_pipeline.export_artifacts import write_json_file
 from dashboard_pipeline.constants import (
     _clone_default_object_mapping,
     _clone_default_budget_config,
@@ -80,9 +81,7 @@ def load_budget_config():
     cfg = _clone_default_budget_config()
     if not os.path.isfile(path):
         try:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(cfg, f, ensure_ascii=False, indent=2)
+            write_json_file(path, cfg)
         except Exception as e:
             logger.warning("Budget config create %s: %s", path, e)
         return cfg
@@ -123,9 +122,7 @@ def load_sector_benchmarks():
     cfg = _clone_default_sector_benchmarks()
     if not os.path.isfile(path):
         try:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(cfg, f, ensure_ascii=False, indent=2)
+            write_json_file(path, cfg)
         except Exception as e:
             logger.warning("Sector benchmarks create %s: %s", path, e)
         return cfg

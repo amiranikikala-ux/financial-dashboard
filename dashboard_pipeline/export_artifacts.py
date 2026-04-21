@@ -2,16 +2,59 @@ from __future__ import annotations
 
 import glob
 import json
+import math
 import os
 import shutil
 import zipfile
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
+from decimal import Decimal
+
+import numpy as np
+import pandas as pd
+
+
+def _is_missing_scalar(value):
+    if value is None:
+        return False
+    if isinstance(value, (dict, list, tuple, set, date, datetime, time, Decimal, np.ndarray)):
+        return False
+    try:
+        missing = pd.isna(value)
+    except Exception:
+        return False
+    return isinstance(missing, (bool, np.bool_)) and bool(missing)
+
+
+def make_json_safe(value):
+    if isinstance(value, dict):
+        return {str(key): make_json_safe(item) for key, item in value.items()}
+    if isinstance(value, np.ndarray):
+        return [make_json_safe(item) for item in value.tolist()]
+    if isinstance(value, (list, tuple, set)):
+        return [make_json_safe(item) for item in value]
+    if isinstance(value, np.generic):
+        return make_json_safe(value.item())
+    if isinstance(value, Decimal):
+        if not value.is_finite():
+            return None
+        return float(value)
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, pd.Timedelta):
+        return str(value)
+    if isinstance(value, (date, datetime, time)):
+        return value.isoformat()
+    if _is_missing_scalar(value):
+        return None
+    return value
 
 
 def write_json_file(path, payload):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
     with open(path, "w", encoding="utf-8") as handle:
-        json.dump(payload, handle, ensure_ascii=False, indent=2)
+        json.dump(make_json_safe(payload), handle, ensure_ascii=False, indent=2, allow_nan=False)
     return {
         "path": path,
         "size_bytes": os.path.getsize(path),

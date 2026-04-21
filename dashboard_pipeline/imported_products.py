@@ -23,6 +23,7 @@ from dashboard_pipeline.constants import (
     _parse_rs_datetime,
     _safe_text,
 )
+from dashboard_pipeline.date_filters import serialize_period_filter
 from dashboard_pipeline.file_utils import (
     _read_imported_products_file,
     list_imported_product_files,
@@ -39,7 +40,7 @@ from dashboard_pipeline.supplier_matching import (
 # empty_imported_products_bundle
 # ---------------------------------------------------------------------------
 
-def empty_imported_products_bundle():
+def empty_imported_products_bundle(period_filter=None):
     return {
         "label_ka": "შემოტანილი პროდუქცია (reference)",
         "notes_ka": (
@@ -96,6 +97,7 @@ def empty_imported_products_bundle():
         "top_products_by_amount": [],
         "top_supplier_product_pairs": [],
         "rows_preview": [],
+        "period_meta": serialize_period_filter(period_filter),
         "rs_waybill_crosscheck": {
             "enabled": False,
             "matched_waybill_count": 0,
@@ -111,9 +113,11 @@ def empty_imported_products_bundle():
 # collect_imported_products_bundle
 # ---------------------------------------------------------------------------
 
-def collect_imported_products_bundle(rs_files=None):
+def collect_imported_products_bundle(
+    rs_files=None, period_filter=None, known_rs_refs=None
+):
     files = list_imported_product_files()
-    bundle = empty_imported_products_bundle()
+    bundle = empty_imported_products_bundle(period_filter=period_filter)
     bundle["files_found_count"] = len(files)
     if not files:
         return bundle
@@ -242,8 +246,8 @@ def collect_imported_products_bundle(rs_files=None):
         fallback = _safe_text(entry.get("supplier")).strip()
         return fallback or "უცნობი მომწოდებელი"
 
-    known_rs_refs = set()
-    if rs_files:
+    known_rs_refs = set(known_rs_refs or [])
+    if not known_rs_refs and rs_files:
         known_rs_refs = set(
             (_build_waybill_reference_index(rs_files) or {}).get("known_refs") or set()
         )
@@ -253,6 +257,9 @@ def collect_imported_products_bundle(rs_files=None):
     imported_waybill_refs = set()
     preview_candidates = []
     read_error_count = 0
+    total_rows_seen = 0
+    matched_rows = 0
+    excluded_unparseable_count = 0
     status_stats = defaultdict(lambda: {"row_count": 0, "total_ge": 0.0, "quantity": 0.0})
     month_stats = defaultdict(lambda: {"row_count": 0, "total_ge": 0.0, "quantity": 0.0})
     supplier_stats = {}
@@ -279,6 +286,7 @@ def collect_imported_products_bundle(rs_files=None):
             continue
 
         row_count = int(len(df.index))
+        total_rows_seen += row_count
         truncation_suspected = row_count == IMPORTED_PRODUCTS_TRUNCATION_ROW_COUNT
         total_amount_ge = 0.0
         total_quantity = 0.0
@@ -287,6 +295,7 @@ def collect_imported_products_bundle(rs_files=None):
         file_suppliers = set()
         file_products = set()
         missing_columns = [c for c in required_summary_cols if c not in df.columns]
+        matched_file_row_count = 0
 
         for _, row in df.iterrows():
             amount_ge = _coerce_float(row.get("საქონლის ფასი"))
@@ -305,6 +314,16 @@ def collect_imported_products_bundle(rs_files=None):
             waybill_number = _clean_text(row.get("ზედნადების ნომერი"))
             waybill_ref = _normalize_waybill_ref(waybill_number)
             dt = _pick_date(row)
+            if dt is not None and not pd.isna(dt):
+                dt = pd.Timestamp(dt)
+            if period_filter and bool(period_filter.get("applied")):
+                if dt is None or pd.isna(dt):
+                    excluded_unparseable_count += 1
+                    continue
+                if dt < period_filter["from_ts"] or dt > period_filter["to_ts"]:
+                    continue
+            matched_rows += 1
+            matched_file_row_count += 1
             month_key = dt.strftime("%Y-%m") if not pd.isna(dt) else "უცნობი თვე"
             normalized_supplier = _normalize_supplier_key(supplier_name)
             supplier_key = (
@@ -449,7 +468,7 @@ def collect_imported_products_bundle(rs_files=None):
             "name": file_name,
             "source_format": source_format,
             "sheet_name": sheet_name,
-            "row_count": row_count,
+            "row_count": matched_file_row_count,
             "truncation_suspected": truncation_suspected,
             "date_range": {
                 "min": _fmt_date(min(file_dates)) if file_dates else None,
@@ -771,6 +790,13 @@ def collect_imported_products_bundle(rs_files=None):
         {k: v for k, v in item.items() if not k.startswith("_sort_")}
         for item in preview_candidates[:IMPORTED_PRODUCTS_ROWS_PREVIEW_LIMIT]
     ]
+
+    bundle["period_meta"] = serialize_period_filter(
+        period_filter,
+        total_rows_seen=total_rows_seen,
+        matched_rows=matched_rows,
+        excluded_unparseable_count=excluded_unparseable_count,
+    )
 
     matched_refs = imported_waybill_refs & known_rs_refs
     unmatched_refs = imported_waybill_refs - known_rs_refs

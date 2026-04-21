@@ -27,6 +27,7 @@ from dashboard_pipeline.constants import (
     _safe_text,
     detect_object,
 )
+from dashboard_pipeline.date_filters import serialize_period_filter
 from dashboard_pipeline.file_utils import (
     _to_financial_relative_path,
     list_retail_sales_files,
@@ -34,11 +35,66 @@ from dashboard_pipeline.file_utils import (
 from dashboard_pipeline.supplier_matching import normalize_name
 
 
+RETAIL_SALES_READ_COLUMNS = {
+    "კოდი",
+    "შტრიხკოდი",
+    "დასახელება",
+    "ერთეული",
+    "რაოდენობა",
+    "ფასი",
+    "თვითღირებულება",
+    "მოგება",
+    "დრო",
+    "ობიექტი",
+    "ქვეჯგუფი",
+}
+
+
+def _file_date_range_overlaps_period(file_stats, period_filter):
+    if not period_filter or not bool(period_filter.get("applied")):
+        return True
+    if not isinstance(file_stats, dict):
+        return True
+    date_range = file_stats.get("date_range") or {}
+    min_date = str(date_range.get("min") or "").strip()
+    max_date = str(date_range.get("max") or "").strip()
+    if not min_date or not max_date:
+        return True
+    from_ts = period_filter.get("from_ts")
+    to_ts = period_filter.get("to_ts")
+    if from_ts is None or to_ts is None:
+        return True
+    try:
+        min_ts = pd.Timestamp(f"{min_date} 00:00:00")
+        max_ts = pd.Timestamp(f"{max_date} 23:59:59")
+    except Exception:
+        return True
+    return not (max_ts < from_ts or min_ts > to_ts)
+
+
+def _filter_source_files_by_period(files, period_filter=None, source_file_stats=None):
+    if not files or not period_filter or not bool(period_filter.get("applied")):
+        return files
+    stats_by_relative_path = {
+        str(item.get("relative_path") or "").strip(): item
+        for item in (source_file_stats or [])
+        if isinstance(item, dict) and str(item.get("relative_path") or "").strip()
+    }
+    if not stats_by_relative_path:
+        return files
+    filtered_files = []
+    for path in files:
+        file_stats = stats_by_relative_path.get(_to_financial_relative_path(path))
+        if file_stats is None or _file_date_range_overlaps_period(file_stats, period_filter):
+            filtered_files.append(path)
+    return filtered_files
+
+
 # ---------------------------------------------------------------------------
 # empty_retail_sales_bundle
 # ---------------------------------------------------------------------------
 
-def empty_retail_sales_bundle():
+def empty_retail_sales_bundle(period_filter=None):
     return {
         "label_ka": "გაყიდული პროდუქცია (retail sales source)",
         "notes_ka": (
@@ -108,6 +164,7 @@ def empty_retail_sales_bundle():
         "top_products_by_revenue": [],
         "top_products_by_profit": [],
         "rows_preview": [],
+        "period_meta": serialize_period_filter(period_filter),
     }
 
 
@@ -115,12 +172,20 @@ def empty_retail_sales_bundle():
 # collect_retail_sales_bundle
 # ---------------------------------------------------------------------------
 
-def collect_retail_sales_bundle(object_mapping=None):
+def collect_retail_sales_bundle(
+    object_mapping=None, period_filter=None, source_file_stats=None
+):
     files = list_retail_sales_files()
-    bundle = empty_retail_sales_bundle()
+    bundle = empty_retail_sales_bundle(period_filter=period_filter)
     bundle["files_found_count"] = len(files)
     if not files:
         return bundle
+
+    candidate_files = _filter_source_files_by_period(
+        files,
+        period_filter=period_filter,
+        source_file_stats=source_file_stats,
+    )
 
     sales_object_mapping = object_mapping or _clone_default_object_mapping()
 
@@ -222,8 +287,11 @@ def collect_retail_sales_bundle(object_mapping=None):
     product_stats = {}
     preview_candidates = []
     read_error_count = 0
+    total_rows_seen = 0
+    matched_rows = 0
+    excluded_unparseable_count = 0
 
-    for f in files:
+    for f in candidate_files:
         file_rel = _to_financial_relative_path(f)
         if file_rel in duplicate_suspected_map:
             suspected_records[file_rel]["present_in_sources"] = True
@@ -233,7 +301,10 @@ def collect_retail_sales_bundle(object_mapping=None):
         file_name = os.path.basename(f)
         fallback_object = _object_from_path(f)
         try:
-            df = pd.read_excel(f)
+            df = pd.read_excel(
+                f,
+                usecols=lambda col: str(col).strip() in RETAIL_SALES_READ_COLUMNS,
+            )
         except Exception as exc:
             read_error_count += 1
             if len(bundle["read_errors"]) < RETAIL_SALES_READ_ERROR_LIMIT:
@@ -254,8 +325,29 @@ def collect_retail_sales_bundle(object_mapping=None):
         if unnamed_cols:
             df = df.drop(columns=unnamed_cols, errors="ignore")
 
-        row_count = int(len(df.index))
+        source_row_count = int(len(df.index))
+        total_rows_seen += source_row_count
         missing_columns = [c for c in required_summary_cols if c not in df.columns]
+        parsed_dates = pd.Series(pd.NaT, index=df.index)
+        if "დრო" in df.columns:
+            date_text = df["დრო"].fillna("").astype(str).str.strip()
+            parsed_dates = pd.to_datetime(
+                date_text,
+                errors="coerce",
+                format="%Y-%m-%d %H:%M",
+            )
+            fallback_mask = parsed_dates.isna() & date_text.ne("")
+            if fallback_mask.any():
+                parsed_dates.loc[fallback_mask] = date_text.loc[fallback_mask].map(
+                    _parse_rs_datetime
+                )
+        if period_filter and bool(period_filter.get("applied")):
+            excluded_unparseable_count += int(parsed_dates.isna().sum())
+            matched_mask = parsed_dates.notna() & (
+                parsed_dates >= period_filter["from_ts"]
+            ) & (parsed_dates <= period_filter["to_ts"])
+            df = df.loc[matched_mask].copy()
+            parsed_dates = parsed_dates.loc[matched_mask]
         file_dates = []
         file_revenue = 0.0
         file_cost = 0.0
@@ -265,8 +357,11 @@ def collect_retail_sales_bundle(object_mapping=None):
         file_categories = set()
         file_products = set()
         file_profit_fallback_rows = 0
+        matched_file_row_count = int(len(df.index))
+        matched_rows += matched_file_row_count
 
-        for _, row in df.iterrows():
+        for row_index, row in df.iterrows():
+            date_value = parsed_dates.get(row_index, pd.NaT)
             quantity = _coerce_float(row.get("რაოდენობა"))
             revenue_ge = _coerce_float(row.get("ფასი"))
             cost_ge = _coerce_float(row.get("თვითღირებულება"))
@@ -280,7 +375,6 @@ def collect_retail_sales_bundle(object_mapping=None):
             else:
                 profit_ge = float(raw_profit)
 
-            date_value = _parse_rs_datetime(row.get("დრო"))
             month_key = (
                 pd.Timestamp(date_value).strftime("%Y-%m")
                 if not pd.isna(date_value)
@@ -469,7 +563,8 @@ def collect_retail_sales_bundle(object_mapping=None):
             {
                 "name": file_name,
                 "relative_path": file_rel,
-                "row_count": row_count,
+                "source_row_count": source_row_count,
+                "row_count": matched_file_row_count,
                 "total_quantity": float(file_quantity),
                 "revenue_ge": float(file_revenue),
                 "cost_ge": float(file_cost),
@@ -503,6 +598,12 @@ def collect_retail_sales_bundle(object_mapping=None):
     bundle["duplicate_policy"]["excluded_files"] = sorted(bundle["files_skipped_by_policy"])
     bundle["duplicate_policy"]["excluded_file_count"] = int(
         len(bundle["files_skipped_by_policy"])
+    )
+    bundle["period_meta"] = serialize_period_filter(
+        period_filter,
+        total_rows_seen=total_rows_seen,
+        matched_rows=matched_rows,
+        excluded_unparseable_count=excluded_unparseable_count,
     )
 
     overall_revenue = float(sum(item.get("revenue_ge") or 0 for item in bundle["files"]))

@@ -29,6 +29,7 @@ from dashboard_pipeline.constants import (
     RECON_FINAL_STATUSES,
     RECON_MATCH_STATUSES,
 )
+from dashboard_pipeline.date_filters import parse_source_datetime
 from dashboard_pipeline.file_utils import (
     _excel_cell,
     _find_excel_column_danishnuleba,
@@ -639,6 +640,42 @@ def _line_for_excel(decision):
         "supplier_total_scope": decision.get("supplier_total_scope", ""),
         "evidence_sources": ", ".join(decision.get("evidence_sources") or []),
     }
+
+
+def _normalize_supplier_payment_row_date(value):
+    ts = parse_source_datetime(value)
+    if pd.isna(ts):
+        return ""
+    return pd.Timestamp(ts).strftime("%Y-%m-%d")
+
+
+def build_strict_supplier_payment_rows(rows):
+    out = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        matched_tax_id = str(row.get("matched_tax_id") or "").strip()
+        if not matched_tax_id:
+            continue
+        out.append(
+            {
+                "row_date": _normalize_supplier_payment_row_date(row.get("row_date")),
+                "amount": float(row.get("amount") or 0),
+                "matched_tax_id": matched_tax_id,
+                "matched_supplier_name": str(row.get("matched_supplier_name") or ""),
+                "status": str(row.get("status") or ""),
+                "source_bank": str(row.get("source_bank") or ""),
+                "matched_by": str(row.get("matched_by") or ""),
+                "confidence": str(row.get("confidence") or ""),
+                "truth_source_label": str(row.get("truth_source_label") or ""),
+                "supplier_truth_summary": str(row.get("supplier_truth_summary") or ""),
+                "official_name_truth_source": str(
+                    row.get("official_name_truth_source") or ""
+                ),
+                "payment_origin": "strict_bank",
+            }
+        )
+    return out
 
 
 def _write_bank_status_excel(rows, download_dir, filename, title_ka):

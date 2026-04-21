@@ -917,7 +917,7 @@ def build_budget(monthly_pnl, forecast_data, budget_config):
             return float((metric_sum / month_count) * 12.0)
         return float(metric_sum)
 
-    current_year = int(pd.Timestamp.now().year)
+    current_year = max(actual_yearly.keys()) if actual_yearly else int(pd.Timestamp.now().year)
     planning_years = list(range(2022, current_year + 2))
     annual_plan = {}
     for year in planning_years:
@@ -1959,3 +1959,77 @@ def tbc_expenses_public_json(bundle):
 
 def bog_expenses_public_json(bundle):
     return _expenses_public_json(bundle, BOG_EXPENSES_LEDGER_NOTE_KA)
+
+
+# ---------------------------------------------------------------------------
+# Phase 3.5/3.7 — Dashboard widgets pre-compute
+# ---------------------------------------------------------------------------
+
+def build_dead_stock_summary(data, *, days_threshold=180, top_n=30):
+    """Pre-compute Phase 2.11 dead-stock analysis for Dashboard widget.
+
+    Reuses the AI tool `analyze_dead_stock` with a sensible default
+    (180-day threshold + top-30 SKUs + all stores). Returns the full
+    tool contract when both `imported_products` and `retail_sales`
+    have been ingested; otherwise a minimal stub so the UI can render
+    an empty-state banner.
+    """
+    from dashboard_pipeline.ai.dead_stock import analyze_dead_stock
+
+    imported = (data or {}).get("imported_products") or {}
+    retail = (data or {}).get("retail_sales") or {}
+    if not imported.get("products") or not retail.get("by_product"):
+        return {
+            "available": False,
+            "reason_ka": (
+                "imported_products ან retail_sales ცარიელია — "
+                "Dead Stock analysis ვერ გავუშვი."
+            ),
+        }
+
+    result = analyze_dead_stock(
+        data_loader=lambda: data,
+        days_threshold=days_threshold,
+        store=None,
+        top_n=top_n,
+    )
+    if isinstance(result, dict) and "error" in result:
+        return {
+            "available": False,
+            "reason_ka": result.get("error"),
+            "hint_ka": result.get("hint"),
+        }
+    # Enrich with an `available` flag so the UI can detect stub vs real payload.
+    result["available"] = True
+    return result
+
+
+def build_supplier_concentration(data, *, top_n=10):
+    """Pre-compute Phase 2.12 supplier portfolio concentration for the widget.
+
+    Reuses the AI tool `prepare_supplier_brief` in portfolio mode (no
+    focus supplier = HHI + Top-N ranked by leverage × savings × spend).
+    """
+    from dashboard_pipeline.ai.supplier_brief import prepare_supplier_brief
+
+    suppliers = (data or {}).get("suppliers") or []
+    if not suppliers:
+        return {
+            "available": False,
+            "reason_ka": (
+                "suppliers ცარიელია — supplier concentration ვერ ავაგე."
+            ),
+        }
+
+    result = prepare_supplier_brief(
+        data_loader=lambda: data,
+        top_n=top_n,
+    )
+    if isinstance(result, dict) and "error" in result:
+        return {
+            "available": False,
+            "reason_ka": result.get("error"),
+            "hint_ka": result.get("hint"),
+        }
+    result["available"] = True
+    return result

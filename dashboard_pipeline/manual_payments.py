@@ -9,6 +9,7 @@ import re
 
 import pandas as pd
 
+from dashboard_pipeline.date_filters import parse_source_datetime
 from dashboard_pipeline.logging_config import get_logger
 from dashboard_pipeline.file_utils import _financial_analysis_path, clean_id
 
@@ -112,6 +113,13 @@ def _read_manual_payments_csv(path):
     return pd.read_csv(path, encoding="utf-8-sig", sep=None, engine="python")
 
 
+def _normalize_journal_row_date(value):
+    ts = parse_source_datetime(value)
+    if pd.isna(ts):
+        return ""
+    return pd.Timestamp(ts).strftime("%Y-%m-%d")
+
+
 # ---------------------------------------------------------------------------
 # RS suppliers by tax ID (used by sync)
 # ---------------------------------------------------------------------------
@@ -136,22 +144,15 @@ def collect_rs_suppliers_by_tax_id(rs_files):
     return by_id
 
 
-# ---------------------------------------------------------------------------
-# Full journal reader
-# ---------------------------------------------------------------------------
-
-def read_manual_journal_full(path):
-    """
-    CSV ყველა ხაზი: tax_id → amount (ჯამი), comment (ბოლო არაცარიელი), company (არასავალდებულო).
-    """
+def read_manual_journal_rows(path):
     if not os.path.isfile(path):
-        return {}
+        return []
     try:
         df = _read_manual_payments_csv(path)
     except Exception:
-        return {}
+        return []
     if df.empty or len(df.columns) < 2:
-        return {}
+        return []
 
     tid_col = _journal_find_col(
         df.columns,
@@ -166,28 +167,86 @@ def read_manual_journal_full(path):
         df.columns,
         ("comment", "კომენტარი", "note", "შენიშვნა"),
     )
+    row_date_col = _journal_find_col(
+        df.columns,
+        (
+            "row_date",
+            "date",
+            "payment_date",
+            "paid_date",
+            "თარიღი",
+            "გადახდის თარიღი",
+            "გადახდის_თარიღი",
+        ),
+    )
     if tid_col is None:
         tid_col = df.columns[0]
     if amt_col is None:
         amt_col = df.columns[1]
 
-    by_tid = {}
+    rows = []
     for _, row in df.iterrows():
         tid = clean_id(row[tid_col])
         if not tid or not tid.isdigit():
             continue
-        if tid not in by_tid:
-            by_tid[tid] = {"amount": 0.0, "comment": "", "company": ""}
-        amt = parse_journal_amount(row[amt_col])
-        by_tid[tid]["amount"] += float(amt)
+        amount = float(parse_journal_amount(row[amt_col]))
+        company = ""
         if company_col and pd.notna(row[company_col]):
             co = str(row[company_col]).strip()
             if co and co.lower() != "nan":
-                by_tid[tid]["company"] = co
+                company = co
+        comment = ""
         if comment_col and pd.notna(row[comment_col]):
             cm = str(row[comment_col]).strip()
             if cm and cm.lower() != "nan":
-                by_tid[tid]["comment"] = cm
+                comment = cm
+        row_date = ""
+        if row_date_col and pd.notna(row[row_date_col]):
+            row_date = _normalize_journal_row_date(row[row_date_col])
+        rows.append(
+            {
+                "matched_tax_id": tid,
+                "matched_supplier_name": company,
+                "company": company,
+                "amount": amount,
+                "comment": comment,
+                "row_date": row_date,
+                "status": "manual_journal",
+                "source_bank": "manual_journal",
+                "matched_by": "manual_journal",
+                "confidence": "manual",
+            }
+        )
+    return rows
+
+
+# ---------------------------------------------------------------------------
+# Full journal reader
+# ---------------------------------------------------------------------------
+
+def read_manual_journal_full(path):
+    """
+    CSV ყველა ხაზი: tax_id → amount (ჯამი), comment (ბოლო არაცარიელი), company (არასავალდებულო).
+    """
+    rows = read_manual_journal_rows(path)
+    if not rows:
+        return {}
+
+    by_tid = {}
+    for row in rows:
+        tid = str(row.get("matched_tax_id") or "").strip()
+        if tid not in by_tid:
+            by_tid[tid] = {"amount": 0.0, "comment": "", "company": "", "row_date": ""}
+        by_tid[tid]["amount"] += float(row.get("amount") or 0)
+        co = str(row.get("company") or "").strip()
+        if co and co.lower() != "nan":
+            by_tid[tid]["company"] = co
+        cm = str(row.get("comment") or "").strip()
+        if cm and cm.lower() != "nan":
+            by_tid[tid]["comment"] = cm
+        row_date = str(row.get("row_date") or "").strip()
+        if row_date and row_date > str(by_tid[tid].get("row_date") or ""):
+            by_tid[tid]["row_date"] = row_date
     return by_tid
 
 
@@ -215,8 +274,9 @@ def sync_manual_payments_journal(rs_files):
         p = prev.get(tid, {})
         amt = float(p.get("amount", 0) or 0)
         com = str(p.get("comment", "") or "")
+        row_date = str(p.get("row_date", "") or "")
         rows.append(
-            {"tax_id": tid, "company": org, "amount": amt, "comment": com}
+            {"tax_id": tid, "company": org, "row_date": row_date, "amount": amt, "comment": com}
         )
 
     orphans = []
@@ -225,13 +285,14 @@ def sync_manual_payments_journal(rs_files):
             org = p.get("company") or "(არაა RS ზედნადებში)"
             amt = float(p.get("amount", 0) or 0)
             com = str(p.get("comment", "") or "")
+            row_date = str(p.get("row_date", "") or "")
             orphans.append(
-                {"tax_id": tid, "company": org, "amount": amt, "comment": com}
+                {"tax_id": tid, "company": org, "row_date": row_date, "amount": amt, "comment": com}
             )
     orphans.sort(key=lambda r: str(r["company"]).lower())
     rows.extend(orphans)
 
-    out_df = pd.DataFrame(rows, columns=["tax_id", "company", "amount", "comment"])
+    out_df = pd.DataFrame(rows, columns=["tax_id", "company", "row_date", "amount", "comment"])
     out_df.to_csv(path, index=False, encoding="utf-8-sig")
     n_manual = sum(1 for r in rows if float(r["amount"] or 0) > 0)
     logger.info(
@@ -252,3 +313,32 @@ def load_manual_payments():
     path = manual_payments_csv_path()
     full = read_manual_journal_full(path)
     return {tid: v["amount"] for tid, v in full.items() if v.get("amount", 0) > 0}
+
+
+def load_manual_payment_rows():
+    path = manual_payments_csv_path()
+    rows = read_manual_journal_rows(path)
+    return [dict(row) for row in rows if float(row.get("amount") or 0) > 0]
+
+
+def build_manual_payment_source_meta(rows):
+    rows = [dict(row) for row in (rows or []) if isinstance(row, dict)]
+    dated_rows = [row for row in rows if str(row.get("row_date") or "").strip()]
+    undated_rows = [row for row in rows if not str(row.get("row_date") or "").strip()]
+    period_correctness_incomplete = len(undated_rows) > 0
+    return {
+        "manual_journal_row_count": len(rows),
+        "dated_row_count": len(dated_rows),
+        "undated_row_count": len(undated_rows),
+        "manual_journal_total": round(
+            sum(float(row.get("amount") or 0) for row in rows),
+            2,
+        ),
+        "date_column_supported": True,
+        "period_correctness_incomplete": period_correctness_incomplete,
+        "period_correctness_caveat_ka": (
+            "manual/off-bank journal-ის თანხები row_date-ის გარეშე ზუსტ period filter-ში სრულად ვერ მოხვდება."
+            if period_correctness_incomplete
+            else ""
+        ),
+    }

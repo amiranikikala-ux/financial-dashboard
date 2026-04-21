@@ -334,12 +334,11 @@ def validate_config_bundle(
 
 
 def validate_api_artifacts(artifacts):
-    from dashboard_pipeline.api_contracts import STATIC_RESPONSE_TABS
+    from dashboard_pipeline.api_contracts import DYNAMIC_SOURCE_ARTIFACTS, STATIC_RESPONSE_TABS
 
     issues = []
     required_static = set(STATIC_RESPONSE_TABS) | {
-        "waybills_source",
-        "imported_products_source",
+        *set(DYNAMIC_SOURCE_ARTIFACTS.values()),
         "retail_sales_source",
     }
     artifact_names = set((artifacts or {}).keys())
