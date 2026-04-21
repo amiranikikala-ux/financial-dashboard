@@ -2,6 +2,8 @@
 chcp 65001 >nul
 title Dashboard: Excel — data.json ^(დაელოდეთ^)
 set "ROOT=%~dp0"
+for %%I in ("%ROOT%..") do set "WORKSPACE_ROOT=%%~fI"
+set "PYTHON_BIN=%WORKSPACE_ROOT%\venv\Scripts\python.exe"
 set PYTHONUNBUFFERED=1
 pushd "%ROOT%" || (
     echo ERROR: Could not switch to project folder:
@@ -26,9 +28,9 @@ echo  მხოლოდ მონაცემები გინდათ ს�
 echo ============================================================
 echo.
 
-if not exist "venv\Scripts\python.exe" (
+if not exist "%PYTHON_BIN%" (
     echo ERROR: venv was not found in this folder:
-    echo   %~dp0
+    echo   %PYTHON_BIN%
     echo Open CMD here and run: python -m venv venv
     pause
     exit /b 1
@@ -36,7 +38,7 @@ if not exist "venv\Scripts\python.exe" (
 
 echo [1/2] მონაცემების გენერაცია... დაწყება %TIME%
 echo.
-"%ROOT%venv\Scripts\python.exe" -u "%ROOT%generate_dashboard_data.py"
+"%PYTHON_BIN%" -u "%ROOT%generate_dashboard_data.py"
 if errorlevel 1 (
     echo ERROR: generate_dashboard_data.py failed
     popd
@@ -64,7 +66,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process -Filter 'name=''python.exe''' | Where-Object { $_.CommandLine -match 'server.py' -and $_.CommandLine -notmatch 'cursor' } | ForEach-Object { taskkill.exe /F /PID $_.ProcessId /T 2>&1 | Out-Null }"
 
 echo Starting FastAPI...
-start "Dashboard API" cmd /k "venv\Scripts\python.exe server.py"
+start "Dashboard API" cmd /k "_api-dev.bat"
 echo INFO: FastAPI health-check ^(მოლოდინი მაქს. 45 წმ^)...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$deadline = (Get-Date).AddSeconds(45); $ok = $false; while ((Get-Date) -lt $deadline) { try { $res = Invoke-WebRequest -Uri 'http://127.0.0.1:8000/api/data?tab=suppliers' -UseBasicParsing -TimeoutSec 4; if ($res.StatusCode -eq 200) { $ok = $true; break } } catch {}; Start-Sleep -Milliseconds 800 }; if (-not $ok) { Write-Host 'ERROR: API did not become ready on http://127.0.0.1:8000'; exit 1 }"

@@ -2,10 +2,12 @@
 chcp 65001 >nul
 title Dashboard: მხოლოდ data.json ^(Python^)
 set "ROOT=%~dp0"
+for %%I in ("%ROOT%..") do set "WORKSPACE_ROOT=%%~fI"
+set "PYTHON_BIN=%WORKSPACE_ROOT%\venv\Scripts\python.exe"
 set PYTHONUNBUFFERED=1
 cd /d "%ROOT%" || (echo ERROR: cd & pause & exit /b 1)
 
-if not exist "venv\Scripts\python.exe" (
+if not exist "%PYTHON_BIN%" (
     echo ERROR: venv არ მოიძებნა.
     pause
     exit /b 1
@@ -17,7 +19,7 @@ echo სერვერი არ გაეშვება. დრო: ხში
 echo.
 echo დაწყება %TIME%
 echo.
-"%ROOT%venv\Scripts\python.exe" -u "%ROOT%generate_dashboard_data.py"
+"%PYTHON_BIN%" -u "%ROOT%generate_dashboard_data.py"
 if errorlevel 1 (
     echo ERROR
     pause
