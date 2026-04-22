@@ -38,7 +38,7 @@
 
 | commit | subject |
 |---|---|
-| _pending_ | feat(pipeline+ai): Sprint 5.1 — VAT reconciliation + cash outflow journal + 3 AI tools |
+| `3a18e45` | feat(pipeline+ai): Sprint 5.1 — VAT reconciliation + cash outflow journal + 3 AI tools |
 | _pending_ | feat(pipeline): Tier 2 Sprint 2 — retail_sales incremental cache integration |
 | `c1cccc6` | feat(pipeline): Tier 2 Sprint 1 — pipeline_cache module foundation |
 | `e83063b` | docs(context-handoff): Tier 1 scale fix landed; Tier 2 incremental ingest queued |
