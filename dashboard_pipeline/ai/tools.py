@@ -2561,11 +2561,29 @@ def compute(
     else:
         result = raw_result
 
+    op_label_ka = {
+        "sum": "ჯამი",
+        "avg": "საშუალო",
+        "min": "მინიმუმი",
+        "max": "მაქსიმუმი",
+        "count": "დათვლა",
+        "pct": "პროცენტი",
+        "growth": "ცვლილება (%)",
+        "diff": "სხვაობა",
+    }.get(operation, operation)
+    unit = "%" if operation in ("pct", "growth") else ""
+    label_part = f" — *{label}*" if label else ""
+    summary_ka = (
+        f"**{op_label_ka}{label_part}**: **{result:g}{unit}** "
+        f"({len(parsed)} მნიშვნელობაზე; formula: `{formula}`)"
+    )
+
     payload: Dict[str, Any] = {
         "operation": operation,
         "input_count": len(parsed),
         "result": result,
         "formula": formula,
+        "summary_ka": summary_ka,
         "source": "compute (server-side arithmetic)",
     }
     if label:
@@ -2686,6 +2704,32 @@ def compute_waybill_total(
     for s in top_suppliers:
         s["total"] = round(float(s["total"]), 2)
 
+    total_rounded = round(total, 2)
+    field_label_ka = {
+        "transport_start_date": "ტრანსპ. დაწყება",
+        "date": "RS რეგისტრაცია",
+        "delivery_date": "ჩაბარების თარ.",
+    }.get(date_field, date_field)
+
+    if len(matched) == 0:
+        summary_ka = (
+            f"**{date_str}** თარიღზე ({field_label_ka}) ზედნადები **არ არის**."
+        )
+    else:
+        supplier_hint = ""
+        if supplier_filter:
+            supplier_hint = f" · supplier filter: *{supplier_filter}*"
+        summary_ka = (
+            f"**{date_str}** ({field_label_ka}): **{total_rounded:,.2f} ₾** "
+            f"ჯამი, {len(matched)} ზედნადებზე{supplier_hint}. "
+            "(exclude returns + cancelled)"
+            if (exclude_returns and exclude_cancelled)
+            else (
+                f"**{date_str}** ({field_label_ka}): **{total_rounded:,.2f} ₾** "
+                f"ჯამი, {len(matched)} ზედნადებზე{supplier_hint}."
+            )
+        )
+
     return {
         "date": date_str,
         "date_field": date_field,
@@ -2694,8 +2738,9 @@ def compute_waybill_total(
         "exclude_cancelled": bool(exclude_cancelled),
         "supplier_filter": supplier_filter,
         "matched_count": len(matched),
-        "total": round(total, 2),
+        "total": total_rounded,
         "bad_amount_rows": bad_amounts,
         "top_suppliers": top_suppliers,
+        "summary_ka": summary_ka,
         "source": "data.json:waybills (server-side computed)",
     }

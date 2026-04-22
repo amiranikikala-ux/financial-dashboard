@@ -594,6 +594,32 @@ def forecast_revenue(
     last_12_total = round(sum(revenues[-12:]), 2)
     yoy = _yoy_growth_pct(revenues)
 
+    # Pre-rendered Georgian summary (Phase 4C Rule 30 — tools think out loud).
+    rounded_rows = _round_rows(merged)
+    store_label_ka = {
+        STORE_TOTAL: "ორივე მაღაზია",
+        STORE_OZURGETI: "ოზურგეთი",
+        STORE_DVABZU: "დვაბზუ",
+    }.get(canonical_store, canonical_store)
+    if rounded_rows:
+        first_baseline = rounded_rows[0].get("baseline")
+        last_baseline = rounded_rows[-1].get("baseline")
+        baseline_range = (
+            f"{first_baseline:,.0f}–{last_baseline:,.0f} ₾"
+            if isinstance(first_baseline, (int, float))
+            and isinstance(last_baseline, (int, float))
+            else "—"
+        )
+    else:
+        baseline_range = "—"
+    yoy_str = f"{yoy:+.1f}%" if isinstance(yoy, (int, float)) else "n/a"
+    engines_str = "+".join(engines_used) if engines_used else "—"
+    summary_ka = (
+        f"**{store_label_ka}** — მომდევნო **{horizon} თვე**: baseline "
+        f"**{baseline_range}** (YoY {yoy_str}, {engines_str} ensemble; "
+        f"{len(months)}თვიანი ისტორია)."
+    )
+
     return {
         "source": SOURCE_LABEL,
         "store": canonical_store,
@@ -604,8 +630,9 @@ def forecast_revenue(
         "last_12_months_total": last_12_total,
         "yoy_growth_pct": yoy,
         "engines_used": engines_used,
-        "forecast": _round_rows(merged),
+        "forecast": rounded_rows,
         "notes": notes,
+        "summary_ka": summary_ka,
     }
 
 

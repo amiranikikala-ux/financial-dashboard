@@ -643,12 +643,24 @@ def analyze_dead_stock(
             "Per-store imported allocation parking-lot-შია."
         )
 
+    # Pre-rendered Georgian summary (Phase 4C Rule 30 — tools think out loud).
+    store_label_ka = "ჯამი" if canonical_store == STORE_TOTAL else canonical_store
+    stale_91_180 = bucket_counts[BUCKET_91_180]
+    stale_181_365 = bucket_counts[BUCKET_181_365]
+    dead_365_plus = bucket_counts[BUCKET_365_PLUS]
+    total_stale = stale_91_180 + stale_181_365 + dead_365_plus
+    warning_prefix = "⚠️ " if matching_warning else ""
+    summary_ka = (
+        f"{warning_prefix}**{store_label_ka}** — გაყინული ფული ~**"
+        f"{frozen_cash_estimate:,.0f} ₾** ({total_stale} SKU stale: "
+        f"{stale_91_180} 91-180d / {stale_181_365} 181-365d / "
+        f"{dead_365_plus} 365d+, threshold {threshold}d)."
+    )
+
     return {
         "as_of_date": today.isoformat(),
         "days_threshold": threshold,
-        "store_filter": (
-            "ჯამი" if canonical_store == STORE_TOTAL else canonical_store
-        ),
+        "store_filter": store_label_ka,
         "summary": {
             "imported_total_count": imported_total_count,
             "imported_total_amount": round(imported_total_amount, 2),
@@ -657,9 +669,9 @@ def analyze_dead_stock(
             "unmatched_count": unmatched_count,
             "unmatched_total_amount": round(unmatched_total_amount, 2),
             "active_within_threshold_count": bucket_counts[BUCKET_ACTIVE],
-            "stale_91_180d_count": bucket_counts[BUCKET_91_180],
-            "stale_181_365d_count": bucket_counts[BUCKET_181_365],
-            "dead_365d_plus_count": bucket_counts[BUCKET_365_PLUS],
+            "stale_91_180d_count": stale_91_180,
+            "stale_181_365d_count": stale_181_365,
+            "dead_365d_plus_count": dead_365_plus,
             "frozen_cash_estimate": frozen_cash_estimate,
             "matching_warning": matching_warning,
         },
@@ -672,4 +684,5 @@ def analyze_dead_stock(
         },
         "top_stale_skus": top_stale,
         "notes": notes,
+        "summary_ka": summary_ka,
     }
