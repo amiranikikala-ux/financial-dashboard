@@ -192,6 +192,10 @@ State audit received 2026-04-22 for **შპს ჯეო ფუდთაიმ�
 
 **BREAKTHROUGH confirmed**: pipeline classification is correct; audit's numbers are systematically undercounting TBC POS.
 
+> **⚠️ KNOWN SIGNAL ERROR (investigated 2026-04-23 02:30, not yet fixed):**
+> RS.ge-ის ოფიციალური `პოს ტერმინალი.xls` (3,900 rows, 1.96M ₾ total, 2022-07 → 2026-02) გვიჩვენებს რომ **pipeline-ის TBC POS 2.38× overcounts** (pipeline 3.18M vs RS ფაქტი 0.38M). BOG POS სწორია (1.48M vs RS 1.57M, 6% VAT დელტა).
+> **გავლენა**: 1.54M ₾ "ხარვეზი" შეიძლება გადაჭარბებული იყოს 2M+ ₾-ით. Pipeline's `tbc_card_income_patterns.json` patterns (`ecom/pos`, `wallet/domestic`) იჭერენ **online/wallet** გადახდებს რომლებიც არა-POS-ია. **Sprint 5.2 scope**: გამოვასწოროთ TBC pattern matching terminal-ID-based-ით (SH079927, RS014189, SH046092, SH034467, SH060853 = 5 TBC ფიზიკური terminals).
+
 **Live-verified summary (2026-04-23 01:45 data.json regen, audit Excel auto-detected):**
 | მეტრიკა | მნიშვნელობა |
 |---|---|

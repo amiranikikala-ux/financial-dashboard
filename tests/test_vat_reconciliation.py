@@ -33,8 +33,10 @@ from dashboard_pipeline.vat_reconciliation import (
     append_cash_outflow_entry,
     compute_vat_reconciliation,
     find_audit_excel,
+    find_invoices_issued_excel,
     parse_audit_excel,
     parse_cash_outflow_journal,
+    parse_invoices_issued,
 )
 
 
@@ -113,6 +115,120 @@ def test_find_audit_excel_searches_up_to_workspace_root(tmp_path: Path) -> None:
     found = find_audit_excel(str(fa))
     assert found is not None
     assert Path(found).parent == workspace
+
+
+# ---------------------------------------------------------------------------
+# parse_invoices_issued + find_invoices_issued_excel (Sprint 5.1.1)
+# ---------------------------------------------------------------------------
+
+def _write_invoices_excel(path: Path, rows: List[Dict[str, Any]]) -> None:
+    """Writes RS.ge report-style Excel (header in row 0)."""
+    header = [
+        "საქონელი / მომსახურება", "ზომის ერთეული", "რაოდ.",
+        "ღირებულება დღგ და აქციზის ჩათვლით", "დაბეგვრა",
+        "დღგ", "აქციზი", "ID", "სერია №", "მყიდველი",
+        "გამყიდველი", "გამოწერის თარ.", "ოპერაციის თარ.", "შენიშვნა",
+    ]
+    df_rows = []
+    for r in rows:
+        df_rows.append([
+            r.get("product", "მარკეტინგული"),
+            "მომსახურება", None, r.get("amount", 0), "ჩვეულებრივი",
+            0, None, r.get("id", 1), "ეა-84 1111", r.get("buyer", ""),
+            r.get("seller", ""), r.get("issued_at"), r.get("op_date"), "",
+        ])
+    df = pd.DataFrame(df_rows, columns=header)
+    df.to_excel(path, index=False)
+
+
+def test_parse_invoices_issued_filters_to_our_tax_id(tmp_path: Path) -> None:
+    f = tmp_path / "report (1).xls"
+    _write_invoices_excel(f, [
+        {"seller": "(400333858-დღგ) შპს ჯეო ფუდთაიმი", "buyer": "შპს ფუდმარტი",
+         "amount": 2299.63, "op_date": pd.Timestamp("2024-08-01")},
+        {"seller": "(400333858-დღგ) შპს ჯეო ფუდთაიმი", "buyer": "შპს მასტერ თრეიდი",
+         "amount": 1000.00, "op_date": pd.Timestamp("2024-08-15")},
+        # Row where we are NOT the seller — must be ignored
+        {"seller": "(999999999) სხვა კომპანია", "buyer": "შპს ვინმე",
+         "amount": 5000.00, "op_date": pd.Timestamp("2024-08-20")},
+        # Different month
+        {"seller": "(400333858-დღგ) შპს ჯეო ფუდთაიმი", "buyer": "შპს ფუდმარტი",
+         "amount": 3000.00, "op_date": pd.Timestamp("2024-09-05")},
+    ])
+    result = parse_invoices_issued(str(f), our_tax_id="400333858")
+    assert "2024-08" in result
+    assert "2024-09" in result
+    assert result["2024-08"] == pytest.approx(2299.63 + 1000.00)
+    assert result["2024-09"] == pytest.approx(3000.00)
+
+
+def test_parse_invoices_issued_missing_file_returns_empty() -> None:
+    assert parse_invoices_issued("/nonexistent.xls") == {}
+
+
+def test_find_invoices_issued_excel_in_subfolder(tmp_path: Path) -> None:
+    fa = tmp_path / "Financial_Analysis"
+    subfolder = fa / "ანგარიშ ფაქტურები"
+    subfolder.mkdir(parents=True)
+    (subfolder / "report (1).xls").write_text("x")
+    (subfolder / "ა.ფ რეესტრი.xls").write_text("x")  # must NOT be picked
+    found = find_invoices_issued_excel(str(fa))
+    assert found is not None
+    assert Path(found).name.lower().startswith("report")
+
+
+def test_find_invoices_issued_excel_searches_up_to_workspace(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    project_fa = workspace / "project" / "Financial_Analysis"
+    project_fa.mkdir(parents=True)
+    # Only workspace-level has the subfolder
+    ws_sub = workspace / "Financial_Analysis" / "ანგარიშ ფაქტურები"
+    ws_sub.mkdir(parents=True)
+    (ws_sub / "report.xlsx").write_text("x")
+    found = find_invoices_issued_excel(str(project_fa))
+    assert found is not None
+
+
+def test_compute_vat_reconciliation_uses_invoices_from_report(tmp_path: Path) -> None:
+    """When report.xls is provided, invoices_ge comes from it (bruto)."""
+    fx = _vat_fixture()
+    invoices_f = tmp_path / "report.xls"
+    _write_invoices_excel(invoices_f, [
+        {"seller": "(400333858-დღგ) შპს ჯეო ფუდთაიმი", "buyer": "შპს ფუდმარტი",
+         "amount": 19591.98, "op_date": pd.Timestamp("2024-08-15")},
+    ])
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle=fx["retail"],
+        tbc_card_income_bundle=fx["tbc"],
+        bog_pos_income_bundle=fx["bog"],
+        manual_journal_full=fx["manual"],
+        invoices_issued_path=str(invoices_f),
+    )
+    row = bundle["by_month"][0]
+    assert row["invoices_ge"] == pytest.approx(19591.98)
+    # total_real = cashreg_in + bank_card + invoices
+    assert row["total_real_ge"] == pytest.approx(
+        row["cashreg_in_ge"] + row["bank_card_ge"] + 19591.98
+    )
+
+
+def test_compute_vat_reconciliation_fallback_to_audit_af_bruto(tmp_path: Path) -> None:
+    """Without report.xls, invoices_ge = audit_af × 1.18 (approximate bruto)."""
+    fx = _vat_fixture()
+    audit_f = tmp_path / "გაანგარიშება.xlsx"
+    _write_audit_excel(audit_f, [
+        {"period": 202408, "declared": 139485, "af": 16603, "cashreg": 142413, "tbc": 6697, "bog": 71200},
+    ])
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle=fx["retail"],
+        tbc_card_income_bundle=fx["tbc"],
+        bog_pos_income_bundle=fx["bog"],
+        manual_journal_full=fx["manual"],
+        audit_excel_path=str(audit_f),
+    )
+    row = bundle["by_month"][0]
+    # invoices_ge = 16603 × 1.18 = 19591.54
+    assert row["invoices_ge"] == pytest.approx(16603 * 1.18)
 
 
 # ---------------------------------------------------------------------------

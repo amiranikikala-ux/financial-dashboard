@@ -157,6 +157,77 @@ def parse_audit_excel(path: str) -> Dict[str, Dict[str, float]]:
     return out
 
 
+def find_invoices_issued_excel(financial_analysis_dir: str) -> Optional[str]:
+    """Auto-detect issued-invoices file (RS.ge "report" export).
+
+    Searches `ანგარიშ ფაქტურები/` subfolder at several plausible locations:
+    under the given `Financial_Analysis` dir, and under `Financial_Analysis/`
+    folders in the parent directories (workspace root). Returns the first
+    `report*.xls*` file found.
+    """
+    if not financial_analysis_dir:
+        return None
+
+    def _scan_ა_ფ_dir(dir_path: str) -> Optional[str]:
+        if not dir_path or not os.path.isdir(dir_path):
+            return None
+        try:
+            for name in os.listdir(dir_path):
+                lower = name.lower()
+                if lower.startswith("report") and (lower.endswith(".xls") or lower.endswith(".xlsx")):
+                    return os.path.join(dir_path, name)
+        except OSError:
+            pass
+        return None
+
+    current = financial_analysis_dir
+    for _ in range(3):
+        if current and os.path.isdir(current):
+            # Direct subfolder
+            hit = _scan_ა_ფ_dir(os.path.join(current, "ანგარიშ ფაქტურები"))
+            if hit:
+                return hit
+            # Sibling Financial_Analysis (when current is project root or workspace)
+            hit = _scan_ა_ფ_dir(os.path.join(current, "Financial_Analysis", "ანგარიშ ფაქტურები"))
+            if hit:
+                return hit
+        next_up = os.path.dirname(current.rstrip(os.sep))
+        if not next_up or next_up == current:
+            break
+        current = next_up
+    return None
+
+
+def parse_invoices_issued(path: str, our_tax_id: str = "400333858") -> Dict[str, float]:
+    """
+    Parses RS.ge "report" Excel (ა/ფ გამოწერილი). Filters rows where
+    `გამყიდველი` contains `our_tax_id` (we are the seller), aggregates
+    `ღირებულება დღგ და აქციზის ჩათვლით` (bruto) by `ოპერაციის თარ.` month.
+    Returns {"YYYY-MM": amount_ge} dict.
+    """
+    if not path or not os.path.isfile(path):
+        return {}
+    try:
+        df = pd.read_excel(path)
+    except Exception as exc:
+        logger.warning("invoices_issued parse failed: %s", exc)
+        return {}
+    df.columns = [str(c).strip() for c in df.columns]
+    if "გამყიდველი" not in df.columns:
+        return {}
+    amount_col = next((c for c in df.columns if "ღირებულება" in c), None)
+    date_col = next((c for c in df.columns if "ოპერაციის" in c and "თარ" in c), None)
+    if not amount_col or not date_col:
+        return {}
+    df_sellers = df[df["გამყიდველი"].astype(str).str.contains(our_tax_id, na=False)].copy()
+    if df_sellers.empty:
+        return {}
+    df_sellers["amount"] = pd.to_numeric(df_sellers[amount_col], errors="coerce").fillna(0)
+    df_sellers["month"] = pd.to_datetime(df_sellers[date_col], errors="coerce").dt.to_period("M").astype(str)
+    by_month = df_sellers.groupby("month")["amount"].sum().to_dict()
+    return {k: float(v) for k, v in by_month.items() if re.match(r"^\d{4}-\d{2}$", k)}
+
+
 def find_audit_excel(financial_analysis_dir: str) -> Optional[str]:
     """Auto-detect audit file: any xlsx starting with 'გაანგარიშება'.
 
@@ -321,6 +392,8 @@ def compute_vat_reconciliation(
     manual_journal_full: List[Dict[str, Any]],
     audit_excel_path: Optional[str] = None,
     cash_outflow_journal_path: Optional[str] = None,
+    invoices_issued_path: Optional[str] = None,
+    our_tax_id: str = "400333858",
 ) -> Dict[str, Any]:
     """
     Builds the vat_reconciliation bundle for data.json.
@@ -337,10 +410,11 @@ def compute_vat_reconciliation(
     audit_by_month = parse_audit_excel(audit_excel_path) if audit_excel_path else {}
     journal_entries = parse_cash_outflow_journal(cash_outflow_journal_path) if cash_outflow_journal_path else []
     cash_classified_by_month = _cash_classified_by_month(journal_entries)
+    invoices_by_month = parse_invoices_issued(invoices_issued_path, our_tax_id=our_tax_id) if invoices_issued_path else {}
 
     # Collect all months seen anywhere
     all_months = set()
-    for d in (max_pos_by_month, tbc_pos_by_month, bog_pos_by_month, manual_by_month, audit_by_month, cash_classified_by_month):
+    for d in (max_pos_by_month, tbc_pos_by_month, bog_pos_by_month, manual_by_month, audit_by_month, cash_classified_by_month, invoices_by_month):
         all_months.update(d.keys())
     months_sorted = sorted(all_months)
 
@@ -376,7 +450,15 @@ def compute_vat_reconciliation(
             + float(audit_row.get("ufz_ge") or 0)
         ) if audit_row else None
 
-        invoices = None  # TODO Sprint 5.2: RS outgoing waybills
+        # invoices_ge from RS.ge ა/ფ report (Sprint 5.1.1).
+        # bruto value (with VAT); audit's af_ge is net — multiply by 1.18 if only audit is available.
+        invoices_from_report = invoices_by_month.get(period)
+        if invoices_from_report is not None:
+            invoices = float(invoices_from_report)
+        elif audit_row.get("af_ge"):
+            invoices = float(audit_row["af_ge"]) * 1.18  # approximate bruto
+        else:
+            invoices = None
         total_real = cashreg_in + bank_card + (invoices or 0)
         gap_vs_declared = (total_real - declared_val) if declared_val is not None else None
 
@@ -479,6 +561,10 @@ def compute_vat_reconciliation(
         "cash_journal_source": (
             {"path": cash_outflow_journal_path, "entries_parsed": len(journal_entries)}
             if cash_outflow_journal_path and journal_entries else None
+        ),
+        "invoices_issued_source": (
+            {"path": invoices_issued_path, "months_parsed": len(invoices_by_month)}
+            if invoices_issued_path and invoices_by_month else None
         ),
     }
 

@@ -189,6 +189,7 @@ from dashboard_pipeline.manual_payments import (
 from dashboard_pipeline.vat_reconciliation import (
     compute_vat_reconciliation,
     find_audit_excel,
+    find_invoices_issued_excel,
 )
 
 # ---------------------------------------------------------------------------
@@ -1395,6 +1396,7 @@ def run():
     # Sprint 5.1 — VAT reconciliation section (computed from raw pipeline outputs)
     financial_analysis_dir = os.path.join(script_dir, "Financial_Analysis")
     audit_excel_path = find_audit_excel(financial_analysis_dir)
+    invoices_issued_path = find_invoices_issued_excel(financial_analysis_dir)
     cash_journal_path = os.path.join(financial_analysis_dir, "cash_outflow_journal.csv")
     manual_rows = read_manual_journal_rows(manual_payments_csv_path())
     data["vat_reconciliation"] = compute_vat_reconciliation(
@@ -1404,6 +1406,7 @@ def run():
         manual_journal_full=manual_rows,
         audit_excel_path=audit_excel_path,
         cash_outflow_journal_path=cash_journal_path,
+        invoices_issued_path=invoices_issued_path,
     )
     vat_summary = data["vat_reconciliation"]["summary"]
     logger.info(
