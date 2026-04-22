@@ -1706,6 +1706,96 @@ SCENARIO_SIMULATOR_TOOL: Dict[str, Any] = {
 }
 
 
+PRODUCT_PROFITABILITY_XRAY_TOOL: Dict[str, Any] = {
+    "name": "analyze_product_profitability",
+    "description": (
+        "Phase 2.5 — Product Profitability X-Ray. Scans "
+        "`retail_sales.by_product` and surfaces the worst margin bleeders "
+        "+ best margin earners + suspicious entries (margin outside "
+        "[-5%, 90%] = likely data entry error). Answers 'რომელი SKU "
+        "ვკარგავ?' / 'რომელი პროდუქტი სიცოცხლეს მოიტანს?' / 'product "
+        "profitability'.\n\n"
+        "**Triggers (CRITICAL):** any product-level margin question: "
+        "'რომელი პროდუქტი იზიდავს ფულს?', 'margin რომელ SKU-ზე დაბალია?', "
+        "'რა პროდუქტები უნდა მოვიშორო?', 'product X-ray', 'რომელ კატეგორიაში "
+        "margin პრობლემაა?', 'ტოპ 10 საუკეთესო/საუარესო პროდუქტი'.\n\n"
+        "**Anti-triggers (NEVER call):**\n"
+        "  • supplier-level analysis ('ვასაძეს რა ფული უნდა?') → "
+        "`prepare_supplier_brief`\n"
+        "  • category/store-level P&L (not product-level) → "
+        "`read_data_json(section='monthly_pnl')`\n"
+        "  • dead stock (unsold items) → `analyze_dead_stock`\n"
+        "  • future price simulation → `simulate_scenario`.\n\n"
+        "**Flags explained:**\n"
+        "  • 🟢 HEALTHY — margin ≥ 15% (retail comfort zone)\n"
+        "  • 🟡 THIN — margin 5–15% (vulnerable to any cost shock)\n"
+        "  • 🔴 BLEEDING — margin < 5% (losing money OR near-zero)\n"
+        "  • ⚠️ SUSPICIOUS — margin outside [-5%, 90%]: negative = "
+        "selling below cost (data error or liquidation); > 90% = likely "
+        "cost field missing. Quarantined from best/worst rankings.\n\n"
+        "**Revenue threshold:** products with revenue < "
+        "`min_revenue_threshold_ge` (default 500 ₾) are EXCLUDED from "
+        "ranking — a product sold once for 12 ₾ doesn't deserve "
+        "'worst performer' status. Raise threshold for store-level focus, "
+        "lower for deep analysis.\n\n"
+        "**Returns:** `{store, category_filter, min_revenue_threshold_ge, "
+        "top_n, products_scanned, products_qualified, worst_performers[], "
+        "best_performers[], suspicious[], portfolio_margin_pct, summary_ka, "
+        "notes[]}`. Each entry in worst/best/suspicious = `{product_name, "
+        "category, product_code, revenue_ge, cost_ge, profit_ge, "
+        "gross_margin_pct, total_quantity, flag}`.\n\n"
+        "**Honesty rule:** ALWAYS surface `summary_ka` verbatim — it "
+        "cites portfolio margin, worst SKU, best SKU, and suspicious "
+        "count. If `suspicious` is non-empty, warn the user explicitly "
+        "that those rows need Excel verification before action — "
+        "acting on a data-entry error can waste a week of work."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "store": {
+                "type": "string",
+                "enum": ["total", "ოზურგეთი", "დვაბზუ"],
+                "description": (
+                    "Which store's product-level P&L to x-ray. Default: "
+                    "'total' (aggregate). Single-store mode reads the "
+                    "per-product object_breakdown block."
+                ),
+            },
+            "top_n": {
+                "type": "integer",
+                "minimum": 3,
+                "maximum": 50,
+                "description": (
+                    "How many to return in worst_performers and "
+                    "best_performers (each). Default 10. Raise for a "
+                    "deeper review; 3-5 for a quick executive summary."
+                ),
+            },
+            "category_filter": {
+                "type": "string",
+                "description": (
+                    "Optional case-insensitive substring matched against "
+                    "product category. Example: 'ფრენჩიზი', 'ალკოჰოლი', "
+                    "'სულ რძე'. Omit to scan every category."
+                ),
+            },
+            "min_revenue_threshold_ge": {
+                "type": "number",
+                "minimum": 0,
+                "description": (
+                    "Minimum GEL revenue required for a product to enter "
+                    "the ranking. Default 500. Prevents one-off sales "
+                    "from dominating 'worst margin' lists."
+                ),
+            },
+        },
+        "required": [],
+        "additionalProperties": False,
+    },
+}
+
+
 TOOL_SCHEMAS: List[Dict[str, Any]] = [
     READ_DATA_JSON_TOOL,
     COMPUTE_WAYBILL_TOTAL_TOOL,
@@ -1722,6 +1812,7 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
     COMPUTE_CASH_FLOW_PROJECTION_TOOL,
     BUILD_DEBT_PLAN_TOOL,
     SCENARIO_SIMULATOR_TOOL,
+    PRODUCT_PROFITABILITY_XRAY_TOOL,
     READ_SOURCE_CODE_TOOL,
     GREP_CODE_TOOL,
     READ_EXCEL_SOURCE_TOOL,
@@ -2112,6 +2203,18 @@ class ToolDispatcher:
                 cogs_share=args.get("cogs_share"),
                 scenario_label=args.get("scenario_label"),
             )
+        elif name == "analyze_product_profitability":
+            from dashboard_pipeline.ai.product_profitability import (
+                analyze_product_profitability as _analyze_product_profitability,
+            )
+
+            result = _analyze_product_profitability(
+                self._data_loader,
+                store=args.get("store"),
+                top_n=args.get("top_n"),
+                category_filter=args.get("category_filter"),
+                min_revenue_threshold_ge=args.get("min_revenue_threshold_ge"),
+            )
         elif name == "read_source_code":
             result = read_source_code(
                 args.get("file_path"),
@@ -2340,6 +2443,22 @@ _SUMMARY_KEYS: Tuple[str, ...] = (
     "net_ge",
     "margin_pct",
     "margin_pp",
+    # Phase 2.5 Product Profitability X-Ray tool fields
+    "category_filter",
+    "min_revenue_threshold_ge",
+    "products_scanned",
+    "products_qualified",
+    "worst_performers",
+    "best_performers",
+    "suspicious",
+    "portfolio_margin_pct",
+    "product_name",
+    "product_code",
+    "cost_ge",
+    "profit_ge",
+    "gross_margin_pct",
+    "total_quantity",
+    "flag",
 )
 
 

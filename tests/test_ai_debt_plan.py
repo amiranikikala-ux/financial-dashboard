@@ -775,10 +775,10 @@ class TestDebtPlanToolSchema:
         names = [t["name"] for t in TOOL_SCHEMAS]
         assert "build_debt_repayment_plan" in names
 
-    def test_total_schemas_is_20(self):
+    def test_total_schemas_is_21(self):
         from dashboard_pipeline.ai.tools import TOOL_SCHEMAS
 
-        assert len(TOOL_SCHEMAS) == 20
+        assert len(TOOL_SCHEMAS) == 21
 
     def test_sits_after_cash_flow_projection(self):
         # Phase 2.1 inserted compute_cash_flow_projection between

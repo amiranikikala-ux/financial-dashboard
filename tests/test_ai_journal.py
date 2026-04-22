@@ -283,11 +283,12 @@ class TestJournalToolSchemas:
         """
         assert TOOL_SCHEMAS[-1]["name"] == "propose_feature"
 
-    def test_total_count_is_20(self):
+    def test_total_count_is_21(self):
         """Phase 4A grew TOOL_SCHEMAS 17 → 18; Phase 2.1 grew 18 → 19
         (+ compute_cash_flow_projection); Phase 2.2 grew 19 → 20
-        (+ simulate_scenario)."""
-        assert len(TOOL_SCHEMAS) == 20
+        (+ simulate_scenario); Phase 2.5 grew 20 → 21
+        (+ analyze_product_profitability)."""
+        assert len(TOOL_SCHEMAS) == 21
 
     def test_add_schema_shape(self):
         props = JOURNAL_ADD_ENTRY_TOOL["input_schema"]["properties"]
