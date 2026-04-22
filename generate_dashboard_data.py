@@ -179,7 +179,16 @@ from dashboard_pipeline.manual_payments import (
     load_manual_payments,
     sync_manual_payments_journal,
     read_manual_journal_full,
+    read_manual_journal_rows,
     collect_rs_suppliers_by_tax_id,
+)
+
+# ---------------------------------------------------------------------------
+# Module imports — VAT reconciliation (Sprint 5.1)
+# ---------------------------------------------------------------------------
+from dashboard_pipeline.vat_reconciliation import (
+    compute_vat_reconciliation,
+    find_audit_excel,
 )
 
 # ---------------------------------------------------------------------------
@@ -420,6 +429,7 @@ def _collect_income_bundles(script_dir, object_mapping):
     )
     return {
         "tbc_card_income_bundle": tbc_card_income_bundle,
+        "bog_pos_income_bundle": bog_pos_income_bundle,
         "pos_terminal_all_rows": pos_terminal_all_rows,
         "pos_terminal_income_bundle": pos_terminal_income_bundle,
         "tbc_expenses_bundle": tbc_expenses_bundle,
@@ -1381,6 +1391,34 @@ def run():
                 **_build_base_meta(inc, retail_overall, retail_duplicate_policy),
             },
         }
+
+    # Sprint 5.1 — VAT reconciliation section (computed from raw pipeline outputs)
+    financial_analysis_dir = os.path.join(script_dir, "Financial_Analysis")
+    audit_excel_path = find_audit_excel(financial_analysis_dir)
+    cash_journal_path = os.path.join(financial_analysis_dir, "cash_outflow_journal.csv")
+    manual_rows = read_manual_journal_rows(manual_payments_csv_path())
+    data["vat_reconciliation"] = compute_vat_reconciliation(
+        retail_sales_bundle=retail_sales_bundle,
+        tbc_card_income_bundle=tbc_card_income_bundle,
+        bog_pos_income_bundle=inc["bog_pos_income_bundle"],
+        manual_journal_full=manual_rows,
+        audit_excel_path=audit_excel_path,
+        cash_outflow_journal_path=cash_journal_path,
+    )
+    vat_summary = data["vat_reconciliation"]["summary"]
+    logger.info(
+        "VAT reconciliation: %s თვე (red %s | yellow %s | green %s | no-declared %s) · "
+        "total_real %s ₾ · declared %s ₾ · gap %s ₾ · unaccounted cash %s ₾",
+        vat_summary["months_total"],
+        vat_summary["months_red"],
+        vat_summary["months_yellow"],
+        vat_summary["months_green"],
+        vat_summary["months_no_declared"],
+        f"{vat_summary['total_real_ge']:,.2f}",
+        f"{vat_summary['total_declared_ge']:,.2f}",
+        f"{vat_summary['total_gap_ge']:+,.2f}",
+        f"{vat_summary['total_unaccounted_cash_ge']:,.2f}",
+    )
 
     _enrich_meta(data, generated_at, source_manifest, source_manifest_summary, config_validation)
 

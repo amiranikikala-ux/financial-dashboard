@@ -232,6 +232,13 @@ ALLOWED_SECTIONS: Dict[str, str] = {
     "company_valuation": "DCF, multiple, and book value summary",
     "executive_summary": "KPIs and alerts for executive view",
     "retail_sales": "Retail sales aggregates (overall, by_object, by_month, tops)",
+    "vat_reconciliation": (
+        "VAT reconciliation per month (Sprint 5.1). "
+        "Contains by_month array with cashreg_in_ge / bank_card_ge / tbc_pos_ge / bog_pos_ge / "
+        "cash_unaccounted_ge / vat_total_liability_ge / declared_ge / gap_vs_declared_ge / status. "
+        "Prefer the dedicated `get_vat_reconciliation_month` tool for single-month drill-down — "
+        "this section is best for scanning red-flag months list or summary totals."
+    ),
     "imported_products": "Imported products summary + items",
     "cashflow_summary": "Cashflow inflow/outflow/net + monthly",
     "response_meta": "Contract meta of the artifact (source, tab, row_count)",
@@ -1937,6 +1944,161 @@ FIND_PROMOTION_CANDIDATES_TOOL: Dict[str, Any] = {
 }
 
 
+GET_VAT_RECONCILIATION_MONTH_TOOL: Dict[str, Any] = {
+    "name": "get_vat_reconciliation_month",
+    "description": (
+        "Sprint 5.1 — VAT reconciliation for ONE month. Returns raw-data-computed "
+        "income capture (MAX POS, TBC POS, BOG POS, cashreg_in), cash outflow "
+        "classification (manual supplier payments + user-classified cash journal + "
+        "unaccounted residual), declared turnover (if audit file uploaded), and "
+        "gap vs declared.\n\n"
+        "**Triggers:** 'რა მოხდა 2024-08-ში?', 'declared 2024 აგვისტოში?', "
+        "'ბრუნვა იანვარი 2025', 'აუდიტის შედარება 2024-07', 'VAT ხარვეზი', "
+        "'რამდენი შემოსავალი მქონდა რეალურად აპრილში', 'სალარო მარტში'.\n\n"
+        "**Per-month focus (CRITICAL):** user explicitly prefers single-month queries "
+        "over full 37-month dumps. If the user asks about a specific month (e.g. "
+        "'აგვისტო 2024'), call this tool — do NOT dump the whole `vat_reconciliation` "
+        "section via `read_data_json`. Multi-month overviews: use `read_data_json("
+        "section='vat_reconciliation')` and cherry-pick summary only.\n\n"
+        "**Anti-triggers:**\n"
+        "  • cash runway / forward projection → `compute_cash_flow_projection`\n"
+        "  • historical P&L month → `read_data_json(section='monthly_pnl')`\n"
+        "  • supplier debt per month → `read_data_json(section='ap_monthly_trend')`.\n\n"
+        "**Consultation escalation:** if returned `row.cash_unaccounted_ge ≥ 5000 ₾`, "
+        "call `explain_unaccounted_cash(period)` next to surface the consultation "
+        "prompt + 18% VAT liability preview, and ASK the user to classify.\n\n"
+        "**Returns:** `{period, row{all vat_reconciliation fields}, summary_ka, "
+        "methodology_ka, vat_rate, unaccounted_threshold_ge, source}`.\n\n"
+        "**Honesty rule:** surface `summary_ka` verbatim. If `row.status == 'red'` "
+        "or `needs_user_input == true`, flag to user BEFORE answering the question."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "period": {
+                "type": "string",
+                "pattern": r"^\d{4}-\d{2}$",
+                "description": "Month in YYYY-MM format (e.g. '2024-08'). REQUIRED.",
+            },
+        },
+        "required": ["period"],
+        "additionalProperties": False,
+    },
+}
+
+
+EXPLAIN_UNACCOUNTED_CASH_TOOL: Dict[str, Any] = {
+    "name": "explain_unaccounted_cash",
+    "description": (
+        "Sprint 5.1 — Unaccounted cash consultation. For a given month, returns the "
+        "unaccounted cash amount (cashreg_in − manual_supplier_payments − already-"
+        "classified cash journal entries) + 18% VAT liability preview + "
+        "user-ready Georgian consultation prompt listing the valid cash-out categories.\n\n"
+        "**Triggers:** when `get_vat_reconciliation_month` returned "
+        "`needs_user_input=true`, OR the user asks 'სად წავიდა 2024-08-ის ნაღდი?' / "
+        "'რა მოხდა ნაღდი ფულით?' / 'რამდენი გადასახადი მერგება ნაღდზე?'.\n\n"
+        "**Anti-triggers:**\n"
+        "  • general audit overview → `get_vat_reconciliation_month`\n"
+        "  • recording the answer → `record_cash_outflow`.\n\n"
+        "**Workflow:** this tool RETURNS a question for the user — do not fabricate "
+        "an answer. Surface `prompt_ka` verbatim, wait for the user's reply, then "
+        "call `record_cash_outflow` for each classification the user gives.\n\n"
+        "**Returns:** `{period, cashreg_in_ge, cash_supplier_ge, cash_classified_ge, "
+        "cash_unaccounted_ge, classified_breakdown, potential_vat_liability_ge, "
+        "categories[], prompt_ka, summary_ka, needs_user_input}`."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "period": {
+                "type": "string",
+                "pattern": r"^\d{4}-\d{2}$",
+                "description": "Month in YYYY-MM format.",
+            },
+        },
+        "required": ["period"],
+        "additionalProperties": False,
+    },
+}
+
+
+RECORD_CASH_OUTFLOW_TOOL: Dict[str, Any] = {
+    "name": "record_cash_outflow",
+    "description": (
+        "Sprint 5.1 — Records a user-classified cash outflow entry to "
+        "`Financial_Analysis/cash_outflow_journal.csv`. Call this AFTER the user "
+        "replies to `explain_unaccounted_cash`. Each reply may map to MULTIPLE "
+        "entries (e.g. 15K ხელფასი ხელზე + 5K პერსონალური + 3K საკანცელარიო) — "
+        "call this tool once per entry.\n\n"
+        "**Categories (enum):**\n"
+        "  • `salary_cash` — ხელფასი ხელზე (default vat_applies=true)\n"
+        "  • `personal_withdrawal` — პერსონალური ამოღება (vat_applies=true)\n"
+        "  • `supplier_undocumented` — მომწოდებელი ხელზე, არ ფიქსირდებოდა (vat_applies=false)\n"
+        "  • `business_expense` — ბიზნეს ხარჯი ქვითრით (vat_applies=false)\n"
+        "  • `advance_to_employee` — ავანსი თანამშრომელს (vat_applies=false)\n"
+        "  • `return_to_customer` — კლიენტის დაბრუნება (vat_applies=false)\n"
+        "  • `unknown` — უცნობი / დაიკარგა (vat_applies=true)\n\n"
+        "**Side effect:** appends a row to the journal CSV. data.json is NOT "
+        "automatically regenerated — the tool returns an in-memory preview of "
+        "updated remaining unaccounted + flags `requires_pipeline_rerun=true`. "
+        "After a batch of entries, recommend the user re-run "
+        "`python generate_dashboard_data.py` to refresh totals.\n\n"
+        "**Returns:** `{status, period, entry{…}, previous_unaccounted_ge, "
+        "remaining_unaccounted_preview_ge, preview_vat_liability_ge, journal_path, "
+        "summary_ka, requires_pipeline_rerun}`."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "period": {
+                "type": "string",
+                "pattern": r"^\d{4}-\d{2}$",
+                "description": "Month in YYYY-MM format.",
+            },
+            "amount_ge": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "Amount of cash classified under this category (positive ₾).",
+            },
+            "purpose_ka": {
+                "type": "string",
+                "description": (
+                    "Free-text description in Georgian (e.g. 'ხელფასი ხელზე სამ "
+                    "თანამშრომელზე', 'საკანცელარიო + მონტაჟი'). User's exact words "
+                    "are best — preserves audit-trail context."
+                ),
+            },
+            "category": {
+                "type": "string",
+                "enum": [
+                    "salary_cash",
+                    "personal_withdrawal",
+                    "supplier_undocumented",
+                    "business_expense",
+                    "advance_to_employee",
+                    "return_to_customer",
+                    "unknown",
+                ],
+                "description": "Classification bucket. See tool description for semantics + default vat_applies per category.",
+            },
+            "vat_applies": {
+                "type": "boolean",
+                "description": (
+                    "Override the default VAT treatment for this category. Only "
+                    "set explicitly if the user disagrees with the category default."
+                ),
+            },
+            "notes": {
+                "type": "string",
+                "description": "Optional extra context (e.g. invoice reference, cross-check source).",
+            },
+        },
+        "required": ["period", "amount_ge", "purpose_ka", "category"],
+        "additionalProperties": False,
+    },
+}
+
+
 TOOL_SCHEMAS: List[Dict[str, Any]] = [
     READ_DATA_JSON_TOOL,
     COMPUTE_WAYBILL_TOTAL_TOOL,
@@ -1955,6 +2117,9 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
     SCENARIO_SIMULATOR_TOOL,
     PRODUCT_PROFITABILITY_XRAY_TOOL,
     FIND_PROMOTION_CANDIDATES_TOOL,
+    GET_VAT_RECONCILIATION_MONTH_TOOL,
+    EXPLAIN_UNACCOUNTED_CASH_TOOL,
+    RECORD_CASH_OUTFLOW_TOOL,
     READ_SOURCE_CODE_TOOL,
     GREP_CODE_TOOL,
     READ_EXCEL_SOURCE_TOOL,
@@ -2371,6 +2536,39 @@ class ToolDispatcher:
                 max_days_since_last_sale=args.get("max_days_since_last_sale"),
                 max_suggested_discount_pct=args.get("max_suggested_discount_pct"),
                 min_volume=args.get("min_volume"),
+            )
+        elif name == "get_vat_reconciliation_month":
+            from dashboard_pipeline.ai.vat_tools import (
+                get_vat_reconciliation_month as _get_vat_reconciliation_month,
+            )
+
+            result = _get_vat_reconciliation_month(
+                self._data_loader,
+                period=args.get("period"),
+            )
+        elif name == "explain_unaccounted_cash":
+            from dashboard_pipeline.ai.vat_tools import (
+                explain_unaccounted_cash as _explain_unaccounted_cash,
+            )
+
+            result = _explain_unaccounted_cash(
+                self._data_loader,
+                period=args.get("period"),
+            )
+        elif name == "record_cash_outflow":
+            from dashboard_pipeline.ai.vat_tools import (
+                record_cash_outflow as _record_cash_outflow,
+            )
+
+            result = _record_cash_outflow(
+                self._data_loader,
+                project_root=str(self._project_root) if self._project_root else None,
+                period=args.get("period"),
+                amount_ge=args.get("amount_ge"),
+                purpose_ka=args.get("purpose_ka"),
+                category=args.get("category"),
+                vat_applies=args.get("vat_applies"),
+                notes=args.get("notes"),
             )
         elif name == "read_source_code":
             result = read_source_code(

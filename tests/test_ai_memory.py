@@ -311,8 +311,9 @@ class TestMemoryToolSchemas:
         (+ compute_cash_flow_projection); Phase 2.2 grew 19 → 20
         (+ simulate_scenario); Phase 2.5 grew 20 → 21
         (+ analyze_product_profitability); Phase 2.6 grew 21 → 22
-        (+ find_promotion_candidates)."""
-        assert len(TOOL_SCHEMAS) == 22
+        (+ find_promotion_candidates); Phase 5.1 grew 22 → 25
+        (+ 3 VAT reconciliation tools)."""
+        assert len(TOOL_SCHEMAS) == 25
 
     def test_recall_context_position(self):
         # Sits right after forecast_revenue (index 3) — both are

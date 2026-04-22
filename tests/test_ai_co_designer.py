@@ -699,8 +699,9 @@ class TestProposeFeatureToolSchema:
     def test_propose_feature_at_tail(self):
         # Tail index shifts as new tools insert before the investigator block:
         # Phase 4A: 17; Phase 2.1: 18; Phase 2.2: 19; Phase 2.5: 20;
-        # Phase 2.6: 21.
-        assert TOOL_SCHEMAS[21]["name"] == "propose_feature"
+        # Phase 2.6: 21; Phase 5.1: 24 (+3 VAT tools).
+        assert TOOL_SCHEMAS[-1]["name"] == "propose_feature"
+        assert TOOL_SCHEMAS[24]["name"] == "propose_feature"
 
 
 # ---------------------------------------------------------------------------

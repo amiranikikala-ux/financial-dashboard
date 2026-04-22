@@ -135,9 +135,11 @@ class TestForecastToolSchema:
         Phase 4A added build_debt_repayment_plan → 18; Phase 2.1 added
         compute_cash_flow_projection → 19; Phase 2.2 added simulate_scenario → 20;
         Phase 2.5 added analyze_product_profitability → 21;
-        Phase 2.6 added find_promotion_candidates → 22.
+        Phase 2.6 added find_promotion_candidates → 22;
+        Phase 5.1 added 3 VAT tools (get_vat_reconciliation_month,
+        explain_unaccounted_cash, record_cash_outflow) → 25.
         Pin the current expected total to catch silent churn either direction."""
-        assert len(TOOL_SCHEMAS) == 22
+        assert len(TOOL_SCHEMAS) == 25
 
     def test_forecast_revenue_index(self):
         """Sits in the compute-family cluster (index 3 right after `compute`)."""
