@@ -90,6 +90,51 @@ def _filter_source_files_by_period(files, period_filter=None, source_file_stats=
     return filtered_files
 
 
+def _category_month_margin_pct(revenue, profit):
+    revenue_val = float(revenue or 0)
+    if revenue_val == 0:
+        return 0.0
+    return float((float(profit or 0) / revenue_val) * 100.0)
+
+
+def _build_by_category_by_month_rows(category_month_stats, category_display_names=None):
+    """Serialize per-(category, month) accumulator into sorted list of rows.
+
+    Feeds Phase 2.9 trend_detector: lets AI compare per-category revenue/margin
+    month-over-month without scanning raw retail_sales rows.
+    """
+    display_names = category_display_names or {}
+    rows = []
+    for (category_key, month_key), stats in category_month_stats.items():
+        if not month_key or month_key == "უცნობი თვე":
+            continue
+        revenue = float(stats.get("revenue_ge") or 0)
+        cost = float(stats.get("cost_ge") or 0)
+        profit = float(stats.get("profit_ge") or 0)
+        quantity = float(stats.get("total_quantity") or 0)
+        row_count = int(stats.get("row_count") or 0)
+        rows.append(
+            {
+                "category": display_names.get(category_key) or category_key or "უცნობი კატეგორია",
+                "normalized_category": category_key or None,
+                "month": month_key,
+                "row_count": row_count,
+                "total_quantity": quantity,
+                "revenue_ge": revenue,
+                "cost_ge": cost,
+                "profit_ge": profit,
+                "gross_margin_pct": float(_category_month_margin_pct(revenue, profit)),
+            }
+        )
+    rows.sort(
+        key=lambda row: (
+            str(row.get("normalized_category") or ""),
+            _month_sort_key(row.get("month") or ""),
+        )
+    )
+    return rows
+
+
 # ---------------------------------------------------------------------------
 # empty_retail_sales_bundle
 # ---------------------------------------------------------------------------
@@ -159,6 +204,7 @@ def empty_retail_sales_bundle(period_filter=None):
         "products_truncated": False,
         "by_product": [],
         "by_month": [],
+        "by_category_by_month": [],
         "top_objects_by_profit": [],
         "top_categories_by_profit": [],
         "top_products_by_revenue": [],
@@ -285,6 +331,15 @@ def collect_retail_sales_bundle(
     object_stats = {}
     category_stats = {}
     product_stats = {}
+    category_month_stats = defaultdict(
+        lambda: {
+            "row_count": 0,
+            "total_quantity": 0.0,
+            "revenue_ge": 0.0,
+            "cost_ge": 0.0,
+            "profit_ge": 0.0,
+        }
+    )
     preview_candidates = []
     read_error_count = 0
     total_rows_seen = 0
@@ -478,6 +533,14 @@ def collect_retail_sales_bundle(
             category_object_totals["revenue_ge"] += revenue_ge
             category_object_totals["cost_ge"] += cost_ge
             category_object_totals["profit_ge"] += profit_ge
+
+            if month_key != "უცნობი თვე":
+                cm_entry = category_month_stats[(category_key, month_key)]
+                cm_entry["row_count"] += 1
+                cm_entry["total_quantity"] += quantity
+                cm_entry["revenue_ge"] += revenue_ge
+                cm_entry["cost_ge"] += cost_ge
+                cm_entry["profit_ge"] += profit_ge
 
             product_entry = product_stats.setdefault(
                 product_key,
@@ -729,6 +792,13 @@ def collect_retail_sales_bundle(
     bundle["category_total_count"] = len(category_rows)
     bundle["categories_truncated"] = len(category_rows) > RETAIL_SALES_CATEGORY_LIMIT
     bundle["by_category"] = category_rows[:RETAIL_SALES_CATEGORY_LIMIT]
+
+    category_display_names = {
+        key: entry.get("category") for key, entry in category_stats.items()
+    }
+    bundle["by_category_by_month"] = _build_by_category_by_month_rows(
+        category_month_stats, category_display_names
+    )
 
     product_rows = []
     for item in product_stats.values():

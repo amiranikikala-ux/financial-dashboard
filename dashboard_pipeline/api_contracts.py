@@ -826,6 +826,7 @@ def _project_retail_sales_summary(bundle):
         "by_category": [],
         "by_product": [],
         "by_month": [],
+        "by_category_by_month": [],
         "top_objects_by_profit": [],
         "top_categories_by_profit": [],
         "top_products_by_revenue": [],
@@ -891,6 +892,9 @@ def _project_retail_sales_summary(bundle):
         )
     months = [item for item in (bundle.get("by_month") or []) if isinstance(item, dict)]
     summary["by_month"] = months[-RETAIL_SALES_SUMMARY_MONTH_LIMIT:]
+    summary["by_category_by_month"] = [
+        item for item in (bundle.get("by_category_by_month") or []) if isinstance(item, dict)
+    ]
     for key in (
         "top_objects_by_profit",
         "top_categories_by_profit",
