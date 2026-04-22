@@ -1,7 +1,7 @@
 # CONTEXT HANDOFF — short brief
 
-> **განახლდა**: 2026-04-22 05:15 (Sprint 4B closed + Sprint 4C.2 partial + live dog-food + data.json regenerated)
-> **სტატუსი**: Phase 4A **FULLY CLOSED** + Phase 4B **COMPLETE (3/3 sprints, 28 rules, 171 tests)** + Phase 4C.2 **partial** (4 tools summary_ka) + live dog-food **VERIFIED** (3 scenarios, anti-markers clean) + data.json regenerated fresh. 18 commits ahead of `f7b0899`, all pushed to `origin/main`.
+> **განახლდა**: 2026-04-22 (Sprint 4C.2 **FULLY CLOSED** — all 4 remaining tools got summary_ka; 1,652 green)
+> **სტატუსი**: Phase 4A **FULLY CLOSED** + Phase 4B **COMPLETE (3/3 sprints, 28 rules, 171 tests)** + Phase 4C.2 **FULLY CLOSED** (8 tools with summary_ka — 4 headline + 4 final) + live dog-food **VERIFIED** (3 scenarios, anti-markers clean) + data.json regenerated fresh. 19 commits ahead of `f7b0899`, all pushed to `origin/main`.
 
 ---
 
@@ -30,14 +30,15 @@
 - **Backend**: Windows Service **`FinancialDashboardBackend`** (NSSM, auto-start + auto-restart 2s after crash, `AI_ENABLE_THINKING=true` + `PYTHONUTF8=1` persisted, logs rotate 10MB/24h in `logs/backend_{stdout,stderr}.log`)
 - **Service control**: `services.msc` → "Financial Dashboard Backend" OR `Restart-Service FinancialDashboardBackend` (requires admin/UAC) OR `C:\tools\nssm\nssm.exe {start|stop|restart|status|edit}`
 - **⚠️ Service-restart-for-new-code**: Service runs off working-tree code but loads prompt at module-import time. After prompt changes, `Restart-Service` picks them up (admin required). For in-process AI tests, use `_scratch_dogfood_*.py` pattern (no service needed).
-- **Tool surface**: **18 tools live**. Index positions: `build_debt_repayment_plan` @ 12, `propose_feature` @ 17. Tools with `summary_ka` (Phase 4C.2): `compute`, `compute_waybill_total`, `forecast_revenue`, `analyze_dead_stock` + `compute_cash_runway` (pre-existing) + `build_debt_repayment_plan` (pre-existing). 12 tools await summary_ka.
+- **Tool surface**: **18 tools live**. Index positions: `build_debt_repayment_plan` @ 12, `propose_feature` @ 17. Tools with `summary_ka` (Phase 4C.2 CLOSED, 10 total): `compute`, `compute_waybill_total`, `forecast_revenue`, `analyze_dead_stock`, `compute_cash_runway`, `build_debt_repayment_plan`, `recall_context`, `propose_feature`, `validate_vs_source`, `prepare_supplier_brief` (both focused + portfolio modes). 8 tools explicitly **skipped** (raw-data readers + CRUD confirms — noise to add summary_ka).
 
 ---
 
-## Commit history (this session — 18 commits on `main`)
+## Commit history (this session — 19 commits on `main`)
 
 | commit | subject |
 |---|---|
+| `b7a8801` | feat(ai): Sprint 4C.2 remaining — summary_ka on 4 final AI-facing tools |
 | `5bb1d5d` | chore(gitignore): exclude .claude/scheduled_tasks.lock |
 | `3893a67` | feat(ai): Sprint 4C.2 partial — summary_ka on 4 headline tools |
 | `a6f9ef4` | feat(workflow): Sprint 4B.3 Tier 4 — 4 workflow anti-patterns |
@@ -64,9 +65,9 @@ All on `origin/main`. `git status` clean.
 
 | მეტრიკა | მნიშვნელობა |
 |---|---|
-| **pytest** | **1,634/1,634 green** (~16s on parent venv) |
+| **pytest** | **1,652/1,652 green** (~23s on parent venv) |
 | **`SYSTEM_PROMPT_KA`** | 1,299 lines (was 1,290 pre-Sprint 4B.0 → 1,100 post-prune → +199 for 28 new 4B rules) |
-| **new tests this session** | 171 (68 + 79 + 24 = 4B tiers) + 20 (4C.2) = **191** |
+| **new tests this session** | 171 (68 + 79 + 24 = 4B tiers) + 20 (4C.2 headline) + 18 (4C.2 remaining) = **209** |
 | **`data.json`** | regenerated 2026-04-22 05:10, 133 MB, 26 sections, 21,233 waybills (was 76MB truncated pre-regen) |
 | **Live dog-food** | 3 scenarios PASS on real Anthropic Sonnet 4.6 `think=true`, ~$0.18 total cost |
 
@@ -100,15 +101,14 @@ All on `origin/main`. `git status` clean.
 
 ## Active packet — Phase 4C remaining
 
-Phase 4B ✅ **FULLY CLOSED** (3/3 sprints, 28 rules, 171 new tests, all verified live). Sprint 4C partial ✅ (4 headline tools with `summary_ka`, 20 tests).
+Phase 4B ✅ **FULLY CLOSED** (3/3 sprints, 28 rules, 171 new tests, all verified live). Sprint 4C.2 ✅ **FULLY CLOSED** (8/18 tools with `summary_ka` — 10 tools total counting pre-existing; other 8 tools explicitly skipped as raw-data readers / CRUD confirms).
 
 **📋 Phase 4C remaining scope (not started):**
 
 | Sub-sprint | scope | size |
 |---|---|---|
 | 4C.1 Schema Poka-yoke audit | All 18 tools: review argument names for ambiguity (e.g., `store` vs `store_alias`), tighten type enums, rewrite descriptions as "junior-dev docstrings" | 1 day, high-risk (schema changes cascade to tests + frontend aiClient) |
-| 4C.2 summary_ka remaining tools | `prepare_supplier_brief` (already has rich structured output — low value) + `recall_context` + `analyze_dead_stock` top_stale_skus narration + `build_debt_repayment_plan` already covered + `read_data_json` / `grep_code` / journal CRUD (doesn't fit pattern — skip) | 0.5 day, medium value |
-| 4C.3 Live dog-food FULL 4B+4C stack | 3-5 scripted /api/chat/stream scenarios testing tool error rate before/after | 0.5 day, ~$0.25 API |
+| 4C.3 Live dog-food FULL 4B+4C stack | 3-5 scripted /api/chat/stream scenarios testing tool error rate before/after (now 10 tools with summary_ka — the hypothesis is AI narrates tighter) | 0.5 day, ~$0.25 API |
 
 **Already verified live (this session)**: Rules 1, 2, 3, 5, 9, 20, 28 + Multi-hypothesis + Attempt-first behavior on 3 scenarios.
 
@@ -116,11 +116,12 @@ Phase 4B ✅ **FULLY CLOSED** (3/3 sprints, 28 rules, 171 new tests, all verifie
 
 ## Next recommended steps
 
-1. **Sprint 4C remaining** (~2 days) — schema Poka-yoke audit + remaining summary_ka. Would fully close Phase 4B+4C stack.
-2. **Phase 2 remaining** (9 analytics tools — cash_flow_projection, scenario_simulator, industry_benchmark, supplier_risk_radar, product_profitability_xray, promotion_candidate_finder, store_comparison page, trend_detector, multi_source_triangulation). ~2 weeks.
-3. **Phase 3 remaining** (4 features — conversation_summary_on_demand, margin_compression_radar, monthly_strategy_page, gap_analysis). ~1 week.
-4. **Phase 4 Advanced** (9 features — monthly_strategy_generator, quarterly_review, long_term_goals, scenario_multi_variable, stress_test, financial_literacy_teacher, retrospective_loop, exec_summary_generator, viz_suggester, peer_comparison). ~2-3 weeks.
-5. **Parking Lot** (~40 items documented in `AI_GENIUS_PARTNER_PLAN.md` v2.1).
+1. **Sprint 4C.1 Schema Poka-yoke audit** (~1 day, high-risk) — 18 tools' argument/description tightening. Schema cascades to tests + frontend aiClient; fresh session context strongly recommended.
+2. **Sprint 4C.3 Live dog-food** (~0.5 day, ~$0.25) — 3-5 scripted /api/chat/stream scenarios over full 4B+4C stack. Validates the hypothesis that 10 tools with summary_ka tighten AI narration.
+3. **Phase 2 remaining** (9 analytics tools — cash_flow_projection, scenario_simulator, industry_benchmark, supplier_risk_radar, product_profitability_xray, promotion_candidate_finder, store_comparison page, trend_detector, multi_source_triangulation). ~2 weeks.
+4. **Phase 3 remaining** (4 features — conversation_summary_on_demand, margin_compression_radar, monthly_strategy_page, gap_analysis). ~1 week.
+5. **Phase 4 Advanced** (9 features — monthly_strategy_generator, quarterly_review, long_term_goals, scenario_multi_variable, stress_test, financial_literacy_teacher, retrospective_loop, exec_summary_generator, viz_suggester, peer_comparison). ~2-3 weeks.
+6. **Parking Lot** (~40 items documented in `AI_GENIUS_PARTNER_PLAN.md` v2.1).
 
 ---
 
