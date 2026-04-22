@@ -1,7 +1,7 @@
 # CONTEXT HANDOFF — short brief
 
-> **განახლდა**: 2026-04-22 (Phase 2.6 landed as `find_promotion_candidates`; Phase 2.9 **pipeline unblocked** — `by_category_by_month` aggregate live; tool itself is next sprint)
-> **სტატუსი**: Phase 4A **FULLY CLOSED** + Phase 4B **COMPLETE (3/3 sprints, 28 rules, 171 tests)** + Phase 4C.2 **FULLY CLOSED** + Phase 4C.3 **LIVE VERIFIED** + **Phase 2.1 / 2.2 / 2.4 / 2.5 / 2.6 LIVE VERIFIED** (5 tools / extensions, 15 live scenarios, $1.19 total Anthropic spend) + **Phase 2.4/2.10 overlap audit COMPLETED** (1.5 days saved) + **Phase 2.9 pipeline unblock LANDED** (`retail_sales.by_category_by_month` aggregate + 10 tests; tool build is the follow-up sprint on a fresh session).
+> **განახლდა**: 2026-04-22 (Phase 2.6 landed; Phase 2.9 pipeline unblocked; **Tier 1 server scale fix LANDED** — pipeline subprocess deadlock + atomic write)
+> **სტატუსი**: Phase 4A **FULLY CLOSED** + Phase 4B **COMPLETE (3/3 sprints, 28 rules, 171 tests)** + Phase 4C.2 **FULLY CLOSED** + Phase 4C.3 **LIVE VERIFIED** + **Phase 2.1 / 2.2 / 2.4 / 2.5 / 2.6 LIVE VERIFIED** (5 tools / extensions, 15 live scenarios, $1.19 total Anthropic spend) + **Phase 2.4/2.10 overlap audit COMPLETED** + **Phase 2.9 pipeline unblock LANDED** (tool build = follow-up) + **Tier 1 scale fix LANDED** (commit `ad4c345`: stream subprocess stdout to log file, atomic data.json write, 30→60 min schedule, 30→10 min timeout).
 
 ---
 
@@ -34,10 +34,12 @@
 
 ---
 
-## Commit history (this session — 20 commits on `main`)
+## Commit history (this session — 22 commits on `main`)
 
 | commit | subject |
 |---|---|
+| `ad4c345` | fix(server): Tier 1 scale fix — stream subprocess logs, atomic data.json, saner schedule |
+| `fa4f62b` | docs(context-handoff): Phase 2.9 pipeline unblocked — tool build is next sprint |
 | `85b870e` | feat(pipeline): Phase 2.9 unblock — retail_sales.by_category_by_month aggregate |
 | `b7a8801` | feat(ai): Sprint 4C.2 remaining — summary_ka on 4 final AI-facing tools |
 | `5bb1d5d` | chore(gitignore): exclude .claude/scheduled_tasks.lock |
@@ -168,7 +170,8 @@ Phase 4B ✅ **FULLY CLOSED**. Phase 4C.2 + 4C.3 ✅ **FULLY CLOSED**. **Phase 2
 
 ## Next recommended steps
 
-1. **Phase 2.9 `trend_detector` tool build (~1 day)** — pipeline is now ready (`retail_sales.by_category_by_month` aggregate, commit `85b870e`). Before building, rerun `python generate_dashboard_data.py` so live `data.json` includes the new section (index will also need `npx gitnexus analyze` refresh after the tool lands). Tool scope: MoM / YoY price-vs-volume decomposition per (category, store), with suspicious-move quarantine mirroring X-Ray's [-5%, 90%] rule. Anti-triggers vs `analyze_product_profitability` + `analyze_dead_stock`.
+1. **Tier 2 scale fix — incremental ingest (~3-4 sessions, user-agreed to do within 2 weeks)**. Today's pipeline re-reads every Excel file on every run — O(N) with total history. User plans daily Excel additions going forward + 2 more months of backfill. Need a file-state tracker (mtime/hash cache) + per-section delta merger. Sprint breakdown: (1) file tracker + cache-invalidation plumbing, (2) retail_sales incremental builder, (3) bank / supplier / waybills incremental builders, (4) full-regen vs incremental validation harness. See `memory/project_scalability_ceiling.md` for full architectural rationale.
+2. **Phase 2.9 `trend_detector` tool build (~1 day)** — pipeline is ready (`retail_sales.by_category_by_month` aggregate, commit `85b870e`). `data.json` already regenerated with the new section (2026-04-22 20:07). Tool scope: MoM / YoY price-vs-volume decomposition per (category, store), with suspicious-move quarantine mirroring X-Ray's [-5%, 90%] rule. Anti-triggers vs `analyze_product_profitability` + `analyze_dead_stock`.
 2. **Phase 2.3 `industry_benchmark`** — needs an external benchmark data source decision first (hard-coded retail medians? Excel import? public dataset?). Ask user which.
 3. **Sprint 4C.1 Schema Poka-yoke audit** (~1 day, high-risk, fresh session strongly recommended) — 22 tools' argument/description tightening.
 4. **Phase 3 remaining** (4 features — conversation_summary_on_demand, margin_compression_radar, monthly_strategy_page, gap_analysis). ~1 week.
