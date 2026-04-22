@@ -71,6 +71,10 @@ rs-dashboard/test-results/
 rs-dashboard/playwright-report/
 .gitnexus
 
+# Pipeline incremental-ingest cache (Tier 2 Sprint 1; machine-specific, disposable)
+.pipeline_cache.json
+.pipeline_cache.json.tmp
+
 # Machine-specific Claude Code settings (per-user overrides)
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
