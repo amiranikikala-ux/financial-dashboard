@@ -1,7 +1,7 @@
 # CONTEXT HANDOFF — short brief
 
-> **განახლდა**: 2026-04-22 (Phase 2.6 landed as `find_promotion_candidates`; Phase 2.9 blocked on pipeline data gap)
-> **სტატუსი**: Phase 4A **FULLY CLOSED** + Phase 4B **COMPLETE (3/3 sprints, 28 rules, 171 tests)** + Phase 4C.2 **FULLY CLOSED** + Phase 4C.3 **LIVE VERIFIED** + **Phase 2.1 / 2.2 / 2.4 / 2.5 / 2.6 LIVE VERIFIED** (5 tools / extensions, 15 live scenarios, $1.19 total Anthropic spend) + **Phase 2.4/2.10 overlap audit COMPLETED** (1.5 days saved) + **Phase 2.9 DATA-BLOCKED** (needs `retail_sales.by_category_by_month` pipeline section before it can be built).
+> **განახლდა**: 2026-04-22 (Phase 2.6 landed as `find_promotion_candidates`; Phase 2.9 **pipeline unblocked** — `by_category_by_month` aggregate live; tool itself is next sprint)
+> **სტატუსი**: Phase 4A **FULLY CLOSED** + Phase 4B **COMPLETE (3/3 sprints, 28 rules, 171 tests)** + Phase 4C.2 **FULLY CLOSED** + Phase 4C.3 **LIVE VERIFIED** + **Phase 2.1 / 2.2 / 2.4 / 2.5 / 2.6 LIVE VERIFIED** (5 tools / extensions, 15 live scenarios, $1.19 total Anthropic spend) + **Phase 2.4/2.10 overlap audit COMPLETED** (1.5 days saved) + **Phase 2.9 pipeline unblock LANDED** (`retail_sales.by_category_by_month` aggregate + 10 tests; tool build is the follow-up sprint on a fresh session).
 
 ---
 
@@ -34,10 +34,11 @@
 
 ---
 
-## Commit history (this session — 19 commits on `main`)
+## Commit history (this session — 20 commits on `main`)
 
 | commit | subject |
 |---|---|
+| `85b870e` | feat(pipeline): Phase 2.9 unblock — retail_sales.by_category_by_month aggregate |
 | `b7a8801` | feat(ai): Sprint 4C.2 remaining — summary_ka on 4 final AI-facing tools |
 | `5bb1d5d` | chore(gitignore): exclude .claude/scheduled_tasks.lock |
 | `3893a67` | feat(ai): Sprint 4C.2 partial — summary_ka on 4 headline tools |
@@ -65,9 +66,9 @@ All on `origin/main`. `git status` clean.
 
 | მეტრიკა | მნიშვნელობა |
 |---|---|
-| **pytest** | **1,872/1,872 green** (~20s full run; 1,800 baseline + 72 Phase 2.6) |
-| **`SYSTEM_PROMPT_KA`** | 1,299 lines (Phase 2.1 + 2.2 + 2.5 + 2.6 added **no** prompt text — tool descriptions carry all guidance) |
-| **new tests this session** | 4B 171 + 4C.2 38 + Phase 2.1 39 + Phase 2.2 52 + Phase 2.5 47 + Phase 2.6 72 = **419** |
+| **pytest** | **1,882/1,882 green** (~21s full run; 1,800 baseline + 72 Phase 2.6 + 10 Phase 2.9 pipeline) |
+| **`SYSTEM_PROMPT_KA`** | 1,299 lines (Phase 2.1 + 2.2 + 2.5 + 2.6 + 2.9 pipeline added **no** prompt text — tool descriptions + pipeline aggregates carry all data) |
+| **new tests this session** | 4B 171 + 4C.2 38 + Phase 2.1 39 + Phase 2.2 52 + Phase 2.5 47 + Phase 2.6 72 + Phase 2.9 pipeline 10 = **429** |
 | **`data.json`** | regenerated 2026-04-22 05:10, 133 MB, 26 sections, 21,233 waybills (was 76MB truncated pre-regen) |
 | **Live dog-food** | 3 scenarios PASS on real Anthropic Sonnet 4.6 `think=true`, ~$0.18 total cost |
 
@@ -154,7 +155,7 @@ Phase 4B ✅ **FULLY CLOSED**. Phase 4C.2 + 4C.3 ✅ **FULLY CLOSED**. **Phase 2
 | ~~2.4~~ | ~~`supplier_risk_radar`~~ → ✅ **DONE 2026-04-22** (REDUCED) | `prepare_supplier_brief` PORTFOLIO `sort_by: "leverage" \| "risk"`. 9 tests, backward-compat preserved. Commit `c235afa`. LIVE 3/3. |
 | ~~2.6~~ | ~~`promotion_candidate_finder`~~ → ✅ **DONE 2026-04-22** | `find_promotion_candidates` new tool: ranked promo menu with margin-headroom + volume + recency scoring, 5% post-discount floor, discount sizing capped by both user ceiling and floor. 72 unit tests + 3/3 live PASS. Suspicious-margin quarantine (mirrors X-Ray's [-5%, 90%] rule). Anti-trigger vs `analyze_dead_stock` verified live. |
 | 2.8 | Store Comparison page (frontend) | "Margin 11% vs 2%" UI |
-| 2.9 | `trend_detector` | **DATA-BLOCKED** — `monthly_pnl` has no per-category rollup; `retail_sales.by_category` has no per-month rollup; `by_month` has no per-category rollup. Needs a new pipeline section (e.g., `retail_sales.by_category_by_month`) before a meaningful price-vs-volume YoY decomposition is computable. Two-sprint scope if tackled now. Parked. |
+| 2.9 | `trend_detector` tool | 🟡 **PIPELINE UNBLOCKED** (commit `85b870e`) — `retail_sales.by_category_by_month` aggregate live, surfaced in AI summary, 10 regression tests green. **Tool build remains** — fresh session, ~1 day: MoM / YoY price-vs-volume decomposition per (category, store). Rerun `python generate_dashboard_data.py` to materialize the new section in live `data.json` before tool dog-food. |
 | ~~2.10~~ | ~~`multi_source_triangulation`~~ | ❌ **DROPPED**: composition of `read_excel_source` + `validate_vs_source(section, expected_total, field_name)` already delivers "Excel vs data.json diff". No new tool required. |
 
 **📋 Phase 4C.1 still open (high-risk, fresh session recommended):**
@@ -167,7 +168,7 @@ Phase 4B ✅ **FULLY CLOSED**. Phase 4C.2 + 4C.3 ✅ **FULLY CLOSED**. **Phase 2
 
 ## Next recommended steps
 
-1. **Phase 2.9 `trend_detector` unblock (~0.5 day pipeline + 1 day tool)** — add `retail_sales.by_category_by_month` aggregate in `dashboard_pipeline/retail_sales.py` (or an adjacent builder), then build the tool. Fresh session recommended — the pipeline edit is in a different module than the AI tool so two-commit flow is natural.
+1. **Phase 2.9 `trend_detector` tool build (~1 day)** — pipeline is now ready (`retail_sales.by_category_by_month` aggregate, commit `85b870e`). Before building, rerun `python generate_dashboard_data.py` so live `data.json` includes the new section (index will also need `npx gitnexus analyze` refresh after the tool lands). Tool scope: MoM / YoY price-vs-volume decomposition per (category, store), with suspicious-move quarantine mirroring X-Ray's [-5%, 90%] rule. Anti-triggers vs `analyze_product_profitability` + `analyze_dead_stock`.
 2. **Phase 2.3 `industry_benchmark`** — needs an external benchmark data source decision first (hard-coded retail medians? Excel import? public dataset?). Ask user which.
 3. **Sprint 4C.1 Schema Poka-yoke audit** (~1 day, high-risk, fresh session strongly recommended) — 22 tools' argument/description tightening.
 4. **Phase 3 remaining** (4 features — conversation_summary_on_demand, margin_compression_radar, monthly_strategy_page, gap_analysis). ~1 week.
