@@ -1,6 +1,6 @@
 # CONTEXT HANDOFF — short brief
 
-> **განახლდა**: 2026-04-22 (Phase 2.6 landed; Phase 2.9 pipeline unblocked; **Tier 1 server scale fix LANDED** + **Tier 2 Sprint 1 foundation LANDED** + **Tier 2 Sprint 2 retail_sales incremental integration LANDED + LIVE VERIFIED** — hot-run 574s vs ~1700s baseline = 66% faster; retail_sales output byte-equal to cold)
+> **განახლდა**: 2026-04-22 (Phase 2.6 landed; Phase 2.9 pipeline unblocked; **Tier 1 + Tier 2 Sprint 1/2 LANDED + LIVE VERIFIED** hot-run 66% faster; **🚨 STATE AUDIT DISCOVERED 2026-04-22** — 742K+ undeclared turnover since 2024-06; **Phase 5 Tax Audit System queued** as highest priority)
 > **სტატუსი**: Phase 4A **FULLY CLOSED** + Phase 4B **COMPLETE (3/3 sprints, 28 rules, 171 tests)** + Phase 4C.2 **FULLY CLOSED** + Phase 4C.3 **LIVE VERIFIED** + **Phase 2.1 / 2.2 / 2.4 / 2.5 / 2.6 LIVE VERIFIED** (5 tools / extensions, 15 live scenarios, $1.19 total Anthropic spend) + **Phase 2.4/2.10 overlap audit COMPLETED** + **Phase 2.9 pipeline unblock LANDED** (tool build = follow-up) + **Tier 1 scale fix LANDED** (commit `ad4c345`: stream subprocess stdout to log file, atomic data.json write, 30→60 min schedule, 30→10 min timeout).
 
 ---
@@ -168,6 +168,50 @@ Phase 4B ✅ **FULLY CLOSED**. Phase 4C.2 + 4C.3 ✅ **FULLY CLOSED**. **Phase 2
 | Sub-sprint | scope | size |
 |---|---|---|
 | 4C.1 Schema Poka-yoke audit | All 22 tools: review argument names for ambiguity, tighten type enums, rewrite descriptions as "junior-dev docstrings" | 1 day, high-risk (schema changes cascade to tests + frontend aiClient) |
+
+---
+
+## 🚨 Phase 5 — Tax Audit System (NEW, HIGHEST PRIORITY)
+
+State audit received 2026-04-22 for **შპს ჯეო ფუდთაიმი**. Bookkeeper errors caused 742,217 ₾ undeclared turnover. User wants SYSTEM (not one-off analysis) so bookkeeper cannot hide anything again.
+
+**Source files** (in `C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\`):
+- `RS_Final_Check.xlsx` — state audit's waybill reconciliation (267 suppliers, 21,233 wb)
+- `გაანგარიშება შპს ჯეო ფუდთაიმი.xlsx` — declared vs actual per month (37 months, 2023-01 to 2026-01)
+
+**Key findings from 2024-08 deep-dive:**
+- Audit total income: 236,914 ₾
+- Direct MAX read: 259,087 ₾ (+22K vs audit — bookkeeper missed register sales)
+- Pipeline retail_sales: 282,314 ₾ (+23K vs direct MAX — retail_sales aggregation drift)
+- **3 pipeline classification bugs** (detailed below)
+
+**Structural breakpoint**: 2024-06 — BOG POS started handling most in-store card transactions, TBC POS dropped from ~10K/month to ~500/month. Declared turnover did not track this change → 19-month gap accumulated.
+
+### Sprint 5.1 — TBC POS classification fix (🔴 highest priority, ~1 session)
+**Bug**: `tbc_card_income_patterns.json` matches all TBC bank transit deposits as "TBC POS". 2024-08 pipeline shows 164,903 ₾ TBC POS vs audit 6,697 ₾ — **25x over-classification**.
+**Fix**: narrow pattern to physical in-store POS only (must distinguish `ტერმინალებში მიღებული` deposit types). Add regression test pinning per-month TBC POS against audit file numbers.
+**Deliverable**: pipeline TBC POS for 2024-08 drops from 164K to ~7K.
+
+### Sprint 5.2 — Direct MAX ingest + cashreg separation (~1 session)
+**Bug 1**: `retail_sales.revenue_ge` computation diverges from direct Excel read by ~10% (2024-08: 282K pipe vs 259K raw).
+**Bug 2**: `retail_sales` bundles cash + card; audit needs cash-only (სალარო) separately.
+**Fix**: verify revenue_ge formula (quantity × price vs summed line totals); add `cashreg_ge` = retail_sales.revenue_ge − (TBC POS + BOG POS) per month; per-month by-shop breakdown.
+
+### Sprint 5.3 — `vat_reconciliation` pipeline section (~1 session)
+New `data.json` section with monthly breakdown matching audit file structure:
+- period, cashreg_ge (from 5.2), tbc_pos_ge (fixed in 5.1), bog_pos_ge, invoices_ge (from RS.ge outgoing waybills if present), total_ge, declared_ge (from uploaded audit file), gap_ge
+- Excel import mechanism: user drops "declared ბრუნვა" Excel into `Financial_Analysis/` → pipeline auto-ingests per-month declared, computes gap
+
+### Sprint 5.4 — AI tools + dashboard tab (~1 session)
+- New AI tool `check_vat_reconciliation` (returns gap status, red-flag months, cumulative under-declaration)
+- Dashboard page "VAT & აუდიტი" — month-by-month table with 🟢/🟡/🔴 color-coded gaps + trend chart
+- SYSTEM_PROMPT_KA: trigger on "აუდიტი", "გადასახადი", "ბუღალტერი", "declared", "ბრუნვა" → auditor consultation mode
+- Excel export ready for accountant/auditor
+
+### Post-Phase 5 optional
+- Phase 5.5 Voluntary disclosure letter generator (legal draft with numbers auto-filled)
+- Phase 5.6 Automated RS.ge declaration fetch (if API available)
+- Phase 5.7 Telegram bot for monthly gap alerts
 
 ---
 
