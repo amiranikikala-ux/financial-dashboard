@@ -1214,7 +1214,9 @@ def run():
             "truncate/export limit ეჭვი: %s",
             ", ".join(imported_products_bundle.get("truncation_suspected_files") or []),
         )
-    retail_sales_bundle = collect_retail_sales_bundle(object_mapping=object_mapping)
+    retail_sales_bundle = collect_retail_sales_bundle(
+        object_mapping=object_mapping, use_cache=True
+    )
     retail_overall = retail_sales_bundle.get("overall") or {}
     logger.info(
         "Retail sales (reference-only): %s ფაილი, %s ხაზი, revenue %s ₾ | profit %s ₾ | margin %s%%",

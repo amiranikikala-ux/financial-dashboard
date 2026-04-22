@@ -1,9 +1,10 @@
 """Unit tests for dashboard_pipeline.pipeline_cache.
 
-Sprint 1 of Tier 2 (incremental ingest): pins the file-signature +
-cache-load/save + file_has_changed contract so Sprint 2 (retail_sales
-integration) can build on a tested foundation. No pipeline integration
-is exercised here — that comes in the next sprint.
+Sprint 1 of Tier 2 shipped v1 (signature-only). Sprint 2 bumped the
+schema to v2: each entry is now ``{signature, payload}`` so per-file
+aggregates can travel with the signature. Tests here pin the v2
+contract (schema shape, helpers, fingerprint invalidation) so the
+retail_sales incremental integration can build on a tested foundation.
 """
 
 from __future__ import annotations
@@ -18,10 +19,18 @@ from dashboard_pipeline.pipeline_cache import (
     FileSignature,
     build_new_cache,
     compute_file_signature,
+    drop_entry,
+    empty_cache,
     file_has_changed,
+    get_payload,
     load_cache,
+    put_entry,
     save_cache,
 )
+
+
+def _make_entry(sig: FileSignature, payload=None):
+    return {"signature": sig.to_dict(), "payload": payload}
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +101,23 @@ def test_signature_matches_when_hash_missing_on_one_side():
 
 
 # ---------------------------------------------------------------------------
+# empty_cache
+# ---------------------------------------------------------------------------
+
+def test_empty_cache_returns_v2_scaffold():
+    assert empty_cache() == {"version": CACHE_VERSION, "files": {}}
+
+
+def test_empty_cache_carries_content_fingerprint_when_given():
+    cache = empty_cache(content_fingerprint="abc")
+    assert cache == {
+        "version": CACHE_VERSION,
+        "files": {},
+        "content_fingerprint": "abc",
+    }
+
+
+# ---------------------------------------------------------------------------
 # load_cache / save_cache roundtrip
 # ---------------------------------------------------------------------------
 
@@ -109,7 +135,8 @@ def test_load_returns_empty_on_malformed_json(tmp_path):
 
 def test_load_returns_empty_on_version_mismatch(tmp_path):
     p = tmp_path / "cache.json"
-    p.write_text(json.dumps({"version": 999, "files": {"f": {}}}))
+    # v1 flat shape — must be treated as empty under v2
+    p.write_text(json.dumps({"version": 1, "files": {"f": {"path": "f", "mtime_ns": 1, "size": 2}}}))
     cache = load_cache(str(p))
     assert cache == {"version": CACHE_VERSION, "files": {}}
 
@@ -121,16 +148,34 @@ def test_load_returns_empty_when_files_key_wrong_type(tmp_path):
     assert cache == {"version": CACHE_VERSION, "files": {}}
 
 
-def test_save_then_load_roundtrip(tmp_path):
+def test_load_skips_entries_without_signature(tmp_path):
+    p = tmp_path / "cache.json"
+    p.write_text(json.dumps({
+        "version": CACHE_VERSION,
+        "files": {
+            "legit": {"signature": {"path": "legit", "mtime_ns": 1, "size": 2}, "payload": 7},
+            "broken": {"payload": 7},  # no signature → dropped
+            "also_broken": "not a dict",  # not a mapping → dropped
+        },
+    }))
+    cache = load_cache(str(p))
+    assert set(cache["files"].keys()) == {"legit"}
+    assert cache["files"]["legit"]["payload"] == 7
+
+
+def test_save_then_load_roundtrip_with_payload(tmp_path):
     p = str(tmp_path / "cache.json")
     payload = {
         "version": CACHE_VERSION,
         "files": {
             "some/path.xlsx": {
-                "path": "some/path.xlsx",
-                "mtime_ns": 123,
-                "size": 456,
-                "sha256": None,
+                "signature": {
+                    "path": "some/path.xlsx",
+                    "mtime_ns": 123,
+                    "size": 456,
+                    "sha256": None,
+                },
+                "payload": {"row_count": 42, "revenue_ge": 100.5},
             }
         },
     }
@@ -142,9 +187,38 @@ def test_save_then_load_roundtrip(tmp_path):
 def test_save_is_atomic(tmp_path):
     p = str(tmp_path / "cache.json")
     save_cache(p, {"version": CACHE_VERSION, "files": {}})
-    # After save, tmp file must not remain
     assert not os.path.exists(p + ".tmp")
     assert os.path.exists(p)
+
+
+def test_load_with_matching_content_fingerprint_preserves_entries(tmp_path):
+    p = str(tmp_path / "cache.json")
+    payload = {
+        "version": CACHE_VERSION,
+        "content_fingerprint": "abc",
+        "files": {
+            "f": {"signature": {"path": "f", "mtime_ns": 1, "size": 2}, "payload": 7}
+        },
+    }
+    save_cache(p, payload)
+    reloaded = load_cache(p, content_fingerprint="abc")
+    assert reloaded["files"]["f"]["payload"] == 7
+    assert reloaded["content_fingerprint"] == "abc"
+
+
+def test_load_with_mismatched_content_fingerprint_returns_empty(tmp_path):
+    p = str(tmp_path / "cache.json")
+    payload = {
+        "version": CACHE_VERSION,
+        "content_fingerprint": "abc",
+        "files": {
+            "f": {"signature": {"path": "f", "mtime_ns": 1, "size": 2}, "payload": 7}
+        },
+    }
+    save_cache(p, payload)
+    reloaded = load_cache(p, content_fingerprint="different")
+    assert reloaded["files"] == {}
+    assert reloaded["content_fingerprint"] == "different"
 
 
 # ---------------------------------------------------------------------------
@@ -170,7 +244,7 @@ def test_file_has_changed_false_when_signature_matches(tmp_path):
     sig = compute_file_signature(str(f))
     cache = {
         "version": CACHE_VERSION,
-        "files": {sig.path: sig.to_dict()},
+        "files": {sig.path: _make_entry(sig, payload=None)},
     }
     assert not file_has_changed(str(f), cache)
 
@@ -179,21 +253,27 @@ def test_file_has_changed_true_after_write(tmp_path):
     f = tmp_path / "x.txt"
     f.write_text("hi")
     sig = compute_file_signature(str(f))
-    cache = {"version": CACHE_VERSION, "files": {sig.path: sig.to_dict()}}
-    # Rewrite to change size + mtime
+    cache = {
+        "version": CACHE_VERSION,
+        "files": {sig.path: _make_entry(sig, payload=None)},
+    }
     f.write_text("hi there, much longer content now")
     assert file_has_changed(str(f), cache)
 
 
 def test_file_has_changed_true_when_file_missing_on_disk(tmp_path):
+    gone = os.path.normpath(str(tmp_path / "gone.txt"))
     cache = {
         "version": CACHE_VERSION,
         "files": {
-            os.path.normpath(str(tmp_path / "gone.txt")): {
-                "path": os.path.normpath(str(tmp_path / "gone.txt")),
-                "mtime_ns": 1,
-                "size": 1,
-                "sha256": None,
+            gone: {
+                "signature": {
+                    "path": gone,
+                    "mtime_ns": 1,
+                    "size": 1,
+                    "sha256": None,
+                },
+                "payload": None,
             }
         },
     }
@@ -208,6 +288,67 @@ def test_file_has_changed_true_on_corrupt_cache_entry(tmp_path):
         "files": {os.path.normpath(str(f)): "not a dict"},
     }
     assert file_has_changed(str(f), cache)
+
+
+def test_file_has_changed_true_when_entry_missing_signature(tmp_path):
+    f = tmp_path / "x.txt"
+    f.write_text("hi")
+    cache = {
+        "version": CACHE_VERSION,
+        "files": {os.path.normpath(str(f)): {"payload": 1}},  # no signature
+    }
+    assert file_has_changed(str(f), cache)
+
+
+# ---------------------------------------------------------------------------
+# get_payload / put_entry / drop_entry
+# ---------------------------------------------------------------------------
+
+def test_get_payload_returns_none_when_missing(tmp_path):
+    assert get_payload({"version": CACHE_VERSION, "files": {}}, "anything") is None
+
+
+def test_put_entry_then_get_payload_roundtrip(tmp_path):
+    f = tmp_path / "x.txt"
+    f.write_text("hi")
+    sig = compute_file_signature(str(f))
+    cache = empty_cache()
+    put_entry(cache, str(f), sig, payload={"row_count": 3})
+    assert get_payload(cache, str(f)) == {"row_count": 3}
+    # Same file should now report unchanged.
+    assert not file_has_changed(str(f), cache)
+
+
+def test_put_entry_overwrites_previous_payload(tmp_path):
+    f = tmp_path / "x.txt"
+    f.write_text("hi")
+    sig = compute_file_signature(str(f))
+    cache = empty_cache()
+    put_entry(cache, str(f), sig, payload={"v": 1})
+    put_entry(cache, str(f), sig, payload={"v": 2})
+    assert get_payload(cache, str(f)) == {"v": 2}
+
+
+def test_put_entry_rejects_non_dict_cache():
+    with pytest.raises(TypeError):
+        put_entry("not a dict", "p", FileSignature("p", 1, 1), None)
+
+
+def test_drop_entry_removes_entry(tmp_path):
+    f = tmp_path / "x.txt"
+    f.write_text("hi")
+    sig = compute_file_signature(str(f))
+    cache = empty_cache()
+    put_entry(cache, str(f), sig, payload=1)
+    drop_entry(cache, str(f))
+    assert get_payload(cache, str(f)) is None
+    assert cache["files"] == {}
+
+
+def test_drop_entry_is_noop_when_missing():
+    cache = empty_cache()
+    drop_entry(cache, "never_added")
+    assert cache == empty_cache()
 
 
 # ---------------------------------------------------------------------------
@@ -225,8 +366,9 @@ def test_build_new_cache_indexes_by_normalized_path(tmp_path):
         os.path.normpath(str(f1)),
         os.path.normpath(str(f2)),
     }
-    assert cache["files"][os.path.normpath(str(f1))]["size"] == 1
-    assert cache["files"][os.path.normpath(str(f2))]["size"] == 2
+    assert cache["files"][os.path.normpath(str(f1))]["signature"]["size"] == 1
+    assert cache["files"][os.path.normpath(str(f1))]["payload"] is None
+    assert cache["files"][os.path.normpath(str(f2))]["signature"]["size"] == 2
 
 
 def test_build_new_cache_skips_missing_paths(tmp_path):
@@ -241,6 +383,13 @@ def test_build_new_cache_populates_hash_when_requested(tmp_path):
     f.write_text("hello")
     cache = build_new_cache([str(f)], include_hash=True)
     entry = cache["files"][os.path.normpath(str(f))]
-    assert entry["sha256"] == (
+    assert entry["signature"]["sha256"] == (
         "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
     )
+
+
+def test_build_new_cache_embeds_content_fingerprint(tmp_path):
+    f = tmp_path / "x.txt"
+    f.write_text("hello")
+    cache = build_new_cache([str(f)], content_fingerprint="fp1")
+    assert cache["content_fingerprint"] == "fp1"
