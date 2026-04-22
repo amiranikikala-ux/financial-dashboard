@@ -1,7 +1,7 @@
 # CONTEXT HANDOFF — short brief
 
-> **განახლდა**: 2026-04-22 (Sprint 4C.2 **FULLY CLOSED** — all 4 remaining tools got summary_ka; 1,652 green)
-> **სტატუსი**: Phase 4A **FULLY CLOSED** + Phase 4B **COMPLETE (3/3 sprints, 28 rules, 171 tests)** + Phase 4C.2 **FULLY CLOSED** (8 tools with summary_ka — 4 headline + 4 final) + live dog-food **VERIFIED** (3 scenarios, anti-markers clean) + data.json regenerated fresh. 19 commits ahead of `f7b0899`, all pushed to `origin/main`.
+> **განახლდა**: 2026-04-22 (Sprint 4C.2 closed + Sprint 4C.3 live dog-food **PASS 3/3**)
+> **სტატუსი**: Phase 4A **FULLY CLOSED** + Phase 4B **COMPLETE (3/3 sprints, 28 rules, 171 tests)** + Phase 4C.2 **FULLY CLOSED** (10 tools with summary_ka, 8 explicitly skipped) + Phase 4C.3 **LIVE VERIFIED** (3 scenarios on Sonnet 4.6 think=True, summary_ka used verbatim, anti-markers clean, $0.28 cost). 19 commits ahead of `f7b0899`, all pushed to `origin/main`.
 
 ---
 
@@ -71,13 +71,20 @@ All on `origin/main`. `git status` clean.
 | **`data.json`** | regenerated 2026-04-22 05:10, 133 MB, 26 sections, 21,233 waybills (was 76MB truncated pre-regen) |
 | **Live dog-food** | 3 scenarios PASS on real Anthropic Sonnet 4.6 `think=true`, ~$0.18 total cost |
 
-**Live dog-food evidence (2026-04-22 05:13)**:
+**Live dog-food evidence — Sprint 4B (2026-04-22 05:13)**:
 - Rule 1 Attempt-first ✅ — AI defaulted to 2025 December for ambiguous "რა margin იყო დეკემბერში?"
 - Rule 3 Premise correction ✅ — AI pushed back on "50% margin ოზურგეთში" with real data (Net −72,814 ₾ Jan / −58,893 ₾ Feb)
 - Rule 2 Max 1 question ✅ — scenarios ended with single priority clarify
 - Rule 20 State scope ✅ — every number came with object + date + metric + source
 - Multi-hypothesis 3-version ✅ — 60%/30%/10% breakdown on premise correction
 - Anti-markers ✅ — 0 "ვცდი და მოვახსენებ" / 0 "ჩემს მეხსიერებაში" / 0 "მშვენიერი კითხვაა"
+
+**Live dog-food evidence — Sprint 4C.3 summary_ka (2026-04-22)**:
+3/3 scenarios PASS on real Sonnet 4.6 `think=True` via in-process `_scratch_dogfood_phase4c3.py`. Total tokens: 37,901 in / 4,221 out / 341,734 cache read. Est. cost $0.28.
+- **Scenario 1 — `prepare_supplier_brief` FOCUSED** (ვასაძე): summary_ka `"**შპს ვასაძის პური** · leverage **32/100** (🟠 LOW) · play-ი ვერ შემუშავდა"` triggered AI to triangulate data (called read_data_json ×5 after brief) and build its own plays — validates the "no plays" fallback branch works + AI reads summary.
+- **Scenario 2 — `prepare_supplier_brief` PORTFOLIO**: summary_ka `"**270 მომწოდებელი**, სულ 5,201,362.18 ₾ · top-5 41.93% (moderate) · #1 call: **შპს ჯიდიაი** (leverage 71) · portfolio savings: **64,625.40 ₾/წელი**"` — AI reused verbatim in reply ("**270 მომწოდებელი**, სულ **5,201,362 ₾** შესყიდვა"), cleanest single-call flow.
+- **Scenario 3 — `validate_vs_source` inspection**: summary_ka `"**suppliers**: 270 მწკრივი (საწყისი inspection ...)"` surfaced in AI reply alongside source_hint.
+- Anti-markers ✅ — all 3 scenarios clean.
 
 **Data caveat**: Old pinned ground truth `2026-02-27 = 7,882.68 ₾` (waybill `transport_start_date`) is **stale** post-regen. New data.json shows 0 under `transport_start_date` field; `date` field shows 17 valid rows / 7,004.06 ₾. If regression tests pin 7,882.68, they'll need updating OR the generate_dashboard_data.py pipeline changed date-field semantics between 2026-04-18 and 2026-04-22.
 
@@ -103,25 +110,23 @@ All on `origin/main`. `git status` clean.
 
 Phase 4B ✅ **FULLY CLOSED** (3/3 sprints, 28 rules, 171 new tests, all verified live). Sprint 4C.2 ✅ **FULLY CLOSED** (8/18 tools with `summary_ka` — 10 tools total counting pre-existing; other 8 tools explicitly skipped as raw-data readers / CRUD confirms).
 
-**📋 Phase 4C remaining scope (not started):**
+**📋 Phase 4C remaining scope (Sprint 4C.2 + 4C.3 closed; only 4C.1 left):**
 
 | Sub-sprint | scope | size |
 |---|---|---|
 | 4C.1 Schema Poka-yoke audit | All 18 tools: review argument names for ambiguity (e.g., `store` vs `store_alias`), tighten type enums, rewrite descriptions as "junior-dev docstrings" | 1 day, high-risk (schema changes cascade to tests + frontend aiClient) |
-| 4C.3 Live dog-food FULL 4B+4C stack | 3-5 scripted /api/chat/stream scenarios testing tool error rate before/after (now 10 tools with summary_ka — the hypothesis is AI narrates tighter) | 0.5 day, ~$0.25 API |
 
-**Already verified live (this session)**: Rules 1, 2, 3, 5, 9, 20, 28 + Multi-hypothesis + Attempt-first behavior on 3 scenarios.
+**Already verified live (this session)**: Rules 1, 2, 3, 5, 9, 20, 28 + Multi-hypothesis + Attempt-first behavior on 3 Sprint 4B scenarios; plus Sprint 4C.3 dog-food 3/3 PASS validating `prepare_supplier_brief` + `validate_vs_source` summary_ka in production (`_scratch_dogfood_phase4c3.py`).
 
 ---
 
 ## Next recommended steps
 
 1. **Sprint 4C.1 Schema Poka-yoke audit** (~1 day, high-risk) — 18 tools' argument/description tightening. Schema cascades to tests + frontend aiClient; fresh session context strongly recommended.
-2. **Sprint 4C.3 Live dog-food** (~0.5 day, ~$0.25) — 3-5 scripted /api/chat/stream scenarios over full 4B+4C stack. Validates the hypothesis that 10 tools with summary_ka tighten AI narration.
-3. **Phase 2 remaining** (9 analytics tools — cash_flow_projection, scenario_simulator, industry_benchmark, supplier_risk_radar, product_profitability_xray, promotion_candidate_finder, store_comparison page, trend_detector, multi_source_triangulation). ~2 weeks.
-4. **Phase 3 remaining** (4 features — conversation_summary_on_demand, margin_compression_radar, monthly_strategy_page, gap_analysis). ~1 week.
-5. **Phase 4 Advanced** (9 features — monthly_strategy_generator, quarterly_review, long_term_goals, scenario_multi_variable, stress_test, financial_literacy_teacher, retrospective_loop, exec_summary_generator, viz_suggester, peer_comparison). ~2-3 weeks.
-6. **Parking Lot** (~40 items documented in `AI_GENIUS_PARTNER_PLAN.md` v2.1).
+2. **Phase 2 remaining** (9 analytics tools — cash_flow_projection, scenario_simulator, industry_benchmark, supplier_risk_radar, product_profitability_xray, promotion_candidate_finder, store_comparison page, trend_detector, multi_source_triangulation). ~2 weeks.
+3. **Phase 3 remaining** (4 features — conversation_summary_on_demand, margin_compression_radar, monthly_strategy_page, gap_analysis). ~1 week.
+4. **Phase 4 Advanced** (9 features — monthly_strategy_generator, quarterly_review, long_term_goals, scenario_multi_variable, stress_test, financial_literacy_teacher, retrospective_loop, exec_summary_generator, viz_suggester, peer_comparison). ~2-3 weeks.
+5. **Parking Lot** (~40 items documented in `AI_GENIUS_PARTNER_PLAN.md` v2.1).
 
 ---
 
