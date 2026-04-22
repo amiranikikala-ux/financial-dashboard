@@ -310,8 +310,9 @@ class TestMemoryToolSchemas:
         """Phase 4A grew TOOL_SCHEMAS 17 → 18; Phase 2.1 grew 18 → 19
         (+ compute_cash_flow_projection); Phase 2.2 grew 19 → 20
         (+ simulate_scenario); Phase 2.5 grew 20 → 21
-        (+ analyze_product_profitability)."""
-        assert len(TOOL_SCHEMAS) == 21
+        (+ analyze_product_profitability); Phase 2.6 grew 21 → 22
+        (+ find_promotion_candidates)."""
+        assert len(TOOL_SCHEMAS) == 22
 
     def test_recall_context_position(self):
         # Sits right after forecast_revenue (index 3) — both are

@@ -1822,6 +1822,121 @@ PRODUCT_PROFITABILITY_XRAY_TOOL: Dict[str, Any] = {
 }
 
 
+FIND_PROMOTION_CANDIDATES_TOOL: Dict[str, Any] = {
+    "name": "find_promotion_candidates",
+    "description": (
+        "Phase 2.6 — Promotion Candidate Finder. Scans "
+        "`retail_sales.by_product` and returns a ranked **promotion menu** — "
+        "actively selling SKUs with enough margin headroom to respond to a "
+        "5–20% discount push while still keeping post-discount margin above "
+        "a 5% floor. Answers 'რა პროდუქცია გავისაბინო promotion-ში?' / "
+        "'5 კანდიდატი ოზურგეთისთვის' / 'რომელ SKU-ებზე გავუშვა discount?'.\n\n"
+        "**Triggers (CRITICAL):** questions about what to PROMOTE / "
+        "discount-push / სარეკლამო აქცია: 'რომელ პროდუქტზე გავუშვა "
+        "discount?', 'promotion-ის კანდიდატი', 'ფასდაკლებაზე რა დადოს?', "
+        "'რა SKU-ებით მოვიზიდო მომხმარებლები?', 'აქცია ოზურგეთისთვის'.\n\n"
+        "**Anti-triggers (NEVER call):**\n"
+        "  • stale / 90+ days unsold inventory to LIQUIDATE → "
+        "`analyze_dead_stock` (dead stock = different goal: flush stuck "
+        "money; promotion = push live SKUs harder)\n"
+        "  • portfolio-wide worst margin scan → "
+        "`analyze_product_profitability`\n"
+        "  • forecast / YoY growth → `forecast_revenue`\n"
+        "  • supplier-level discount request → `prepare_supplier_brief`.\n\n"
+        "**Ranking formula:** `promotion_score = margin_headroom × "
+        "log(1 + total_quantity) × recency_bonus`. Margin_headroom = "
+        "current_margin − 5% floor. Recency_bonus = 1.0 (≤30d) / 0.7 "
+        "(≤60d) / 0.5 (≤90d) / 0.3 (else). Highest score ranks first.\n\n"
+        "**Discount sizing:** suggested_discount_pct = "
+        "`min(max_suggested_discount_pct, current_margin − 5%)`. Capped "
+        "so post-discount margin never drops below the 5% floor. "
+        "Rounded to nearest whole percent.\n\n"
+        "**Signal labels:** 🟢 high (score ≥ 30) / 🟡 medium (≥ 10) / "
+        "🟠 low (< 10). High = both margin AND volume are healthy — best "
+        "ROI. Low = marginal fit; if dead-stock is the real question, "
+        "route there instead.\n\n"
+        "**Returns:** `{store, min_margin_pct, max_days_since_last_sale, "
+        "max_suggested_discount_pct, floor_post_discount_margin_pct, "
+        "top_n, products_scanned, products_evaluated, candidates[], "
+        "summary_ka, notes_ka[]}`. Each candidate = `{product_code, "
+        "product_name, category, current_margin_pct, revenue_ge, "
+        "total_quantity, days_since_last_sale, distinct_month_count, "
+        "store_breakdown[], suggested_discount_pct, "
+        "post_discount_margin_pct, promotion_score, expected_signal_ka, "
+        "rationale_ka}`.\n\n"
+        "**Honesty rule:** ALWAYS surface `summary_ka` verbatim — it "
+        "cites the top candidate, margin math, and evaluated count. "
+        "Acknowledge the 'first-cut suggestion' disclaimer from "
+        "`notes_ka`: live prices / elasticity aren't modelled, so the "
+        "user should sanity-check on the shelf before running the promo."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "store": {
+                "type": "string",
+                "enum": ["total", "ოზურგეთი", "დვაბზუ"],
+                "description": (
+                    "Which store's SKU pool to scan. Default 'total' "
+                    "(aggregate). Single-store mode reads the per-product "
+                    "object_breakdown block."
+                ),
+            },
+            "top_n": {
+                "type": "integer",
+                "minimum": 3,
+                "maximum": 30,
+                "description": (
+                    "Promotion menu size (default 10). 3–5 for a quick "
+                    "executive short-list; 15–20 for deep planning."
+                ),
+            },
+            "min_margin_pct": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 80,
+                "description": (
+                    "Minimum current gross margin % required for a SKU to "
+                    "enter the menu (default 15). Needs enough headroom to "
+                    "absorb the discount AND stay above the 5% floor."
+                ),
+            },
+            "max_days_since_last_sale": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 365,
+                "description": (
+                    "Keep only SKUs that sold within the last N days "
+                    "(default 90). Tighter = fresher momentum; looser = "
+                    "include slow-but-alive SKUs. SKUs past this boundary "
+                    "are a dead-stock question, not a promotion one."
+                ),
+            },
+            "max_suggested_discount_pct": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 40,
+                "description": (
+                    "Ceiling for `suggested_discount_pct` (default 20). "
+                    "Actual discount is `min(this, current_margin − 5%)`."
+                ),
+            },
+            "min_volume": {
+                "type": "number",
+                "minimum": 0,
+                "description": (
+                    "Minimum `total_quantity` over the aggregation period "
+                    "(default 20 units). Keeps fringe one-off sales out "
+                    "of the menu."
+                ),
+            },
+        },
+        "required": [],
+        "additionalProperties": False,
+    },
+}
+
+
 TOOL_SCHEMAS: List[Dict[str, Any]] = [
     READ_DATA_JSON_TOOL,
     COMPUTE_WAYBILL_TOTAL_TOOL,
@@ -1839,6 +1954,7 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
     BUILD_DEBT_PLAN_TOOL,
     SCENARIO_SIMULATOR_TOOL,
     PRODUCT_PROFITABILITY_XRAY_TOOL,
+    FIND_PROMOTION_CANDIDATES_TOOL,
     READ_SOURCE_CODE_TOOL,
     GREP_CODE_TOOL,
     READ_EXCEL_SOURCE_TOOL,
@@ -2242,6 +2358,20 @@ class ToolDispatcher:
                 category_filter=args.get("category_filter"),
                 min_revenue_threshold_ge=args.get("min_revenue_threshold_ge"),
             )
+        elif name == "find_promotion_candidates":
+            from dashboard_pipeline.ai.promotion_candidates import (
+                find_promotion_candidates as _find_promotion_candidates,
+            )
+
+            result = _find_promotion_candidates(
+                self._data_loader,
+                store=args.get("store"),
+                top_n=args.get("top_n"),
+                min_margin_pct=args.get("min_margin_pct"),
+                max_days_since_last_sale=args.get("max_days_since_last_sale"),
+                max_suggested_discount_pct=args.get("max_suggested_discount_pct"),
+                min_volume=args.get("min_volume"),
+            )
         elif name == "read_source_code":
             result = read_source_code(
                 args.get("file_path"),
@@ -2487,6 +2617,25 @@ _SUMMARY_KEYS: Tuple[str, ...] = (
     "gross_margin_pct",
     "total_quantity",
     "flag",
+    # Phase 2.6 Promotion Candidate Finder tool fields
+    "min_margin_pct",
+    "max_days_since_last_sale",
+    "max_suggested_discount_pct",
+    "min_volume",
+    "floor_post_discount_margin_pct",
+    "products_evaluated",
+    "suspicious_skipped",
+    "candidates",
+    "current_margin_pct",
+    "days_since_last_sale",
+    "distinct_month_count",
+    "store_breakdown",
+    "suggested_discount_pct",
+    "post_discount_margin_pct",
+    "promotion_score",
+    "expected_signal_ka",
+    "rationale_ka",
+    "notes_ka",
 )
 
 
