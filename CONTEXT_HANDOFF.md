@@ -187,21 +187,38 @@ State audit received 2026-04-22 for **შპს ჯეო ფუდთაიმ�
 
 **Structural breakpoint**: 2024-06 — BOG POS started handling most in-store card transactions, TBC POS dropped from ~10K/month to ~500/month. Declared turnover did not track this change → 19-month gap accumulated.
 
-### Sprint 5.1 — TBC POS classification INVESTIGATION (🔴 highest priority, ~1 session)
-**Finding 2026-04-23** (from 2024-08 deep-dive): two patterns "ტერმინალებში მიღებული" + "გადახდების სატრანზიტო" each match the SAME 99 rows = 157,071 ₾. These phrases are part of the TBC bank IBAN description — they appear on EVERY transit deposit to GE69TB0000000251140006, not just POS.
+### Sprint 5.1 — Audit Reconciliation Forensics (🔴 highest priority, ~1 session)
 
-**Three hypotheses — need bank statement line-by-line analysis to disambiguate:**
-1. Real POS sales (pipeline correct, audit under-reports)
-2. Double-counting (same transaction captured elsewhere in pipeline — e.g., BOG POS + cashreg)
-3. Non-POS transit (interbank, refunds, other categories)
+**BREAKTHROUGH 2026-04-23 investigation**: pipeline classification is NOT the bug — audit's numbers are.
 
-**Do NOT narrow patterns before investigation** — risk of losing real income signal. Sprint 5.1 scope is now:
-1. Extract ALL 2024-08 TBC bank rows (not just pipeline-matched) — cross-check against MAX POS receipts
-2. Identify which 99 transit-deposit rows correspond to which POS purchases at the register
-3. Determine if audit's 6.7K TBC POS is MISSING these or classifying them differently
-4. THEN (if applicable) narrow patterns with regression test pinning per-month TBC POS
-5. **Deliverable**: investigation report + targeted pattern fix OR documented decision to keep patterns broad
-**Key context**: MAX POS register total for 2024-08 is 259,087 ₾ (direct Excel read). Audit says register sales = cashreg 142K + POS 78K = 220K, understating by 39K. Pipeline says 282K retail_sales (+23K over direct MAX — separate Sprint 5.2 issue).
+**2024-08 hard evidence:**
+| Source | Amount |
+|---|---|
+| MAX POS direct read (Ozurgeti+Dvabzu) | **259,087 ₾** |
+| TBC bank ALL incoming (every row, no filter) | 177,066 ₾ |
+| BOG bank ALL incoming | 83,281 ₾ |
+| **Bank total** | **260,347 ₾** |
+| Pipeline TBC POS match | 164,903 (93% of TBC incoming) |
+| Pipeline BOG POS match | 82,481 (99% of BOG incoming) |
+
+**Key insight**: MAX POS ≈ Bank total (259K ≈ 260K). Virtually all register sales paid by card and deposited to banks. Pipeline correctly classifies ~all bank incoming as POS.
+
+**Audit's "cashreg 142,413 ₾" is the suspicious number**, not the TBC POS. If all register sales went to banks (card), cashreg should be ~0, not 142K. Possible reasons: (a) bookkeeper double-counted bank deposits as cashreg, (b) unrecorded pure cash receipts (tax evasion?), (c) external POS data not in MAX.
+
+**Revised real gap 2024-08**: if real income = 260K (bank) + actual cash (0 per bank match) + invoices 17K ≈ **277K**, and declared was 139K, real gap is **~138K** — larger than audit's 97K estimate.
+
+**DO NOT narrow TBC POS patterns** — would delete real income signal.
+
+**Revised Sprint 5.1 scope:**
+1. Read `Financial_Analysis/object_mapping.json` and verify TBC IBAN → shop attribution (is GE69... unique to POS transit or used for other deposits too?)
+2. For 2024-08, LIST the 12K ₾ of TBC incoming that pipeline does NOT classify as POS — what is it?
+3. For 2024-08, LIST the 0.8K ₾ of BOG incoming that pipeline does NOT classify as POS — what is it?
+4. Design `vat_reconciliation` pipeline section with columns COMPUTED from raw data (no audit-file dependency):
+   - period, cashreg_ge (= MAX POS − bank_card), tbc_pos_ge (= pipeline TBC POS), bog_pos_ge (= pipeline BOG POS), invoices_ge (TBD — from RS outgoing waybills if present), total_ge, declared_ge (= uploaded Excel — audit file or user's manual entry)
+5. Add regression test: `MAX POS direct ≈ bank_tbc_match + bank_bog_match + cashreg` (within 5% tolerance)
+6. **Deliverable**: evidence that pipeline's income capture ≥ audit's income capture for every month, quantified discrepancies, foundation for Sprint 5.2+
+
+**NOT in scope**: changing `tbc_card_income_patterns.json` or `bog_pos_terminal_income_patterns.json`. Leave patterns as-is.
 
 ### Sprint 5.2 — Direct MAX ingest + cashreg separation (~1 session)
 **Bug 1**: `retail_sales.revenue_ge` computation diverges from direct Excel read by ~10% (2024-08: 282K pipe vs 259K raw).
