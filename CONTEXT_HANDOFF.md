@@ -192,6 +192,18 @@ State audit received 2026-04-22 for **შპს ჯეო ფუდთაიმ�
 
 **BREAKTHROUGH confirmed**: pipeline classification is correct; audit's numbers are systematically undercounting TBC POS.
 
+**Live-verified summary (2026-04-23 01:45 data.json regen, audit Excel auto-detected):**
+| მეტრიკა | მნიშვნელობა |
+|---|---|
+| months total | 43 (2022-06 → 2026-02) · 🔴 22 red · 🟡 5 yellow · 🟢 9 green · ⚪ 7 no-declared |
+| **total_real_ge** (pipeline) | **5,638,253.58 ₾** |
+| **total_declared_ge** (audit 37 months) | **3,903,149.86 ₾** |
+| **total_gap_ge** (pipeline − declared) | **+1,535,810.44 ₾** |
+| **total_unaccounted_cash_ge** | **980,810.82 ₾** |
+| **total_vat_liability_ge** (18% of unaccounted) | **176,545.95 ₾** |
+
+**Cumulative under-declaration 1.54M ₾ is ~2x audit's 742K estimate.** Evidence in hand for audit defense OR voluntary-disclosure path (user decides).
+
 **Forensics results (2024-08 deep dive):**
 - TBC 2024-08 non-POS incoming = 12,163 ₾, **100% non-income**: 7,663 treasury tax refund + 4,500 BOG→TBC internal transfer (GE15BG...) + zero other. Pipeline's POS filter correctly excludes all three.
 - BOG 2024-08 non-POS incoming = 800 ₾, **100% non-income**: single ჯეო→ჯეო internal transfer.
