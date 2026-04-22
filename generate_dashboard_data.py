@@ -727,10 +727,15 @@ def _write_outputs(data, script_dir, inc):
         },
     }
     out_file = get_dashboard_data_path(script_dir)
-    
-    with open(out_file, 'w', encoding='utf-8') as f:
+
+    # Atomic write: write to temp then rename. Keeps the live data.json readable
+    # for any concurrent HTTP reader + shortens the OneDrive sync lock window
+    # from the multi-minute 131MB write down to a single rename operation.
+    tmp_file = out_file + ".tmp"
+    with open(tmp_file, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-        
+    os.replace(tmp_file, out_file)
+
     logger.info("Data generated at %s", out_file)
     size_mb = float(os.path.getsize(out_file) / (1024 * 1024))
     logger.info("data.json size: %.2f MB", size_mb)

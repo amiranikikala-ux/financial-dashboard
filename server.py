@@ -64,7 +64,7 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
 # ---------------------------------------------------------------------------
 # Pipeline scheduler state
 # ---------------------------------------------------------------------------
-SCHEDULE_INTERVAL_MIN = int(os.environ.get("DASHBOARD_REFRESH_MINUTES", "30"))
+SCHEDULE_INTERVAL_MIN = int(os.environ.get("DASHBOARD_REFRESH_MINUTES", "60"))
 
 _pipeline_lock = Lock()
 _pipeline_status = {
@@ -77,7 +77,15 @@ _pipeline_status = {
 
 
 def _run_pipeline():
-    """Run generate_dashboard_data in a subprocess (thread-safe)."""
+    """Run generate_dashboard_data in a subprocess (thread-safe).
+
+    Streams subprocess stdout/stderr directly to logs/pipeline_subprocess.log
+    instead of buffering in memory (capture_output=True). On Windows with
+    OneDrive-synced folders, in-memory buffering of the 5-50MB pipeline log
+    stream was a primary slowdown — backend GC pressure pushed pipeline runs
+    from 3-5 min to 28-30 min and regularly hit the timeout. Streaming to a
+    file leaves backend memory untouched.
+    """
     acquired = _pipeline_lock.acquire(blocking=False)
     if not acquired:
         logger.info("Pipeline already running, skipping")
@@ -88,24 +96,36 @@ def _run_pipeline():
         start = datetime.now(timezone.utc)
         logger.info("Pipeline regeneration started")
 
-        script = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "generate_dashboard_data.py",
-        )
-        result = subprocess.run(
-            [sys.executable, script],
-            capture_output=True,
-            text=True,
-            timeout=30 * 60,  # 30 min hard limit
-            cwd=os.path.dirname(os.path.abspath(__file__)),
-        )
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        script = os.path.join(script_dir, "generate_dashboard_data.py")
+
+        log_dir = os.path.join(script_dir, "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        subprocess_log_path = os.path.join(log_dir, "pipeline_subprocess.log")
+
+        with open(subprocess_log_path, "ab") as log_handle:
+            header = (
+                f"\n=== pipeline run @ {start.isoformat()} ===\n"
+            ).encode("utf-8")
+            log_handle.write(header)
+            log_handle.flush()
+            result = subprocess.run(
+                [sys.executable, script],
+                stdout=log_handle,
+                stderr=subprocess.STDOUT,
+                timeout=10 * 60,  # 10 min hard limit; healthy runs are 2-5 min
+                cwd=script_dir,
+            )
         elapsed = (datetime.now(timezone.utc) - start).total_seconds()
         _pipeline_status["last_duration_s"] = round(elapsed, 1)
         _pipeline_status["last_run"] = datetime.now(timezone.utc).isoformat()
         _pipeline_status["runs_total"] += 1
 
         if result.returncode != 0:
-            err_msg = (result.stderr or result.stdout or "unknown error")[-500:]
+            err_msg = (
+                f"pipeline exited with code {result.returncode}; "
+                f"see {subprocess_log_path} for details"
+            )
             _pipeline_status["state"] = "error"
             _pipeline_status["last_error"] = err_msg
             logger.error("Pipeline failed (%.1fs): %s", elapsed, err_msg)
