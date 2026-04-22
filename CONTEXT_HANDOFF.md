@@ -1,7 +1,7 @@
 # CONTEXT HANDOFF — short brief
 
 > **განახლდა**: 2026-04-22 (Phase 2.1 + 2.2 + 2.5 landed; Phase 2.4 REDUCED landed as portfolio sort_by extension; Phase 2.10 dropped)
-> **სტატუსი**: Phase 4A **FULLY CLOSED** + Phase 4B **COMPLETE (3/3 sprints, 28 rules, 171 tests)** + Phase 4C.2 **FULLY CLOSED** + Phase 4C.3 **LIVE VERIFIED** + **Phase 2.1 / 2.2 / 2.4 / 2.5 LIVE VERIFIED** (4 tools / extensions, 9 live scenarios, $0.82 total Anthropic spend) + **Phase 2.4/2.10 overlap audit COMPLETED** (1.5 days saved).
+> **სტატუსი**: Phase 4A **FULLY CLOSED** + Phase 4B **COMPLETE (3/3 sprints, 28 rules, 171 tests)** + Phase 4C.2 **FULLY CLOSED** + Phase 4C.3 **LIVE VERIFIED** + **Phase 2.1 / 2.2 / 2.4 / 2.5 LIVE VERIFIED** (4 tools / extensions, 12 live scenarios, $1.01 total Anthropic spend) + **Phase 2.4/2.10 overlap audit COMPLETED** (1.5 days saved).
 
 ---
 
@@ -107,6 +107,14 @@ All on `origin/main`. `git status` clean.
 - **Scenario 3 — anti-trigger routing** (dead stock question): AI correctly called `analyze_dead_stock`, NOT `analyze_product_profitability`. Anti-trigger disambiguation held.
 - Anti-markers ✅ — all 3 scenarios clean. `usage.thinking=True` on all turns.
 
+**Live dog-food evidence — Phase 2.4 REDUCED `prepare_supplier_brief` portfolio `sort_by` (2026-04-22)**:
+3/3 scenarios PASS on real Sonnet 4.6 `think=True` via in-process `_scratch_dogfood_phase2_4.py`. Total tokens: 4,328 in / 6,155 out / 280,002 cache read. Est. cost $0.19.
+- **Scenario 1 — `sort_by="risk"` watch list**: "მომწოდებლების პორტფოლიოში ვისი payment reliability ყველაზე ცუდი? ვინ უნდა ჩავსვა watch list-ზე?" → AI called `prepare_supplier_brief(sort_by="risk", top_n=15)`. summary_ka `"**270 მომწოდებელი**, სულ 5,201,362.18 ₾ · top-5 41.93% (moderate) · #1 risk: **შპს ფუდმარტი** (unpaid 100%, debt 53,314 ₾, 🔴 behind) · top-15 debt-at-risk: **569,945 ₾**"` — AI structured a Critical/Systemic watch-list in reply, honoring the ranking. `sort_mode="risk"` echoed in payload.
+- **Scenario 2 — leverage default (backward-compat)**: "ვის ვთხოვო discount-ი ჯერ?" → AI called `prepare_supplier_brief(sort_by="leverage", top_n=10)`. summary_ka legacy shape unchanged: `"... #1 call: **შპს ჯიდიაი** (leverage 71) · portfolio savings: **64,625.40 ₾/წელი**"`. No risk-mode markers leaked. `sort_mode="leverage"` echoed.
+- **Scenario 3 — FOCUSED routing intact**: "შპს ჯიდიაიზე გამიკეთე brief" → AI called `prepare_supplier_brief(supplier_name="ჯიდიაი")` (focused mode). summary_ka `"**შპს ჯიდიაი** · leverage **71/100** (🟢 HIGH) · #1 play: *6% ფასდაკლება ...*"`. Portfolio `sort_by` addition did not disrupt focused routing.
+- **Calibration learning**: first dry-run used phrasing "რომელ მომწოდებლებზე უფრო მეტი დავალიანება მიმაქვს?" — AI correctly routed to `read_data_json(supplier_aging)` per the schema's anti-trigger ("რამდენი ვალი მაქვს X-თან" → raw aging). Reframed as strategic monitoring ("watch list / ranking / payment reliability") — AI then hit `sort_by="risk"` cleanly. Schema anti-trigger is working as designed; risk-sort is the strategic-monitoring path, not the raw AP-lookup path.
+- Anti-markers ✅ — all 3 scenarios clean. `usage.thinking=True` on all turns.
+
 **Data caveat**: Old pinned ground truth `2026-02-27 = 7,882.68 ₾` (waybill `transport_start_date`) is **stale** post-regen. New data.json shows 0 under `transport_start_date` field; `date` field shows 17 valid rows / 7,004.06 ₾. If regression tests pin 7,882.68, they'll need updating OR the generate_dashboard_data.py pipeline changed date-field semantics between 2026-04-18 and 2026-04-22.
 
 ---
@@ -158,11 +166,10 @@ Phase 4B ✅ **FULLY CLOSED**. Phase 4C.2 + 4C.3 ✅ **FULLY CLOSED**. **Phase 2
 
 1. **Phase 2.9 `trend_detector`** — YoY category trends (price vs volume decomposition). Builds on existing monthly_pnl + retail_sales.by_category. Complements profitability X-ray (X-ray = snapshot; trend_detector = time-motion). ~1 day.
 2. **Phase 2.6 `promotion_candidate_finder`** — combines dead_stock + margin data to propose discount candidates. Reuses existing tools as inputs. ~1 day.
-3. **Live dog-food Phase 2.4 REDUCED** — verify `sort_by="risk"` flow on real Sonnet 4.6 before closing the sprint as "LIVE VERIFIED" (like 2.1/2.2/2.5 pattern). ~0.5 day. Can piggyback with 2.9 dog-food session.
-4. **Sprint 4C.1 Schema Poka-yoke audit** (~1 day, high-risk, fresh session strongly recommended) — 21 tools' argument/description tightening.
-5. **Phase 3 remaining** (4 features — conversation_summary_on_demand, margin_compression_radar, monthly_strategy_page, gap_analysis). ~1 week.
-6. **Phase 4 Advanced** (9 features). ~2-3 weeks.
-7. **Parking Lot** (~40 items documented in `AI_GENIUS_PARTNER_PLAN.md` v2.1).
+3. **Sprint 4C.1 Schema Poka-yoke audit** (~1 day, high-risk, fresh session strongly recommended) — 21 tools' argument/description tightening.
+4. **Phase 3 remaining** (4 features — conversation_summary_on_demand, margin_compression_radar, monthly_strategy_page, gap_analysis). ~1 week.
+5. **Phase 4 Advanced** (9 features). ~2-3 weeks.
+6. **Parking Lot** (~40 items documented in `AI_GENIUS_PARTNER_PLAN.md` v2.1).
 
 ---
 
