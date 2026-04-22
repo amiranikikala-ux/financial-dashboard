@@ -1,6 +1,6 @@
 # CONTEXT HANDOFF — short brief
 
-> **განახლდა**: 2026-04-22 (Phase 2.6 landed; Phase 2.9 pipeline unblocked; **Tier 1 server scale fix LANDED** — pipeline subprocess deadlock + atomic write)
+> **განახლდა**: 2026-04-22 (Phase 2.6 landed; Phase 2.9 pipeline unblocked; **Tier 1 server scale fix LANDED** + **Tier 2 Sprint 1 foundation LANDED** — pipeline_cache module ready for Sprint 2 retail_sales integration)
 > **სტატუსი**: Phase 4A **FULLY CLOSED** + Phase 4B **COMPLETE (3/3 sprints, 28 rules, 171 tests)** + Phase 4C.2 **FULLY CLOSED** + Phase 4C.3 **LIVE VERIFIED** + **Phase 2.1 / 2.2 / 2.4 / 2.5 / 2.6 LIVE VERIFIED** (5 tools / extensions, 15 live scenarios, $1.19 total Anthropic spend) + **Phase 2.4/2.10 overlap audit COMPLETED** + **Phase 2.9 pipeline unblock LANDED** (tool build = follow-up) + **Tier 1 scale fix LANDED** (commit `ad4c345`: stream subprocess stdout to log file, atomic data.json write, 30→60 min schedule, 30→10 min timeout).
 
 ---
@@ -34,10 +34,12 @@
 
 ---
 
-## Commit history (this session — 22 commits on `main`)
+## Commit history (this session — 24 commits on `main`)
 
 | commit | subject |
 |---|---|
+| `c1cccc6` | feat(pipeline): Tier 2 Sprint 1 — pipeline_cache module foundation |
+| `e83063b` | docs(context-handoff): Tier 1 scale fix landed; Tier 2 incremental ingest queued |
 | `ad4c345` | fix(server): Tier 1 scale fix — stream subprocess logs, atomic data.json, saner schedule |
 | `fa4f62b` | docs(context-handoff): Phase 2.9 pipeline unblocked — tool build is next sprint |
 | `85b870e` | feat(pipeline): Phase 2.9 unblock — retail_sales.by_category_by_month aggregate |
@@ -68,9 +70,9 @@ All on `origin/main`. `git status` clean.
 
 | მეტრიკა | მნიშვნელობა |
 |---|---|
-| **pytest** | **1,882/1,882 green** (~21s full run; 1,800 baseline + 72 Phase 2.6 + 10 Phase 2.9 pipeline) |
-| **`SYSTEM_PROMPT_KA`** | 1,299 lines (Phase 2.1 + 2.2 + 2.5 + 2.6 + 2.9 pipeline added **no** prompt text — tool descriptions + pipeline aggregates carry all data) |
-| **new tests this session** | 4B 171 + 4C.2 38 + Phase 2.1 39 + Phase 2.2 52 + Phase 2.5 47 + Phase 2.6 72 + Phase 2.9 pipeline 10 = **429** |
+| **pytest** | **1,905/1,905 green** (~20s full run; 1,800 baseline + 72 Phase 2.6 + 10 Phase 2.9 pipeline + 23 pipeline_cache) |
+| **`SYSTEM_PROMPT_KA`** | 1,299 lines (Phase 2.1 + 2.2 + 2.5 + 2.6 + 2.9 pipeline + Tier 1/2 infra added **no** prompt text) |
+| **new tests this session** | 4B 171 + 4C.2 38 + Phase 2.1 39 + Phase 2.2 52 + Phase 2.5 47 + Phase 2.6 72 + Phase 2.9 pipeline 10 + pipeline_cache 23 = **452** |
 | **`data.json`** | regenerated 2026-04-22 05:10, 133 MB, 26 sections, 21,233 waybills (was 76MB truncated pre-regen) |
 | **Live dog-food** | 3 scenarios PASS on real Anthropic Sonnet 4.6 `think=true`, ~$0.18 total cost |
 
@@ -170,7 +172,7 @@ Phase 4B ✅ **FULLY CLOSED**. Phase 4C.2 + 4C.3 ✅ **FULLY CLOSED**. **Phase 2
 
 ## Next recommended steps
 
-1. **Tier 2 scale fix — incremental ingest (~3-4 sessions, user-agreed to do within 2 weeks)**. Today's pipeline re-reads every Excel file on every run — O(N) with total history. User plans daily Excel additions going forward + 2 more months of backfill. Need a file-state tracker (mtime/hash cache) + per-section delta merger. Sprint breakdown: (1) file tracker + cache-invalidation plumbing, (2) retail_sales incremental builder, (3) bank / supplier / waybills incremental builders, (4) full-regen vs incremental validation harness. See `memory/project_scalability_ceiling.md` for full architectural rationale.
+1. **Tier 2 Sprint 2 — retail_sales incremental integration (~1 session)**. Sprint 1 shipped `dashboard_pipeline/pipeline_cache.py` (commit `c1cccc6`, 23 tests green). Sprint 2 scope: refactor `collect_retail_sales_bundle` to (a) compute per-file aggregates keyed by file signature, (b) cache them to `.pipeline_cache.json`, (c) on next run reuse cached per-file aggregates for unchanged files and re-read only changed files, (d) merge all per-file aggregates into the current bundle shape. Add validation: first pass runs full read (no cache) AND uses cache, diff the bundles; any divergence > rounding tolerance = test fail. Sprint 3-4 extend to bank / supplier / waybills once the retail_sales pattern is proven. See `memory/project_scalability_ceiling.md`.
 2. **Phase 2.9 `trend_detector` tool build (~1 day)** — pipeline is ready (`retail_sales.by_category_by_month` aggregate, commit `85b870e`). `data.json` already regenerated with the new section (2026-04-22 20:07). Tool scope: MoM / YoY price-vs-volume decomposition per (category, store), with suspicious-move quarantine mirroring X-Ray's [-5%, 90%] rule. Anti-triggers vs `analyze_product_profitability` + `analyze_dead_stock`.
 2. **Phase 2.3 `industry_benchmark`** — needs an external benchmark data source decision first (hard-coded retail medians? Excel import? public dataset?). Ask user which.
 3. **Sprint 4C.1 Schema Poka-yoke audit** (~1 day, high-risk, fresh session strongly recommended) — 22 tools' argument/description tightening.
