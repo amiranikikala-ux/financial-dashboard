@@ -187,10 +187,21 @@ State audit received 2026-04-22 for **შპს ჯეო ფუდთაიმ�
 
 **Structural breakpoint**: 2024-06 — BOG POS started handling most in-store card transactions, TBC POS dropped from ~10K/month to ~500/month. Declared turnover did not track this change → 19-month gap accumulated.
 
-### Sprint 5.1 — TBC POS classification fix (🔴 highest priority, ~1 session)
-**Bug**: `tbc_card_income_patterns.json` matches all TBC bank transit deposits as "TBC POS". 2024-08 pipeline shows 164,903 ₾ TBC POS vs audit 6,697 ₾ — **25x over-classification**.
-**Fix**: narrow pattern to physical in-store POS only (must distinguish `ტერმინალებში მიღებული` deposit types). Add regression test pinning per-month TBC POS against audit file numbers.
-**Deliverable**: pipeline TBC POS for 2024-08 drops from 164K to ~7K.
+### Sprint 5.1 — TBC POS classification INVESTIGATION (🔴 highest priority, ~1 session)
+**Finding 2026-04-23** (from 2024-08 deep-dive): two patterns "ტერმინალებში მიღებული" + "გადახდების სატრანზიტო" each match the SAME 99 rows = 157,071 ₾. These phrases are part of the TBC bank IBAN description — they appear on EVERY transit deposit to GE69TB0000000251140006, not just POS.
+
+**Three hypotheses — need bank statement line-by-line analysis to disambiguate:**
+1. Real POS sales (pipeline correct, audit under-reports)
+2. Double-counting (same transaction captured elsewhere in pipeline — e.g., BOG POS + cashreg)
+3. Non-POS transit (interbank, refunds, other categories)
+
+**Do NOT narrow patterns before investigation** — risk of losing real income signal. Sprint 5.1 scope is now:
+1. Extract ALL 2024-08 TBC bank rows (not just pipeline-matched) — cross-check against MAX POS receipts
+2. Identify which 99 transit-deposit rows correspond to which POS purchases at the register
+3. Determine if audit's 6.7K TBC POS is MISSING these or classifying them differently
+4. THEN (if applicable) narrow patterns with regression test pinning per-month TBC POS
+5. **Deliverable**: investigation report + targeted pattern fix OR documented decision to keep patterns broad
+**Key context**: MAX POS register total for 2024-08 is 259,087 ₾ (direct Excel read). Audit says register sales = cashreg 142K + POS 78K = 220K, understating by 39K. Pipeline says 282K retail_sales (+23K over direct MAX — separate Sprint 5.2 issue).
 
 ### Sprint 5.2 — Direct MAX ingest + cashreg separation (~1 session)
 **Bug 1**: `retail_sales.revenue_ge` computation diverges from direct Excel read by ~10% (2024-08: 282K pipe vs 259K raw).
