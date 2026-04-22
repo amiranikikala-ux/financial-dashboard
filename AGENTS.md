@@ -53,3 +53,21 @@
 - shared symbol-ის შეცვლამდე შეამოწმე impact
 - commit-მდე გადაამოწმე ცვლილებების scope
 - თუ index stale-ა, მხოლოდ მაშინ განაახლე
+
+## Prompt Hygiene (Phase 4B.3 Rule 22 — `code.claude.com`)
+- **Ruthlessly prune.** If the prompt does something correctly without a given instruction, delete the instruction. >1000-line CLAUDE.md / system prompt gets half-ignored.
+- ახალი წესის დამატებამდე ჯერ ნახე, ხომ არ ვრცელდება უკვე არსებულ წესით
+- dublicate section-ები (მაგ. "ენა და ფორმატი" ორჯერ) აკრძალულია — consolidate
+- verbose narrative intro ⇒ table or 2-line rule
+- ყოველი rule-ს უნდა ჰქონდეს grep-assertion `test_ai_prompts_phase*.py`-ში, სხვაგვარად refactor-ის დროს silently ქრება
+
+## Session Boundaries (Phase 4B.3 Rule 23 — `code.claude.com`)
+- **No kitchen-sink sessions.** ერთი session = ერთი logical goal (მაგ. "Sprint 4B.2 + tests + commit")
+- scope creep = bug. თუ გზაში "ოჰ, ესეც გავაკეთო" მომიტყდა — ახალი task რომ გავაკეთო, ამ session-ის goal უნდა დავასრულო ჯერ
+- HANDOFF.md / CONTEXT_HANDOFF.md — განაახლე მხოლოდ მიმდინარე goal-ის დახურვისას, არა ყოველ commit-ზე
+- `/restart-session` command-ით ახალი session-ი, თუ იგივე შეცდომა 2-ჯერ გაკეთდა (Rule 25 ქვემოთ)
+
+## Correction Escalation (Phase 4B.3 Rule 25 — `code.claude.com`)
+- User-მა **იგივე შეცდომა** 2-ჯერ გამისწორა ერთ session-ში → **restart**. context ძალიან დაბინძურდა, fix-ების კასკადი აღარ მუშაობს
+- restart = ახალი ჩატი + `CONTEXT_HANDOFF.md`-ის ცოცხალი წაკითხვა + განმეორება user-ის ბოლო ცხადი მოთხოვნის
+- 3-ჯერ იგივე შეცდომა **არასოდეს** — restart 2-ზე
