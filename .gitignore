@@ -73,3 +73,4 @@ rs-dashboard/playwright-report/
 
 # Machine-specific Claude Code settings (per-user overrides)
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
