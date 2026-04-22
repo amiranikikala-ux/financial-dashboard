@@ -306,10 +306,11 @@ class TestMemoryToolSchemas:
         names = [t["name"] for t in TOOL_SCHEMAS]
         assert "save_memory" in names
 
-    def test_tool_count_is_19(self):
+    def test_tool_count_is_20(self):
         """Phase 4A grew TOOL_SCHEMAS 17 → 18; Phase 2.1 grew 18 → 19
-        (+ compute_cash_flow_projection)."""
-        assert len(TOOL_SCHEMAS) == 19
+        (+ compute_cash_flow_projection); Phase 2.2 grew 19 → 20
+        (+ simulate_scenario)."""
+        assert len(TOOL_SCHEMAS) == 20
 
     def test_recall_context_position(self):
         # Sits right after forecast_revenue (index 3) — both are

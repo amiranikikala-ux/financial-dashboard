@@ -1577,6 +1577,135 @@ COMPUTE_CASH_FLOW_PROJECTION_TOOL: Dict[str, Any] = {
 }
 
 
+SCENARIO_SIMULATOR_TOOL: Dict[str, Any] = {
+    "name": "simulate_scenario",
+    "description": (
+        "Phase 2.2 — run a deterministic what-if against a baseline month "
+        "from `monthly_pnl`. Given price/volume/expense/fixed-cost knobs, "
+        "returns baseline vs scenario side-by-side plus a decision indicator "
+        "(🟢 PROFIT_IMPROVE / 🟡 NEUTRAL / 🔴 PROFIT_ERODE).\n\n"
+        "**Triggers (CRITICAL):** any what-if / trade-off / sensitivity "
+        "question: 'თუ ფასი ავწიე 5%-ით, რა მოხდება?', 'volume 10%-ით "
+        "რომ დამეცა?', 'ხელფასის +10% რა დამიჯდება?', 'ფასდაკლება რას "
+        "გამოიღებს?', 'scenario', 'simulation', 'what-if', '+5% "
+        "ფასი → −8% volume', 'ან-ან რა სჯობს?'.\n\n"
+        "**Anti-triggers (NEVER call):**\n"
+        "  • historical month lookup ('რამდენი მოგება მქონდა 2026-02-ში?') "
+        "→ `read_data_json(section='monthly_pnl')`\n"
+        "  • forward revenue forecast ('მომდევნო 3 თვე') → `forecast_revenue`\n"
+        "  • daily cash trajectory → `compute_cash_flow_projection`\n"
+        "  • supplier-specific negotiation → `prepare_supplier_brief`.\n\n"
+        "**Price × volume coupling (IMPORTANT):** when you pass "
+        "`price_change_pct` alone (no explicit `volume_change_pct`), the "
+        "tool auto-applies price elasticity (default -0.8 — price-elastic "
+        "retail). Example: price_change_pct=+5 → volume_change_pct=-4.0 "
+        "auto. If the user has a different elasticity assumption ('ჩემი "
+        "მომხმარებელი ერთგულია'), pass `price_elasticity=-0.3` (less "
+        "elastic) or `volume_change_pct=0` explicitly to disable the "
+        "auto-apply.\n\n"
+        "**Variable vs fixed cost split:** retail expenses are split "
+        "`cogs_share` variable (scales with volume) + the rest fixed "
+        "(stays flat when volume moves). Default `cogs_share=0.5`; "
+        "override if the user has a concrete cost structure. "
+        "`expense_change_pct` applies on top of the split (captures wage "
+        "raises, rent index, general inflation). `fixed_cost_delta_ge` "
+        "adds one-off additions like new equipment.\n\n"
+        "**Returns:** `{base_period_used, store, scenario_label, baseline, "
+        "scenario, deltas, adjustments_applied, decision_indicator, "
+        "summary_ka, notes[]}`. `baseline` / `scenario` = "
+        "`{revenue_ge, expenses_ge, net_ge, margin_pct}`; `deltas` = "
+        "`{revenue_ge, expenses_ge, net_ge, margin_pp}` where `margin_pp` "
+        "is percentage-point change. `decision_indicator` uses a ±2%-of-"
+        "baseline-revenue band so rounding noise never flips to improve/erode.\n\n"
+        "**Honesty rule:** ALWAYS surface `summary_ka` verbatim — it cites "
+        "baseline→scenario net, margin pp delta, and decision. If "
+        "`adjustments_applied.volume_implied_by_elasticity` is true, state "
+        "it: 'volume -4% ავტომატურად დავიანგარიშე price elasticity -0.8-ით'."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "base_period": {
+                "type": "string",
+                "description": (
+                    "Which historical month to use as baseline. Options: "
+                    "'last_month' (default — most recent in monthly_pnl), "
+                    "'last_3_avg' (smoothed avg of last 3 months — reduces "
+                    "single-month noise), or an explicit 'YYYY-MM' string."
+                ),
+            },
+            "store": {
+                "type": "string",
+                "enum": ["total", "ოზურგეთი", "დვაბზუ"],
+                "description": (
+                    "Which store's P&L to simulate. Default: 'total' "
+                    "(combined). Pass 'ოზურგეთი' or 'დვაბზუ' for a "
+                    "single-store what-if."
+                ),
+            },
+            "price_change_pct": {
+                "type": "number",
+                "description": (
+                    "Percent change in unit price, e.g. +5 = raise prices 5%. "
+                    "Default 0. When non-zero and `volume_change_pct` is "
+                    "omitted, elasticity auto-computes the volume response."
+                ),
+            },
+            "volume_change_pct": {
+                "type": "number",
+                "description": (
+                    "Percent change in units sold, e.g. -8 = volume drops 8%. "
+                    "Default 0. Pass explicitly (incl. 0) to override the "
+                    "elasticity auto-compute from price_change_pct."
+                ),
+            },
+            "expense_change_pct": {
+                "type": "number",
+                "description": (
+                    "Percent change in total expenses on top of the "
+                    "variable/fixed split (e.g. +10 = wages up 10%). Default 0."
+                ),
+            },
+            "fixed_cost_delta_ge": {
+                "type": "number",
+                "description": (
+                    "One-off GEL addition/subtraction to fixed cost (e.g. "
+                    "+3000 for new equipment, -2000 for cancelling a "
+                    "subscription). Default 0."
+                ),
+            },
+            "price_elasticity": {
+                "type": "number",
+                "description": (
+                    "Price elasticity of demand, used ONLY when "
+                    "`volume_change_pct` is omitted and `price_change_pct` "
+                    "is set. Default -0.8 (price-elastic retail). Clamped "
+                    "to [-5, 0]. Less elastic example: -0.3 (customer "
+                    "loyalty). Unit-elastic: -1.0."
+                ),
+            },
+            "cogs_share": {
+                "type": "number",
+                "description": (
+                    "Fraction of expenses that scales with volume (variable "
+                    "cost share). Default 0.5. Accepts fractions (0.6) or "
+                    "percents (60). Clamped to [0, 1]."
+                ),
+            },
+            "scenario_label": {
+                "type": "string",
+                "description": (
+                    "Optional human-readable label shown in summary_ka "
+                    "(e.g. 'ფასი +5% · ხელფასი +10%'). Default empty."
+                ),
+            },
+        },
+        "required": [],
+        "additionalProperties": False,
+    },
+}
+
+
 TOOL_SCHEMAS: List[Dict[str, Any]] = [
     READ_DATA_JSON_TOOL,
     COMPUTE_WAYBILL_TOTAL_TOOL,
@@ -1592,6 +1721,7 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
     COMPUTE_CASH_RUNWAY_TOOL,
     COMPUTE_CASH_FLOW_PROJECTION_TOOL,
     BUILD_DEBT_PLAN_TOOL,
+    SCENARIO_SIMULATOR_TOOL,
     READ_SOURCE_CODE_TOOL,
     GREP_CODE_TOOL,
     READ_EXCEL_SOURCE_TOOL,
@@ -1965,6 +2095,23 @@ class ToolDispatcher:
                 plan_duration_months=args.get("plan_duration_months"),
                 max_priority_count=args.get("max_priority_count"),
             )
+        elif name == "simulate_scenario":
+            from dashboard_pipeline.ai.scenario_simulator import (
+                simulate_scenario as _simulate_scenario,
+            )
+
+            result = _simulate_scenario(
+                self._data_loader,
+                base_period=args.get("base_period"),
+                store=args.get("store"),
+                price_change_pct=args.get("price_change_pct"),
+                volume_change_pct=args.get("volume_change_pct"),
+                expense_change_pct=args.get("expense_change_pct"),
+                fixed_cost_delta_ge=args.get("fixed_cost_delta_ge"),
+                price_elasticity=args.get("price_elasticity"),
+                cogs_share=args.get("cogs_share"),
+                scenario_label=args.get("scenario_label"),
+            )
         elif name == "read_source_code":
             result = read_source_code(
                 args.get("file_path"),
@@ -2173,6 +2320,26 @@ _SUMMARY_KEYS: Tuple[str, ...] = (
     "min_balance_ge",
     "lowest_day",
     "amount_ge",
+    # Phase 2.2 Scenario Simulator tool fields
+    "base_period_used",
+    "scenario_label",
+    "baseline",
+    "scenario",
+    "deltas",
+    "adjustments_applied",
+    "decision_indicator",
+    "price_change_pct",
+    "volume_change_pct",
+    "volume_implied_by_elasticity",
+    "expense_change_pct",
+    "fixed_cost_delta_ge",
+    "elasticity_used",
+    "cogs_share",
+    "revenue_ge",
+    "expenses_ge",
+    "net_ge",
+    "margin_pct",
+    "margin_pp",
 )
 
 

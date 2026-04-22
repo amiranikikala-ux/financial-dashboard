@@ -698,8 +698,9 @@ class TestProposeFeatureToolSchema:
 
     def test_propose_feature_at_tail(self):
         # Phase 2.1 added compute_cash_flow_projection before debt_plan, shifting
-        # the tail from index 17 to 18. Pin by tail semantics + absolute index.
-        assert TOOL_SCHEMAS[18]["name"] == "propose_feature"
+        # the tail from index 17 to 18; Phase 2.2 added simulate_scenario before
+        # the investigator block, shifting the tail to 19.
+        assert TOOL_SCHEMAS[19]["name"] == "propose_feature"
 
 
 # ---------------------------------------------------------------------------

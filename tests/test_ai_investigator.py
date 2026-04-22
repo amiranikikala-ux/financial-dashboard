@@ -600,8 +600,9 @@ class TestExtendedToolSchemas:
         #  15; propose_feature added in Phase 3.1 → 16;
         #  compute_cash_runway added in Phase 3.5 → 17;
         #  build_debt_repayment_plan added in Phase 4A → 18;
-        #  compute_cash_flow_projection added in Phase 2.1 → 19.)
-        assert len(TOOL_SCHEMAS) == 19
+        #  compute_cash_flow_projection added in Phase 2.1 → 19;
+        #  simulate_scenario added in Phase 2.2 → 20.)
+        assert len(TOOL_SCHEMAS) == 20
 
     def test_investigator_tool_names_set(self):
         assert set(INVESTIGATOR_TOOL_NAMES) == {

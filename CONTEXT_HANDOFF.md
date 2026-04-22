@@ -1,7 +1,7 @@
 # CONTEXT HANDOFF — short brief
 
-> **განახლდა**: 2026-04-22 (Phase 2.1 `compute_cash_flow_projection` landed + live PASS 3/3)
-> **სტატუსი**: Phase 4A **FULLY CLOSED** + Phase 4B **COMPLETE (3/3 sprints, 28 rules, 171 tests)** + Phase 4C.2 **FULLY CLOSED** (10 tools with summary_ka, 8 explicitly skipped) + Phase 4C.3 **LIVE VERIFIED** + **Phase 2.1 Cash Flow Projection LIVE VERIFIED** (3 scenarios on Sonnet 4.6 think=True, summary_ka used verbatim, anti-trigger routing works, $0.16 cost).
+> **განახლდა**: 2026-04-22 (Phase 2.1 + 2.2 landed — 2 of 9 Phase 2 tools done)
+> **სტატუსი**: Phase 4A **FULLY CLOSED** + Phase 4B **COMPLETE (3/3 sprints, 28 rules, 171 tests)** + Phase 4C.2 **FULLY CLOSED** (10 tools with summary_ka, 8 explicitly skipped) + Phase 4C.3 **LIVE VERIFIED** + **Phase 2.1 Cash Flow Projection LIVE VERIFIED** ($0.16) + **Phase 2.2 Scenario Simulator LIVE VERIFIED** ($0.45, 3/3 PASS).
 
 ---
 
@@ -30,7 +30,7 @@
 - **Backend**: Windows Service **`FinancialDashboardBackend`** (NSSM, auto-start + auto-restart 2s after crash, `AI_ENABLE_THINKING=true` + `PYTHONUTF8=1` persisted, logs rotate 10MB/24h in `logs/backend_{stdout,stderr}.log`)
 - **Service control**: `services.msc` → "Financial Dashboard Backend" OR `Restart-Service FinancialDashboardBackend` (requires admin/UAC) OR `C:\tools\nssm\nssm.exe {start|stop|restart|status|edit}`
 - **⚠️ Service-restart-for-new-code**: Service runs off working-tree code but loads prompt at module-import time. After prompt changes, `Restart-Service` picks them up (admin required). For in-process AI tests, use `_scratch_dogfood_*.py` pattern (no service needed).
-- **Tool surface**: **19 tools live** (Phase 2.1 added `compute_cash_flow_projection` @ 12). Index positions: `compute_cash_flow_projection` @ 12 (between runway and debt-plan), `build_debt_repayment_plan` @ 13, `propose_feature` @ 18 (tail). Tools with `summary_ka` (Phase 4C.2 + 2.1): `compute`, `compute_waybill_total`, `forecast_revenue`, `analyze_dead_stock`, `compute_cash_runway` (legacy `status_summary_ka`), `build_debt_repayment_plan`, `recall_context`, `propose_feature`, `validate_vs_source`, `prepare_supplier_brief` (focused + portfolio), `compute_cash_flow_projection` (Phase 2.1). 8 tools explicitly **skipped** (raw-data readers + CRUD confirms — noise to add summary_ka).
+- **Tool surface**: **20 tools live** (Phase 2.1 + 2.2 added two; `compute_cash_flow_projection` @ 12, `simulate_scenario` @ 14). Index positions: `compute_cash_flow_projection` @ 12, `build_debt_repayment_plan` @ 13, `simulate_scenario` @ 14, `propose_feature` @ 19 (tail). Tools with `summary_ka` (12 total): `compute`, `compute_waybill_total`, `forecast_revenue`, `analyze_dead_stock`, `compute_cash_runway` (legacy `status_summary_ka`), `build_debt_repayment_plan`, `recall_context`, `propose_feature`, `validate_vs_source`, `prepare_supplier_brief` (focused + portfolio), `compute_cash_flow_projection`, `simulate_scenario`. 8 tools explicitly **skipped** (raw-data readers + CRUD confirms).
 
 ---
 
@@ -65,9 +65,9 @@ All on `origin/main`. `git status` clean.
 
 | მეტრიკა | მნიშვნელობა |
 |---|---|
-| **pytest** | **1,691/1,691 green** (~19s on parent venv; 1,652 baseline + 39 Phase 2.1) |
-| **`SYSTEM_PROMPT_KA`** | 1,299 lines (was 1,290 pre-Sprint 4B.0 → 1,100 post-prune → +199 for 28 new 4B rules; Phase 2.1 added **no** prompt text — tool description carries the guidance) |
-| **new tests this session** | 171 (68 + 79 + 24 = 4B tiers) + 20 (4C.2 headline) + 18 (4C.2 remaining) + 39 (Phase 2.1) = **248** |
+| **pytest** | **1,743/1,743 green** (~18s; 1,652 baseline + 39 Phase 2.1 + 52 Phase 2.2) |
+| **`SYSTEM_PROMPT_KA`** | 1,299 lines (Phase 2.1 + 2.2 added **no** prompt text — tool descriptions carry all guidance) |
+| **new tests this session** | 4B 171 + 4C.2 38 + Phase 2.1 39 + Phase 2.2 52 = **300** |
 | **`data.json`** | regenerated 2026-04-22 05:10, 133 MB, 26 sections, 21,233 waybills (was 76MB truncated pre-regen) |
 | **Live dog-food** | 3 scenarios PASS on real Anthropic Sonnet 4.6 `think=true`, ~$0.18 total cost |
 
@@ -93,6 +93,13 @@ All on `origin/main`. `git status` clean.
 - **Scenario 3 — anti-trigger routing** (months-left question): AI routed to `compute_cash_runway` (✅) NOT `compute_cash_flow_projection` (✅) — schema description's anti-triggers successfully disambiguated the two runway tools.
 - Anti-markers ✅ — all 3 scenarios clean. `usage.thinking=True` on all turns.
 
+**Live dog-food evidence — Phase 2.2 `simulate_scenario` (2026-04-22)**:
+3/3 scenarios PASS on real Sonnet 4.6 `think=True` via in-process `_scratch_dogfood_phase2_2.py`. Total tokens: 63,520 in / 5,916 out / 574,293 cache read. Est. cost $0.45.
+- **Scenario 1 — price +5% with elasticity auto**: summary_ka `"**scenario** (2026-02, ორივე მაღაზია) · **ფასი +5% · elasticity −0.8** · net **-15,266 → -11,514 ₾** (+3,752) · margin **-12.4% → -9.3%** (+3.1 pp) · 🟢 PROFIT_IMPROVE · volume=elasticity"` — AI surfaced full table + verdict + "volume -4% ავტომატურად დავიანგარიშე" caveat verbatim.
+- **Scenario 2 — wage +10%**: AI called `read_data_json` 6× first to check payroll share (Phase 4B Rule 20 "state scope" discipline), THEN called `simulate_scenario(expense_change_pct=10, cogs_share=...)`. summary_ka `"net **-15,266 → -29,101 ₾** (-13,835) · margin **-23.6%** (-11.2 pp) · 🔴 PROFIT_ERODE"` verbatim. AI added honest caveat: payroll is ~20% of total expenses, so simulating 10% of total is overstated — and flagged it to user. Good epistemic humility.
+- **Scenario 3 — anti-trigger routing** (historical margin lookup): AI correctly called `read_data_json` + `compute`, NOT `simulate_scenario` (✅). Description anti-triggers successfully disambiguated scenario-simulator from historical-lookup.
+- Anti-markers ✅ — all 3 scenarios clean. `usage.thinking=True` on all turns.
+
 **Data caveat**: Old pinned ground truth `2026-02-27 = 7,882.68 ₾` (waybill `transport_start_date`) is **stale** post-regen. New data.json shows 0 under `transport_start_date` field; `date` field shows 17 valid rows / 7,004.06 ₾. If regression tests pin 7,882.68, they'll need updating OR the generate_dashboard_data.py pipeline changed date-field semantics between 2026-04-18 and 2026-04-22.
 
 ---
@@ -113,39 +120,39 @@ All on `origin/main`. `git status` clean.
 
 ---
 
-## Active packet — Phase 2 started (1 of 9 tools done)
+## Active packet — Phase 2 started (2 of 9 tools done)
 
-Phase 4B ✅ **FULLY CLOSED**. Phase 4C.2 + 4C.3 ✅ **FULLY CLOSED**. **Phase 2.1 `compute_cash_flow_projection`** ✅ **LANDED + LIVE VERIFIED** — first of the 9-tool Phase 2 batch.
+Phase 4B ✅ **FULLY CLOSED**. Phase 4C.2 + 4C.3 ✅ **FULLY CLOSED**. **Phase 2.1 `compute_cash_flow_projection`** + **Phase 2.2 `simulate_scenario`** ✅ **LANDED + LIVE VERIFIED**.
 
-**📋 Phase 2 remaining (8 tools after 2.1):**
+**📋 Phase 2 remaining (7 tools after 2.1 + 2.2):**
 
 | Phase | Tool | Scope |
 |---|---|---|
-| 2.2 | `scenario_simulator` | "+5% price → −8% volume" what-if analysis |
-| 2.3 | `industry_benchmark` | "Margin 7.2% vs median 5% — ahead" (needs external data) |
-| 2.4 | `supplier_risk_radar` | Portfolio risk scoring (may already be covered by `prepare_supplier_brief` PORTFOLIO) |
-| 2.5 | `product_profitability_xray` | Per-product margin deep-dive |
-| 2.6 | `promotion_candidate_finder` | "5 candidates for ოზურგეთი" |
+| 2.3 | `industry_benchmark` | "Margin 7.2% vs median 5% — ahead" (needs external data source) |
+| 2.4 | `supplier_risk_radar` | Portfolio risk scoring (may already be covered by `prepare_supplier_brief` PORTFOLIO — audit first) |
+| 2.5 | `product_profitability_xray` | Per-product margin deep-dive from retail_sales |
+| 2.6 | `promotion_candidate_finder` | "5 candidates for ოზურგეთი" from dead-stock + margin data |
 | 2.8 | Store Comparison page (frontend) | "Margin 11% vs 2%" UI |
 | 2.9 | `trend_detector` | "Category YoY +11% price / −4% volume" |
-| 2.10 | `multi_source_triangulation` | Likely subsumed by existing `validate_vs_source` |
+| 2.10 | `multi_source_triangulation` | Likely subsumed by existing `validate_vs_source` — audit first |
 
 **📋 Phase 4C.1 still open (high-risk, fresh session recommended):**
 
 | Sub-sprint | scope | size |
 |---|---|---|
-| 4C.1 Schema Poka-yoke audit | All 19 tools: review argument names for ambiguity (e.g., `store` vs `store_alias`), tighten type enums, rewrite descriptions as "junior-dev docstrings" | 1 day, high-risk (schema changes cascade to tests + frontend aiClient) |
+| 4C.1 Schema Poka-yoke audit | All 20 tools: review argument names for ambiguity, tighten type enums, rewrite descriptions as "junior-dev docstrings" | 1 day, high-risk (schema changes cascade to tests + frontend aiClient) |
 
 ---
 
 ## Next recommended steps
 
-1. **Phase 2.2 `scenario_simulator`** — highest user value next (what-if ratcheting for pricing/promo decisions). Builds on existing `forecast_revenue` + monthly_pnl infrastructure. ~1 day.
-2. **Phase 2.5 `product_profitability_xray`** — per-product margin lens. Product list from `retail_sales`. ~1 day.
-3. **Sprint 4C.1 Schema Poka-yoke audit** (~1 day, high-risk, fresh session strongly recommended) — 19 tools' argument/description tightening.
-4. **Phase 3 remaining** (4 features — conversation_summary_on_demand, margin_compression_radar, monthly_strategy_page, gap_analysis). ~1 week.
-5. **Phase 4 Advanced** (9 features — monthly_strategy_generator, quarterly_review, long_term_goals, scenario_multi_variable, stress_test, financial_literacy_teacher, retrospective_loop, exec_summary_generator, viz_suggester, peer_comparison). ~2-3 weeks.
-6. **Parking Lot** (~40 items documented in `AI_GENIUS_PARTNER_PLAN.md` v2.1).
+1. **Phase 2.5 `product_profitability_xray`** — per-product margin lens. Product list from `retail_sales`. Clear user value ("which SKU bleeds money?"). ~1 day.
+2. **Phase 2.9 `trend_detector`** — YoY category trends (price vs volume decomposition). Builds on existing monthly_pnl. ~1 day.
+3. **Audit Phase 2.4 + 2.10 for overlap** with existing `prepare_supplier_brief` PORTFOLIO + `validate_vs_source`. May be unnecessary additions.
+4. **Sprint 4C.1 Schema Poka-yoke audit** (~1 day, high-risk, fresh session strongly recommended) — 20 tools' argument/description tightening.
+5. **Phase 3 remaining** (4 features — conversation_summary_on_demand, margin_compression_radar, monthly_strategy_page, gap_analysis). ~1 week.
+6. **Phase 4 Advanced** (9 features — monthly_strategy_generator, quarterly_review, long_term_goals, scenario_multi_variable, stress_test, financial_literacy_teacher, retrospective_loop, exec_summary_generator, viz_suggester, peer_comparison). ~2-3 weeks.
+7. **Parking Lot** (~40 items documented in `AI_GENIUS_PARTNER_PLAN.md` v2.1).
 
 ---
 
