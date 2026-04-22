@@ -169,6 +169,9 @@ DEFAULT_BENCHMARK_N = 10
 MIN_BENCHMARK_N = 1
 MAX_BENCHMARK_N = 30
 
+DEFAULT_PORTFOLIO_SORT_BY = "leverage"
+ALLOWED_PORTFOLIO_SORT_MODES = ("leverage", "risk")
+
 # Minimum quantity units required before we trust a price comparison.
 # Below this, statistical noise dominates.
 _MIN_QTY_FOR_BENCHMARK = 5.0
@@ -229,6 +232,18 @@ def _resolve_benchmark_n(value: Any) -> int:
     except (TypeError, ValueError):
         return DEFAULT_BENCHMARK_N
     return max(MIN_BENCHMARK_N, min(n, MAX_BENCHMARK_N))
+
+
+def _resolve_portfolio_sort_by(value: Any) -> str:
+    if value is None:
+        return DEFAULT_PORTFOLIO_SORT_BY
+    try:
+        normalized = str(value).strip().lower()
+    except Exception:  # pragma: no cover — defensive
+        return DEFAULT_PORTFOLIO_SORT_BY
+    if normalized not in ALLOWED_PORTFOLIO_SORT_MODES:
+        return DEFAULT_PORTFOLIO_SORT_BY
+    return normalized
 
 
 # ---------------------------------------------------------------------------
@@ -1018,8 +1033,21 @@ def _build_portfolio_report(
     *,
     top_n: int,
     today: date,
+    sort_by: str = DEFAULT_PORTFOLIO_SORT_BY,
 ) -> Dict[str, Any]:
-    """Pareto concentration + top-N candidates ranked by leverage."""
+    """Pareto concentration + top-N candidates ranked by leverage or risk.
+
+    ``sort_by="leverage"`` (default, backward-compat): ranks candidates by
+    negotiation leverage_score × savings × spend.
+
+    ``sort_by="risk"``: ranks candidates by payment-risk signals
+    (unpaid_share_pct DESC, current_debt_ge DESC, total_spend_ge DESC).
+    Regardless of mode, payment fields (``current_debt_ge``,
+    ``unpaid_share_pct``, ``reliability_label``) are surfaced on every
+    candidate so callers can reason about risk even in leverage mode.
+    """
+    if sort_by not in ALLOWED_PORTFOLIO_SORT_MODES:
+        sort_by = DEFAULT_PORTFOLIO_SORT_BY
     total_portfolio = sum(
         _safe_float(s.get("total_effective")) for s in suppliers or []
     )
@@ -1094,17 +1122,32 @@ def _build_portfolio_report(
                 "leverage_label": leverage["label"],
                 "headline_play_ka": headline,
                 "estimated_annual_savings_ge": round(savings, 2),
+                "current_debt_ge": payment["current_debt_ge"],
+                "unpaid_share_pct": payment["unpaid_share_pct"],
+                "reliability_label": payment["reliability_label"],
+                "aging_bucket": payment["aging_bucket"],
             }
         )
 
-    # Re-rank by leverage*savings (practical "who to call first" order).
-    top_candidates.sort(
-        key=lambda c: (
-            -int(c["leverage_score"]),
-            -float(c["estimated_annual_savings_ge"]),
-            -float(c["total_spend_ge"]),
-        ),
-    )
+    # Re-rank by the requested sort mode.
+    if sort_by == "risk":
+        # Higher unpaid share → higher risk; tie-break by absolute debt then spend.
+        top_candidates.sort(
+            key=lambda c: (
+                -float(c.get("unpaid_share_pct") or 0),
+                -float(c.get("current_debt_ge") or 0),
+                -float(c["total_spend_ge"]),
+            ),
+        )
+    else:  # "leverage"
+        # Practical "who to call first for negotiation" order.
+        top_candidates.sort(
+            key=lambda c: (
+                -int(c["leverage_score"]),
+                -float(c["estimated_annual_savings_ge"]),
+                -float(c["total_spend_ge"]),
+            ),
+        )
     for i, c in enumerate(top_candidates[:top_n], start=1):
         c["rank"] = i
 
@@ -1112,11 +1155,23 @@ def _build_portfolio_report(
     total_supplier_count = len(
         [s for s in suppliers or [] if isinstance(s, dict)]
     )
+    if sort_by == "risk":
+        ranking_note_ka = (
+            "Portfolio ranking ითვლება payment-risk-ით: unpaid_share_pct DESC → "
+            "current_debt_ge DESC → total_spend_ge DESC."
+        )
+    else:
+        ranking_note_ka = (
+            "Portfolio ranking ითვლება leverage_score × savings-ის მიხედვით "
+            "(არა ცარიელი spend)."
+        )
+
     payload: Dict[str, Any] = {
         "mode": "portfolio",
         "as_of_date": today.isoformat(),
         "total_suppliers": total_supplier_count,
         "total_spend_ge": round(total_portfolio, 2),
+        "sort_mode": sort_by,
         "concentration": {
             "top_5_share_pct": _share(5),
             "top_10_share_pct": _share(10),
@@ -1127,7 +1182,7 @@ def _build_portfolio_report(
         "top_candidates": trimmed_candidates,
         "aggregate_savings_opportunity_ge": round(aggregate_savings, 2),
         "notes": [
-            "Portfolio ranking ითვლება leverage_score × savings-ის მიხედვით (არა ცარიელი spend).",
+            ranking_note_ka,
             "თითო მომწოდებელზე focused brief-ისთვის გადააპროცესიე `prepare_supplier_brief(supplier_name=...)` ან `tax_id=...`.",
         ],
     }
@@ -1185,8 +1240,11 @@ def _render_focused_summary_ka(payload: Dict[str, Any]) -> str:
 def _render_portfolio_summary_ka(payload: Dict[str, Any]) -> str:
     """One-sentence Georgian summary of a portfolio supplier brief.
 
-    Surface order: total supplier count + spend, concentration label,
-    first call + leverage, full-portfolio savings opportunity.
+    Surface order (leverage mode): total supplier count + spend, concentration
+    label, #1 call + leverage, full-portfolio savings opportunity.
+
+    Risk mode swaps the #1-call chunk to surface unpaid share + current debt
+    and replaces "portfolio savings" with a cumulative debt-at-risk figure.
     """
     total_suppliers = payload.get("total_suppliers") or 0
     total_spend = payload.get("total_spend_ge") or 0.0
@@ -1195,6 +1253,7 @@ def _render_portfolio_summary_ka(payload: Dict[str, Any]) -> str:
     conc_label = str(concentration.get("concentration_label") or "").strip()
     candidates = payload.get("top_candidates") or []
     savings = payload.get("aggregate_savings_opportunity_ge") or 0.0
+    sort_mode = str(payload.get("sort_mode") or "leverage").strip().lower()
 
     parts: List[str] = [
         f"**{int(total_suppliers)} მომწოდებელი**, "
@@ -1209,15 +1268,42 @@ def _render_portfolio_summary_ka(payload: Dict[str, Any]) -> str:
     if isinstance(candidates, list) and candidates:
         first = candidates[0]
         first_name = str(first.get("supplier_name") or "").strip() or "?"
-        first_lev = first.get("leverage_score")
-        if isinstance(first_lev, (int, float)):
-            parts.append(
-                f"#1 call: **{first_name}** (leverage {int(first_lev)})"
-            )
+        if sort_mode == "risk":
+            unpaid = first.get("unpaid_share_pct")
+            debt = first.get("current_debt_ge")
+            reliability = str(first.get("reliability_label") or "").strip()
+            risk_chunk = f"#1 risk: **{first_name}**"
+            extras: List[str] = []
+            if isinstance(unpaid, (int, float)):
+                extras.append(f"unpaid {float(unpaid):g}%")
+            if isinstance(debt, (int, float)) and debt:
+                extras.append(f"debt {float(debt):,.0f} ₾")
+            if reliability:
+                extras.append(reliability)
+            if extras:
+                risk_chunk += " (" + ", ".join(extras) + ")"
+            parts.append(risk_chunk)
         else:
-            parts.append(f"#1 call: **{first_name}**")
+            first_lev = first.get("leverage_score")
+            if isinstance(first_lev, (int, float)):
+                parts.append(
+                    f"#1 call: **{first_name}** (leverage {int(first_lev)})"
+                )
+            else:
+                parts.append(f"#1 call: **{first_name}**")
 
-    if isinstance(savings, (int, float)) and savings > 0:
+    if sort_mode == "risk":
+        total_debt_at_risk = sum(
+            float(c.get("current_debt_ge") or 0)
+            for c in candidates
+            if isinstance(c, dict)
+        )
+        if total_debt_at_risk > 0:
+            parts.append(
+                f"top-{len(candidates)} debt-at-risk: "
+                f"**{total_debt_at_risk:,.0f} ₾**"
+            )
+    elif isinstance(savings, (int, float)) and savings > 0:
         parts.append(
             f"portfolio savings: **{float(savings):,.2f} ₾/წელი**"
         )
@@ -1238,6 +1324,7 @@ def prepare_supplier_brief(
     lookback_months: Any = None,
     top_n: Any = None,
     benchmark_n: Any = None,
+    sort_by: Any = None,
     today: Optional[date] = None,
 ) -> Dict[str, Any]:
     """Build a negotiation brief for a single supplier (or portfolio report).
@@ -1257,6 +1344,11 @@ def prepare_supplier_brief(
         Max candidates in portfolio mode (default 10, range 1..50).
     benchmark_n:
         Max rows in ``price_benchmark`` (default 10, range 1..30).
+    sort_by:
+        Portfolio-mode ranking criterion. ``"leverage"`` (default) ranks by
+        negotiation leverage × savings. ``"risk"`` ranks by payment risk
+        (unpaid_share_pct DESC, current_debt_ge DESC). Invalid values fall
+        back to ``"leverage"``. Ignored in focused mode.
     today:
         Override "today" for deterministic tests. Defaults to
         :func:`date.today`.
@@ -1266,6 +1358,7 @@ def prepare_supplier_brief(
     months = _resolve_lookback_months(lookback_months)
     n_top = _resolve_top_n(top_n)
     n_benchmark = _resolve_benchmark_n(benchmark_n)
+    resolved_sort_by = _resolve_portfolio_sort_by(sort_by)
 
     if today is None:
         today = date.today()
@@ -1307,6 +1400,7 @@ def prepare_supplier_brief(
             aging_rows,
             top_n=n_top,
             today=today,
+            sort_by=resolved_sort_by,
         )
 
     # --- Focused mode ----------------------------------------------------

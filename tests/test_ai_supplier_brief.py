@@ -21,8 +21,10 @@ from typing import Any, Dict, List
 import pytest
 
 from dashboard_pipeline.ai.supplier_brief import (
+    ALLOWED_PORTFOLIO_SORT_MODES,
     DEFAULT_BENCHMARK_N,
     DEFAULT_LOOKBACK_MONTHS,
+    DEFAULT_PORTFOLIO_SORT_BY,
     DEFAULT_TOP_N,
     MAX_BENCHMARK_N,
     MAX_LOOKBACK_MONTHS,
@@ -46,6 +48,7 @@ from dashboard_pipeline.ai.supplier_brief import (
     _normalize_name,
     _resolve_benchmark_n,
     _resolve_lookback_months,
+    _resolve_portfolio_sort_by,
     _resolve_supplier,
     _resolve_top_n,
     prepare_supplier_brief,
@@ -761,6 +764,112 @@ class TestPortfolio:
         assert r["total_spend_ge"] == pytest.approx(900_000, rel=0.01)
         assert r["concentration"]["top_5_share_pct"] == pytest.approx(100.0, rel=0.01)
         assert len(r["top_candidates"]) <= 10
+
+
+# ---------------------------------------------------------------------------
+# Phase 2.4 REDUCED — portfolio sort_by + payment-risk enrichment
+# ---------------------------------------------------------------------------
+
+
+class TestPortfolioSortBy:
+    """Phase 2.4 REDUCED: sort_by="leverage"|"risk" + payment fields on candidates.
+
+    Supersedes the scrapped `supplier_risk_radar` tool; risk-sort mode ranks
+    by unpaid_share_pct DESC → current_debt_ge DESC → total_spend_ge DESC.
+    Payment fields are surfaced on every candidate regardless of sort mode.
+    """
+
+    def _payload(self) -> Dict[str, Any]:
+        # A: high spend, mostly paid (low risk).
+        # B: medium spend, half unpaid (moderate risk).
+        # C: small spend, fully unpaid (highest risk by share).
+        suppliers = [
+            _supplier_row(tax_id="111111111", name="A", effective=500_000, paid=490_000),
+            _supplier_row(tax_id="222222222", name="B", effective=200_000, paid=100_000),
+            _supplier_row(tax_id="333333333", name="C", effective=50_000, paid=0),
+        ]
+        aging = [
+            _aging_row(tax_id="111111111", first="2024-01-01", last="2026-04-01"),
+            _aging_row(tax_id="222222222", first="2024-06-01", last="2026-04-10"),
+            _aging_row(tax_id="333333333", first="2024-06-01", last="2026-04-10"),
+        ]
+        return {
+            "suppliers": suppliers,
+            "imported_products": {"suppliers": [], "products": []},
+            "supplier_aging": aging,
+        }
+
+    def test_resolve_sort_by_defaults_to_leverage(self):
+        assert _resolve_portfolio_sort_by(None) == DEFAULT_PORTFOLIO_SORT_BY
+        assert _resolve_portfolio_sort_by(None) == "leverage"
+
+    def test_resolve_sort_by_accepts_known_modes(self):
+        for mode in ALLOWED_PORTFOLIO_SORT_MODES:
+            assert _resolve_portfolio_sort_by(mode) == mode
+            assert _resolve_portfolio_sort_by(mode.upper()) == mode
+
+    def test_resolve_sort_by_falls_back_on_unknown(self):
+        assert _resolve_portfolio_sort_by("bogus") == DEFAULT_PORTFOLIO_SORT_BY
+        assert _resolve_portfolio_sort_by("") == DEFAULT_PORTFOLIO_SORT_BY
+        assert _resolve_portfolio_sort_by(123) == DEFAULT_PORTFOLIO_SORT_BY
+
+    def test_default_portfolio_has_sort_mode_leverage(self):
+        r = prepare_supplier_brief(_loader_for(self._payload()), today=TODAY)
+        assert r["mode"] == "portfolio"
+        assert r["sort_mode"] == "leverage"
+
+    def test_top_candidates_include_payment_fields_in_leverage_mode(self):
+        r = prepare_supplier_brief(_loader_for(self._payload()), today=TODAY)
+        assert r["top_candidates"], "expected at least one candidate"
+        for candidate in r["top_candidates"]:
+            assert "current_debt_ge" in candidate
+            assert "unpaid_share_pct" in candidate
+            assert "reliability_label" in candidate
+            assert "aging_bucket" in candidate
+
+    def test_sort_by_risk_ranks_highest_unpaid_share_first(self):
+        r = prepare_supplier_brief(
+            _loader_for(self._payload()), sort_by="risk", today=TODAY,
+        )
+        assert r["sort_mode"] == "risk"
+        candidates = r["top_candidates"]
+        assert candidates
+        # C has 100% unpaid, B has 50%, A has 2% — risk sort should put C first.
+        assert candidates[0]["supplier_name"].endswith("C")
+        assert candidates[0]["unpaid_share_pct"] == pytest.approx(100.0, rel=0.01)
+        # Monotonic non-increasing by unpaid_share_pct.
+        shares = [float(c["unpaid_share_pct"]) for c in candidates]
+        assert shares == sorted(shares, reverse=True)
+
+    def test_sort_by_invalid_value_falls_back_to_leverage(self):
+        r = prepare_supplier_brief(
+            _loader_for(self._payload()), sort_by="bogus_mode", today=TODAY,
+        )
+        assert r["sort_mode"] == "leverage"
+
+    def test_sort_by_risk_summary_ka_surfaces_risk_headline(self):
+        r = prepare_supplier_brief(
+            _loader_for(self._payload()), sort_by="risk", today=TODAY,
+        )
+        summary = r.get("summary_ka") or ""
+        # Risk mode summary should mention "risk" in the #1 slot and debt-at-risk aggregate.
+        assert "#1 risk:" in summary
+        assert "debt-at-risk" in summary
+
+    def test_sort_by_leverage_summary_ka_unchanged(self):
+        r = prepare_supplier_brief(_loader_for(self._payload()), today=TODAY)
+        summary = r.get("summary_ka") or ""
+        # Backward-compat: leverage summary keeps "#1 call:" phrasing.
+        assert "#1 call:" in summary
+        assert "#1 risk:" not in summary
+
+    def test_ranking_note_reflects_sort_mode(self):
+        r_lev = prepare_supplier_brief(_loader_for(self._payload()), today=TODAY)
+        r_risk = prepare_supplier_brief(
+            _loader_for(self._payload()), sort_by="risk", today=TODAY,
+        )
+        assert any("leverage_score" in n for n in r_lev["notes"])
+        assert any("payment-risk" in n for n in r_risk["notes"])
 
 
 # ---------------------------------------------------------------------------

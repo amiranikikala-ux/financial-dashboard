@@ -1,7 +1,7 @@
 # CONTEXT HANDOFF — short brief
 
-> **განახლდა**: 2026-04-22 (Phase 2.1 + 2.2 + 2.5 landed; Phase 2.4 reduced, Phase 2.10 dropped via audit)
-> **სტატუსი**: Phase 4A **FULLY CLOSED** + Phase 4B **COMPLETE (3/3 sprints, 28 rules, 171 tests)** + Phase 4C.2 **FULLY CLOSED** + Phase 4C.3 **LIVE VERIFIED** + **Phase 2.1 / 2.2 / 2.5 LIVE VERIFIED** (3 tools, 9 live scenarios, $0.82 total Anthropic spend) + **Phase 2.4/2.10 overlap audit COMPLETED** (1.5 days saved).
+> **განახლდა**: 2026-04-22 (Phase 2.1 + 2.2 + 2.5 landed; Phase 2.4 REDUCED landed as portfolio sort_by extension; Phase 2.10 dropped)
+> **სტატუსი**: Phase 4A **FULLY CLOSED** + Phase 4B **COMPLETE (3/3 sprints, 28 rules, 171 tests)** + Phase 4C.2 **FULLY CLOSED** + Phase 4C.3 **LIVE VERIFIED** + **Phase 2.1 / 2.2 / 2.4 / 2.5 LIVE VERIFIED** (4 tools / extensions, 9 live scenarios, $0.82 total Anthropic spend) + **Phase 2.4/2.10 overlap audit COMPLETED** (1.5 days saved).
 
 ---
 
@@ -65,7 +65,7 @@ All on `origin/main`. `git status` clean.
 
 | მეტრიკა | მნიშვნელობა |
 |---|---|
-| **pytest** | **1,790/1,790 green** (~19s; 1,652 baseline + 39 Phase 2.1 + 52 Phase 2.2 + 47 Phase 2.5) |
+| **pytest** | **1,800/1,800 green** (~60s full run; 1,652 baseline + 39 Phase 2.1 + 52 Phase 2.2 + 47 Phase 2.5 + 9 Phase 2.4 + other legacy additions) |
 | **`SYSTEM_PROMPT_KA`** | 1,299 lines (Phase 2.1 + 2.2 + 2.5 added **no** prompt text — tool descriptions carry all guidance) |
 | **new tests this session** | 4B 171 + 4C.2 38 + Phase 2.1 39 + Phase 2.2 52 + Phase 2.5 47 = **347** |
 | **`data.json`** | regenerated 2026-04-22 05:10, 133 MB, 26 sections, 21,233 waybills (was 76MB truncated pre-regen) |
@@ -136,7 +136,7 @@ Phase 4B ✅ **FULLY CLOSED**. Phase 4C.2 + 4C.3 ✅ **FULLY CLOSED**. **Phase 2
 | Phase | Tool | Scope |
 |---|---|---|
 | 2.3 | `industry_benchmark` | "Margin 7.2% vs median 5% — ahead" (needs external data source) |
-| 2.4 | ~~`supplier_risk_radar`~~ → **REDUCED** | Extend `prepare_supplier_brief` PORTFOLIO: add `sort_by: "leverage"\|"risk"` param + surface `current_debt_ge`/`unpaid_share_pct`/`reliability_label` in top_candidates. Signals already live in FOCUSED mode's `_build_payment_profile` (tools.py `supplier_brief.py:576-610`). ~0.5 day, no new tool. |
+| ~~2.4~~ | ~~`supplier_risk_radar`~~ → ✅ **DONE 2026-04-22** (REDUCED) | `prepare_supplier_brief` PORTFOLIO now accepts `sort_by: "leverage" \| "risk"`. `top_candidates` always carry `current_debt_ge` + `unpaid_share_pct` + `reliability_label` + `aging_bucket`. `sort_mode` echoed in payload. `summary_ka` switches to risk-headline when `sort_by="risk"`. 9 new tests, backward-compat preserved (pipeline `build_supplier_concentration` unchanged). Commit `<pending>`. |
 | 2.6 | `promotion_candidate_finder` | "5 candidates for ოზურგეთი" from dead-stock + margin data |
 | 2.8 | Store Comparison page (frontend) | "Margin 11% vs 2%" UI |
 | 2.9 | `trend_detector` | "Category YoY +11% price / −4% volume" |
@@ -156,9 +156,9 @@ Phase 4B ✅ **FULLY CLOSED**. Phase 4C.2 + 4C.3 ✅ **FULLY CLOSED**. **Phase 2
 
 ## Next recommended steps
 
-1. **Phase 2.4 REDUCED (`prepare_supplier_brief` risk-sort extension)** — ~0.5 day. Smallest next step; closes out "risk radar" scope without new tool. Add `sort_by` param + payment fields to top_candidates.
-2. **Phase 2.9 `trend_detector`** — YoY category trends (price vs volume decomposition). Builds on existing monthly_pnl + retail_sales.by_category. Complements profitability X-ray (X-ray = snapshot; trend_detector = time-motion). ~1 day.
-3. **Phase 2.6 `promotion_candidate_finder`** — combines dead_stock + margin data to propose discount candidates. Reuses existing tools as inputs. ~1 day.
+1. **Phase 2.9 `trend_detector`** — YoY category trends (price vs volume decomposition). Builds on existing monthly_pnl + retail_sales.by_category. Complements profitability X-ray (X-ray = snapshot; trend_detector = time-motion). ~1 day.
+2. **Phase 2.6 `promotion_candidate_finder`** — combines dead_stock + margin data to propose discount candidates. Reuses existing tools as inputs. ~1 day.
+3. **Live dog-food Phase 2.4 REDUCED** — verify `sort_by="risk"` flow on real Sonnet 4.6 before closing the sprint as "LIVE VERIFIED" (like 2.1/2.2/2.5 pattern). ~0.5 day. Can piggyback with 2.9 dog-food session.
 4. **Sprint 4C.1 Schema Poka-yoke audit** (~1 day, high-risk, fresh session strongly recommended) — 21 tools' argument/description tightening.
 5. **Phase 3 remaining** (4 features — conversation_summary_on_demand, margin_compression_radar, monthly_strategy_page, gap_analysis). ~1 week.
 6. **Phase 4 Advanced** (9 features). ~2-3 weeks.

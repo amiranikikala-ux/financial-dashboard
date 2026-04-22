@@ -947,9 +947,19 @@ PREPARE_SUPPLIER_BRIEF_TOOL: Dict[str, Any] = {
         "imported_products lookup fails\n\n"
         "Returns (portfolio mode, when no identifier passed):\n"
         "  • `concentration` — Pareto shares (top 5/10/20), HHI, label\n"
-        "  • `top_candidates` — ranked by leverage_score × savings, not just "
-        "spend — includes per-candidate headline play\n"
+        "  • `sort_mode` — echoes which ranking was applied (`leverage` "
+        "or `risk`)\n"
+        "  • `top_candidates` — ranked by the selected `sort_by`. Each "
+        "candidate carries both leverage signals (`leverage_score`, "
+        "`estimated_annual_savings_ge`, `headline_play_ka`) AND payment-"
+        "risk signals (`current_debt_ge`, `unpaid_share_pct`, "
+        "`reliability_label`, `aging_bucket`) so the caller can reason "
+        "about both dimensions regardless of sort mode.\n"
         "  • `aggregate_savings_opportunity_ge` — full-portfolio annual upside\n\n"
+        "**Sort modes**: use `sort_by=\"leverage\"` (default) for "
+        "\"whom should I negotiate with first?\". Use `sort_by=\"risk\"` "
+        "for \"whom should I watch for payment problems?\" — ranks by "
+        "unpaid_share_pct DESC, then current_debt_ge DESC.\n\n"
         "**Identity confidence protocol:** if `match_confidence` is "
         "`medium` or `low`, ASK the user to confirm the identity BEFORE "
         "quoting numbers (example: 'ჩემი ვარაუდი X-ს ქვეშ ვიპოვე tax_id "
@@ -1004,6 +1014,22 @@ PREPARE_SUPPLIER_BRIEF_TOOL: Dict[str, Any] = {
                 "description": (
                     "Focused mode: maximum rows in `price_benchmark` "
                     "(default 10). Ignored in portfolio mode."
+                ),
+            },
+            "sort_by": {
+                "type": "string",
+                "enum": ["leverage", "risk"],
+                "description": (
+                    "Portfolio-mode ranking criterion. `leverage` "
+                    "(default) ranks `top_candidates` by "
+                    "`leverage_score × estimated_annual_savings_ge × "
+                    "total_spend_ge` — answers 'whom should I "
+                    "negotiate with first?'. `risk` ranks by "
+                    "`unpaid_share_pct` DESC → `current_debt_ge` DESC "
+                    "→ `total_spend_ge` DESC — answers 'whom should I "
+                    "watch for payment problems?'. Payment fields are "
+                    "included on every candidate regardless of mode. "
+                    "Ignored in focused mode."
                 ),
             },
         },
@@ -2149,6 +2175,7 @@ class ToolDispatcher:
                 lookback_months=args.get("lookback_months"),
                 top_n=args.get("top_n"),
                 benchmark_n=args.get("benchmark_n"),
+                sort_by=args.get("sort_by"),
             )
         elif name == "compute_cash_runway":
             from dashboard_pipeline.ai.cash_runway import (
@@ -2379,6 +2406,7 @@ _SUMMARY_KEYS: Tuple[str, ...] = (
     "lookback_months",
     "total_suppliers",
     "total_spend_ge",
+    "sort_mode",
     # Phase 3.1 Co-Designer tool fields (propose_feature + cleanup_stale_proposals)
     "problem",
     "benefit",
