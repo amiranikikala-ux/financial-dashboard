@@ -775,16 +775,19 @@ class TestDebtPlanToolSchema:
         names = [t["name"] for t in TOOL_SCHEMAS]
         assert "build_debt_repayment_plan" in names
 
-    def test_total_schemas_is_18(self):
+    def test_total_schemas_is_19(self):
         from dashboard_pipeline.ai.tools import TOOL_SCHEMAS
 
-        assert len(TOOL_SCHEMAS) == 18
+        assert len(TOOL_SCHEMAS) == 19
 
-    def test_sits_after_cash_runway(self):
+    def test_sits_after_cash_flow_projection(self):
+        # Phase 2.1 inserted compute_cash_flow_projection between
+        # compute_cash_runway and build_debt_repayment_plan — the runway
+        # family now ends with the daily projection, then the debt planner.
         from dashboard_pipeline.ai.tools import TOOL_SCHEMAS
 
         names = [t["name"] for t in TOOL_SCHEMAS]
-        assert names[names.index("compute_cash_runway") + 1] == "build_debt_repayment_plan"
+        assert names[names.index("compute_cash_flow_projection") + 1] == "build_debt_repayment_plan"
 
     def test_schema_has_all_optional_fields(self):
         from dashboard_pipeline.ai.tools import BUILD_DEBT_PLAN_TOOL

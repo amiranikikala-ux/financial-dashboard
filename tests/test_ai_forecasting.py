@@ -132,9 +132,10 @@ class TestForecastToolSchema:
         journal_list_entries / journal_update_entry → 13; Phase 2.11 added
         analyze_dead_stock → 14; Phase 2.12 added prepare_supplier_brief → 15;
         Phase 3.1 added propose_feature → 16; Phase 3.5 added compute_cash_runway → 17;
-        Phase 4A added build_debt_repayment_plan → 18.
+        Phase 4A added build_debt_repayment_plan → 18; Phase 2.1 added
+        compute_cash_flow_projection → 19.
         Pin the current expected total to catch silent churn either direction."""
-        assert len(TOOL_SCHEMAS) == 18
+        assert len(TOOL_SCHEMAS) == 19
 
     def test_forecast_revenue_index(self):
         """Sits in the compute-family cluster (index 3 right after `compute`)."""

@@ -1187,7 +1187,7 @@ class TestChatMode:
         assert result["usage"]["mode"] == "investigate"
 
     def test_investigate_mode_preserves_tool_surface(self):
-        """All 18 tools must stay visible regardless of mode (Phase 4A: +build_debt_repayment_plan)."""
+        """All 19 tools must stay visible regardless of mode (Phase 2.1: +compute_cash_flow_projection)."""
         script = [
             {
                 "stop_reason": "end_turn",
@@ -1216,6 +1216,7 @@ class TestChatMode:
             "analyze_dead_stock",
             "prepare_supplier_brief",
             "compute_cash_runway",  # Phase 3.5 Cash Runway
+            "compute_cash_flow_projection",  # Phase 2.1 Cash Flow Projection
             "build_debt_repayment_plan",  # Phase 4A Debt Plan (autonomous strategist)
             "read_source_code",
             "grep_code",

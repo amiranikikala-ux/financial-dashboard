@@ -696,8 +696,10 @@ class TestProposeFeatureToolSchema:
     def test_propose_feature_is_last_in_schemas(self):
         assert TOOL_SCHEMAS[-1]["name"] == "propose_feature"
 
-    def test_propose_feature_at_index_17(self):
-        assert TOOL_SCHEMAS[17]["name"] == "propose_feature"
+    def test_propose_feature_at_tail(self):
+        # Phase 2.1 added compute_cash_flow_projection before debt_plan, shifting
+        # the tail from index 17 to 18. Pin by tail semantics + absolute index.
+        assert TOOL_SCHEMAS[18]["name"] == "propose_feature"
 
 
 # ---------------------------------------------------------------------------

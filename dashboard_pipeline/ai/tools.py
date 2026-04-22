@@ -1451,6 +1451,132 @@ BUILD_DEBT_PLAN_TOOL: Dict[str, Any] = {
 }
 
 
+COMPUTE_CASH_FLOW_PROJECTION_TOOL: Dict[str, Any] = {
+    "name": "compute_cash_flow_projection",
+    "description": (
+        "Phase 2.1 — project the DAILY cash trajectory over the next 7–60 "
+        "days. Complements `compute_cash_runway` (static 'months left at "
+        "current burn') with a day-by-day forward view that identifies "
+        "SPECIFIC red days ('17–19 მაისს cash −8,200 ₾').\n\n"
+        "**Triggers (CRITICAL):** any forward-looking daily cash question: "
+        "'მომდევნო 2 კვირაში რამდენი cash მექნება?', 'როდის ჩავარდები "
+        "მინუსში?', 'cash flow projection', 'daily cash plan', "
+        "'14 დღიანი პროგნოზი', 'გადავრჩები კვირას?', 'როდის მოვა "
+        "პრობლემა?'.\n\n"
+        "**Anti-triggers (NEVER call):**\n"
+        "  • static runway ('რამდენ თვეს ვცოცხლობ?') → `compute_cash_runway`\n"
+        "  • plain balance lookup → user knows via bank app\n"
+        "  • month-level revenue forecast → `forecast_revenue`\n"
+        "  • historical burn analysis → `read_data_json(section='monthly_pnl')`.\n\n"
+        "**Workflow MANDATE:** ALWAYS ask the user for BOG + TBC balances "
+        "verbatim before calling. NEVER guess balances. If the user knows "
+        "upcoming fixed commitments (rent, royalty, loan instalments, tax "
+        "payments) ask for `{date, amount_ge, label}` triplets and pass "
+        "them via `upcoming_payments` so they land on the right day rather "
+        "than smeared into the smoothed baseline.\n\n"
+        "**Returns:** `{as_of_date, horizon_days, opening_balance_ge, "
+        "daily_income_baseline_ge, daily_burn_ge, daily_projection[], "
+        "risk_windows[], ending_balance_ge, minimum_balance_ge, "
+        "minimum_balance_date, forecast_engines[], summary_ka, notes[]}`. "
+        "Each `daily_projection[i]` = `{date, opening_ge, income_ge, "
+        "outflow_ge, scheduled_payments[], closing_ge, status}` where "
+        "`status ∈ {🟢 SAFE, 🟡 WATCH (<1 week buffer), 🔴 RED (closing <0)}`. "
+        "`risk_windows[]` collapses consecutive 🔴 days into `{start_date, "
+        "end_date, days, min_balance_ge, lowest_day}`.\n\n"
+        "**Honesty rule:** surface `summary_ka` verbatim — it already cites "
+        "the red-day count, the worst day, and the forecast engine mix. "
+        "Daily numbers are SMOOTHED baselines (POS income averaged across "
+        "days; real Saturday > Wednesday swings are ±10–20%). If "
+        "`forecast_engines` is empty, income baseline fell back to a "
+        "historical average — confidence is lower, say so."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "current_balance_bog_ge": {
+                "type": "number",
+                "description": (
+                    "Current BOG (Bank of Georgia) cash balance in GEL, as "
+                    "the user reads it from their bank app TODAY. "
+                    "Non-negative. If user has no BOG account, pass 0."
+                ),
+            },
+            "current_balance_tbc_ge": {
+                "type": "number",
+                "description": (
+                    "Current TBC cash balance in GEL, as the user reads it "
+                    "TODAY. Non-negative. If user has no TBC account, pass 0. "
+                    "At least one of bog/tbc must be > 0."
+                ),
+            },
+            "horizon_days": {
+                "type": "integer",
+                "minimum": 7,
+                "maximum": 60,
+                "description": (
+                    "How many days forward to project. Default 14 (two weeks "
+                    "is the most actionable planning window for a retail "
+                    "shop). Values above 30 widen forecast uncertainty."
+                ),
+            },
+            "store": {
+                "type": "string",
+                "enum": ["total", "ოზურგეთი", "დვაბზუ"],
+                "description": (
+                    "Which store's revenue to forecast. Default: 'total' "
+                    "(combined). Pass 'ოზურგეთი' or 'დვაბზუ' for a "
+                    "single-store projection."
+                ),
+            },
+            "lookback_months": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 12,
+                "description": (
+                    "How many recent months to average over when computing "
+                    "the smoothed daily burn baseline. Default 3."
+                ),
+            },
+            "upcoming_payments": {
+                "type": "array",
+                "description": (
+                    "Optional list of known fixed commitments to overlay on "
+                    "specific days (rent, royalty, loan instalments, tax "
+                    "payments). Entries outside [start, end] or with "
+                    "invalid fields are silently dropped with a warning in "
+                    "`notes`."
+                ),
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "date": {
+                            "type": "string",
+                            "description": "YYYY-MM-DD when the payment falls.",
+                        },
+                        "amount_ge": {
+                            "type": "number",
+                            "description": "Payment amount in GEL (positive).",
+                        },
+                        "label": {
+                            "type": "string",
+                            "description": (
+                                "Short label, e.g. 'ქირა', 'royalty', "
+                                "'სესხის გადახდა'. Default 'გადახდა'."
+                            ),
+                        },
+                    },
+                    "required": ["date", "amount_ge"],
+                    "additionalProperties": False,
+                },
+                "maxItems": 30,
+            },
+        },
+        "required": ["current_balance_bog_ge", "current_balance_tbc_ge"],
+        "additionalProperties": False,
+    },
+}
+
+
 TOOL_SCHEMAS: List[Dict[str, Any]] = [
     READ_DATA_JSON_TOOL,
     COMPUTE_WAYBILL_TOTAL_TOOL,
@@ -1464,6 +1590,7 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
     ANALYZE_DEAD_STOCK_TOOL,
     PREPARE_SUPPLIER_BRIEF_TOOL,
     COMPUTE_CASH_RUNWAY_TOOL,
+    COMPUTE_CASH_FLOW_PROJECTION_TOOL,
     BUILD_DEBT_PLAN_TOOL,
     READ_SOURCE_CODE_TOOL,
     GREP_CODE_TOOL,
@@ -1813,6 +1940,20 @@ class ToolDispatcher:
                 current_balance_tbc_ge=args.get("current_balance_tbc_ge"),
                 lookback_months=args.get("lookback_months"),
             )
+        elif name == "compute_cash_flow_projection":
+            from dashboard_pipeline.ai.cash_flow_projection import (
+                compute_cash_flow_projection as _compute_cash_flow_projection,
+            )
+
+            result = _compute_cash_flow_projection(
+                self._data_loader,
+                current_balance_bog_ge=args.get("current_balance_bog_ge"),
+                current_balance_tbc_ge=args.get("current_balance_tbc_ge"),
+                horizon_days=args.get("horizon_days"),
+                store=args.get("store"),
+                lookback_months=args.get("lookback_months"),
+                upcoming_payments=args.get("upcoming_payments"),
+            )
         elif name == "build_debt_repayment_plan":
             from dashboard_pipeline.ai.debt_plan import (
                 build_debt_repayment_plan as _build_debt_repayment_plan,
@@ -2009,6 +2150,29 @@ _SUMMARY_KEYS: Tuple[str, ...] = (
     "runway_days",
     "runway_label",
     "status_summary_ka",
+    # Phase 2.1 Cash Flow Projection tool fields
+    "horizon_days",
+    "opening_balance_ge",
+    "daily_income_baseline_ge",
+    "daily_burn_ge",
+    "daily_projection",
+    "risk_windows",
+    "ending_balance_ge",
+    "minimum_balance_ge",
+    "minimum_balance_date",
+    "forecast_engines",
+    "scheduled_payments",
+    "opening_ge",
+    "income_ge",
+    "outflow_ge",
+    "closing_ge",
+    "status",
+    "start_date",
+    "end_date",
+    "days",
+    "min_balance_ge",
+    "lowest_day",
+    "amount_ge",
 )
 
 
