@@ -1108,10 +1108,14 @@ def _build_portfolio_report(
     for i, c in enumerate(top_candidates[:top_n], start=1):
         c["rank"] = i
 
-    return {
+    trimmed_candidates = top_candidates[:top_n]
+    total_supplier_count = len(
+        [s for s in suppliers or [] if isinstance(s, dict)]
+    )
+    payload: Dict[str, Any] = {
         "mode": "portfolio",
         "as_of_date": today.isoformat(),
-        "total_suppliers": len([s for s in suppliers or [] if isinstance(s, dict)]),
+        "total_suppliers": total_supplier_count,
         "total_spend_ge": round(total_portfolio, 2),
         "concentration": {
             "top_5_share_pct": _share(5),
@@ -1120,13 +1124,15 @@ def _build_portfolio_report(
             "hhi_index": hhi,
             "concentration_label": _hhi_label(hhi),
         },
-        "top_candidates": top_candidates[:top_n],
+        "top_candidates": trimmed_candidates,
         "aggregate_savings_opportunity_ge": round(aggregate_savings, 2),
         "notes": [
             "Portfolio ranking ითვლება leverage_score × savings-ის მიხედვით (არა ცარიელი spend).",
             "თითო მომწოდებელზე focused brief-ისთვის გადააპროცესიე `prepare_supplier_brief(supplier_name=...)` ან `tax_id=...`.",
         ],
     }
+    payload["summary_ka"] = _render_portfolio_summary_ka(payload)
+    return payload
 
 
 def _clean_display_name(org_string: str) -> str:
@@ -1136,6 +1142,87 @@ def _clean_display_name(org_string: str) -> str:
         return ""
     text = re.sub(r"\(\s*\d{9,11}[\w\-]*\s*\)\s*", "", text)
     return text.strip(" -\u2013,")
+
+
+def _render_focused_summary_ka(payload: Dict[str, Any]) -> str:
+    """One-sentence Georgian summary of a focused supplier brief.
+
+    Surface order: supplier name, leverage score/label, #1 play, warning
+    marker when match_confidence is not ``high``. Truncates the first
+    play to stay one-line — the full text lives in
+    ``negotiation_plays[0].ask_ka``.
+    """
+    supplier = payload.get("supplier") or {}
+    name = str(supplier.get("resolved_name") or "").strip() or "მომწოდებელი"
+    confidence = str(supplier.get("match_confidence") or "").strip()
+    leverage = payload.get("leverage_score") or {}
+    score = leverage.get("score")
+    label = str(leverage.get("label") or "").strip()
+
+    plays = payload.get("negotiation_plays") or []
+    first_ask = ""
+    if isinstance(plays, list) and plays:
+        first_ask = str(plays[0].get("ask_ka") or "").strip()
+    if len(first_ask) > 70:
+        first_ask = first_ask[:67].rstrip() + "…"
+
+    prefix = "⚠️ " if confidence in ("medium", "low") else ""
+    parts: List[str] = [f"{prefix}**{name}**"]
+    if isinstance(score, (int, float)):
+        lev_chunk = f"leverage **{int(score)}/100**"
+        if label:
+            lev_chunk += f" ({label})"
+        parts.append(lev_chunk)
+    if first_ask:
+        parts.append(f"#1 play: *{first_ask}*")
+    elif not plays:
+        parts.append("play-ი ვერ შემუშავდა")
+    if confidence in ("medium", "low"):
+        parts.append(f"match: {confidence} — დააზუსტე")
+    return " · ".join(parts)
+
+
+def _render_portfolio_summary_ka(payload: Dict[str, Any]) -> str:
+    """One-sentence Georgian summary of a portfolio supplier brief.
+
+    Surface order: total supplier count + spend, concentration label,
+    first call + leverage, full-portfolio savings opportunity.
+    """
+    total_suppliers = payload.get("total_suppliers") or 0
+    total_spend = payload.get("total_spend_ge") or 0.0
+    concentration = payload.get("concentration") or {}
+    top_5 = concentration.get("top_5_share_pct")
+    conc_label = str(concentration.get("concentration_label") or "").strip()
+    candidates = payload.get("top_candidates") or []
+    savings = payload.get("aggregate_savings_opportunity_ge") or 0.0
+
+    parts: List[str] = [
+        f"**{int(total_suppliers)} მომწოდებელი**, "
+        f"სულ {float(total_spend):,.2f} ₾"
+    ]
+    if isinstance(top_5, (int, float)):
+        conc_chunk = f"top-5 {top_5:g}%"
+        if conc_label:
+            conc_chunk += f" ({conc_label})"
+        parts.append(conc_chunk)
+
+    if isinstance(candidates, list) and candidates:
+        first = candidates[0]
+        first_name = str(first.get("supplier_name") or "").strip() or "?"
+        first_lev = first.get("leverage_score")
+        if isinstance(first_lev, (int, float)):
+            parts.append(
+                f"#1 call: **{first_name}** (leverage {int(first_lev)})"
+            )
+        else:
+            parts.append(f"#1 call: **{first_name}**")
+
+    if isinstance(savings, (int, float)) and savings > 0:
+        parts.append(
+            f"portfolio savings: **{float(savings):,.2f} ₾/წელი**"
+        )
+
+    return " · ".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -1318,7 +1405,7 @@ def prepare_supplier_brief(
             "`forecast_revenue` გამოიყენე."
         )
 
-    return {
+    payload: Dict[str, Any] = {
         "mode": "focused",
         "supplier": {
             "tax_id": resolved_tid or None,
@@ -1339,3 +1426,5 @@ def prepare_supplier_brief(
         "matching_warnings": matching_warnings,
         "notes": notes,
     }
+    payload["summary_ka"] = _render_focused_summary_ka(payload)
+    return payload

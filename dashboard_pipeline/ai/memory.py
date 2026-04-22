@@ -916,6 +916,36 @@ def save_memory(
     return result
 
 
+def _render_recall_summary_ka(recall_result: Dict[str, Any]) -> str:
+    """One-sentence Georgian summary of a ``recall_context`` payload.
+
+    The AI's preferred surface — faster than narrating the raw JSON each turn.
+    Distance is cosine (0 = perfect, 1 = unrelated); a close top hit should
+    be called out so the AI can cite it.
+    """
+    query = str(recall_result.get("query") or "").strip()
+    query_label = f"„{query}”" if query else "მოთხოვნა"
+    count = int(recall_result.get("result_count") or 0)
+    results = recall_result.get("results") or []
+
+    if count == 0:
+        return f"მეხსიერებაში {query_label}-ზე **შედეგი არ ვიპოვე**."
+
+    top = results[0] if isinstance(results, list) and results else {}
+    top_id = str(top.get("id") or "?")
+    try:
+        top_dist = float(top.get("distance", 1.0))
+    except (TypeError, ValueError):
+        top_dist = 1.0
+    top_created = str(top.get("created_at") or "").strip()
+    created_hint = f", {top_created}" if top_created else ""
+
+    return (
+        f"**{count} შედეგი** {query_label}-ზე. Top match: `{top_id}` "
+        f"(distance {top_dist:.2f}{created_hint})."
+    )
+
+
 def recall_context(
     query: Any,
     *,
@@ -954,7 +984,7 @@ def recall_context(
         return {"error": f"მეხსიერების ბაზა ვერ გაიხსნა: {exc}"}
 
     try:
-        return store.recall(
+        result = store.recall(
             text,
             limit=requested_limit,
             source=canonical_source,
@@ -963,6 +993,9 @@ def recall_context(
     except Exception as exc:
         logger.warning("recall_context failed: %s", exc)
         return {"error": f"მეხსიერებაში ძიება ვერ მოხერხდა: {exc}"}
+
+    result["summary_ka"] = _render_recall_summary_ka(result)
+    return result
 
 
 # ---------------------------------------------------------------------------

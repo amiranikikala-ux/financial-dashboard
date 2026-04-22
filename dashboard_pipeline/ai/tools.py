@@ -1776,6 +1776,8 @@ class ToolDispatcher:
                 risk_critique=args.get("risk_critique"),
                 project_root=self._project_root,
             )
+            if isinstance(result, dict) and result.get("ok"):
+                result["summary_ka"] = _render_propose_feature_summary_ka(result)
         elif name == "analyze_dead_stock":
             from dashboard_pipeline.ai.dead_stock import (
                 analyze_dead_stock as _analyze_dead_stock,
@@ -2008,6 +2010,32 @@ _SUMMARY_KEYS: Tuple[str, ...] = (
     "runway_label",
     "status_summary_ka",
 )
+
+
+def _render_propose_feature_summary_ka(result: Dict[str, Any]) -> str:
+    """One-sentence Georgian summary of a ``propose_feature`` journal entry.
+
+    The AI cites the returned ``entry_id`` verbatim so the user can later
+    run ``journal_update_entry(entry_id, status=...)``. Surfacing
+    ``time_estimate`` + the first phrase of ``risk_critique`` keeps the
+    summary ≤1 line while still flagging the weakest link.
+    """
+    title = str(result.get("title") or "").strip() or "შემოთავაზება"
+    entry_id = str(result.get("entry_id") or "").strip()
+    proposal = result.get("proposal") or {}
+    time_est = str(proposal.get("time_estimate") or "").strip()
+    risk = str(proposal.get("risk_critique") or "").strip()
+    # Truncate the risk critique to ~60 chars to stay one-line.
+    if len(risk) > 60:
+        risk = risk[:57].rstrip() + "…"
+
+    parts: List[str] = [f"შემოთავაზება: **{title}**"]
+    if time_est:
+        parts.append(f"დრო: *{time_est}*")
+    if risk:
+        parts.append(f"რისკი: *{risk}*")
+    id_suffix = f" (`{entry_id}`)" if entry_id else ""
+    return " · ".join(parts) + id_suffix
 
 
 def _summarize_result(result: Dict[str, Any]) -> Dict[str, Any]:
@@ -2434,7 +2462,70 @@ def validate_vs_source(
         result["status"] = "match"
     else:
         result["status"] = "mismatch"
+
+    result["summary_ka"] = _render_validate_vs_source_summary_ka(result)
     return result
+
+
+def _render_validate_vs_source_summary_ka(result: Dict[str, Any]) -> str:
+    """One-sentence Georgian summary of a ``validate_vs_source`` outcome.
+
+    Surface order mirrors the AI's decision path — section, pass/fail icon,
+    then the deltas that explain *why*.
+    """
+    section = str(result.get("section") or "?")
+    status = str(result.get("status") or "inspected")
+    current_rows = result.get("current_row_count")
+
+    if status == "inspected":
+        return (
+            f"**{section}**: {current_rows} მწკრივი (საწყისი inspection — "
+            "expected_row_count / expected_total არ გადმოიცა)."
+        )
+
+    parts: List[str] = []
+    icon = "✅" if status == "match" else "❌"
+    parts.append(f"{icon} **{section}**")
+
+    if "row_count_match" in result:
+        expected = result.get("expected_row_count")
+        delta = result.get("row_count_delta")
+        if result.get("row_count_match"):
+            parts.append(f"row count ✓ ({current_rows})")
+        else:
+            parts.append(
+                f"row count ✗ (expected {expected}, got {current_rows}, "
+                f"Δ={delta:+d})"
+                if isinstance(delta, int)
+                else f"row count ✗ (expected {expected}, got {current_rows})"
+            )
+
+    if "total_match" in result:
+        expected_tot = result.get("expected_total")
+        current_tot = result.get("current_total")
+        total_delta = result.get("total_delta")
+        field = result.get("field_name") or "?"
+        if result.get("total_match"):
+            parts.append(
+                f"`{field}` ჯამი ✓ ({current_tot:,.2f})"
+                if isinstance(current_tot, (int, float))
+                else f"`{field}` ჯამი ✓"
+            )
+        else:
+            delta_str = (
+                f" Δ={total_delta:+,.2f}"
+                if isinstance(total_delta, (int, float))
+                else ""
+            )
+            parts.append(
+                f"`{field}` ჯამი ✗ (expected {expected_tot:,.2f}, got "
+                f"{current_tot:,.2f}{delta_str})"
+                if isinstance(expected_tot, (int, float))
+                and isinstance(current_tot, (int, float))
+                else f"`{field}` ჯამი ✗"
+            )
+
+    return " · ".join(parts)
 
 
 # ---------------------------------------------------------------------------
