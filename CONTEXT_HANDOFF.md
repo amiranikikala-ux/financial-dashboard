@@ -1,7 +1,7 @@
 # CONTEXT HANDOFF — short brief
 
-> **განახლდა**: 2026-04-22 (Phase 2.1 + 2.2 + 2.5 landed — 3 of 9 Phase 2 tools done)
-> **სტატუსი**: Phase 4A **FULLY CLOSED** + Phase 4B **COMPLETE (3/3 sprints, 28 rules, 171 tests)** + Phase 4C.2 **FULLY CLOSED** + Phase 4C.3 **LIVE VERIFIED** + **Phase 2.1 / 2.2 / 2.5 LIVE VERIFIED** (3 tools, 9 live scenarios, $0.82 total Anthropic spend).
+> **განახლდა**: 2026-04-22 (Phase 2.1 + 2.2 + 2.5 landed; Phase 2.4 reduced, Phase 2.10 dropped via audit)
+> **სტატუსი**: Phase 4A **FULLY CLOSED** + Phase 4B **COMPLETE (3/3 sprints, 28 rules, 171 tests)** + Phase 4C.2 **FULLY CLOSED** + Phase 4C.3 **LIVE VERIFIED** + **Phase 2.1 / 2.2 / 2.5 LIVE VERIFIED** (3 tools, 9 live scenarios, $0.82 total Anthropic spend) + **Phase 2.4/2.10 overlap audit COMPLETED** (1.5 days saved).
 
 ---
 
@@ -131,16 +131,20 @@ All on `origin/main`. `git status` clean.
 
 Phase 4B ✅ **FULLY CLOSED**. Phase 4C.2 + 4C.3 ✅ **FULLY CLOSED**. **Phase 2.1 + 2.2 + 2.5** ✅ **LANDED + LIVE VERIFIED**.
 
-**📋 Phase 2 remaining (6 tools after 2.1 + 2.2 + 2.5):**
+**📋 Phase 2 remaining after 2026-04-22 audit (4 build + 1 micro-extension):**
 
 | Phase | Tool | Scope |
 |---|---|---|
 | 2.3 | `industry_benchmark` | "Margin 7.2% vs median 5% — ahead" (needs external data source) |
-| 2.4 | `supplier_risk_radar` | Portfolio risk scoring (may already be covered by `prepare_supplier_brief` PORTFOLIO — audit first) |
+| 2.4 | ~~`supplier_risk_radar`~~ → **REDUCED** | Extend `prepare_supplier_brief` PORTFOLIO: add `sort_by: "leverage"\|"risk"` param + surface `current_debt_ge`/`unpaid_share_pct`/`reliability_label` in top_candidates. Signals already live in FOCUSED mode's `_build_payment_profile` (tools.py `supplier_brief.py:576-610`). ~0.5 day, no new tool. |
 | 2.6 | `promotion_candidate_finder` | "5 candidates for ოზურგეთი" from dead-stock + margin data |
 | 2.8 | Store Comparison page (frontend) | "Margin 11% vs 2%" UI |
 | 2.9 | `trend_detector` | "Category YoY +11% price / −4% volume" |
-| 2.10 | `multi_source_triangulation` | Likely subsumed by existing `validate_vs_source` — audit first |
+| ~~2.10~~ | ~~`multi_source_triangulation`~~ | ❌ **DROPPED**: composition of `read_excel_source` + `validate_vs_source(section, expected_total, field_name)` already delivers "Excel vs data.json diff". Production-demonstrated in investigator mode (HANDOFF.md:201/223/235). No new tool required. |
+
+**Audit evidence (2026-04-22)**:
+- `prepare_supplier_brief` FOCUSED output already returns per-supplier `payment.current_debt_ge` / `unpaid_share_pct` / `aging_bucket` / `reliability_label` — same signal-set 2.4 intended. Only gap: portfolio ranking uses leverage, not risk. Fix via one param, not new tool.
+- `validate_vs_source` accepts caller-supplied `expected_total` (AI computes it from `read_excel_source`) and returns `total_delta` + `total_match`. Chain demonstrated live at 29,891 input tokens / ~$0.082 call.
 
 **📋 Phase 4C.1 still open (high-risk, fresh session recommended):**
 
@@ -152,9 +156,9 @@ Phase 4B ✅ **FULLY CLOSED**. Phase 4C.2 + 4C.3 ✅ **FULLY CLOSED**. **Phase 2
 
 ## Next recommended steps
 
-1. **Phase 2.9 `trend_detector`** — YoY category trends (price vs volume decomposition). Builds on existing monthly_pnl + retail_sales.by_category. Complements profitability X-ray (X-ray = snapshot; trend_detector = time-motion). ~1 day.
-2. **Phase 2.6 `promotion_candidate_finder`** — combines dead_stock + margin data to propose discount candidates. Reuses existing tools as inputs. ~1 day.
-3. **Audit Phase 2.4 + 2.10 for overlap** with existing `prepare_supplier_brief` PORTFOLIO + `validate_vs_source`. May be unnecessary.
+1. **Phase 2.4 REDUCED (`prepare_supplier_brief` risk-sort extension)** — ~0.5 day. Smallest next step; closes out "risk radar" scope without new tool. Add `sort_by` param + payment fields to top_candidates.
+2. **Phase 2.9 `trend_detector`** — YoY category trends (price vs volume decomposition). Builds on existing monthly_pnl + retail_sales.by_category. Complements profitability X-ray (X-ray = snapshot; trend_detector = time-motion). ~1 day.
+3. **Phase 2.6 `promotion_candidate_finder`** — combines dead_stock + margin data to propose discount candidates. Reuses existing tools as inputs. ~1 day.
 4. **Sprint 4C.1 Schema Poka-yoke audit** (~1 day, high-risk, fresh session strongly recommended) — 21 tools' argument/description tightening.
 5. **Phase 3 remaining** (4 features — conversation_summary_on_demand, margin_compression_radar, monthly_strategy_page, gap_analysis). ~1 week.
 6. **Phase 4 Advanced** (9 features). ~2-3 weeks.

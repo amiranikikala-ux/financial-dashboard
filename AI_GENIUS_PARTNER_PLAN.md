@@ -176,16 +176,16 @@ Cost: ~$30-80/თვე heavy. ROI: 1 good decision > $1,000.
 
 | # | Feature | მაგალითი |
 |---|---|---|
-| 2.1 | 💰 Cash Flow Projection | "14-18 მაისში cash −15K რისკი" |
-| 2.2 | 🧪 Scenario Simulator | "+5% ფასი → −8% volume, +2K profit" |
-| 2.3 | 📊 Industry Benchmark | "Margin 7.2% vs median 5% — ahead" |
-| 2.4 | ⚠️ Supplier Risk Radar | "ვასაძე 18K AP, delayed 3x, HIGH" |
-| 2.5 | 📦 Product Profitability X-Ray | "12 product margin −2% — დაღუპვა" |
+| 2.1 | 💰 Cash Flow Projection | "14-18 მაისში cash −15K რისკი" — ✅ **DONE 2026-04-22** (`compute_cash_flow_projection`) |
+| 2.2 | 🧪 Scenario Simulator | "+5% ფასი → −8% volume, +2K profit" — ✅ **DONE 2026-04-22** (`simulate_scenario`) |
+| 2.3 | 📊 Industry Benchmark | "Margin 7.2% vs median 5% — ahead" (needs external data source) |
+| 2.4 | ⚠️ Supplier Risk Radar | "ვასაძე 18K AP, delayed 3x, HIGH" — 🔀 **REDUCED 2026-04-22**: new tool dropped; instead extend `prepare_supplier_brief` PORTFOLIO with `sort_by: "leverage" \| "risk"` + add `current_debt_ge`/`unpaid_share_pct`/`reliability_label` to top_candidates (~0.5 day). Signals already exist in FOCUSED mode's `_build_payment_profile`. "Delayed 3x" historical count is out of scope (needs RS invoice history). |
+| 2.5 | 📦 Product Profitability X-Ray | "12 product margin −2% — დაღუპვა" — ✅ **DONE 2026-04-22** (`analyze_product_profitability`) |
 | 2.6 | 🎯 Promotion Candidate Finder | "5 candidate ოზურგეთისთვის" |
-| 2.7 | 🔎 Supplier Deep-Dive | Full one-supplier profile |
+| 2.7 | 🔎 Supplier Deep-Dive | Full one-supplier profile — ✅ already covered by `prepare_supplier_brief` FOCUSED mode |
 | 2.8 | 🏪 Store Comparison | "Margin 11% vs 2%" |
 | 2.9 | 📈 Trend Detector | "Category YoY +11% price, −4% volume" |
-| 2.10 | 🔄 Multi-source Triangulation | "Excel vs data.json 6.6% diff" |
+| 2.10 | 🔄 Multi-source Triangulation | "Excel vs data.json 6.6% diff" — ❌ **DROPPED 2026-04-22**: composition of existing `read_excel_source` + `validate_vs_source` already delivers this. Demonstrated live in investigator-mode (HANDOFF.md:201/223/235 — "Excel → data.json → validate → grep_code → read_source_code" chain, ~$0.082/call). No new tool required. |
 | 🆕 2.11 | 💀 **Dead Stock + Salvage Plan** — 90+ დღე გაუყიდავი პროდუქცია + ფასდაკლების/დაბრუნების გეგმა |
 | 🆕 2.12 | 📞 **Supplier Negotiation Prep** — მომწოდებელთან შეხვედრის წინ 1-pager: ჩემი volume, payment reliability, comparables |
 
