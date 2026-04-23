@@ -82,6 +82,7 @@ All on `origin/main`. Older commits → `git log`.
   - (2) `"რა პროდუქცია მაქვს 120+ დღე გაუყიდავი?"` → `analyze_dead_stock` ONLY (Part B anti-trigger kept analyze_product_profitability + find_promotion_candidates out — distinction between frozen vs live SKUs held)
   - (3) `"ფუდმარტს რამდენი ვალი?"` (no date) → `read_data_json(supplier_aging)` + `compute`, NOT `compute_waybill_total` (Part B anti-trigger for undated debt questions held)
   - (4) `"2024-08-ში declared vs რეალური?"` → `get_vat_reconciliation_month` (Part A anti-trigger away from read_data_json held).
+- **Sprint 5.11 unit-fix** (2026-04-24, post-commit bfeeee5) — **1/1 PASS** · 27.7s · ~$0.05 · in-process Sonnet 4.6 `think=True`. Scenario: `"2024 აგვისტოში declared vs რეალური ბრუნვა — რა არის გაპი?"` → AI called `get_vat_reconciliation_month` + `explain_unaccounted_cash`, emitted explicit "NET საფუძველი (პირველადი, audit-matched)" table with declared 139,485 / total_real_net 236,169 / gap_net +96,684 / gap_gross +114,087 labeled as alternative. Verified: "ნეტო" surfaced, no trace of old 906K headline, thinking=True, no anti-markers. In-process test — confirms production AI will behave correctly once `FinancialDashboardBackend` service restarts (admin/UAC required) to pick up the new prompt + tools cache.
 
 ---
 
