@@ -21,20 +21,22 @@ import pandas as pd
 
 _MONTHLY_COLUMNS = [
     ("period", "თვე"),
-    ("declared_ge", "declared (ბუღალტერი) ₾"),
+    ("declared_ge", "declared (ბუღალტერი, net) ₾"),
     ("max_pos_ge", "MAX retail ₾"),
     ("tbc_pos_ge", "TBC POS ₾"),
     ("bog_pos_ge", "BOG POS ₾"),
-    ("bank_card_ge", "bank_card (TBC+BOG) ₾"),
-    ("cashreg_in_ge", "cashreg_in ₾"),
+    ("bank_card_ge", "bank_card (TBC+BOG, gross) ₾"),
+    ("cashreg_in_ge", "cashreg_in (gross) ₾"),
     ("invoices_ge", "invoices ა/ფ (bruto) ₾"),
-    ("total_real_ge", "📦 total_real ₾"),
+    ("total_real_ge", "📦 total_real (gross) ₾"),
+    ("total_real_net_ge", "total_real (net = gross ÷ 1.18) ₾"),
     ("cash_supplier_ge", "cash_supplier ₾"),
     ("cash_classified_ge", "cash_classified ₾"),
     ("cash_unaccounted_ge", "🟡 cash_unaccounted ₾"),
     ("vat_on_unaccounted_ge", "VAT on unaccounted (18%) ₾"),
-    ("gap_vs_declared_ge", "gap vs declared ₾"),
-    ("audit_total_ge", "audit total_real ₾"),
+    ("gap_vs_declared_ge", "🔴 gap (net basis, primary) ₾"),
+    ("gap_gross_ge", "gap (gross basis, alternative) ₾"),
+    ("audit_total_ge", "audit total_real (net) ₾"),
     ("status", "status"),
     ("needs_user_input", "needs classification"),
 ]
@@ -44,31 +46,39 @@ _STATUS_LABELS_KA = {
     "yellow": "🟡 ყურადღება",
     "red": "🔴 ხარვეზი",
     "no_declared_data": "⚪ declared არ მაქვს",
+    "insufficient_data": "⚫ MAX data აკლია",
 }
 
 _METHODOLOGY_KA = [
-    "მეთოდოლოგია — VAT reconciliation (Sprint 5.1–5.3)",
+    "მეთოდოლოგია — VAT reconciliation (Sprint 5.1–5.11)",
     "",
     "1. bank_card = TBC POS + BOG POS (ფიზიკური ტერმინალების ID-ით — Sprint 5.2)",
+    "   (GROSS: bank deposit-ები commission-ის შემდეგ, VAT-ის ჩათვლით)",
     "2. cashreg_in = max(0, MAX retail − bank_card)  ← nonnegative floor",
-    "3. total_real = cashreg_in + bank_card + invoices",
-    "4. gap = total_real − declared  (+ undeclared, − pipeline data gap)",
-    "5. VAT exposure = cash_unaccounted × 18%  (worst-case, classification-მდე)",
+    "3. total_real (GROSS) = cashreg_in + bank_card + invoices",
+    "4. total_real_net = total_real / 1.18  ← unit conversion (Sprint 5.11)",
+    "5. gap (PRIMARY, net basis) = total_real_net − declared",
+    "   (aligns with audit's methodology: declared is NET of VAT)",
+    "6. gap (ALTERNATIVE, gross basis) = total_real − declared × 1.18",
+    "7. VAT exposure = cash_unaccounted × 18%  (worst-case, classification-მდე)",
+    "",
+    "Sprint 5.11 unit-error fix:",
+    "  • BEFORE: gap_vs_declared_ge = total_real (gross) − declared (net) — UNIT-MIXED",
+    "    (inflated gap by declared × 0.18 systematically)",
+    "  • AFTER: gap_vs_declared_ge = (total_real ÷ 1.18) − declared — NET-BASIS",
+    "    (matches audit's own 'სხვაობა ბრუნვაში' column methodology)",
+    "  • Per-month cross-check (2024-08, 2025-08, 2025-12): pipeline_gross ≈ audit_net × 1.18",
+    "    within 0.3% where pipeline data is complete. Larger residuals mark pipeline",
+    "    coverage gaps (missing MAX/BOG/TBC data), NOT pipeline-vs-audit disagreement.",
     "",
     "წყაროები (ground-truth rank):",
-    "  • MAX retail — Financial_Analysis/გაყიდული პროდუქტები *",
-    "  • TBC POS — თბს ბანკი ამონაწერი, 5 physical terminals",
+    "  • MAX retail — Financial_Analysis/გაყიდული პროდუქტები * (GROSS)",
+    "  • TBC POS — თბს ბანკი ამონაწერი, 5 physical terminals (GROSS)",
     "    (RS014189, SH079927, SH046092, SH034467, SH060853)",
-    "  • BOG POS — ბოგ ბანკი ამონაწერი, pattern-matched",
-    "  • invoices_issued — Financial_Analysis/ანგარიშ ფაქტურები/report*.xls",
-    "  • declared — გაანგარიშება შპს ჯეო ფუდთაიმი.xlsx",
+    "  • BOG POS — ბოგ ბანკი ამონაწერი, pattern-matched (GROSS)",
+    "  • invoices_issued — Financial_Analysis/ანგარიშ ფაქტურები/report*.xls (BRUTO/GROSS)",
+    "  • declared — გაანგარიშება შპს ჯეო ფუდთაიმი.xlsx (NET of VAT)",
     "  • cash classification — Financial_Analysis/cash_outflow_journal.csv",
-    "",
-    "cross-validation (37-month cumulative, post-Sprint 5.2):",
-    "  • Pipeline TBC POS vs RS.ge POS terminal file: 98.5% match",
-    "  • Pipeline BOG POS vs RS.ge POS terminal file: 94% match",
-    "  • Pipeline total_real vs audit total_real: pipeline 1M ₾ higher",
-    "  • Audit's claimed 742K ხარვეზი is ~2× underestimate of real gap",
     "",
     "cash classification → VAT exposure ამცირებს:",
     "  • salary_cash, personal_withdrawal, unknown — VAT დარჩება",
@@ -108,10 +118,12 @@ def _compute_summary(by_month: List[Dict[str, Any]]) -> Dict[str, Any]:
         "cashreg_in_ge": 0.0,
         "invoices_ge": 0.0,
         "total_real_ge": 0.0,
+        "total_real_net_ge": 0.0,
         "cash_unaccounted_ge": 0.0,
         "cash_classified_ge": 0.0,
         "cash_supplier_ge": 0.0,
         "gap_vs_declared_ge": 0.0,
+        "gap_gross_ge": 0.0,
         "months_total": len(by_month),
         "months_with_declared": 0,
         "months_red": 0,
@@ -121,7 +133,8 @@ def _compute_summary(by_month: List[Dict[str, Any]]) -> Dict[str, Any]:
     for m in by_month:
         for k in (
             "max_pos_ge", "bank_card_ge", "cashreg_in_ge", "invoices_ge",
-            "total_real_ge", "cash_unaccounted_ge", "cash_classified_ge",
+            "total_real_ge", "total_real_net_ge",
+            "cash_unaccounted_ge", "cash_classified_ge",
             "cash_supplier_ge",
         ):
             s[k] += float(m.get(k) or 0)
@@ -130,6 +143,8 @@ def _compute_summary(by_month: List[Dict[str, Any]]) -> Dict[str, Any]:
             s["months_with_declared"] += 1
         if m.get("gap_vs_declared_ge") is not None:
             s["gap_vs_declared_ge"] += float(m["gap_vs_declared_ge"])
+        if m.get("gap_gross_ge") is not None:
+            s["gap_gross_ge"] += float(m["gap_gross_ge"])
         status = m.get("status")
         if status == "red":
             s["months_red"] += 1
@@ -147,15 +162,17 @@ def _build_summary_df(s: Dict[str, Any]) -> pd.DataFrame:
         if s["declared_ge"] > 0 else 0.0
     )
     rows = [
-        ("Declared (ბუღალტერი)", round(s["declared_ge"], 2)),
+        ("Declared (ბუღალტერი, net)", round(s["declared_ge"], 2)),
         ("MAX retail (total register)", round(s["max_pos_ge"], 2)),
-        ("bank_card (TBC+BOG)", round(s["bank_card_ge"], 2)),
-        ("cashreg_in (MAX − bank_card)", round(s["cashreg_in_ge"], 2)),
+        ("bank_card (TBC+BOG, gross)", round(s["bank_card_ge"], 2)),
+        ("cashreg_in (MAX − bank_card, gross)", round(s["cashreg_in_ge"], 2)),
         ("invoices (ა/ფ bruto)", round(s["invoices_ge"], 2)),
-        ("📦 total_real", round(s["total_real_ge"], 2)),
+        ("📦 total_real (gross)", round(s["total_real_ge"], 2)),
+        ("📦 total_real (net = gross ÷ 1.18)", round(s.get("total_real_net_ge", 0.0), 2)),
         ("", ""),
-        ("🔴 Gap vs declared", round(s["gap_vs_declared_ge"], 2)),
+        ("🔴 Gap vs declared (net basis — primary)", round(s["gap_vs_declared_ge"], 2)),
         ("Gap % of declared", f"{undeclared_pct:.1f}%"),
+        ("Gap vs declared (gross basis — alternative)", round(s.get("gap_gross_ge", 0.0), 2)),
         ("", ""),
         ("cash_supplier (manual_payments)", round(s["cash_supplier_ge"], 2)),
         ("cash_classified (journal)", round(s["cash_classified_ge"], 2)),

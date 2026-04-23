@@ -1,13 +1,29 @@
 """
-VAT reconciliation — Sprint 5.1
+VAT reconciliation — Sprint 5.1 (Sprint 5.11 unit-error fix)
 
 Computes per-month income capture from raw sources and compares against declared turnover.
 
-Core identity (per month):
+Core identity (per month, all amounts in ₾):
     cashreg_in  = max(0, max_pos_ge - bank_card_ge)    # cash received at register
     bank_card   = tbc_pos_ge + bog_pos_ge               # card deposits to banks
-    total_real  = cashreg_in + bank_card + invoices     # pipeline-known real income
-    gap         = total_real - declared                 # under-declaration
+    total_real  = cashreg_in + bank_card + invoices     # pipeline-known real income (GROSS with VAT)
+
+Gap calculation — UNIT-CORRECTED (Sprint 5.11):
+    The audit Excel reports declared_ge NET of VAT (the taxpayer's declared
+    turnover on the VAT return is net). But pipeline's total_real_ge is GROSS
+    (bank deposits + register cash + invoice bruto — all include VAT).
+    Comparing them directly would mix units and inflate the gap by declared × 0.18.
+
+    Correct formula (NET basis — primary figure):
+        total_real_net_ge  = total_real_ge / 1.18
+        gap_vs_declared_ge = total_real_net_ge - declared_ge     # net, matches audit's "სხვაობა ბრუნვაში"
+
+    Alternative (GROSS basis — same story, different unit):
+        gap_gross_ge       = total_real_ge - declared_ge * 1.18
+
+    Both reconcile: gap_gross_ge == gap_vs_declared_ge * 1.18. Per-month check
+    against audit (2024-08, 2025-08, 2025-12) confirms <0.3% residual when data
+    is complete; larger residuals → pipeline coverage gap, not disagreement.
 
 Cash outflow side (tracks where register cash went):
     cash_supplier_ge    = manual_payments.csv by month (documented cash supplier payments)
@@ -33,6 +49,11 @@ logger = get_logger(__name__)
 
 
 VAT_RATE = 0.18
+
+# Gross → net divisor. Pipeline is GROSS (bank deposits, MAX POS bruto, invoice
+# bruto); audit's declared_ge is NET (VAT return). Divide gross by this to get
+# the matching net figure.
+GROSS_TO_NET_DIVISOR = 1.0 + VAT_RATE  # 1.18
 
 # Gap classification thresholds (relative to declared)
 STATUS_GREEN_MAX_PCT = 0.05   # ≤5%
@@ -573,7 +594,20 @@ def compute_vat_reconciliation(
         else:
             invoices = None
         total_real = cashreg_in + bank_card + (invoices or 0)
-        gap_vs_declared = (total_real - declared_val) if declared_val is not None else None
+        # Sprint 5.11 — unit-corrected gap. `total_real` is GROSS (bank deposits
+        # + register cash + invoice bruto), but `declared_val` is NET (audit's
+        # VAT-return figure). Normalize to NET for the primary gap, compute
+        # GROSS as an alternative view for debugging / per-surface display.
+        # Guard: when declared is missing OR zero (placeholder for "not yet
+        # filed" — e.g. the current in-flight month), gap is meaningless —
+        # emit None so it is not summed into cumulative totals.
+        total_real_net = total_real / GROSS_TO_NET_DIVISOR
+        if declared_val is not None and declared_val > 0:
+            gap_vs_declared = total_real_net - declared_val        # primary (net)
+            gap_gross = total_real - declared_val * GROSS_TO_NET_DIVISOR  # alternative (gross)
+        else:
+            gap_vs_declared = None
+            gap_gross = None
 
         has_unaccounted = cash_unaccounted >= UNACCOUNTED_CASH_THRESHOLD_GE
 
@@ -613,6 +647,9 @@ def compute_vat_reconciliation(
             "cashreg_in_ge": cashreg_in,
             "invoices_ge": invoices,
             "total_real_ge": total_real,
+            # Sprint 5.11 — unit-explicit alternate (total_real / 1.18). Used
+            # for direct comparison with audit's declared_ge (which is net).
+            "total_real_net_ge": total_real_net,
 
             # Cash outflow classification
             "cash_supplier_ge": cash_supplier,
@@ -629,7 +666,12 @@ def compute_vat_reconciliation(
             "declared_ge": declared_val,
             "audit_total_ge": audit_total,
             "audit_snapshot": audit_row or None,
+            # Sprint 5.11 — `gap_vs_declared_ge` is now NET-BASIS (primary
+            # figure, matches audit's methodology). `gap_gross_ge` is the
+            # same reconciliation expressed in gross ₾ for operational
+            # reference (bank deposits, cash register — user-facing units).
             "gap_vs_declared_ge": gap_vs_declared,
+            "gap_gross_ge": gap_gross,
 
             # Sprint 5.8 — per-shop breakdown.
             "by_shop": by_shop,
@@ -651,17 +693,26 @@ def compute_vat_reconciliation(
 
     # Summary
     total_real_all = sum(r["total_real_ge"] for r in by_month)
+    total_real_net_all = sum(r.get("total_real_net_ge") or 0 for r in by_month)
     total_declared_all = sum(r["declared_ge"] or 0 for r in by_month)
     total_gap_all = sum((r["gap_vs_declared_ge"] or 0) for r in by_month if r["gap_vs_declared_ge"] is not None)
+    total_gap_gross_all = sum((r.get("gap_gross_ge") or 0) for r in by_month if r.get("gap_gross_ge") is not None)
     total_unaccounted = sum(r["cash_unaccounted_ge"] for r in by_month)
     total_vat_liability = sum(r["vat_total_liability_ge"] for r in by_month)
 
     return {
         "label_ka": "VAT და აუდიტის შედარება",
         "methodology_ka": (
-            "ყოველთვიური შემოსავლის დათვლა raw data-დან: bank_card = TBC POS + BOG POS; "
-            "cashreg_in = max(0, MAX_POS − bank_card); total_real = cashreg_in + bank_card + invoices. "
-            "declared uploaded audit file-დან. cash_unaccounted = cashreg_in − cash_supplier − cash_classified. "
+            "ყოველთვიური შემოსავლის დათვლა raw data-დან: bank_card = TBC POS + BOG POS (GROSS — "
+            "ბანკის depozit, commission-ის შემდეგ); cashreg_in = max(0, MAX_POS − bank_card); "
+            "total_real = cashreg_in + bank_card + invoices (ყველა GROSS, დღგ-ის ჩათვლით). "
+            "declared uploaded audit file-დან (NET, ე.ი. VAT-ის ოფიციალური დეკლარაცია). "
+            "Sprint 5.11 — unit-corrected gap: total_real_net_ge = total_real / 1.18 "
+            "(gross-დან net-ად), gap_vs_declared_ge = total_real_net_ge − declared_ge "
+            "(PRIMARY — იგივე სისტემაში აუდიტის სხვაობა ბრუნვაში); gap_gross_ge = "
+            "total_real − declared × 1.18 (ALTERNATIVE — გროსი view-სთვის). per-month "
+            "cross-check (2024-08, 2025-08, 2025-12) pipeline ≈ audit × 1.18 < 0.3% residual. "
+            "cash_unaccounted = cashreg_in − cash_supplier − cash_classified. "
             "by_shop (Sprint 5.8): per-მაღაზია MAX/TBC/BOG/cashreg_in სადაც retail_sales-ის ფოლდერი გვაძლევს "
             "MAX-ის shop-split-ს და bog_terminal_to_object/tbc_text_to_object mapping-ი გვაძლევს bank-ის shop-split-ს. "
             "TBC attribution text-based, შეიძლება არასრული იყოს — data_quality.tbc_per_shop_reliable ფლაგი გვიჩვენებს. "
@@ -687,8 +738,11 @@ def compute_vat_reconciliation(
             "months_insufficient_data": len([r for r in by_month if r["status"] == "insufficient_data"]),
             "months_needing_user_input": len(needs_input_months),
             "total_real_ge": total_real_all,
+            # Sprint 5.11 — unit-explicit totals.
+            "total_real_net_ge": total_real_net_all,
             "total_declared_ge": total_declared_all,
-            "total_gap_ge": total_gap_all,
+            "total_gap_ge": total_gap_all,           # NET-basis (primary, matches audit)
+            "total_gap_gross_ge": total_gap_gross_all,  # GROSS-basis (alternative view)
             "total_unaccounted_cash_ge": total_unaccounted,
             "total_vat_liability_ge": total_vat_liability,
         },

@@ -1411,13 +1411,15 @@ def run():
     vat_summary = data["vat_reconciliation"]["summary"]
     logger.info(
         "VAT reconciliation: %s თვე (red %s | yellow %s | green %s | no-declared %s) · "
-        "total_real %s ₾ · declared %s ₾ · gap %s ₾ · unaccounted cash %s ₾",
+        "total_real %s ₾ (gross) / %s ₾ (net) · declared %s ₾ (net) · "
+        "gap %s ₾ (net basis, primary) · unaccounted cash %s ₾",
         vat_summary["months_total"],
         vat_summary["months_red"],
         vat_summary["months_yellow"],
         vat_summary["months_green"],
         vat_summary["months_no_declared"],
         f"{vat_summary['total_real_ge']:,.2f}",
+        f"{vat_summary.get('total_real_net_ge', 0):,.2f}",
         f"{vat_summary['total_declared_ge']:,.2f}",
         f"{vat_summary['total_gap_ge']:+,.2f}",
         f"{vat_summary['total_unaccounted_cash_ge']:,.2f}",

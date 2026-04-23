@@ -34,6 +34,7 @@ def _mk_month(period, **overrides):
         "cashreg_in_ge": 0.0,
         "invoices_ge": 0.0,
         "total_real_ge": 0.0,
+        "total_real_net_ge": 0.0,
         "cash_supplier_ge": 0.0,
         "cash_classified_ge": 0.0,
         "cash_classified_by_category": {},
@@ -42,6 +43,7 @@ def _mk_month(period, **overrides):
         "declared_ge": None,
         "audit_total_ge": None,
         "gap_vs_declared_ge": None,
+        "gap_gross_ge": None,
         "status": "no_declared_data",
         "needs_user_input": False,
     }
@@ -62,9 +64,11 @@ def bundle_two_months():
                 cashreg_in_ge=55000,
                 invoices_ge=12000,
                 total_real_ge=112000,
+                total_real_net_ge=112000 / 1.18,
                 cash_unaccounted_ge=55000,
                 declared_ge=80000,
-                gap_vs_declared_ge=32000,
+                gap_vs_declared_ge=32000,  # fixture — summary just aggregates
+                gap_gross_ge=32000 * 1.18,
                 vat_on_unaccounted_ge=9900,
                 status="red",
             ),
@@ -77,6 +81,7 @@ def bundle_two_months():
                 cashreg_in_ge=82000,
                 invoices_ge=20000,
                 total_real_ge=170000,
+                total_real_net_ge=170000 / 1.18,
                 cash_classified_ge=30000,
                 cash_classified_by_category={
                     "salary_cash": {"total_ge": 30000, "vat_applies_ge": 30000, "entries_count": 2},
@@ -84,6 +89,7 @@ def bundle_two_months():
                 cash_unaccounted_ge=52000,
                 declared_ge=140000,
                 gap_vs_declared_ge=30000,
+                gap_gross_ge=30000 * 1.18,
                 vat_on_unaccounted_ge=9360,
                 status="yellow",
             ),
@@ -131,9 +137,12 @@ def test_summary_sums_match_months(bundle_two_months):
     assert s["cashreg_in_ge"] == pytest.approx(137000)
     assert s["invoices_ge"] == pytest.approx(32000)
     assert s["total_real_ge"] == pytest.approx(282000)
+    # Sprint 5.11 — new net-basis totals exposed.
+    assert s["total_real_net_ge"] == pytest.approx(282000 / 1.18)
     assert s["cash_unaccounted_ge"] == pytest.approx(107000)
     assert s["declared_ge"] == pytest.approx(220000)
-    assert s["gap_vs_declared_ge"] == pytest.approx(62000)
+    assert s["gap_vs_declared_ge"] == pytest.approx(62000)  # net basis from fixtures
+    assert s["gap_gross_ge"] == pytest.approx(62000 * 1.18)  # gross basis from fixtures
     assert s["vat_exposure_ge"] == pytest.approx(107000 * 0.18)
     assert s["months_total"] == 2
     assert s["months_with_declared"] == 2
@@ -176,5 +185,10 @@ def test_methodology_sheet_includes_sprint_context(bundle_two_months):
     full_text = "\n".join(str(row[0].value) for row in ws.iter_rows() if row[0].value)
     assert "Sprint 5.1" in full_text
     assert "Sprint 5.2" in full_text
-    assert "98.5%" in full_text  # RS terminal cross-check
+    assert "Sprint 5.11" in full_text  # unit-fix documented
+    assert "net basis" in full_text or "NET" in full_text  # unit clarified
     assert "18%" in full_text  # VAT rate
+    # Sprint 5.11 — hardcoded 98.5/94 cross-match claims withdrawn (were not
+    # computed, just strings). Assert they are NOT in the methodology anymore.
+    assert "98.5%" not in full_text
+    assert "2× underestimate" not in full_text

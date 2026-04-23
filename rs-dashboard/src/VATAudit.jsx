@@ -86,17 +86,19 @@ function DrillDown({ row }) {
     ['MAX retail (total register)', row.max_pos_ge],
     ['TBC POS', row.tbc_pos_ge],
     ['BOG POS', row.bog_pos_ge],
-    ['bank_card (TBC+BOG)', row.bank_card_ge],
-    ['cashreg_in (MAX − bank)', row.cashreg_in_ge],
+    ['bank_card (TBC+BOG, gross)', row.bank_card_ge],
+    ['cashreg_in (MAX − bank, gross)', row.cashreg_in_ge],
     ['invoices ა/ფ (bruto)', row.invoices_ge],
-    ['📦 total_real_ge', row.total_real_ge],
+    ['📦 total_real (gross)', row.total_real_ge],
+    ['📦 total_real (net = gross ÷ 1.18)', row.total_real_net_ge],
     ['—', null],
     ['cash_supplier (manual_payments)', row.cash_supplier_ge],
     ['cash_classified (journal)', row.cash_classified_ge],
     ['🟡 cash_unaccounted', row.cash_unaccounted_ge],
     ['—', null],
-    ['declared (ბუღალტერი)', row.declared_ge],
-    ['gap_vs_declared', row.gap_vs_declared_ge],
+    ['declared (ბუღალტერი, net)', row.declared_ge],
+    ['🔴 gap (net basis — primary)', row.gap_vs_declared_ge],
+    ['gap (gross basis — alternative)', row.gap_gross_ge],
     ['VAT on unaccounted (18%)', row.vat_on_unaccounted_ge],
   ];
   return (
@@ -380,7 +382,9 @@ export default function VATAudit({ reloadKey }) {
     const t = {
       declared: 0,
       real: 0,
+      real_net: 0,
       gap: 0,
+      gap_gross: 0,
       unaccounted: 0,
       bank_card: 0,
       cashreg: 0,
@@ -392,6 +396,7 @@ export default function VATAudit({ reloadKey }) {
     };
     filteredRows.forEach((r) => {
       t.real += Number(r.total_real_ge) || 0;
+      t.real_net += Number(r.total_real_net_ge) || 0;
       t.bank_card += Number(r.bank_card_ge) || 0;
       t.cashreg += Number(r.cashreg_in_ge) || 0;
       t.invoices += Number(r.invoices_ge) || 0;
@@ -399,6 +404,7 @@ export default function VATAudit({ reloadKey }) {
       if (r.declared_ge != null) {
         t.declared += Number(r.declared_ge) || 0;
         t.gap += Number(r.gap_vs_declared_ge) || 0;
+        t.gap_gross += Number(r.gap_gross_ge) || 0;
         t.months_with_declared += 1;
       }
       if (r.status === 'red') t.red += 1;
@@ -467,22 +473,22 @@ export default function VATAudit({ reloadKey }) {
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 18 }}>
         <SummaryCard
-          label="Declared (ბუღალტერი)"
+          label="Declared (ბუღალტერი, net)"
           value={fmt(totals.declared)}
           hint={`${totals.months_with_declared} თვე declared`}
         />
         <SummaryCard
-          label="🟢 რეალური pipeline (total_real)"
-          value={fmt(totals.real)}
-          hint="MAX − bank-overlap + bank_card + invoices"
+          label="🟢 total_real (net)"
+          value={fmt(totals.real_net)}
+          hint={`gross ${fmt(totals.real)} ÷ 1.18`}
         />
         <SummaryCard
-          label="🔴 Gap vs declared"
+          label="🔴 Gap (net — primary)"
           value={fmt(totals.gap)}
           color={totals.gap > 0 ? '#f87171' : '#4ade80'}
           hint={
             totals.declared > 0
-              ? `${((totals.gap / totals.declared) * 100).toFixed(1)}% undeclared`
+              ? `${((totals.gap / totals.declared) * 100).toFixed(1)}% of declared · აუდიტის ერთეული`
               : '—'
           }
         />
@@ -673,9 +679,15 @@ export default function VATAudit({ reloadKey }) {
           lineHeight: 1.5,
         }}
       >
-        💡 <b>Identity</b>: total_real = bank_card + cashreg_in + invoices ·{' '}
-        cashreg_in = max(0, MAX − bank_card) · gap = total_real − declared ·{' '}
-        VAT exposure = cash_unaccounted × 18%.
+        💡 <b>Identity</b>: total_real (gross) = bank_card + cashreg_in + invoices ·{' '}
+        cashreg_in = max(0, MAX − bank_card) · total_real_net = total_real ÷ 1.18 ·{' '}
+        <b>gap (net) = total_real_net − declared</b> (primary, matches audit) ·{' '}
+        gap (gross) = total_real − declared × 1.18 · VAT exposure = cash_unaccounted × 18%.
+        <br />
+        💡 <b>Sprint 5.11 unit-fix:</b> declared_ge არის NET (VAT-ის დეკლარაცია),
+        pipeline-ის bank/cash/invoices არის GROSS — შედარებისთვის gross ⁄ 1.18 ხდება.
+        ძველი &ldquo;gap&rdquo; რიცხვი (pre-5.11) იყო gross − net, რომელიც declared × 0.18-ით
+        ამაღლებდა მას (+702K cumulative artifact).
         <br />
         💡 <b>cash_unaccounted</b> კლასიფიკაცია <code>cash_outflow_journal.csv</code>-ში
         (salary_cash / supplier_undocumented / business_expense / …) ამცირებს VAT exposure-ს.

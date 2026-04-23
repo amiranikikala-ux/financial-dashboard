@@ -233,9 +233,13 @@ ALLOWED_SECTIONS: Dict[str, str] = {
     "executive_summary": "KPIs and alerts for executive view",
     "retail_sales": "Retail sales aggregates (overall, by_object, by_month, tops)",
     "vat_reconciliation": (
-        "VAT reconciliation per month (Sprint 5.1). "
+        "VAT reconciliation per month (Sprint 5.1, unit-fixed Sprint 5.11). "
         "Contains by_month array with cashreg_in_ge / bank_card_ge / tbc_pos_ge / bog_pos_ge / "
-        "cash_unaccounted_ge / vat_total_liability_ge / declared_ge / gap_vs_declared_ge / status. "
+        "total_real_ge (gross) / total_real_net_ge (gross÷1.18) / cash_unaccounted_ge / "
+        "vat_total_liability_ge / declared_ge (NET) / gap_vs_declared_ge (NET basis — primary) / "
+        "gap_gross_ge (GROSS basis — alternative) / status. "
+        "Sprint 5.11: gap_vs_declared_ge = total_real_net − declared (matches audit's "
+        "methodology; declared is net-of-VAT on the tax return). "
         "Prefer the dedicated `get_vat_reconciliation_month` tool for single-month drill-down — "
         "this section is best for scanning red-flag months list or summary totals."
     ),
@@ -2201,6 +2205,13 @@ GET_VAT_RECONCILIATION_MONTH_TOOL: Dict[str, Any] = {
         "verbatim from `summary_ka`, ASK the user to upload the MAX Excel to "
         "`Financial_Analysis/გაყიდული პროდუქტები სოფ ოზურგეთი/` + `...დვაბზუ/`, "
         "and DO NOT assert any reconciliation conclusion for the month.\n\n"
+        "**Unit note (Sprint 5.11 — REQUIRED for correct audit framing):** "
+        "`row.gap_vs_declared_ge` is **net basis** (primary, matches audit). "
+        "`row.gap_gross_ge` is the **gross basis** alternative. `row.declared_ge` "
+        "is **net** (VAT return). `row.total_real_ge` is **gross** (bank deposits + "
+        "register cash + invoice bruto). `row.total_real_net_ge` = total_real_ge÷1.18. "
+        "When reporting to the user, state the basis explicitly ('ნეტო საფუძველზე') so "
+        "they can reconcile against the auditor's figures.\n\n"
         "**Anti-triggers:**\n"
         "  • cash runway / forward projection → `compute_cash_flow_projection`\n"
         "  • historical P&L month → `read_data_json(section='monthly_pnl')`\n"

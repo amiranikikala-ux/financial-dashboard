@@ -459,8 +459,19 @@ def test_compute_vat_reconciliation_with_audit_excel(tmp_path: Path) -> None:
     )
     row = bundle["by_month"][0]
     assert row["declared_ge"] == pytest.approx(139485)
-    # gap = total_real - declared; total_real >> declared
-    assert row["gap_vs_declared_ge"] > 100000
+    # Sprint 5.11 — gap_vs_declared_ge is now NET-basis (primary).
+    # net gap = (total_real_gross / 1.18) − declared.
+    # Also gap_gross_ge = total_real_gross − declared × 1.18 (alternative view).
+    expected_gap_net = row["total_real_ge"] / 1.18 - 139485
+    expected_gap_gross = row["total_real_ge"] - 139485 * 1.18
+    assert row["gap_vs_declared_ge"] == pytest.approx(expected_gap_net)
+    assert row["gap_gross_ge"] == pytest.approx(expected_gap_gross)
+    # gap_gross = gap_net × 1.18 (unit identity)
+    assert row["gap_gross_ge"] == pytest.approx(row["gap_vs_declared_ge"] * 1.18)
+    # total_real_net_ge exposed for consumers
+    assert row["total_real_net_ge"] == pytest.approx(row["total_real_ge"] / 1.18)
+    # Fixture still produces real >> declared → red (~50% net gap of declared)
+    assert row["gap_vs_declared_ge"] > 50000
     assert row["status"] == "red"
 
 
@@ -473,6 +484,115 @@ def test_compute_vat_reconciliation_empty_inputs() -> None:
     )
     assert bundle["by_month"] == []
     assert bundle["summary"]["months_total"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Sprint 5.11 — unit-correctness regression pins
+# ---------------------------------------------------------------------------
+
+
+def test_sprint_5_11_gap_is_net_basis(tmp_path: Path) -> None:
+    """gap_vs_declared_ge MUST equal (total_real / 1.18) − declared.
+
+    Pinned after Sprint 5.11 to prevent regression to the old gross-minus-net
+    formula that inflated the gap by declared × 0.18.
+    """
+    fx = _vat_fixture()
+    audit_f = tmp_path / "გაანგარიშება.xlsx"
+    _write_audit_excel(audit_f, [
+        {"period": 202408, "declared": 139485, "af": 16603, "cashreg": 142413, "tbc": 6697, "bog": 71200},
+    ])
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle=fx["retail"],
+        tbc_card_income_bundle=fx["tbc"],
+        bog_pos_income_bundle=fx["bog"],
+        manual_journal_full=fx["manual"],
+        audit_excel_path=str(audit_f),
+    )
+    row = bundle["by_month"][0]
+    assert row["gap_vs_declared_ge"] == pytest.approx(row["total_real_ge"] / 1.18 - 139485)
+    # And gap_gross is the explicit alternative:
+    assert row["gap_gross_ge"] == pytest.approx(row["total_real_ge"] - 139485 * 1.18)
+
+
+def test_sprint_5_11_total_real_net_is_exposed(tmp_path: Path) -> None:
+    """total_real_net_ge must be present and equal total_real_ge / 1.18."""
+    fx = _vat_fixture()
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle=fx["retail"],
+        tbc_card_income_bundle=fx["tbc"],
+        bog_pos_income_bundle=fx["bog"],
+        manual_journal_full=fx["manual"],
+    )
+    row = bundle["by_month"][0]
+    assert "total_real_net_ge" in row
+    assert row["total_real_net_ge"] == pytest.approx(row["total_real_ge"] / 1.18)
+
+
+def test_sprint_5_11_summary_has_net_and_gross_totals(tmp_path: Path) -> None:
+    """Summary must expose both total_gap_ge (net, primary) and
+    total_gap_gross_ge (alternative) so downstream surfaces can pick."""
+    fx = _vat_fixture()
+    audit_f = tmp_path / "გაანგარიშება.xlsx"
+    _write_audit_excel(audit_f, [
+        {"period": 202408, "declared": 139485, "af": 16603, "cashreg": 142413, "tbc": 6697, "bog": 71200},
+    ])
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle=fx["retail"],
+        tbc_card_income_bundle=fx["tbc"],
+        bog_pos_income_bundle=fx["bog"],
+        manual_journal_full=fx["manual"],
+        audit_excel_path=str(audit_f),
+    )
+    s = bundle["summary"]
+    assert "total_real_net_ge" in s
+    assert "total_gap_ge" in s
+    assert "total_gap_gross_ge" in s
+    # Unit identity at the summary level too.
+    assert s["total_gap_gross_ge"] == pytest.approx(s["total_gap_ge"] * 1.18, rel=1e-6)
+    # Methodology says so.
+    assert "Sprint 5.11" in bundle["methodology_ka"]
+
+
+def test_sprint_5_11_insufficient_data_months_retain_none_gap(tmp_path: Path) -> None:
+    """Months with no declared_ge must still produce None gap (both net and gross)."""
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle={"by_month": [{"month": "2023-04", "revenue_ge": 50000}]},
+        tbc_card_income_bundle={"lines": [{"თარიღი": "2023-04-10", "თანხა": 8000}]},
+        bog_pos_income_bundle={"lines": [{"თარიღი": "2023-04-15", "თანხა": 12000}]},
+        manual_journal_full=[],
+    )
+    row = bundle["by_month"][0]
+    assert row["declared_ge"] is None
+    assert row["gap_vs_declared_ge"] is None
+    assert row["gap_gross_ge"] is None
+
+
+def test_sprint_5_11_declared_zero_placeholder_gap_is_none(tmp_path: Path) -> None:
+    """declared_ge = 0 (placeholder for 'not yet filed') must produce gap = None.
+
+    Audit Excel sometimes records 0 for in-flight months where the declaration
+    has not been filed yet. Those rows are NOT real 'declared zero turnover'
+    — they should be excluded from cumulative gap totals (otherwise the raw
+    total_real for that month gets miscounted as under-declaration).
+    """
+    fx = _vat_fixture()
+    audit_f = tmp_path / "გაანგარიშება.xlsx"
+    _write_audit_excel(audit_f, [
+        {"period": 202408, "declared": 0, "af": 0, "cashreg": 0, "tbc": 0, "bog": 0},
+    ])
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle=fx["retail"],
+        tbc_card_income_bundle=fx["tbc"],
+        bog_pos_income_bundle=fx["bog"],
+        manual_journal_full=fx["manual"],
+        audit_excel_path=str(audit_f),
+    )
+    row = bundle["by_month"][0]
+    assert row["declared_ge"] == 0.0
+    assert row["gap_vs_declared_ge"] is None
+    assert row["gap_gross_ge"] is None
+    assert row["status"] == "no_declared_data"
 
 
 # ---------------------------------------------------------------------------

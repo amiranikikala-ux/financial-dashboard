@@ -50,7 +50,12 @@ def _render_month_summary_ka(row: Dict[str, Any]) -> str:
     cash_classified = row.get("cash_classified_ge") or 0
     cash_unaccounted = row.get("cash_unaccounted_ge") or 0
     declared = row.get("declared_ge")
-    gap = row.get("gap_vs_declared_ge")
+    # Sprint 5.11 — gap_vs_declared_ge is now NET-BASIS (primary, matches audit).
+    # gap_gross_ge is the GROSS alternative for operational context.
+    gap_net = row.get("gap_vs_declared_ge")
+    gap_gross = row.get("gap_gross_ge")
+    total_real_gross = row.get("total_real_ge") or 0
+    total_real_net = row.get("total_real_net_ge") or 0
     dq = row.get("data_quality") or {}
 
     parts = [f"**{period}** · {emoji} {status}"]
@@ -74,8 +79,19 @@ def _render_month_summary_ka(row: Dict[str, Any]) -> str:
             f"პოტენც. დღგ **{vat_liab:,.0f} ₾**"
         )
 
-    if declared is not None and gap is not None:
-        parts.append(f"declared **{declared:,.0f} ₾** · gap **{gap:+,.0f} ₾**")
+    if declared is not None and gap_net is not None:
+        # Sprint 5.11 — ცხადი unit-ი. declared = NET (VAT return); total_real_net
+        # = pipeline-ის gross / 1.18; gap = რეალური_net − declared (აუდიტის
+        # მეთოდოლოგიის ექვივალენტი).
+        parts.append(
+            f"declared (net) **{declared:,.0f} ₾** · total_real (net) "
+            f"**{total_real_net:,.0f} ₾** · gap (net) **{gap_net:+,.0f} ₾**"
+        )
+        if gap_gross is not None and abs(gap_gross - gap_net) > 1:
+            parts.append(
+                f"_(alternative gross basis: total_real {total_real_gross:,.0f} "
+                f"₾ − declared×1.18 {declared * 1.18:,.0f} ₾ = **{gap_gross:+,.0f} ₾**)_"
+            )
     elif declared is None:
         parts.append("declared: N/A")
 
