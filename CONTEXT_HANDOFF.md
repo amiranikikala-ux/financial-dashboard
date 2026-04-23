@@ -1,7 +1,7 @@
 # CONTEXT HANDOFF — short brief
 
-> **განახლდა**: 2026-04-23 (**Sprint 5.9 LANDED** — MAX-data-gap vs over-declaration გარჩევა; **2,068/2,068 pytest green** ~73s; tool surface **26**; dashboard tabs **15**; SYSTEM_PROMPT_KA **1,163 lines**; cache **207 MB**; data.json **131.7 MB**; real gap **906K ₾** vs audit 742K)
-> **სტატუსი**: Phase 4A/4B/4C.2/4C.3 CLOSED · **Phase 2.1/2.2/2.4/2.5/2.6/2.8/2.9 COMPLETE** · Tier 1 + Tier 2 Sprint 1/2/3a COMPLETE · **🧾 Sprint 5.1 → 5.9 COMPLETE** (full VAT audit system: reconciliation forensics · TBC POS terminal-ID fix · Dashboard 🧾 tab · Excel export · retail_sales revenue=price×qty fix · 3/3 live dog-food · per-shop by_shop breakdown · MAX data gap distinction). Phase 4C.1 VAT-tools-scoped ✅.
+> **განახლდა**: 2026-04-24 (**Sprint 5.10 evidence-only** — VAT gap unit-error diagnosed; **906K claim WITHDRAWN**; real gap aligns with audit's **742K (net)**, pipeline data-gaps prevent full independent reproduction of 652K; production code NOT changed this session — fix queued as Sprint 5.11)
+> **სტატუსი**: Phase 4A/4B/4C.2/4C.3 CLOSED · **Phase 2.1/2.2/2.4/2.5/2.6/2.8/2.9 COMPLETE** · Tier 1 + Tier 2 Sprint 1/2/3a COMPLETE · **🧾 Sprint 5.1 → 5.9 COMPLETE** · Phase 4C.1 VAT-tools-scoped ✅ · **Sprint 5.10 🚨 CRITICAL DISCOVERY** (906K inflated by unit error — see `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_5_10_UNIT_ERROR_PREVIEW.md`) — **Sprint 5.11 PENDING: fix `gap_vs_declared_ge` across 6 production files + tests + AI prompts + live dog-food**.
 
 ---
 
@@ -42,14 +42,15 @@
 | **Dashboard tabs** | 15 (incl. Store Compare, 💀 Dead Stock, ⚠️ Supplier Concentration, 📋 Debt Plan, 🧾 VAT) |
 | **Pipeline cache** | 207 MB (was 864 MB — Sprint 3a slim-down) |
 | **`data.json`** | 131.7 MB, 26 sections, 21,233 waybills |
-| **VAT cumulative gap** | **906K ₾** (post-Sprint-5.5 revenue fix; was 1.6M pre-fix) |
+| **VAT cumulative gap** | ⚠️ **906K ₾ headline is UNIT-WRONG** (Sprint 5.10 discovery: gross pipeline − net declared). Unit-corrected: **+90K pipeline independently** / **+742K audit-matched** (remaining 652K within pipeline coverage gaps). **Sprint 5.11 will fix.** |
 
 ---
 
-## Commit history — Sprint 5.x (state audit response, 2026-04-23)
+## Commit history — Sprint 5.x (state audit response, 2026-04-23 → 2026-04-24)
 
 | commit | sprint | summary |
 |---|---|---|
+| *pending* | **5.10** | **evidence-only session** — diagnosed unit error in `gap_vs_declared_ge` (gross − net mismatch inflating gap by +702K); identified 98.5/94 cross-match as hardcoded string, not computed; mapped fix blast radius (6 production files + tests + prompts). **No production code changed.** See `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_5_10_UNIT_ERROR_PREVIEW.md` + `_scratch_sprint5_10_*.json` evidence. |
 | `6a4ee1b` | 5.9 | MAX-data-gap vs over-declaration: `insufficient_data` status for max=0 & (bank>0 \| declared>0); AI-facing warning prepended to summary_ka |
 | `354ffe7` | 4C.1 scoped | VAT 3 tools schema Poka-yoke audit (by_shop docs, anti-triggers, STRICT do-not-guess) |
 | `6e5118d` | 5.8 | per-shop by_shop breakdown (ოზურგეთი vs დვაბზუ); `tbc_per_shop_reliable` honesty flag; 22 new tests |
@@ -104,6 +105,7 @@ All on `origin/main`. Older commits → `git log`.
 
 | # | item | size | risk | რატომ |
 |---|---|---|---|---|
+| **0** | **🚨 Sprint 5.11 — VAT gap unit-error fix** | ~1-2 sessions | **MED** | **URGENT**: `gap_vs_declared_ge` is unit-wrong across UI + AI + Excel. Blueprint + blast radius in `SPRINT_5_10_UNIT_ERROR_PREVIEW.md`. Single biggest audit-defense integrity fix. |
 | 1 | **Phase 4C.1 Part C (if gaps appear)** | evidence-driven | LOW | Parts A+B covered 8 tools with real Triggers/Anti-triggers gaps. The remaining tools (forecast/math six + save_memory/recall_context/journal_add/journal_list + prepare_supplier_brief + analyze_product_profitability + find_promotion_candidates + build_debt_repayment_plan + propose_feature) were SKIPPED per evidence-based survey — they already carry Triggers + Anti-triggers + Returns + Honesty-rule blocks. Only open new schema-audit work if a live dog-food surfaces an actual routing miss. |
 | 2 | **Tier 2 Sprint 3b — cache extension to bank / supplier / waybills** | ~1 session each | MED | applies Sprint 2/3a pattern per `project_pipeline_cache_pattern.md` memory; audit all-rows fields before caching |
 | 3 | **Phase 2.3 `industry_benchmark`** | ~1 day | LOW | blocked on external data source decision (hardcoded retail medians? Excel import? public dataset?) — ask user |
@@ -111,7 +113,17 @@ All on `origin/main`. Older commits → `git log`.
 | 5 | **Phase 4 Advanced (9 features)** | ~2-3 weeks | MED | in `AI_GENIUS_PARTNER_PLAN.md` v2.1 |
 | 6 | **Parking Lot** | — | — | ~40 items in v2.1 plan |
 
-**Audit defense view**: real gap is **906K ₾** (not 1.6M as pre-Sprint-5.5; not audit's 742K). Pipeline is cross-validated against RS.ge POS terminal export (98.5% TBC / 94% BOG match). Ready for voluntary-disclosure conversation OR audit defense — user decides.
+**Audit defense view** (rewritten 2026-04-24 after Sprint 5.10 evidence):
+
+- **Real gap (net, audit-matched): 742K ₾.** Audit's Excel "სხვაობა ბრუნვაში" = 4,645,366 (net sum) − 3,903,150 (declared net) = **742,217 ₾** — reproduces exactly from the audit file.
+- **Pipeline independently verifies 90K ₾** of this directly. Per-month check (2024-08, 2025-08, 2025-12): pipeline_gross ≈ audit_net × 1.18 within **0.3%** when data is complete.
+- **Remaining ~652K is within pipeline coverage gaps** — not a disagreement with audit:
+  - missing MAX POS Excel files: 2022-10..12 + 2023-01..05 (8 months, `status=insufficient_data`)
+  - missing BOG bank statements: 2023-Q1 (3 months, pipe_bog=0, audit has ~34K)
+  - TBC shortage 2023-08..2024-03 (8 months, pipeline captures 27–81% less TBC than audit — root cause unknown, needs separate investigation)
+- **Previously reported "98.5% TBC / 94% BOG match"** (hardcoded in `vat_reconciliation_export.py:68-69`) — **WITHDRAWN**: actual cumulative match ratios are 95.7% / 88.7%, and that naive comparison mixes gross/net units. Meaningful cross-check requires unit normalization (which shows <0.3% per-month residual).
+- **Previously reported "906K ₾ real gap"** — **WITHDRAWN as headline**: this number was produced by `total_real_ge (gross) − declared_ge (net)` which is a unit error. The 906 decomposes to **742 audit-true + 703 unit inflation − 652 coverage deficit** (approximate).
+- **Sprint 5.11 (next session) will land the code fix.** Until then, 🧾 VAT dashboard tab + AI VAT tool + Excel export all still show the unit-wrong numbers. Do NOT share the 906K figure with the auditor; if the 742K audit figure is already what they have, that number is correct.
 
 ---
 
