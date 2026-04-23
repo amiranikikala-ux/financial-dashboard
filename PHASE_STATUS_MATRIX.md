@@ -1,12 +1,12 @@
 # Phase Status Matrix
 
-> **განახლდა:** 2026-04-22
+> **განახლდა:** 2026-04-23
 > **მიზანი:** ერთი ცხრილი — ყველა phase-ის ცხადი მდგომარეობა. ფართო narrative `PLAN.md`-ში, ისტორიული evidence `HANDOFF.md`-ში, საწყისი preview-ები `HANDOFF_ARCHIVE/PREVIEWS/`-ში.
 >
 > **Authoritative docs:**
-> - Master roadmap (active): `AI_GENIUS_PARTNER_PLAN.md` v2.1 (2026-04-18)
-> - Live status tracker: `PLAN.md`
-> - Short chat brief: `CONTEXT_HANDOFF.md`
+> - Short chat brief (**canonical live status**): `CONTEXT_HANDOFF.md`
+> - Master roadmap (historical v2.1, 2026-04-18 — **predates Phase 5**): `AI_GENIUS_PARTNER_PLAN.md`
+> - Live status tracker (mixed narrative + addenda): `PLAN.md`
 > - Full evidence log: `HANDOFF.md`
 > - Legacy (Phase 1-2 AI evidence only): `HANDOFF_ARCHIVE/AI_ADVISOR_ROADMAP_v1.0_superseded_2026-04-18.md`
 
@@ -15,10 +15,24 @@
 ## Legend
 
 - ✅ **COMPLETE** — code merged, tests green
-- 🎬 **LIVE VERIFIED** — scripted `/api/chat` or UI dog-food passed on real backend
+- 🎬 **LIVE VERIFIED** — scripted `/api/chat` or in-process dog-food passed on real Anthropic Sonnet 4.6
 - 📋 **PLANNED** — scope drafted, awaits approval/start
 - 💤 **PARKED** — in Parking Lot, not scheduled
+- ❌ **DROPPED** — scope rejected or superseded
 - ⚠️ **DRIFT** — preview file's internal status doesn't match merged code (archived copy reflects pre-merge draft)
+
+---
+
+## Verified top-level metrics (2026-04-23)
+
+| მეტრიკა | მნიშვნელობა |
+|---|---|
+| pytest | **2,023/2,023 green** (~75s full run) |
+| Tool surface | **26 tools** (`detect_trends` @ 17; Sprint 5.1 VAT trio @ 18-20) |
+| Dashboard tabs | **15** (incl. Store Compare + 💀 Dead Stock + ⚠️ Supplier Concentration + 📋 Debt Plan + 🧾 VAT) |
+| `SYSTEM_PROMPT_KA` | **1,351 lines** |
+| Pipeline cache | **207 MB** (was 864 MB — Sprint 3a slim-down) |
+| `data.json` | **133 MB**, 26 sections, 21,233 waybills |
 
 ---
 
@@ -38,16 +52,16 @@
 
 ---
 
-## AI Advisor — original roadmap (legacy path, 2026-04-17 / 18)
+## AI Advisor — original MVP (2026-04-17 / 18)
 
 | Phase | Status | Date | Notes |
 |---|---|---|---|
 | AI Phase 0 Foundation | ✅ | 2026-04-17 | Data Quality 9.8/10, deps pinned, Anthropic + Telegram pings |
-| AI Phase 1 MVP Chat | ✅ 🎬 | 2026-04-17 23:35 | `/api/chat` live, 163/163 unit + 70/70 E2E |
-| AI Phase 1 Polish (prompt caching + column pruning) | ✅ 🎬 | 2026-04-18 00:20 | cache_read stable across repeats |
-| AI Streaming SSE (`/api/chat/stream`) | ✅ 🎬 | 2026-04-18 00:42 | first-token 3.66–4.52s |
-| AI Phase 2 Investigator (Sprint 1 backend / 2 prompt+mode / 3 frontend) | ✅ 🎬 | 2026-04-18 01:10 – 02:40 | 🔍 toggle + Cascade block + 9/9 E2E |
-| Waybill Arithmetic Bug-Fix (`compute_waybill_total`) | ✅ | 2026-04-18 04:00 | Feb 27 = 7,882.68 ₾ / Feb 28 = 2,675.86 ₾ pinned |
+| AI Phase 1 MVP Chat | ✅ 🎬 | 2026-04-17 | `/api/chat` live, 163/163 unit + 70/70 E2E |
+| AI Phase 1 Polish (prompt caching + column pruning) | ✅ 🎬 | 2026-04-18 | cache_read stable across repeats |
+| AI Streaming SSE (`/api/chat/stream`) | ✅ 🎬 | 2026-04-18 | first-token 3.66–4.52s |
+| AI Phase 2 Investigator (Sprint 1-3) | ✅ 🎬 | 2026-04-18 | 🔍 toggle + Cascade block + 9/9 E2E |
+| Waybill Arithmetic Bug-Fix (`compute_waybill_total`) | ✅ | 2026-04-18 | Feb 27 = 7,882.68 ₾ / Feb 28 = 2,675.86 ₾ pinned (**⚠️ stale post-regen**, see CONTEXT_HANDOFF data caveat) |
 
 **Note:** Phase 3+ of the original roadmap (Daily Briefing / Telegram push / Provider migration / Voice) was **rejected** by user on 2026-04-18 and superseded by `AI_GENIUS_PARTNER_PLAN.md` v2.1.
 
@@ -59,80 +73,122 @@
 
 | Phase | Status | Date | Preview |
 |---|---|---|---|
-| 0A.1 Calculator Enforcement (generic `compute` tool, 8 ops) | ✅ 🎬 | 2026-04-18 23:00 | `HANDOFF_ARCHIVE/PREVIEWS/PHASE_0A_PREVIEW.md` ⚠️ DRIFT (header says Draft, code merged) |
-| 0A.2 Self-Critique Loop (📊 / ⚠️ / 🎯 structure) | ✅ 🎬 | 2026-04-18 23:00 | same file |
-| 0A.3 Today's Pulse (`today_context.py`) | ✅ 🎬 | 2026-04-18 23:00 | same file |
+| 0A.1 Calculator Enforcement (generic `compute` tool) | ✅ 🎬 | 2026-04-18 | `HANDOFF_ARCHIVE/PREVIEWS/PHASE_0A_PREVIEW.md` ⚠️ DRIFT |
+| 0A.2 Self-Critique Loop (📊 / ⚠️ / 🎯) | ✅ 🎬 | 2026-04-18 | same |
+| 0A.3 Today's Pulse (`today_context.py`) | ✅ 🎬 | 2026-04-18 | same |
 
-**Verification:** 73 new tests, pytest 381/381 green.
+### Phase 0B — Genius Core
 
-### Phase 0B — Genius Core (4 sprints)
+| Sprint | Feature | Status | Date |
+|---|---|---|---|
+| 1 | Extended Thinking + Multi-hypothesis + 🧠 Deep Think | ✅ 🎬 | 2026-04-19 |
+| 2 | Prophet + ARIMA ensemble (`forecast_revenue`) | ✅ 🎬 | 2026-04-19 |
+| 3 | ChromaDB Semantic Memory (`save_memory` / `recall_context`) | ✅ 🎬 | 2026-04-19 |
+| 4 | Decision Journal (CRUD + journal kinds) | ✅ 🎬 | 2026-04-19 |
 
-| Sprint | Feature | Status | Date | Preview |
-|---|---|---|---|---|
-| 1 | Extended Thinking + Multi-hypothesis + 🧠 Deep Think toggle | ✅ 🎬 | 2026-04-19 | `PHASE_0B_PREVIEW.md` ⚠️ DRIFT |
-| 2 | Prophet Forecasting + ARIMA ensemble (`forecast_revenue`) | ✅ 🎬 | 2026-04-19 18:42 | `PHASE_0B_SPRINT2_PREVIEW.md` ⚠️ DRIFT |
-| 3 | ChromaDB Semantic Memory (`save_memory` / `recall_context`) | ✅ 🎬 | 2026-04-19 | `PHASE_0B_SPRINT3_PREVIEW.md` ⚠️ DRIFT |
-| 4 | Decision Journal (CRUD + journal kinds) | ✅ 🎬 | 2026-04-19 23:40 | `PHASE_0B_SPRINT4_PREVIEW.md` |
+### Phase 1 — AI Persona & Context
 
-**Verification:** Phase 0B FULLY CLOSED 2026-04-19 23:40; 7 features (0B.1–0B.7) landed across 4 sprints. 2 bug-fixes en-route (Windows venv Path caveat + ChromaDB `$lt`/`$gt` string-range caveat).
-
-### Phase 1 — AI Persona & Context (4 parts)
-
-| Part | Feature | Status | Date | Preview |
-|---|---|---|---|---|
-| A | "ხასიათი" + "საზრისობა" Layer 1 (5 ქუდი, persona, strict tone) | ✅ 🎬 | 2026-04-20 00:55 | `PHASE_1_PART_A_PREVIEW.md` |
-| B | ქართული რეგულაცია + ფრენჩაიზი კონტექსტი (RS.ge, VAT, royalty) | ✅ 🎬 | 2026-04-20 01:28 | `PHASE_1_PART_B_PREVIEW.md` |
-| C | Multi-Store DNA (ოზურგეთი urban vs დვაბზუ rural) | ✅ 🎬 | 2026-04-20 02:11 | `PHASE_1_PART_C_PREVIEW.md` |
-| D | Self-Correction Loop (Retry / Latin alias / Self-triage) | ✅ 🎬 | 2026-04-20 02:50 | `PHASE_1_PART_D_PREVIEW.md` |
-
-**Verification:** pytest 969/969 green at Part D close. 4 parts released on same night.
+| Part | Feature | Status | Date |
+|---|---|---|---|
+| A | "ხასიათი" + "საზრისობა" Layer 1 (5 ქუდი, persona) | ✅ 🎬 | 2026-04-20 |
+| B | ქართული რეგულაცია + ფრენჩაიზი (RS.ge, VAT, royalty) | ✅ 🎬 | 2026-04-20 |
+| C | Multi-Store DNA (ოზურგეთი urban vs დვაბზუ rural) | ✅ 🎬 | 2026-04-20 |
+| D | Self-Correction Loop (Retry / Latin alias MANDATE / Self-triage) | ✅ 🎬 | 2026-04-20 |
 
 ### Phase 2 — Specialized Tools
 
-| Phase | Feature | Status | Date | Preview |
+| Phase | Feature | Tool | Status | Date |
 |---|---|---|---|---|
-| 2.11 | Dead Stock Liquidation (`analyze_dead_stock`) | ✅ 🎬 | 2026-04-20 15:30 | `PHASE_2_11_DEAD_STOCK_PREVIEW.md` ⚠️ DRIFT |
-| 2.12 | Supplier Negotiation Prep (`prepare_supplier_brief`, 5-factor leverage) | ✅ 🎬 | 2026-04-20 15:30 | `PHASE_2_12_SUPPLIER_NEGOTIATION_PREVIEW.md` ⚠️ DRIFT |
-
-**Verification:** Real Anthropic dog-food PASS — Focused (ჯიდიაი) 9/9, Portfolio 10/10, Dead Stock 9/9. Session cost ~$0.48.
+| 2.1 | Cash Flow Projection | `compute_cash_flow_projection` | ✅ 🎬 | 2026-04-22 |
+| 2.2 | Scenario Simulator | `simulate_scenario` | ✅ 🎬 | 2026-04-22 |
+| 2.3 | Industry Benchmark | `industry_benchmark` | 📋 PLANNED | — — needs external data source decision |
+| 2.4 | Supplier Risk Radar (REDUCED) | `prepare_supplier_brief` portfolio `sort_by` | ✅ 🎬 | 2026-04-22 |
+| 2.5 | Product Profitability X-Ray | `analyze_product_profitability` | ✅ 🎬 | 2026-04-22 |
+| 2.6 | Promotion Candidate Finder | `find_promotion_candidates` | ✅ 🎬 | 2026-04-22 |
+| 2.8 | Store Comparison page (frontend) | — | ✅ | 2026-04-23 (commit `5f94ded`) |
+| 2.9 | Trend Detector (MoM/YoY price×volume) | `detect_trends` | ✅ | 2026-04-23 (commit `84faa43`) |
+| 2.10 | Multi-Source Triangulation | — | ❌ DROPPED | composition of `read_excel_source` + `validate_vs_source` covers it |
+| 2.11 | Dead Stock Liquidation | `analyze_dead_stock` | ✅ 🎬 | 2026-04-20 |
+| 2.12 | Supplier Negotiation Prep | `prepare_supplier_brief` | ✅ 🎬 | 2026-04-20 |
 
 ### Phase 3 — Co-Designer + Widgets + AI Tools
 
-| Phase | Feature | Status | Date | Preview |
-|---|---|---|---|---|
-| 3.1 | Co-Designer Mode (PULL-ONLY, `propose_feature`) | ✅ 🎬 | 2026-04-20 17:50 | `PHASE_3_1_CO_DESIGNER_PREVIEW.md` |
-| 3.5 | Dead Stock page + Supplier Concentration widget | ✅ 🎬 | 2026-04-20 23:50 | `PHASE_3_5_7_PREVIEW.md` |
-| 3.7 | `compute_cash_runway` AI tool (PULL-ONLY workflow) | ✅ 🎬 | 2026-04-20 23:50 | `PHASE_3_5_7_PREVIEW.md` |
+| Phase | Feature | Status | Date |
+|---|---|---|---|
+| 3.1 | Co-Designer Mode (PULL-ONLY, `propose_feature`) | ✅ 🎬 | 2026-04-20 |
+| 3.5 | Dead Stock page + Supplier Concentration widget | ✅ 🎬 | 2026-04-20 |
+| 3.7 | `compute_cash_runway` AI tool (PULL-ONLY workflow) | ✅ 🎬 | 2026-04-20 |
+
+**Phase 3 remaining (not yet started):** conversation_summary_on_demand, margin_compression_radar, monthly_strategy_page, gap_analysis. ~1 week budget.
 
 ### Phase 4 — Autonomous Strategist
 
-| Phase | Feature | Status | Date | Preview |
-|---|---|---|---|---|
-| 4A Part A | Debt Repayment Plan tool (`build_debt_repayment_plan`) | ✅ 🎬 | 2026-04-21 00:50 | `PHASE_4A_DEBT_PLAN_PREVIEW.md` |
-| 4A Part B | React page + `/api/debt-plan` + journal mirror (2 bug-fixes en-route) | ✅ 🎬 | 2026-04-21 04:02 | same file |
-| 4A Windows Service install (NSSM `FinancialDashboardBackend`) | ✅ | 2026-04-21 04:15 | — retired "backend restart #N" counter |
-| 4B + 4C | AI Personality & Tool Design Tuning — 31 rules / 5 sprints | 📋 PLANNED | 2026-04-21 | `PHASE_4B_PROMPT_TUNING_PREVIEW.md` (root — only active preview) |
+| Phase | Feature | Status | Date |
+|---|---|---|---|
+| 4A Part A + B | Debt Repayment Plan + React page + journal mirror | ✅ 🎬 | 2026-04-21 |
+| 4A Windows Service install (NSSM `FinancialDashboardBackend`) | ✅ | 2026-04-21 | retired "backend restart #N" counter |
+| 4B.0 Prune `SYSTEM_PROMPT_KA` 1,290→1,100 | ✅ | 2026-04-22 (commit `7ef3451`) |
+| 4B.1 Tier 1 Fundamental (9 rules, 68 tests) | ✅ | 2026-04-22 (commit `334220b`) |
+| 4B.2 Tier 2+3 Personality+Format (15 rules, 79 tests) | ✅ | 2026-04-22 (commit `27c6f71`) |
+| 4B.3 Tier 4 Workflow Anti-patterns (4 rules, 24 tests) | ✅ 🎬 | 2026-04-22 (commit `a6f9ef4`) |
+| 4C.1 Schema Poka-yoke audit (26 tools) | 📋 PLANNED | ~1 day, **high-risk** — schema changes cascade to tests + frontend aiClient |
+| 4C.2 `summary_ka` on headline tools (4 + 4) | ✅ | 2026-04-22 (commits `3893a67`, `b7a8801`) |
+| 4C.3 Full-stack live dog-food (3/3 PASS) | ✅ 🎬 | 2026-04-22 |
 
-**Prerequisite for 4B:** Sprint 4B.0 Prune `SYSTEM_PROMPT_KA` 1,291 → ~900 lines before adding new rules.
+**Phase 4 Advanced (Parking Lot):** 9 features documented in `AI_GENIUS_PARTNER_PLAN.md`. ~2-3 weeks. Not scheduled.
+
+### 🧾 Phase 5 — Tax Audit System (NEW since v2.1 plan — HIGHEST PRIORITY)
+
+**Trigger (2026-04-22):** state audit received for **შპს ჯეო ფუდთაიმი**; bookkeeper errors caused 742,217 ₾ undeclared turnover (real gap **1,595,306 ₾** per post-fix pipeline). User wants SYSTEM so bookkeeper cannot hide anything again.
+
+| Sprint | Feature | Status | Date |
+|---|---|---|---|
+| 5.1 | Audit Reconciliation Forensics — `vat_reconciliation.py` + 3 AI tools + `cash_outflow_journal.csv` + SYSTEM_PROMPT_KA section | ✅ | 2026-04-23 (commit `3a18e45`) |
+| 5.1.1 | Live dog-food 3/3 PASS | ✅ 🎬 | 2026-04-23 |
+| 5.2 | TBC POS terminal-ID fix (5 physical terminals; transit IBAN double-count eliminated) | ✅ | 2026-04-23 |
+| 5.3 | Dashboard 🧾 VAT tab + Excel export | ✅ | 2026-04-23 |
+| 5.4 | Retail_sales preview cap + revenue formula fix | ✅ | 2026-04-23 |
+| 5.5 | Terminal-ID POS rewire | ✅ | 2026-04-23 |
+| 5.6 | VAT AI dog-food 3/3 PASS | ✅ 🎬 | 2026-04-23 (commit `e962857`) |
+| 5.7 | RS outgoing waybill ingest → populate `invoices_ge` | 📋 PLANNED | ~1 session — user exports RS.ge გასაცემი ზედნადებები; cross-check `აფ.გამოწერილი` |
+| 5.8 | Direct MAX Excel ingest + `cashreg_ge` separation | 📋 PLANNED | ~1 session — investigate 282K pipe vs 259K raw divergence |
+
+### Scalability — Tier 1 + Tier 2
+
+| Phase | Feature | Status | Date |
+|---|---|---|---|
+| Tier 1 | Stream subprocess logs + atomic `data.json` + saner schedule | ✅ | 2026-04-22 (commit `ad4c345`) |
+| Tier 2 Sprint 1 | `pipeline_cache` module foundation | ✅ | 2026-04-22 (commit `c1cccc6`) |
+| Tier 2 Sprint 2 | retail_sales incremental cache integration | ✅ | 2026-04-22 |
+| Tier 2 Sprint 3a | Cap retail_sales preview_rows per file (cache 864→207 MB) | ✅ | 2026-04-23 (commit `efcc79a`) |
+| Tier 2 Sprint 3b | Extend cache pattern to bank / supplier / waybills | 📋 PLANNED | ~1 session each, AFTER 3a. See `project_pipeline_cache_pattern.md` memory. |
 
 ### Hotfixes & collateral
 
 | Fix | Status | Date |
 |---|---|---|
-| Excel Georgian Path Fix (`_resolve_safe_path` OneDrive) | ✅ | 2026-04-20 12:45 |
-| Service Worker Cache Bug-Fix (route strategies + BUILD_ID) | ✅ | 2026-04-19 00:20 |
-| AI FAB Stability Hotfix (eager import + SW cleanup + idempotent launch) | ✅ 🎬 | 2026-04-21 13:25 |
+| Excel Georgian Path Fix (`_resolve_safe_path` OneDrive) | ✅ | 2026-04-20 |
+| Service Worker Cache Bug-Fix (route strategies + BUILD_ID) | ✅ | 2026-04-19 |
+| AI FAB Stability Hotfix (eager import + SW cleanup + idempotent launch) | ✅ 🎬 | 2026-04-21 |
 
 ---
 
-## Future work — Parking Lot (not scheduled)
+## Still-open work (in priority order)
 
-From `AI_GENIUS_PARTNER_PLAN.md` v2.1 "10 ახალი Dashboard Features" + ~40 Parking Lot items. Not started. 10 dashboard widgets (Cash Runway widget done, others pending): Dead Stock (done), Supplier Concentration (done), plus 7 unscheduled (e.g. Daily Plan page, Monthly Strategy page). Exact list in `AI_GENIUS_PARTNER_PLAN.md`.
+1. **Sprint 5.7 — RS outgoing waybill ingest** (state audit scope) — ~1 session
+2. **Sprint 5.8 — Direct MAX ingest + cashreg separation** (state audit scope) — ~1 session
+3. **Tier 2 Sprint 3b — cache extension to bank/supplier/waybills** — ~1 session each
+4. **Phase 2.3 `industry_benchmark`** — needs external data source decision first (hard-coded retail medians? Excel import? public dataset?)
+5. **Sprint 4C.1 Schema Poka-yoke audit** (~1 day, high-risk, fresh session strongly recommended) — 26 tools' argument/description tightening
+6. **Phase 3 remaining** (4 features). ~1 week.
+7. **Phase 4 Advanced** (9 features). ~2-3 weeks.
+8. **Parking Lot** (~40 items in `AI_GENIUS_PARTNER_PLAN.md` v2.1)
 
 ---
 
 ## Docs hygiene notes
 
 - ⚠️ 6 PREVIEW files were archived with internal header still saying "Draft — თქვენი დასამტკიცებლად" even though the corresponding code had already merged. Marked `DRIFT` above. Accept as historical artifacts — do NOT edit retrospectively.
-- `HANDOFF.md` banner (as of 2026-04-20 12:50) names Phase 1 Part D as latest; actual latest is Phase 4A + AI FAB hotfix per `CONTEXT_HANDOFF.md` (2026-04-21 13:25). Use `CONTEXT_HANDOFF.md` for current state, `HANDOFF.md` for archived evidence.
-- Only one active PREVIEW remains in root: `PHASE_4B_PROMPT_TUNING_PREVIEW.md`. All other PHASE previews are under `HANDOFF_ARCHIVE/PREVIEWS/`.
+- `AI_GENIUS_PARTNER_PLAN.md` v2.1 predates Phase 5 (Tax Audit System). Phase 5 lives in `CONTEXT_HANDOFF.md` + this matrix; v2.1 roadmap master does NOT mention it.
+- `PLAN.md` main body narrative stops at Phase 1 Part D; Phase 2 / 4B / 4C / 5 status lives as `Active:` / `წინა-სტატუსი` blob in lines 287-327. Use `CONTEXT_HANDOFF.md` for current state.
+- `HANDOFF.md` (2026-04-22 02:24) is archival; not kept in sync with recent commits.
