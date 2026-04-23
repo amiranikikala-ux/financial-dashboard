@@ -779,6 +779,29 @@ def _process_retail_sales_file(
         for (cat_key, month_key), stats in category_month_stats.items()
     ]
 
+    # Cap preview_rows at the global preview limit BEFORE returning, so the
+    # per-file cache payload stays small. Sort by (date desc, revenue desc,
+    # product_name) — same key the downstream merger uses, so taking top-N
+    # per file first and merging is equivalent to taking top-N globally
+    # (pigeonhole: union of per-file top-N ⊇ global top-N when the sort
+    # key is total-ordered). Pre-Sprint-3a this field stored all matched
+    # rows per file (up to ~384k rows × 6 files = ~2M rows cached).
+    def _preview_row_sort_key(row):
+        date_str = row.get("date") or ""
+        ts = 0.0
+        if date_str:
+            try:
+                ts = pd.Timestamp(date_str).timestamp()
+            except Exception:
+                ts = float("-inf")
+        else:
+            ts = float("-inf")
+        return (ts, float(row.get("revenue_ge") or 0), str(row.get("product_name") or ""))
+
+    if len(preview_rows) > RETAIL_SALES_ROWS_PREVIEW_LIMIT:
+        preview_rows.sort(key=_preview_row_sort_key, reverse=True)
+        preview_rows = preview_rows[:RETAIL_SALES_ROWS_PREVIEW_LIMIT]
+
     return {
         "status": "ok",
         "files_entry": files_entry,
