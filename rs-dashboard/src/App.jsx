@@ -36,6 +36,7 @@ const Suppliers = lazy(() => import('./Suppliers.jsx'));
 const Waybills = lazy(() => import('./Waybills.jsx'));
 const Insights = lazy(() => import('./Insights.jsx'));
 const VATAudit = lazy(() => import('./VATAudit.jsx'));
+const StoreCompare = lazy(() => import('./StoreCompare.jsx'));
 
 const SAFE_PERIOD_REQUEST_TABS = new Set([
   'suppliers',
@@ -144,7 +145,7 @@ function App() {
   useEffect(() => {
     if (activeTab === 'imported_products' || activeTab === 'waybills' || activeTab === 'cashflow' || activeTab === 'insights' || activeTab === 'debt_plan' || activeTab === 'vat_audit') return undefined;
     let active = true;
-    const requestTab = activeTab === 'pnl' ? 'pnl_summary' : activeTab === 'analytics' ? 'suppliers' : activeTab;
+    const requestTab = activeTab === 'pnl' ? 'pnl_summary' : activeTab === 'analytics' ? 'suppliers' : activeTab === 'store_compare' ? 'retail_sales' : activeTab;
     const params = new URLSearchParams({ tab: requestTab });
     appendCanonicalPeriodParams(params, requestTab);
     setTimeout(() => {
@@ -276,7 +277,7 @@ function App() {
     );
   };
 
-  const expectedTab = activeTab === 'pnl' ? 'pnl_summary' : activeTab === 'cashflow' ? 'cashflow_summary' : activeTab === 'analytics' ? 'suppliers' : activeTab;
+  const expectedTab = activeTab === 'pnl' ? 'pnl_summary' : activeTab === 'cashflow' ? 'cashflow_summary' : activeTab === 'analytics' ? 'suppliers' : activeTab === 'store_compare' ? 'retail_sales' : activeTab;
   const currentResponseMeta = activeTab === 'imported_products'
     ? importedProductsResponse?.response_meta ?? null
     : data.response_meta?.tab === expectedTab
@@ -481,6 +482,10 @@ function App() {
         ) : activeTab === 'vat_audit' ? (
           <Suspense fallback={tabSuspenseFallback}>
             <VATAudit reloadKey={reloadKey} />
+          </Suspense>
+        ) : activeTab === 'store_compare' ? (
+          <Suspense fallback={tabSuspenseFallback}>
+            <StoreCompare retailSales={data.retail_sales} />
           </Suspense>
         ) : null}
       </div>
