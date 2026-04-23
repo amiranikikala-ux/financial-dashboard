@@ -1,7 +1,7 @@
 # CONTEXT HANDOFF — short brief
 
-> **განახლდა**: 2026-04-23 (**Sprint 5.2 LANDED** — TBC POS terminal-ID matching fix; **1,979/1,979 pytest green**; tool surface 25; data.json regenerated, 3-source cross-validated)
-> **სტატუსი**: Phase 4A **FULLY CLOSED** + Phase 4B **COMPLETE** + Phase 4C.2/4C.3 **CLOSED** + **Phase 2.1/2.2/2.4/2.5/2.6 LIVE VERIFIED** + **Phase 2.9 pipeline unblocked** + **Tier 1 + Tier 2 Sprint 1/2 LIVE VERIFIED** + **🧾 Sprint 5.1 LANDED** + **✅ Sprint 5.2 LANDED** (TBC POS 3.18M → 378K, 98.5% match with RS.ge POS terminal file ground truth; 2.80M ₾ false-positive eliminated).
+> **განახლდა**: 2026-04-23 (**Sprint 5.3/5.4/5.5 LANDED** — Dashboard VAT tab + Excel export + retail_sales revenue formula fix; **1,994/1,994 pytest green**; data.json regenerated, 3-source cross-validated; real gap 906K ₾ vs audit's 742K)
+> **სტატუსი**: Phase 4A **FULLY CLOSED** + Phase 4B **COMPLETE** + Phase 4C.2/4C.3 **CLOSED** + **Phase 2.1/2.2/2.4/2.5/2.6 LIVE VERIFIED** + **Phase 2.9 pipeline unblocked** + **Tier 1 + Tier 2 Sprint 1/2 LIVE VERIFIED** + **🧾 Sprint 5.1/5.1.1/5.2/5.3/5.4/5.5 LANDED** (audit defense stack: VAT pipeline + 3 AI tools + dashboard UI + Excel export + terminal-ID POS fix + revenue formula fix).
 
 ---
 
