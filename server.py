@@ -12,7 +12,7 @@ from typing import Any
 
 from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -628,6 +628,43 @@ async def get_vat_reconciliation(request: Request):
         "generated_at": data.get("meta", {}).get("generated_at")
             or data.get("generated_at"),
     }
+
+
+@app.get("/api/vat-reconciliation/export")
+@limiter.limit("30/minute")
+async def get_vat_reconciliation_export(request: Request):
+    """Returns a formatted VAT reconciliation Excel workbook for download.
+
+    Sheets: Summary (cumulative totals), Monthly (all months × fields),
+    Cash_classification (per-category breakdown if any entries), Methodology
+    (auditor-friendly explanation). Uses the currently-cached data.json —
+    refresh requires a pipeline rerun.
+    """
+    from dashboard_pipeline.vat_reconciliation_export import build_vat_export_bytes
+    data = load_full_data()
+    vat = data.get("vat_reconciliation") or {}
+    if not vat.get("by_month"):
+        raise HTTPException(
+            status_code=404,
+            detail="VAT reconciliation მონაცემები არ მოიძებნა data.json-ში.",
+        )
+    try:
+        xlsx_bytes = build_vat_export_bytes(vat)
+    except ImportError:
+        raise HTTPException(
+            status_code=500,
+            detail="openpyxl არ არის დაყენებული სერვერზე.",
+        )
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M")
+    filename = f"VAT_reconciliation_{stamp}.xlsx"
+    return Response(
+        content=xlsx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(len(xlsx_bytes)),
+        },
+    )
 
 
 @app.post("/api/vat-reconciliation/cash-outflow")

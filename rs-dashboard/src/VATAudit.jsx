@@ -426,13 +426,42 @@ export default function VATAudit({ reloadKey }) {
 
   return (
     <div style={{ padding: 16 }}>
-      <div style={{ marginBottom: 16 }}>
-        <h2 style={{ margin: '0 0 4px 0', color: '#f1f5f9' }}>🧾 VAT &amp; აუდიტი</h2>
-        <div style={{ fontSize: 13, color: '#94a3b8' }}>
-          Declared (ბუღალტერი) vs რეალური pipeline ბრუნვა · month-by-month ×{' '}
-          {filteredRows.length} თვე · status: 🟢 {totals.green} · 🟡 {totals.yellow} · 🔴{' '}
-          {totals.red}
+      <div
+        style={{
+          marginBottom: 16,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        <div>
+          <h2 style={{ margin: '0 0 4px 0', color: '#f1f5f9' }}>🧾 VAT &amp; აუდიტი</h2>
+          <div style={{ fontSize: 13, color: '#94a3b8' }}>
+            Declared (ბუღალტერი) vs რეალური pipeline ბრუნვა · month-by-month ×{' '}
+            {filteredRows.length} თვე · status: 🟢 {totals.green} · 🟡 {totals.yellow} · 🔴{' '}
+            {totals.red}
+          </div>
         </div>
+        <a
+          href="/api/vat-reconciliation/export"
+          download
+          style={{
+            padding: '8px 14px',
+            background: '#16a34a',
+            color: '#f1f5f9',
+            border: 'none',
+            borderRadius: 6,
+            fontWeight: 600,
+            fontSize: 13,
+            textDecoration: 'none',
+            whiteSpace: 'nowrap',
+          }}
+          title="ექსელ ექსპორტი აუდიტორის/ბუღალტერის გადასაცემად"
+        >
+          📥 Excel ექსპორტი
+        </a>
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 18 }}>
