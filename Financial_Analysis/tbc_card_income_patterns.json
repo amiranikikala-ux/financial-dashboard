@@ -1,23 +1,11 @@
 {
   "label_ka": "POS ტერმინალის შემოსავალი (TBC)",
-  "notes": "TBC ამონაწერში შემოსული თანხები POS/ECOM არხებიდან, მათ შორის \"ნავაჭრი/TRM/ტერმინალებში მიღებული\" სატრანზიტო ჩარიცხვები.",
-  "match_substrings": [
-    "ecom/pos მერჩანტ",
-    "tbcbank_ის mc ბარათებით",
-    "tbcbank_ის visa ბარათებით",
-    "სავაჭრო ობიექტებში",
-    "wallet/domestic",
-    "ნავაჭრი",
-    "trm:",
-    "ტერმინალებში მიღებული",
-    "გადახდების სატრანზიტო"
-  ],
-  "comment_tbcbge22": "TBCBGE22 ბევრ ხაზზეა — არ ვამატებთ substring-ად, რომ არ გაფართოვდეს ყველა ოპერაცია.",
-  "iban_hints": [
-    "GE35TB0002511341111111",
-    "GE66TB0002511340000000",
-    "GE85TB0000000251137002",
-    "GE65TB0000000250137001",
-    "GE69TB0000000251140006"
+  "notes": "TBC POS income matched strictly by physical terminal IDs from RS.ge official POS export. Previous substring/IBAN matching (ecom/pos, wallet/domestic, ნავაჭრი, ტერმინალებში მიღებული, transit IBAN GE69TB...) double-counted end-of-day transit sweeps on top of per-transaction rows — inflated 8.3x vs RS truth. Sprint 5.2 2026-04-23.",
+  "terminal_ids": [
+    "RS014189",
+    "SH079927",
+    "SH046092",
+    "SH034467",
+    "SH060853"
   ]
 }

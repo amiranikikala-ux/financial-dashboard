@@ -84,6 +84,26 @@ def _tbc_income_matches_blob(blob_lower, patterns, iban_hints):
     return False
 
 
+# Physical TBC POS terminal IDs seen in RS.ge official POS export
+# (Financial_Analysis/ანგარიშ ფაქტურები/პოს ტერმინალი.xls, 2022-06 → 2026-02).
+# Matching by terminal ID eliminates 2.8M ₾ double-count from transit sweeps
+# ("ნავაჭრი", "ტერმინალებში მიღებული") that aggregate per-transaction rows.
+_DEFAULT_TBC_TERMINAL_IDS = (
+    "RS014189",
+    "SH079927",
+    "SH046092",
+    "SH034467",
+    "SH060853",
+)
+
+
+def _tbc_income_row_has_terminal(raw, terminal_ids):
+    for t in terminal_ids:
+        if t and t in raw:
+            return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Samurneo (საქმიანობისთვის აუცილებელი ხარჯი) — TBC + BOG
 # ---------------------------------------------------------------------------
@@ -466,19 +486,22 @@ def collect_bog_pos_terminal_income(script_dir, object_mapping=None):
 
 def collect_tbc_card_income(script_dir, object_mapping=None):
     cfg_path = os.path.join(script_dir, "Financial_Analysis", "tbc_card_income_patterns.json")
-    empty = {"total_ge": 0.0, "lines": [], "line_count": 0, "label_ka": ""}
-    if not os.path.isfile(cfg_path):
+    label_ka = ""
+    terminal_ids = list(_DEFAULT_TBC_TERMINAL_IDS)
+    if os.path.isfile(cfg_path):
+        try:
+            with open(cfg_path, encoding="utf-8") as f:
+                cfg = json.load(f)
+            label_ka = str(cfg.get("label_ka", "") or "")
+            cfg_ids = [str(x).strip() for x in (cfg.get("terminal_ids") or []) if str(x).strip()]
+            if cfg_ids:
+                terminal_ids = cfg_ids
+        except Exception:
+            pass
+
+    empty = {"total_ge": 0.0, "lines": [], "line_count": 0, "label_ka": label_ka}
+    if not terminal_ids:
         return empty
-    try:
-        with open(cfg_path, encoding="utf-8") as f:
-            cfg = json.load(f)
-    except Exception:
-        return empty
-    patterns = [str(p) for p in cfg.get("match_substrings", []) if str(p).strip()]
-    iban_hints = [str(p) for p in cfg.get("iban_hints", []) if str(p).strip()]
-    label_ka = str(cfg.get("label_ka", "") or "")
-    if not patterns and not iban_hints:
-        return {**empty, "label_ka": label_ka}
 
     object_mapping = object_mapping or load_object_mapping(script_dir)
     lines = []
@@ -499,8 +522,7 @@ def collect_tbc_card_income(script_dir, object_mapping=None):
                 if pd.isna(amt) or amt <= 0:
                     continue
                 raw = _tbc_income_row_text_join(row, cols, credit_col)
-                blob_lower = raw.lower()
-                if not _tbc_income_matches_blob(blob_lower, patterns, iban_hints):
+                if not _tbc_income_row_has_terminal(raw, terminal_ids):
                     continue
                 total += float(amt)
                 lines.append({"ფაილი": os.path.basename(f), "თარიღი": _excel_cell(row, date_col),
