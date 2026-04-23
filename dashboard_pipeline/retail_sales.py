@@ -450,8 +450,15 @@ def _process_retail_sales_file(
     for row_index, row in df.iterrows():
         date_value = parsed_dates.get(row_index, pd.NaT)
         quantity = _coerce_float(row.get("რაოდენობა"))
-        revenue_ge = _coerce_float(row.get("ფასი"))
-        cost_ge = _coerce_float(row.get("თვითღირებულება"))
+        unit_price = _coerce_float(row.get("ფასი"))
+        unit_cost = _coerce_float(row.get("თვითღირებულება"))
+        # MAX POS export stores ფასი / თვითღირებულება as PER-UNIT values,
+        # so true line revenue and line cost are price × quantity. Sprint 5.5
+        # fix (2026-04-23) — prior code summed unit prices directly, which
+        # overstated revenue by ~9% on typical months (e.g. 2024-08 pipeline
+        # 282K vs direct MAX read 259K) and inflated cashreg_in downstream.
+        revenue_ge = unit_price * quantity
+        cost_ge = unit_cost * quantity
         raw_profit = pd.to_numeric(
             _safe_text(row.get("მოგება")).replace(",", "."),
             errors="coerce",
