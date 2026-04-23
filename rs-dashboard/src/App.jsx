@@ -142,7 +142,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'imported_products' || activeTab === 'waybills' || activeTab === 'cashflow' || activeTab === 'insights' || activeTab === 'debt_plan') return undefined;
+    if (activeTab === 'imported_products' || activeTab === 'waybills' || activeTab === 'cashflow' || activeTab === 'insights' || activeTab === 'debt_plan' || activeTab === 'vat_audit') return undefined;
     let active = true;
     const requestTab = activeTab === 'pnl' ? 'pnl_summary' : activeTab === 'analytics' ? 'suppliers' : activeTab;
     const params = new URLSearchParams({ tab: requestTab });
