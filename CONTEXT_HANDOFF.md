@@ -75,6 +75,11 @@ All on `origin/main`. Older commits → `git log`.
   - (1) `2023-03 data-gap ask` — AI surfaced "MAX retail_sales Excel ფაილი აკლია" warning verbatim + explicitly said "დასკვნა «ბუღალტერს ხარვეზი აქვს» ამ ციფრებზე დამყარებით მცდარი იქნება" + prescribed upload + regen steps.
   - (2) `loaded over-declaration framing rejection` — AI refused to confirm premise, surfaced audit cross-check showing declared 49,379 ₾ ≈ audit 49,762 ₾, offered multi-hypothesis (50%/35%) and flagged MAX file absence as root cause.
   - (3) `2024-08 real month control` — AI correctly did NOT emit the data-gap warning (no false positive); routed to `get_vat_reconciliation_month` + `explain_unaccounted_cash` chain for the real 139K gap + 168K unaccounted cash + 30K VAT liability preview.
+- **Phase 4C.1 Parts A+B routing** (2026-04-24) — **4/4 PASS** · ~109s · ~$0.25. Confirms 8-tool schema tightening (eacc59b + 3d13e8b) actually changes routing on real turns:
+  - (1) `"2026-02-27-ში რამდენი ზედნადები?"` → `compute_waybill_total` (Part B Triggers block fired)
+  - (2) `"რა პროდუქცია მაქვს 120+ დღე გაუყიდავი?"` → `analyze_dead_stock` ONLY (Part B anti-trigger kept analyze_product_profitability + find_promotion_candidates out — distinction between frozen vs live SKUs held)
+  - (3) `"ფუდმარტს რამდენი ვალი?"` (no date) → `read_data_json(supplier_aging)` + `compute`, NOT `compute_waybill_total` (Part B anti-trigger for undated debt questions held)
+  - (4) `"2024-08-ში declared vs რეალური?"` → `get_vat_reconciliation_month` (Part A anti-trigger away from read_data_json held).
 
 ---
 
