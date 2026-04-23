@@ -1944,6 +1944,91 @@ FIND_PROMOTION_CANDIDATES_TOOL: Dict[str, Any] = {
 }
 
 
+DETECT_TRENDS_TOOL: Dict[str, Any] = {
+    "name": "detect_trends",
+    "description": (
+        "Phase 2.9 — Trend Detector. Compares `retail_sales.by_category_by_month` "
+        "current vs prior period and **decomposes each category's revenue change "
+        "into price_effect + volume_effect + mix_effect** so you can answer "
+        "'რა შეიცვალა?' / 'რისი ბრალია რომ ბრუნვა დაეცა?' / 'MoM' / 'YoY'.\n\n"
+        "**Triggers:** 'რა შეიცვალა 2025-08 vs 07?', 'წინა წელთან შედარებით?', "
+        "'ალკოჰოლი რატომ ჩავარდა?', 'MoM / YoY ცვლილება', 'რომელი category "
+        "გაიზარდა?', 'ფასები ავწიეთ თუ მოცულობა დაეცა?'.\n\n"
+        "**Anti-triggers (NEVER call):**\n"
+        "  • per-SKU margin ranking static snapshot → "
+        "`analyze_product_profitability` (trend_detector = temporal Δ; "
+        "product_profitability = absolute values)\n"
+        "  • stale / 90+ days unsold SKUs → `analyze_dead_stock`\n"
+        "  • forward-looking revenue forecast → `forecast_revenue`\n"
+        "  • what to promote → `find_promotion_candidates`.\n\n"
+        "**Decomposition identity (exact):** "
+        "`delta_revenue = price_effect + volume_effect + mix_effect`, where:\n"
+        "  • `price_effect  = Δavg_price × qty_compare`  (price shift impact)\n"
+        "  • `volume_effect = Δqty × avg_price_compare`  (demand shift impact)\n"
+        "  • `mix_effect    = Δavg_price × Δqty`           (interaction residual)\n\n"
+        "**driver** field = whichever effect has the largest absolute value, "
+        "so the AI can say 'volume driven' or 'price driven'.\n\n"
+        "**Suspicious-margin quarantine:** categories with "
+        "current-OR-compare `gross_margin_pct` outside [−5%, 90%] are "
+        "dropped and listed under `suspicious[]`. Mirrors the Product X-Ray "
+        "rule — data-quality red flags, not trend signals.\n\n"
+        "**Noise floor:** categories where BOTH periods have revenue < 100 ₾ "
+        "are skipped (one-off trades don't qualify as trends).\n\n"
+        "**Returns:** `{mode, current_period, compare_period, "
+        "categories_compared, categories_skipped_suspicious, totals{...}, "
+        "top_positive[], top_negative[], suspicious[], summary_ka, notes_ka[]}`. "
+        "Each entry = `{category, revenue_current_ge, revenue_compare_ge, "
+        "delta_revenue_ge, delta_pct, qty_*, avg_price_*, price_effect_ge, "
+        "volume_effect_ge, mix_effect_ge, driver, direction_ka}`.\n\n"
+        "**Honesty rule:** ALWAYS surface `summary_ka` verbatim — it cites "
+        "top mover each side, total delta, and the two main effects. If "
+        "`suspicious[]` is non-empty, mention it to the user (data-quality "
+        "warning) before building strategy from the numbers."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "mode": {
+                "type": "string",
+                "enum": ["MoM", "YoY"],
+                "description": (
+                    "'MoM' = current vs previous month (default). "
+                    "'YoY' = current vs same month one year earlier."
+                ),
+            },
+            "period": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}$",
+                "description": (
+                    "YYYY-MM of the current (anchor) period. Default = "
+                    "latest month available in retail_sales.by_category_by_month."
+                ),
+            },
+            "top_n": {
+                "type": "integer",
+                "minimum": 3,
+                "maximum": 20,
+                "description": (
+                    "Size of `top_positive` and `top_negative` lists "
+                    "(default 5). Smaller for executive glance; bigger "
+                    "for strategic category review."
+                ),
+            },
+            "category_filter": {
+                "type": "string",
+                "description": (
+                    "Optional substring — restrict comparison to "
+                    "categories whose label contains this text "
+                    "(case-insensitive). Empty = all categories."
+                ),
+            },
+        },
+        "required": [],
+        "additionalProperties": False,
+    },
+}
+
+
 GET_VAT_RECONCILIATION_MONTH_TOOL: Dict[str, Any] = {
     "name": "get_vat_reconciliation_month",
     "description": (
@@ -2117,6 +2202,7 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
     SCENARIO_SIMULATOR_TOOL,
     PRODUCT_PROFITABILITY_XRAY_TOOL,
     FIND_PROMOTION_CANDIDATES_TOOL,
+    DETECT_TRENDS_TOOL,
     GET_VAT_RECONCILIATION_MONTH_TOOL,
     EXPLAIN_UNACCOUNTED_CASH_TOOL,
     RECORD_CASH_OUTFLOW_TOOL,
@@ -2536,6 +2622,18 @@ class ToolDispatcher:
                 max_days_since_last_sale=args.get("max_days_since_last_sale"),
                 max_suggested_discount_pct=args.get("max_suggested_discount_pct"),
                 min_volume=args.get("min_volume"),
+            )
+        elif name == "detect_trends":
+            from dashboard_pipeline.ai.trend_detector import (
+                detect_trends as _detect_trends,
+            )
+
+            result = _detect_trends(
+                self._data_loader,
+                mode=args.get("mode"),
+                period=args.get("period"),
+                top_n=args.get("top_n"),
+                category_filter=args.get("category_filter"),
             )
         elif name == "get_vat_reconciliation_month":
             from dashboard_pipeline.ai.vat_tools import (

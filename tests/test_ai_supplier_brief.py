@@ -1073,7 +1073,7 @@ class TestToolSurface:
 
         names = [s["name"] for s in TOOL_SCHEMAS]
         assert "prepare_supplier_brief" in names
-        assert len(TOOL_SCHEMAS) == 25  # Phase 5.1 added 3 VAT tools
+        assert len(TOOL_SCHEMAS) == 26  # Phase 5.1 added 3 VAT tools
 
     def test_tool_schema_has_required_properties(self):
         from dashboard_pipeline.ai.tools import PREPARE_SUPPLIER_BRIEF_TOOL

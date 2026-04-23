@@ -290,7 +290,7 @@ class TestJournalToolSchemas:
         (+ analyze_product_profitability); Phase 2.6 grew 21 → 22
         (+ find_promotion_candidates); Phase 5.1 grew 22 → 25
         (+ 3 VAT reconciliation tools)."""
-        assert len(TOOL_SCHEMAS) == 25
+        assert len(TOOL_SCHEMAS) == 26
 
     def test_add_schema_shape(self):
         props = JOURNAL_ADD_ENTRY_TOOL["input_schema"]["properties"]
