@@ -476,6 +476,197 @@ def test_compute_vat_reconciliation_empty_inputs() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Sprint 5.8 — per-shop by_shop breakdown
+# ---------------------------------------------------------------------------
+
+
+def _vat_fixture_by_shop() -> Dict[str, Any]:
+    """Synthetic 2024-08 fixture with per-shop retail_sales + per-line bank object tags."""
+    retail = {
+        "by_month": [
+            {"month": "2024-08", "revenue_ge": 282314.0, "cost_ge": 0, "profit_ge": 0},
+        ],
+        "by_object_by_month": [
+            {"object": "ოზურგეთი", "month": "2024-08", "revenue_ge": 180000.0, "cost_ge": 0, "profit_ge": 0, "row_count": 5000, "total_quantity": 1000},
+            {"object": "დვაბზუ", "month": "2024-08", "revenue_ge": 102314.0, "cost_ge": 0, "profit_ge": 0, "row_count": 3000, "total_quantity": 600},
+        ],
+    }
+    tbc = {
+        "lines": [
+            {"თარიღი": "2024-08-05", "თანხა": 100000.0, "object": "ოზურგეთი"},
+            {"თარიღი": "2024-08-20", "თანხა": 64903.0, "object": "დვაბზუ"},
+        ],
+    }
+    bog = {
+        "lines": [
+            {"თარიღი": "2024-08-10", "თანხა": 50000.0, "object": "ოზურგეთი"},
+            {"თარიღი": "2024-08-15", "თანხა": 32481.0, "object": "დვაბზუ"},
+        ],
+    }
+    return {"retail": retail, "tbc": tbc, "bog": bog, "manual": []}
+
+
+def test_by_shop_splits_max_per_shop() -> None:
+    fx = _vat_fixture_by_shop()
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle=fx["retail"],
+        tbc_card_income_bundle=fx["tbc"],
+        bog_pos_income_bundle=fx["bog"],
+        manual_journal_full=fx["manual"],
+    )
+    row = bundle["by_month"][0]
+    assert "by_shop" in row
+    shops = row["by_shop"]
+    assert set(shops.keys()) == {"ოზურგეთი", "დვაბზუ"}
+    assert shops["ოზურგეთი"]["max_pos_ge"] == pytest.approx(180000.0)
+    assert shops["დვაბზუ"]["max_pos_ge"] == pytest.approx(102314.0)
+
+
+def test_by_shop_splits_bank_per_shop() -> None:
+    fx = _vat_fixture_by_shop()
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle=fx["retail"],
+        tbc_card_income_bundle=fx["tbc"],
+        bog_pos_income_bundle=fx["bog"],
+        manual_journal_full=fx["manual"],
+    )
+    shops = bundle["by_month"][0]["by_shop"]
+    assert shops["ოზურგეთი"]["tbc_pos_ge"] == pytest.approx(100000.0)
+    assert shops["ოზურგეთი"]["bog_pos_ge"] == pytest.approx(50000.0)
+    assert shops["ოზურგეთი"]["bank_card_ge"] == pytest.approx(150000.0)
+    assert shops["დვაბზუ"]["tbc_pos_ge"] == pytest.approx(64903.0)
+    assert shops["დვაბზუ"]["bog_pos_ge"] == pytest.approx(32481.0)
+    assert shops["დვაბზუ"]["bank_card_ge"] == pytest.approx(97384.0)
+
+
+def test_by_shop_cashreg_in_per_shop() -> None:
+    fx = _vat_fixture_by_shop()
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle=fx["retail"],
+        tbc_card_income_bundle=fx["tbc"],
+        bog_pos_income_bundle=fx["bog"],
+        manual_journal_full=fx["manual"],
+    )
+    shops = bundle["by_month"][0]["by_shop"]
+    # ოზურგეთი: MAX 180K - bank 150K = 30K cashreg
+    assert shops["ოზურგეთი"]["cashreg_in_ge"] == pytest.approx(30000.0)
+    # დვაბზუ: MAX 102,314 - bank 97,384 = 4,930 cashreg
+    assert shops["დვაბზუ"]["cashreg_in_ge"] == pytest.approx(4930.0)
+    assert shops["ოზურგეთი"]["bank_exceeds_max"] is False
+    assert shops["დვაბზუ"]["bank_exceeds_max"] is False
+
+
+def test_by_shop_bank_exceeds_max_flag_per_shop() -> None:
+    """One shop has bank > MAX (anomaly) — only that shop's flag set."""
+    retail = {
+        "by_month": [{"month": "2025-03", "revenue_ge": 100000.0}],
+        "by_object_by_month": [
+            {"object": "ოზურგეთი", "month": "2025-03", "revenue_ge": 60000.0, "cost_ge": 0, "profit_ge": 0, "row_count": 1, "total_quantity": 1},
+            {"object": "დვაბზუ", "month": "2025-03", "revenue_ge": 40000.0, "cost_ge": 0, "profit_ge": 0, "row_count": 1, "total_quantity": 1},
+        ],
+    }
+    tbc = {
+        "lines": [
+            {"თარიღი": "2025-03-10", "თანხა": 50000.0, "object": "ოზურგეთი"},
+            {"თარიღი": "2025-03-12", "თანხა": 60000.0, "object": "დვაბზუ"},  # bank > MAX for დვაბზუ
+        ],
+    }
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle=retail,
+        tbc_card_income_bundle=tbc,
+        bog_pos_income_bundle={"lines": []},
+        manual_journal_full=[],
+    )
+    shops = bundle["by_month"][0]["by_shop"]
+    assert shops["ოზურგეთი"]["bank_exceeds_max"] is False
+    assert shops["დვაბზუ"]["bank_exceeds_max"] is True
+    assert shops["დვაბზუ"]["cashreg_in_ge"] == 0.0
+
+
+def test_by_shop_skips_shops_with_no_activity() -> None:
+    """A shop present in mapping but with 0 MAX and 0 bank for that month is omitted."""
+    retail = {
+        "by_month": [{"month": "2025-06", "revenue_ge": 50000.0}],
+        "by_object_by_month": [
+            {"object": "ოზურგეთი", "month": "2025-06", "revenue_ge": 50000.0, "cost_ge": 0, "profit_ge": 0, "row_count": 1, "total_quantity": 1},
+            # No დვაბზუ row for this month
+        ],
+    }
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle=retail,
+        tbc_card_income_bundle={"lines": [{"თარიღი": "2025-06-01", "თანხა": 30000, "object": "ოზურგეთი"}]},
+        bog_pos_income_bundle={"lines": []},
+        manual_journal_full=[],
+    )
+    shops = bundle["by_month"][0]["by_shop"]
+    assert set(shops.keys()) == {"ოზურგეთი"}
+
+
+def test_by_shop_tags_unallocated_when_no_object() -> None:
+    """Bank line with no `object` tag falls to გაუნაწილებელი."""
+    retail = {
+        "by_month": [{"month": "2025-07", "revenue_ge": 100000.0}],
+        "by_object_by_month": [
+            {"object": "ოზურგეთი", "month": "2025-07", "revenue_ge": 100000.0, "cost_ge": 0, "profit_ge": 0, "row_count": 1, "total_quantity": 1},
+        ],
+    }
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle=retail,
+        tbc_card_income_bundle={"lines": [{"თარიღი": "2025-07-10", "თანხა": 20000}]},  # no object tag
+        bog_pos_income_bundle={"lines": []},
+        manual_journal_full=[],
+    )
+    shops = bundle["by_month"][0]["by_shop"]
+    assert "გაუნაწილებელი" in shops
+    assert shops["გაუნაწილებელი"]["tbc_pos_ge"] == pytest.approx(20000.0)
+    # TBC reliability flag = False (20K attributed to "გაუნაწილებელი", 0 attributed to real shops)
+    assert bundle["by_month"][0]["data_quality"]["tbc_per_shop_reliable"] is False
+
+
+def test_by_shop_tbc_reliable_when_fully_attributed() -> None:
+    fx = _vat_fixture_by_shop()
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle=fx["retail"],
+        tbc_card_income_bundle=fx["tbc"],
+        bog_pos_income_bundle=fx["bog"],
+        manual_journal_full=fx["manual"],
+    )
+    assert bundle["by_month"][0]["data_quality"]["tbc_per_shop_reliable"] is True
+
+
+def test_by_shop_absent_when_no_object_by_month() -> None:
+    """Backward-compat: bundle without `by_object_by_month` → empty by_shop, no crash."""
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle={"by_month": [{"month": "2024-08", "revenue_ge": 282314.0}]},  # no by_object_by_month
+        tbc_card_income_bundle={"lines": [{"თარიღი": "2024-08-05", "თანხა": 164903.0}]},
+        bog_pos_income_bundle={"lines": [{"თარიღი": "2024-08-10", "თანხა": 82481.0}]},
+        manual_journal_full=[],
+    )
+    row = bundle["by_month"][0]
+    # Top-level fields still populated normally.
+    assert row["max_pos_ge"] == pytest.approx(282314.0)
+    assert row["bank_card_ge"] == pytest.approx(247384.0)
+    # Bank lines without object tags → everything falls to გაუნაწილებელი.
+    # MAX side contributes nothing to by_shop (no by_object_by_month).
+    shops = row["by_shop"]
+    assert "გაუნაწილებელი" in shops
+    assert shops["გაუნაწილებელი"]["max_pos_ge"] == 0
+
+
+def test_by_shop_methodology_ka_documents_sprint_5_8() -> None:
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle={"by_month": []},
+        tbc_card_income_bundle={"lines": []},
+        bog_pos_income_bundle={"lines": []},
+        manual_journal_full=[],
+    )
+    meta = bundle["methodology_ka"]
+    assert "by_shop" in meta
+    assert "Sprint 5.8" in meta
+    assert "tbc_per_shop_reliable" in meta
+
+
+# ---------------------------------------------------------------------------
 # AI tools — vat_tools
 # ---------------------------------------------------------------------------
 
@@ -522,6 +713,59 @@ def test_get_vat_reconciliation_month_missing_period_lists_available() -> None:
     out = get_vat_reconciliation_month(loader, period="2030-01")
     assert "error" in out
     assert "2024-08" in out["available_periods"]
+
+
+def test_get_vat_reconciliation_month_summary_ka_surfaces_by_shop() -> None:
+    """Sprint 5.8 — summary_ka must list per-shop MAX + cashreg when ≥2 shops material."""
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle={
+            "by_month": [{"month": "2024-08", "revenue_ge": 282314.0}],
+            "by_object_by_month": [
+                {"object": "ოზურგეთი", "month": "2024-08", "revenue_ge": 180000.0, "cost_ge": 0, "profit_ge": 0, "row_count": 1, "total_quantity": 1},
+                {"object": "დვაბზუ", "month": "2024-08", "revenue_ge": 102314.0, "cost_ge": 0, "profit_ge": 0, "row_count": 1, "total_quantity": 1},
+            ],
+        },
+        tbc_card_income_bundle={"lines": [
+            {"თარიღი": "2024-08-05", "თანხა": 100000.0, "object": "ოზურგეთი"},
+            {"თარიღი": "2024-08-20", "თანხა": 64903.0, "object": "დვაბზუ"},
+        ]},
+        bog_pos_income_bundle={"lines": [
+            {"თარიღი": "2024-08-10", "თანხა": 50000.0, "object": "ოზურგეთი"},
+            {"თარიღი": "2024-08-15", "თანხა": 32481.0, "object": "დვაბზუ"},
+        ]},
+        manual_journal_full=[],
+    )
+    loader = _fake_data_loader(bundle)
+    out = get_vat_reconciliation_month(loader, period="2024-08")
+    summary = out["summary_ka"]
+    assert "მაღაზიები" in summary
+    assert "ოზურგეთი" in summary
+    assert "დვაბზუ" in summary
+    # Ordered by MAX desc → ოზურგეთი (180K) before დვაბზუ (102K)
+    idx_ozurgeti = summary.index("ოზურგეთი")
+    idx_dvabzu = summary.index("დვაბზუ")
+    assert idx_ozurgeti < idx_dvabzu
+
+
+def test_get_vat_reconciliation_month_summary_ka_skips_by_shop_for_single_shop() -> None:
+    """When only one shop material, summary_ka stays compact without per-shop line."""
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle={
+            "by_month": [{"month": "2025-07", "revenue_ge": 100000.0}],
+            "by_object_by_month": [
+                {"object": "ოზურგეთი", "month": "2025-07", "revenue_ge": 100000.0, "cost_ge": 0, "profit_ge": 0, "row_count": 1, "total_quantity": 1},
+            ],
+        },
+        tbc_card_income_bundle={"lines": [
+            {"თარიღი": "2025-07-10", "თანხა": 80000.0, "object": "ოზურგეთი"},
+        ]},
+        bog_pos_income_bundle={"lines": []},
+        manual_journal_full=[],
+    )
+    loader = _fake_data_loader(bundle)
+    out = get_vat_reconciliation_month(loader, period="2025-07")
+    summary = out["summary_ka"]
+    assert "მაღაზიები:" not in summary
 
 
 def test_explain_unaccounted_cash_prompts_user_when_above_threshold() -> None:

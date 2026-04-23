@@ -62,6 +62,26 @@ def _render_month_summary_ka(row: Dict[str, Any]) -> str:
     elif declared is None:
         parts.append("declared: N/A")
 
+    # Sprint 5.8 — surface per-shop breakdown when available (≥2 shops with
+    # non-trivial activity). Lets the AI attribute under-declaration to a
+    # specific store during audit defense.
+    by_shop = row.get("by_shop") or {}
+    material_shops = [
+        (s, v) for s, v in by_shop.items() if (v.get("max_pos_ge") or 0) >= 1000
+    ]
+    if len(material_shops) >= 2:
+        shop_fragments = []
+        for shop, stats in sorted(
+            material_shops,
+            key=lambda kv: -float(kv[1].get("max_pos_ge") or 0),
+        ):
+            shop_max = float(stats.get("max_pos_ge") or 0)
+            shop_cashreg = float(stats.get("cashreg_in_ge") or 0)
+            shop_fragments.append(
+                f"**{shop}** MAX {shop_max:,.0f} / cashreg {shop_cashreg:,.0f}"
+            )
+        parts.append("მაღაზიები: " + " · ".join(shop_fragments))
+
     return " · ".join(parts)
 
 

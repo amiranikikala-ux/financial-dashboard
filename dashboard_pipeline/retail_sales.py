@@ -192,6 +192,43 @@ def _build_by_category_by_month_rows(category_month_stats, category_display_name
     return rows
 
 
+def _build_by_object_by_month_rows(object_month_stats):
+    """Serialize per-(object, month) accumulator into sorted list of rows.
+
+    Feeds Sprint 5.8 vat_reconciliation `by_shop`: lets the AI tool compare
+    per-shop MAX POS revenue against per-shop bank POS deposits and surface
+    per-shop cashreg_in (= MAX − bank_card) for audit defense.
+    """
+    rows = []
+    for (object_label, month_key), stats in object_month_stats.items():
+        if not month_key or month_key == "უცნობი თვე":
+            continue
+        revenue = float(stats.get("revenue_ge") or 0)
+        cost = float(stats.get("cost_ge") or 0)
+        profit = float(stats.get("profit_ge") or 0)
+        quantity = float(stats.get("total_quantity") or 0)
+        row_count = int(stats.get("row_count") or 0)
+        rows.append(
+            {
+                "object": object_label or OBJECT_UNALLOCATED,
+                "month": month_key,
+                "row_count": row_count,
+                "total_quantity": quantity,
+                "revenue_ge": revenue,
+                "cost_ge": cost,
+                "profit_ge": profit,
+                "gross_margin_pct": float(_margin_pct(revenue, profit)),
+            }
+        )
+    rows.sort(
+        key=lambda row: (
+            str(row.get("object") or ""),
+            _month_sort_key(row.get("month") or ""),
+        )
+    )
+    return rows
+
+
 def _object_from_path(path):
     parent = _normalize_for_match(os.path.basename(os.path.dirname(path)))
     if "ოზურგეთი" in parent:
@@ -291,6 +328,7 @@ def empty_retail_sales_bundle(period_filter=None):
         "by_product": [],
         "by_month": [],
         "by_category_by_month": [],
+        "by_object_by_month": [],
         "top_objects_by_profit": [],
         "top_categories_by_profit": [],
         "top_products_by_revenue": [],
@@ -429,6 +467,17 @@ def _process_retail_sales_file(
     category_stats = {}
     product_stats = {}
     category_month_stats = defaultdict(
+        lambda: {
+            "row_count": 0,
+            "total_quantity": 0.0,
+            "revenue_ge": 0.0,
+            "cost_ge": 0.0,
+            "profit_ge": 0.0,
+        }
+    )
+    # Sprint 5.8 — per-shop per-month aggregation for VAT-reconciliation by_shop.
+    # Keyed by (object, month_key). Mirror shape of category_month_stats.
+    object_month_stats = defaultdict(
         lambda: {
             "row_count": 0,
             "total_quantity": 0.0,
@@ -577,6 +626,13 @@ def _process_retail_sales_file(
             cm["revenue_ge"] += revenue_ge
             cm["cost_ge"] += cost_ge
             cm["profit_ge"] += profit_ge
+
+            om = object_month_stats[(object_label, month_key)]
+            om["row_count"] += 1
+            om["total_quantity"] += quantity
+            om["revenue_ge"] += revenue_ge
+            om["cost_ge"] += cost_ge
+            om["profit_ge"] += profit_ge
 
         product_entry = product_stats.setdefault(
             product_key,
@@ -766,6 +822,19 @@ def _process_retail_sales_file(
         for month_key, stats in month_stats.items()
     ]
 
+    by_object_month_serial = [
+        {
+            "object": obj_label,
+            "month": month_key,
+            "row_count": int(stats["row_count"]),
+            "total_quantity": float(stats["total_quantity"]),
+            "revenue_ge": float(stats["revenue_ge"]),
+            "cost_ge": float(stats["cost_ge"]),
+            "profit_ge": float(stats["profit_ge"]),
+        }
+        for (obj_label, month_key), stats in object_month_stats.items()
+    ]
+
     by_cat_month_serial = [
         {
             "category_key": cat_key,
@@ -810,6 +879,7 @@ def _process_retail_sales_file(
         "by_product": by_product_serial,
         "by_month": by_month_serial,
         "by_category_by_month": by_cat_month_serial,
+        "by_object_by_month": by_object_month_serial,
         "preview_rows": preview_rows,
         "date_range_iso": {
             "min": _iso_or_none(min(file_dates)) if file_dates else None,
@@ -1027,6 +1097,26 @@ def _merge_category_month(master_cat_month, per_file):
         entry["profit_ge"] += float(item["profit_ge"])
 
 
+def _merge_object_month(master_object_month, per_file):
+    for item in per_file:
+        key = (item["object"], item["month"])
+        entry = master_object_month.setdefault(
+            key,
+            {
+                "row_count": 0,
+                "total_quantity": 0.0,
+                "revenue_ge": 0.0,
+                "cost_ge": 0.0,
+                "profit_ge": 0.0,
+            },
+        )
+        entry["row_count"] += int(item["row_count"])
+        entry["total_quantity"] += float(item["total_quantity"])
+        entry["revenue_ge"] += float(item["revenue_ge"])
+        entry["cost_ge"] += float(item["cost_ge"])
+        entry["profit_ge"] += float(item["profit_ge"])
+
+
 # ---------------------------------------------------------------------------
 # collect_retail_sales_bundle — orchestrator (cacheable when no period filter)
 # ---------------------------------------------------------------------------
@@ -1099,6 +1189,7 @@ def collect_retail_sales_bundle(
     master_category_stats = {}
     master_product_stats = {}
     master_category_month_stats = {}
+    master_object_month_stats = {}
     preview_candidates = []
     read_error_count = 0
     total_rows_seen = 0
@@ -1146,6 +1237,9 @@ def collect_retail_sales_bundle(
         _merge_month(master_month_stats, payload.get("by_month") or [])
         _merge_category_month(
             master_category_month_stats, payload.get("by_category_by_month") or []
+        )
+        _merge_object_month(
+            master_object_month_stats, payload.get("by_object_by_month") or []
         )
         for row in payload.get("preview_rows") or []:
             preview_candidates.append(row)
@@ -1326,6 +1420,9 @@ def collect_retail_sales_bundle(
     }
     bundle["by_category_by_month"] = _build_by_category_by_month_rows(
         master_category_month_stats, category_display_names
+    )
+    bundle["by_object_by_month"] = _build_by_object_by_month_rows(
+        master_object_month_stats
     )
 
     product_rows = []

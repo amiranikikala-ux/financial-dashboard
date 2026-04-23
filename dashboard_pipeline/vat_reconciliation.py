@@ -107,6 +107,57 @@ def _retail_sales_by_month(retail_sales_bundle: Dict[str, Any]) -> Dict[str, flo
     return out
 
 
+def _retail_sales_by_object_month(
+    retail_sales_bundle: Dict[str, Any],
+) -> Dict[str, Dict[str, float]]:
+    """Sprint 5.8 — per-shop MAX POS revenue per month.
+
+    Returns {"YYYY-MM": {object_label: revenue_ge}} using the bundle's
+    `by_object_by_month` section. Missing or mis-shaped entries are skipped.
+    Falls back to empty dict when the bundle has no object-month breakdown
+    (older cached runs or empty fixture).
+    """
+    out: Dict[str, Dict[str, float]] = defaultdict(dict)
+    rows = (retail_sales_bundle or {}).get("by_object_by_month") or []
+    for row in rows:
+        month = str(row.get("month") or "")
+        if not re.match(r"^\d{4}-\d{2}$", month):
+            continue
+        obj = str(row.get("object") or "").strip()
+        if not obj:
+            continue
+        try:
+            revenue = float(row.get("revenue_ge") or 0)
+        except (TypeError, ValueError):
+            continue
+        out[month][obj] = revenue
+    return dict(out)
+
+
+def _lines_by_object_month(
+    lines: List[Dict[str, Any]], amount_field: str = "თანხა"
+) -> Dict[str, Dict[str, float]]:
+    """Sprint 5.8 — per-shop bank POS income per month.
+
+    Uses the per-line `object` tag populated by `detect_object` in
+    `bank_income.py`. When `object` is missing or blank, attributes to
+    `გაუნაწილებელი` (unallocated).
+    """
+    out: Dict[str, Dict[str, float]] = defaultdict(lambda: defaultdict(float))
+    for line in lines or []:
+        m = _month_of(line.get("თარიღი"))
+        if not m:
+            continue
+        try:
+            amt = float(line.get(amount_field) or 0)
+        except (TypeError, ValueError):
+            continue
+        obj = str(line.get("object") or "").strip() or "გაუნაწილებელი"
+        out[m][obj] += amt
+    # Defaultdict → plain dict for stable serialization.
+    return {month: dict(by_obj) for month, by_obj in out.items()}
+
+
 # ---------------------------------------------------------------------------
 # Audit Excel parser (declared turnover per month)
 # ---------------------------------------------------------------------------
@@ -406,6 +457,11 @@ def compute_vat_reconciliation(
     bog_pos_by_month = _lines_by_month((bog_pos_income_bundle or {}).get("lines") or [])
     manual_by_month = _manual_payments_by_month(manual_journal_full or [])
 
+    # Sprint 5.8 — per-shop per-month inputs for by_shop breakdown.
+    max_by_obj_month = _retail_sales_by_object_month(retail_sales_bundle)
+    tbc_by_obj_month = _lines_by_object_month((tbc_card_income_bundle or {}).get("lines") or [])
+    bog_by_obj_month = _lines_by_object_month((bog_pos_income_bundle or {}).get("lines") or [])
+
     # External sources
     audit_by_month = parse_audit_excel(audit_excel_path) if audit_excel_path else {}
     journal_entries = parse_cash_outflow_journal(cash_outflow_journal_path) if cash_outflow_journal_path else []
@@ -432,6 +488,48 @@ def compute_vat_reconciliation(
         raw_gap = max_pos - bank_card
         cashreg_in = max(0.0, raw_gap)
         bank_exceeds_max = (max_pos > 0) and (raw_gap < 0)
+
+        # Sprint 5.8 — per-shop breakdown for audit-per-shop defense.
+        # MAX POS side is reliable (retail_sales folder is per-shop).
+        # Bank POS side: BOG uses object_mapping.json bog_terminal_to_object
+        # (terminal ID → shop, reliable); TBC uses tbc_text_to_object which
+        # matches shop name in transaction description (imperfect — many rows
+        # fall to "გაუნაწილებელი"). data_quality.tbc_per_shop_reliable flags
+        # when TBC attribution is likely complete.
+        shops_seen = set()
+        shops_seen.update(max_by_obj_month.get(period, {}).keys())
+        shops_seen.update(tbc_by_obj_month.get(period, {}).keys())
+        shops_seen.update(bog_by_obj_month.get(period, {}).keys())
+        by_shop: Dict[str, Dict[str, float]] = {}
+        for shop in sorted(shops_seen):
+            shop_max = float(max_by_obj_month.get(period, {}).get(shop, 0))
+            shop_tbc = float(tbc_by_obj_month.get(period, {}).get(shop, 0))
+            shop_bog = float(bog_by_obj_month.get(period, {}).get(shop, 0))
+            shop_bank = shop_tbc + shop_bog
+            shop_cashreg_raw = shop_max - shop_bank
+            shop_cashreg_in = max(0.0, shop_cashreg_raw)
+            shop_bank_exceeds = (shop_max > 0) and (shop_cashreg_raw < 0)
+            # Only include shops with any activity in the month.
+            if shop_max == 0 and shop_bank == 0:
+                continue
+            by_shop[shop] = {
+                "max_pos_ge": shop_max,
+                "tbc_pos_ge": shop_tbc,
+                "bog_pos_ge": shop_bog,
+                "bank_card_ge": shop_bank,
+                "cashreg_in_ge": shop_cashreg_in,
+                "bank_exceeds_max": shop_bank_exceeds,
+            }
+
+        # TBC per-shop reliability: share of TBC attributed to REAL shops
+        # (not "გაუნაწილებელი" bucket) should be ≥98% of total TBC. Low
+        # reliability → AI should treat per-shop TBC as incomplete.
+        tbc_real_attributed = sum(
+            v["tbc_pos_ge"] for shop, v in by_shop.items() if shop != "გაუნაწილებელი"
+        )
+        tbc_per_shop_reliable = (
+            tbc_pos == 0 or (tbc_real_attributed / max(tbc_pos, 1)) >= 0.98
+        )
 
         cash_supplier = float(manual_by_month.get(period, 0))
         classified = cash_classified_by_month.get(period, {"total_ge": 0.0, "vat_applies_ge": 0.0, "entries": [], "by_category": {}})
@@ -502,6 +600,9 @@ def compute_vat_reconciliation(
             "audit_snapshot": audit_row or None,
             "gap_vs_declared_ge": gap_vs_declared,
 
+            # Sprint 5.8 — per-shop breakdown.
+            "by_shop": by_shop,
+
             # Quality + status
             "status": status,
             "needs_user_input": has_unaccounted,
@@ -511,6 +612,7 @@ def compute_vat_reconciliation(
                 "declared_available": declared_val is not None,
                 "bank_exceeds_max": bank_exceeds_max,
                 "cash_outflow_classified": cash_classified > 0 or cash_supplier > 0,
+                "tbc_per_shop_reliable": tbc_per_shop_reliable,
             },
         })
 
@@ -526,7 +628,10 @@ def compute_vat_reconciliation(
         "methodology_ka": (
             "ყოველთვიური შემოსავლის დათვლა raw data-დან: bank_card = TBC POS + BOG POS; "
             "cashreg_in = max(0, MAX_POS − bank_card); total_real = cashreg_in + bank_card + invoices. "
-            "declared uploaded audit file-დან. cash_unaccounted = cashreg_in − cash_supplier − cash_classified."
+            "declared uploaded audit file-დან. cash_unaccounted = cashreg_in − cash_supplier − cash_classified. "
+            "by_shop (Sprint 5.8): per-მაღაზია MAX/TBC/BOG/cashreg_in სადაც retail_sales-ის ფოლდერი გვაძლევს "
+            "MAX-ის shop-split-ს და bog_terminal_to_object/tbc_text_to_object mapping-ი გვაძლევს bank-ის shop-split-ს. "
+            "TBC attribution text-based, შეიძლება არასრული იყოს — data_quality.tbc_per_shop_reliable ფლაგი გვიჩვენებს."
         ),
         "vat_rate": VAT_RATE,
         "thresholds": {

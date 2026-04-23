@@ -27,7 +27,7 @@
 
 | მეტრიკა | მნიშვნელობა |
 |---|---|
-| pytest | **2,023/2,023 green** (~75s full run) |
+| pytest | **2,045/2,045 green** (~77s full run) |
 | Tool surface | **26 tools** (`detect_trends` @ 17; Sprint 5.1 VAT trio @ 18-20) |
 | Dashboard tabs | **15** (incl. Store Compare + 💀 Dead Stock + ⚠️ Supplier Concentration + 📋 Debt Plan + 🧾 VAT) |
 | `SYSTEM_PROMPT_KA` | **1,351 lines** |
@@ -151,7 +151,7 @@
 | 5.5 | Terminal-ID POS rewire | ✅ | 2026-04-23 |
 | 5.6 | VAT AI dog-food 3/3 PASS | ✅ 🎬 | 2026-04-23 (commit `e962857`) |
 | 5.7 | RS outgoing waybill ingest → populate `invoices_ge` | 📋 PLANNED | ~1 session — user exports RS.ge გასაცემი ზედნადებები; cross-check `აფ.გამოწერილი` |
-| 5.8 | Direct MAX Excel ingest + `cashreg_ge` separation | 📋 PLANNED | ~1 session — investigate 282K pipe vs 259K raw divergence |
+| 5.8 | Per-shop `by_shop` breakdown in vat_reconciliation | ✅ | 2026-04-23 — MAX POS/TBC/BOG/cashreg_in per ოზურგეთი/დვაბზუ; retail_sales `by_object_by_month` aggregation; `tbc_per_shop_reliable` honesty flag; summary_ka surfaces per-shop when ≥2 shops material. +22 tests (12 by_object_by_month + 10 by_shop). Revenue formula 282K vs 259K divergence already fixed in Sprint 5.5. |
 
 ### Scalability — Tier 1 + Tier 2
 

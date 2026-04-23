@@ -1,7 +1,7 @@
 # CONTEXT HANDOFF — short brief
 
-> **განახლდა**: 2026-04-23 (**Phase 5 COMPLETE + Phase 2 EXTENDED + Tier 2 Sprint 3a LANDED** — 10 commits this session; **2,023/2,023 pytest green**; tool surface 26; dashboard tabs 15; cache 864MB → 207MB; real gap 906K ₾ vs audit 742K)
-> **სტატუსი**: Phase 4A/4B/4C.2/4C.3 CLOSED + **Phase 2.1/2.2/2.4/2.5/2.6/2.8/2.9 COMPLETE** + Tier 1 + Tier 2 Sprint 1/2/3a COMPLETE + **🧾 Sprint 5.1/5.1.1/5.2/5.3/5.4/5.5/5.6 COMPLETE** (VAT pipeline + 3 AI tools + dashboard UI + Excel export + terminal-ID POS fix + revenue formula fix + live dog-food 3/3 PASS + trend_detector + Store Compare + retail_sales preview cap).
+> **განახლდა**: 2026-04-23 (**Sprint 5.8 by_shop LANDED** + docs-sync — **2,045/2,045 pytest green**; tool surface 26; dashboard tabs 15; cache 864MB → 207MB; real gap 906K ₾ vs audit 742K)
+> **სტატუსი**: Phase 4A/4B/4C.2/4C.3 CLOSED + **Phase 2.1/2.2/2.4/2.5/2.6/2.8/2.9 COMPLETE** + Tier 1 + Tier 2 Sprint 1/2/3a COMPLETE + **🧾 Sprint 5.1-5.6 COMPLETE** + **🧾 Sprint 5.8 COMPLETE** (per-shop by_shop breakdown in vat_reconciliation: MAX POS / TBC / BOG / cashreg_in per ოზურგეთი/დვაბზუ; summary_ka surfaces per-shop when ≥2 shops material; tbc_per_shop_reliable flag for text-based TBC attribution honesty).
 
 ---
 
