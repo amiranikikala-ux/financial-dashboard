@@ -905,6 +905,84 @@ def test_vat_reconciliation_in_allowed_sections() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Phase 4C.1 — Schema Poka-yoke markers for VAT tools (Sprint 5.8 audit)
+# ---------------------------------------------------------------------------
+
+
+def test_vat_month_schema_documents_by_shop() -> None:
+    """Sprint 5.8 — `by_shop` dimension must be surfaced in the tool description
+    so AI knows to reach for it on per-shop questions."""
+    from dashboard_pipeline.ai.tools import TOOL_SCHEMAS
+
+    tool = next(t for t in TOOL_SCHEMAS if t["name"] == "get_vat_reconciliation_month")
+    desc = tool["description"]
+    assert "by_shop" in desc
+    assert "Sprint 5.8" in desc
+    assert "ოზურგეთი" in desc
+    assert "დვაბზუ" in desc
+    # Honesty flag must be referenced.
+    assert "tbc_per_shop_reliable" in desc
+
+
+def test_vat_month_schema_has_per_shop_trigger() -> None:
+    """Per-shop question ('რომელ მაღაზიაშია ხარვეზი') must appear in triggers."""
+    from dashboard_pipeline.ai.tools import TOOL_SCHEMAS
+
+    tool = next(t for t in TOOL_SCHEMAS if t["name"] == "get_vat_reconciliation_month")
+    desc = tool["description"]
+    assert "რომელ მაღაზიაშია ხარვეზი" in desc
+
+
+def test_vat_month_schema_has_per_shop_anti_trigger() -> None:
+    """Pure per-shop revenue comparison (no audit) should route to retail_sales,
+    not vat_reconciliation. Anti-trigger must say so."""
+    from dashboard_pipeline.ai.tools import TOOL_SCHEMAS
+
+    tool = next(t for t in TOOL_SCHEMAS if t["name"] == "get_vat_reconciliation_month")
+    desc = tool["description"]
+    assert "per-shop revenue comparison WITHOUT audit" in desc
+    assert "retail_sales" in desc
+
+
+def test_explain_unaccounted_has_below_threshold_anti_trigger() -> None:
+    """Months with cash_unaccounted < threshold should not be interrogated."""
+    from dashboard_pipeline.ai.tools import TOOL_SCHEMAS
+
+    tool = next(t for t in TOOL_SCHEMAS if t["name"] == "explain_unaccounted_cash")
+    desc = tool["description"]
+    assert "< threshold_ge" in desc
+    assert "5,000 ₾" in desc
+    assert "do NOT prompt the user unnecessarily" in desc
+
+
+def test_record_cash_outflow_has_strict_dont_guess_rule() -> None:
+    """User said 'accurate analysis' — record_cash_outflow must forbid AI from
+    guessing amount/category when user input is ambiguous."""
+    from dashboard_pipeline.ai.tools import TOOL_SCHEMAS
+
+    tool = next(t for t in TOOL_SCHEMAS if t["name"] == "record_cash_outflow")
+    desc = tool["description"]
+    assert "STRICT: do not guess" in desc
+    # All 4 args must be covered by the strict block.
+    for arg in ("amount_ge", "category", "purpose_ka", "vat_applies"):
+        assert arg in desc
+    # Range ambiguity anti-pattern.
+    assert "10-15K" in desc
+    # Category ambiguity anti-pattern.
+    assert "ხელზე" in desc
+
+
+def test_record_cash_outflow_has_append_only_anti_trigger() -> None:
+    """CSV is append-only — modifying past entries requires explicit user confirmation."""
+    from dashboard_pipeline.ai.tools import TOOL_SCHEMAS
+
+    tool = next(t for t in TOOL_SCHEMAS if t["name"] == "record_cash_outflow")
+    desc = tool["description"]
+    assert "append-only" in desc
+    assert "modifying a past entry" in desc
+
+
+# ---------------------------------------------------------------------------
 # SYSTEM_PROMPT_KA presence
 # ---------------------------------------------------------------------------
 
