@@ -1,6 +1,6 @@
 # CONTEXT HANDOFF — short brief
 
-> **განახლდა**: 2026-04-23 (**Sprint 5.9 LANDED** — MAX-data-gap vs over-declaration გარჩევა; **2,060/2,060 pytest green** ~73s; tool surface **26**; dashboard tabs **15**; SYSTEM_PROMPT_KA **1,163 lines**; cache **207 MB**; data.json **131.7 MB**; real gap **906K ₾** vs audit 742K)
+> **განახლდა**: 2026-04-23 (**Sprint 5.9 LANDED** — MAX-data-gap vs over-declaration გარჩევა; **2,065/2,065 pytest green** ~73s; tool surface **26**; dashboard tabs **15**; SYSTEM_PROMPT_KA **1,163 lines**; cache **207 MB**; data.json **131.7 MB**; real gap **906K ₾** vs audit 742K)
 > **სტატუსი**: Phase 4A/4B/4C.2/4C.3 CLOSED · **Phase 2.1/2.2/2.4/2.5/2.6/2.8/2.9 COMPLETE** · Tier 1 + Tier 2 Sprint 1/2/3a COMPLETE · **🧾 Sprint 5.1 → 5.9 COMPLETE** (full VAT audit system: reconciliation forensics · TBC POS terminal-ID fix · Dashboard 🧾 tab · Excel export · retail_sales revenue=price×qty fix · 3/3 live dog-food · per-shop by_shop breakdown · MAX data gap distinction). Phase 4C.1 VAT-tools-scoped ✅.
 
 ---
@@ -36,7 +36,7 @@
 
 | მეტრიკა | მნიშვნელობა |
 |---|---|
-| **pytest** | **2,060/2,060 green** (~73s full run) |
+| **pytest** | **2,065/2,065 green** (~77s full run) |
 | **`SYSTEM_PROMPT_KA`** | 1,163 lines |
 | **Tool surface** | 26 |
 | **Dashboard tabs** | 15 (incl. Store Compare, 💀 Dead Stock, ⚠️ Supplier Concentration, 📋 Debt Plan, 🧾 VAT) |
@@ -99,7 +99,7 @@ All on `origin/main`. Older commits → `git log`.
 
 | # | item | size | risk | რატომ |
 |---|---|---|---|---|
-| 1 | **Phase 4C.1 — 23 non-VAT tools schema Poka-yoke audit** | ~1 day | HIGH | schema changes cascade to tests + frontend aiClient; single biggest remaining accuracy lever for AI tool-routing |
+| 1 | **Phase 4C.1 Part B — remaining 18 tools schema Poka-yoke audit** | ~1 day | MED | Part A (read_data_json + 4 investigator tools) landed 2026-04-24. Forecast/math tools (compute, forecast_revenue, compute_cash_runway, compute_cash_flow_projection, simulate_scenario, detect_trends) already disciplined — skip. Remaining: memory/journal (recall_context, save_memory, journal_*), Phase 2 tools (analyze_dead_stock, prepare_supplier_brief, analyze_product_profitability, find_promotion_candidates, compute_waybill_total, build_debt_repayment_plan), propose_feature. |
 | 2 | **Tier 2 Sprint 3b — cache extension to bank / supplier / waybills** | ~1 session each | MED | applies Sprint 2/3a pattern per `project_pipeline_cache_pattern.md` memory; audit all-rows fields before caching |
 | 3 | **Phase 2.3 `industry_benchmark`** | ~1 day | LOW | blocked on external data source decision (hardcoded retail medians? Excel import? public dataset?) — ask user |
 | 4 | **Phase 3 remaining (4 features)** | ~1 week | LOW | conversation_summary_on_demand · margin_compression_radar · monthly_strategy_page · gap_analysis |

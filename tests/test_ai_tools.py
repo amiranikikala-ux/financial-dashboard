@@ -89,6 +89,89 @@ class TestToolSchema:
         json.dumps(TOOL_SCHEMAS, ensure_ascii=False)
 
 
+def _tool_by_name(name: str) -> dict:
+    for tool in TOOL_SCHEMAS:
+        if tool.get("name") == name:
+            return tool
+    raise AssertionError(f"tool not found in TOOL_SCHEMAS: {name}")
+
+
+class TestPhase4C1PartAPokaYoke:
+    """Phase 4C.1 Part A — routing hardening on the 5 legacy tools.
+
+    Sprint 4C.1 scoped audit (commit 354ffe7) applied junior-dev-docstring
+    discipline to the 3 VAT tools. Part A (this session) extends the same
+    discipline to read_data_json + 4 investigator tools so AI routes
+    business-data questions to specialized tools (summary_ka-equipped)
+    instead of dumping raw rows through read_data_json. These assertions
+    pin the new markers so a later refactor can't silently drop them.
+    """
+
+    def test_read_data_json_has_anti_triggers_to_specialized_tools(self):
+        desc = _tool_by_name("read_data_json")["description"]
+        # Triggers section present
+        assert "Triggers" in desc
+        # Anti-triggers must route to these specialized tools:
+        for tool_name in (
+            "get_vat_reconciliation_month",
+            "compute_waybill_total",
+            "forecast_revenue",
+            "compute_cash_runway",
+            "compute_cash_flow_projection",
+            "simulate_scenario",
+            "analyze_product_profitability",
+            "find_promotion_candidates",
+            "detect_trends",
+            "analyze_dead_stock",
+            "prepare_supplier_brief",
+            "build_debt_repayment_plan",
+            "recall_context",
+        ):
+            assert tool_name in desc, (
+                f"read_data_json anti-trigger must route to {tool_name}"
+            )
+        # Workflow discipline
+        assert "filter" in desc.lower()
+        assert "minimal" in desc.lower()
+        assert "source" in desc.lower()
+
+    def test_read_source_code_separates_code_from_data_questions(self):
+        desc = _tool_by_name("read_source_code")["description"]
+        assert "Triggers" in desc
+        assert "Anti-triggers" in desc
+        # Data questions must be routed away from this tool
+        assert "read_data_json" in desc
+        # Investigator partnership
+        assert "grep_code" in desc
+        assert "read_excel_source" in desc
+
+    def test_grep_code_separates_code_from_data_questions(self):
+        desc = _tool_by_name("grep_code")["description"]
+        assert "Triggers" in desc
+        assert "Anti-triggers" in desc
+        # Must redirect business-data queries and chat-memory queries
+        assert "read_data_json" in desc
+        assert "recall_context" in desc
+
+    def test_read_excel_source_surfaces_validate_vs_source_partnership(self):
+        desc = _tool_by_name("read_excel_source")["description"]
+        assert "Triggers" in desc
+        assert "Anti-triggers" in desc
+        # Excel ground-truth partnership
+        assert "validate_vs_source" in desc
+        assert "read_data_json" in desc
+
+    def test_validate_vs_source_documents_workflow_and_routing(self):
+        desc = _tool_by_name("validate_vs_source")["description"]
+        assert "Triggers" in desc
+        assert "Anti-triggers" in desc
+        # Directs to row-browsing tools when mismatch needs drilling
+        assert "read_excel_source" in desc
+        assert "read_data_json" in desc
+        # Returns contract surfaced so AI knows what it gets
+        assert "match" in desc.lower()
+
+
 # ---------------------------------------------------------------------------
 # Allowlist / error paths
 # ---------------------------------------------------------------------------
