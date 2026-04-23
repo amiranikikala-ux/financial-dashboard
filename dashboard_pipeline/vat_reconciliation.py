@@ -413,7 +413,22 @@ def _manual_payments_by_month(manual_journal_full: List[Dict[str, Any]]) -> Dict
 # Status classification
 # ---------------------------------------------------------------------------
 
-def _classify_status(gap: Optional[float], declared: Optional[float], has_unaccounted: bool) -> str:
+def _classify_status(
+    gap: Optional[float],
+    declared: Optional[float],
+    has_unaccounted: bool,
+    max_data_gap_suspected: bool = False,
+) -> str:
+    """Classify per-month reconciliation status.
+
+    Sprint 5.9 — when raw MAX retail_sales data is missing for a period
+    (pipeline has no Excel file but banks/audit show activity), `gap` is
+    mathematically negative but MEANINGLESS — it's a data hole, not a
+    reconciliation signal. Surface as `insufficient_data` so UI + AI know
+    not to interpret the number as over-declaration.
+    """
+    if max_data_gap_suspected:
+        return "insufficient_data"
     if declared is None or declared <= 0:
         return "no_declared_data"
     if gap is None:
@@ -561,7 +576,23 @@ def compute_vat_reconciliation(
         gap_vs_declared = (total_real - declared_val) if declared_val is not None else None
 
         has_unaccounted = cash_unaccounted >= UNACCOUNTED_CASH_THRESHOLD_GE
-        status = _classify_status(gap_vs_declared, declared_val, has_unaccounted)
+
+        # Sprint 5.9 — detect missing MAX retail_sales data. When banks show
+        # real activity OR declared turnover is set but MAX is 0, the raw
+        # POS Excel file is likely missing from Financial_Analysis — NOT that
+        # the shop was closed. This distinction matters for audit defense:
+        # a false "real < declared" signal from a data gap would otherwise
+        # be misread as "bookkeeper over-declared".
+        max_data_gap_suspected = (
+            max_pos == 0 and (bank_card > 0 or (declared_val or 0) > 0)
+        )
+
+        status = _classify_status(
+            gap_vs_declared,
+            declared_val,
+            has_unaccounted,
+            max_data_gap_suspected=max_data_gap_suspected,
+        )
 
         if status == "red":
             red_flag_months.append(period)
@@ -613,6 +644,8 @@ def compute_vat_reconciliation(
                 "bank_exceeds_max": bank_exceeds_max,
                 "cash_outflow_classified": cash_classified > 0 or cash_supplier > 0,
                 "tbc_per_shop_reliable": tbc_per_shop_reliable,
+                # Sprint 5.9 — raw MAX retail_sales Excel likely missing.
+                "max_data_gap_suspected": max_data_gap_suspected,
             },
         })
 
@@ -631,7 +664,9 @@ def compute_vat_reconciliation(
             "declared uploaded audit file-დან. cash_unaccounted = cashreg_in − cash_supplier − cash_classified. "
             "by_shop (Sprint 5.8): per-მაღაზია MAX/TBC/BOG/cashreg_in სადაც retail_sales-ის ფოლდერი გვაძლევს "
             "MAX-ის shop-split-ს და bog_terminal_to_object/tbc_text_to_object mapping-ი გვაძლევს bank-ის shop-split-ს. "
-            "TBC attribution text-based, შეიძლება არასრული იყოს — data_quality.tbc_per_shop_reliable ფლაგი გვიჩვენებს."
+            "TBC attribution text-based, შეიძლება არასრული იყოს — data_quality.tbc_per_shop_reliable ფლაგი გვიჩვენებს. "
+            "max_data_gap_suspected (Sprint 5.9): MAX retail_sales Excel ფაილი აკლია თვისთვის, მაგრამ ბანკი ან "
+            "declared არის — status 'insufficient_data'. negative gap ამ თვეებში არის data gap, არა over-declaration."
         ),
         "vat_rate": VAT_RATE,
         "thresholds": {
@@ -649,6 +684,7 @@ def compute_vat_reconciliation(
             "months_yellow": len([r for r in by_month if r["status"] == "yellow"]),
             "months_green": len([r for r in by_month if r["status"] == "green"]),
             "months_no_declared": len([r for r in by_month if r["status"] == "no_declared_data"]),
+            "months_insufficient_data": len([r for r in by_month if r["status"] == "insufficient_data"]),
             "months_needing_user_input": len(needs_input_months),
             "total_real_ge": total_real_all,
             "total_declared_ge": total_declared_all,

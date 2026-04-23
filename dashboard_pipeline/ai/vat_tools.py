@@ -30,7 +30,13 @@ def _validate_period(period: Any) -> Optional[str]:
 
 
 def _status_emoji(status: str) -> str:
-    return {"green": "🟢", "yellow": "🟡", "red": "🔴", "no_declared_data": "⚪"}.get(status, "⚪")
+    return {
+        "green": "🟢",
+        "yellow": "🟡",
+        "red": "🔴",
+        "no_declared_data": "⚪",
+        "insufficient_data": "⚫",
+    }.get(status, "⚪")
 
 
 def _render_month_summary_ka(row: Dict[str, Any]) -> str:
@@ -45,8 +51,19 @@ def _render_month_summary_ka(row: Dict[str, Any]) -> str:
     cash_unaccounted = row.get("cash_unaccounted_ge") or 0
     declared = row.get("declared_ge")
     gap = row.get("gap_vs_declared_ge")
+    dq = row.get("data_quality") or {}
 
     parts = [f"**{period}** · {emoji} {status}"]
+
+    # Sprint 5.9 — insufficient_data case. Surface the warning FIRST before any
+    # numbers so AI doesn't misread negative gap as over-declaration.
+    if status == "insufficient_data" or dq.get("max_data_gap_suspected"):
+        parts.append(
+            "⚠️ **MAX retail_sales Excel ფაილი აკლია ამ თვისთვის** — "
+            "gap არ ასახავს რეალობას (data gap, არა over-declaration). "
+            "ატვირთე ფაილი `Financial_Analysis/გაყიდული პროდუქტები სოფ ოზურგეთი/` + "
+            "`Financial_Analysis/გაყიდული პროდუქტები სოფ დვაბზუ/`-ში და გააკეთე pipeline regen."
+        )
     parts.append(f"MAX POS **{max_pos:,.0f} ₾** · ბანკი **{bank:,.0f} ₾** · cashreg_in **{cashreg_in:,.0f} ₾**")
 
     if cash_unaccounted >= UNACCOUNTED_CASH_THRESHOLD_GE:

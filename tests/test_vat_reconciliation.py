@@ -905,6 +905,150 @@ def test_vat_reconciliation_in_allowed_sections() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Sprint 5.9 — MAX data gap detection (correctness fix)
+# ---------------------------------------------------------------------------
+
+
+def test_max_data_gap_sets_insufficient_status_when_banks_active() -> None:
+    """Missing MAX Excel but banks show activity → status 'insufficient_data',
+    NOT a false red/yellow signal based on negative gap."""
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle={"by_month": []},  # no MAX file for this month
+        tbc_card_income_bundle={"lines": [
+            {"თარიღი": "2023-03-05", "თანხა": 15000.0},
+        ]},
+        bog_pos_income_bundle={"lines": [
+            {"თარიღი": "2023-03-10", "თანხა": 25000.0},
+        ]},
+        manual_journal_full=[],
+    )
+    row = bundle["by_month"][0]
+    assert row["period"] == "2023-03"
+    assert row["status"] == "insufficient_data"
+    assert row["data_quality"]["max_data_gap_suspected"] is True
+    assert row["max_pos_ge"] == 0
+    assert row["bank_card_ge"] == pytest.approx(40000.0)
+
+
+def test_max_data_gap_suspected_when_declared_exists_but_max_missing(tmp_path: Path) -> None:
+    """Audit Excel shows declared 150K but pipeline has no MAX → insufficient_data."""
+    audit_f = tmp_path / "გაანგარიშება.xlsx"
+    _write_audit_excel(audit_f, [
+        {"period": 202303, "declared": 150000, "af": 20000, "cashreg": 80000, "tbc": 50000, "bog": 0},
+    ])
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle={"by_month": []},  # MAX missing
+        tbc_card_income_bundle={"lines": []},
+        bog_pos_income_bundle={"lines": []},
+        manual_journal_full=[],
+        audit_excel_path=str(audit_f),
+    )
+    row = bundle["by_month"][0]
+    assert row["status"] == "insufficient_data"
+    assert row["data_quality"]["max_data_gap_suspected"] is True
+    # declared is preserved for transparency
+    assert row["declared_ge"] == pytest.approx(150000.0)
+
+
+def test_max_data_gap_not_flagged_when_both_max_and_banks_present() -> None:
+    """Normal month — MAX present, banks present → max_data_gap_suspected=False."""
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle={"by_month": [{"month": "2024-08", "revenue_ge": 282314.0}]},
+        tbc_card_income_bundle={"lines": [{"თარიღი": "2024-08-05", "თანხა": 100000.0}]},
+        bog_pos_income_bundle={"lines": [{"თარიღი": "2024-08-10", "თანხა": 50000.0}]},
+        manual_journal_full=[],
+    )
+    row = bundle["by_month"][0]
+    assert row["data_quality"]["max_data_gap_suspected"] is False
+    assert row["status"] != "insufficient_data"
+
+
+def test_max_data_gap_not_flagged_when_everything_empty() -> None:
+    """Genuinely empty month (no MAX, no banks, no declared) → not a data gap
+    worth flagging; stays as no_declared_data."""
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle={"by_month": [{"month": "2024-08", "revenue_ge": 0}]},
+        tbc_card_income_bundle={"lines": []},
+        bog_pos_income_bundle={"lines": []},
+        manual_journal_full=[
+            {"თარიღი": "2024-08-01", "თანხა": 0.0},  # keeps the period alive
+        ],
+    )
+    if bundle["by_month"]:
+        row = bundle["by_month"][0]
+        # No banks + no declared → neither insufficient_data nor red. Likely
+        # no_declared_data (if declared null). The point is NOT insufficient_data
+        # since banks = 0 = MAX → no conflict.
+        assert row["data_quality"]["max_data_gap_suspected"] is False
+        assert row["status"] != "insufficient_data"
+
+
+def test_summary_counts_insufficient_data_months() -> None:
+    """summary.months_insufficient_data counter is present + correct."""
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle={"by_month": [{"month": "2024-08", "revenue_ge": 100000}]},
+        tbc_card_income_bundle={"lines": [
+            {"თარიღი": "2023-03-05", "თანხა": 15000.0},  # 2023-03 will be insufficient
+            {"თარიღი": "2024-08-05", "თანხა": 50000.0},
+        ]},
+        bog_pos_income_bundle={"lines": [
+            {"თარიღი": "2023-03-10", "თანხა": 25000.0},
+        ]},
+        manual_journal_full=[],
+    )
+    assert bundle["summary"]["months_insufficient_data"] == 1
+    # 2024-08 is NOT insufficient (MAX available)
+    m_2408 = next(r for r in bundle["by_month"] if r["period"] == "2024-08")
+    assert m_2408["data_quality"]["max_data_gap_suspected"] is False
+
+
+def test_methodology_documents_insufficient_data_rule() -> None:
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle={"by_month": []},
+        tbc_card_income_bundle={"lines": []},
+        bog_pos_income_bundle={"lines": []},
+        manual_journal_full=[],
+    )
+    meta = bundle["methodology_ka"]
+    assert "max_data_gap_suspected" in meta
+    assert "Sprint 5.9" in meta
+    assert "insufficient_data" in meta
+
+
+def test_get_vat_month_summary_ka_warns_on_insufficient_data() -> None:
+    """AI-facing summary_ka must carry a loud warning when MAX is missing —
+    so AI does NOT interpret negative gap as over-declaration."""
+    bundle = compute_vat_reconciliation(
+        retail_sales_bundle={"by_month": []},
+        tbc_card_income_bundle={"lines": [{"თარიღი": "2023-03-05", "თანხა": 15000.0}]},
+        bog_pos_income_bundle={"lines": [{"თარიღი": "2023-03-10", "თანხა": 25000.0}]},
+        manual_journal_full=[],
+    )
+    loader = _fake_data_loader(bundle)
+    out = get_vat_reconciliation_month(loader, period="2023-03")
+    summary = out["summary_ka"]
+    assert "MAX retail_sales Excel ფაილი აკლია" in summary
+    assert "data gap, არა over-declaration" in summary
+
+
+def test_classify_status_insufficient_data_overrides_gap_direction() -> None:
+    """_classify_status directly: max_data_gap_suspected=True overrides normal
+    red/yellow/green classification, regardless of gap."""
+    # Even a massive negative gap (declared >> real) returns insufficient_data
+    assert _classify_status(
+        gap=-200000, declared=150000, has_unaccounted=False, max_data_gap_suspected=True
+    ) == "insufficient_data"
+    # Massive positive gap (real >> declared) ALSO returns insufficient_data
+    assert _classify_status(
+        gap=200000, declared=150000, has_unaccounted=False, max_data_gap_suspected=True
+    ) == "insufficient_data"
+    # Without the flag, same inputs → red
+    assert _classify_status(
+        gap=-200000, declared=150000, has_unaccounted=False, max_data_gap_suspected=False
+    ) == "red"
+
+
+# ---------------------------------------------------------------------------
 # Phase 4C.1 — Schema Poka-yoke markers for VAT tools (Sprint 5.8 audit)
 # ---------------------------------------------------------------------------
 
@@ -980,6 +1124,20 @@ def test_record_cash_outflow_has_append_only_anti_trigger() -> None:
     desc = tool["description"]
     assert "append-only" in desc
     assert "modifying a past entry" in desc
+
+
+def test_vat_month_schema_has_data_gap_guard() -> None:
+    """Sprint 5.9 — AI must be warned about insufficient_data status so it
+    doesn't misread negative gap as over-declaration."""
+    from dashboard_pipeline.ai.tools import TOOL_SCHEMAS
+
+    tool = next(t for t in TOOL_SCHEMAS if t["name"] == "get_vat_reconciliation_month")
+    desc = tool["description"]
+    assert "insufficient_data" in desc
+    assert "max_data_gap_suspected" in desc
+    assert "Sprint 5.9" in desc
+    # AI is told explicitly NOT to conclude.
+    assert "DO NOT assert any reconciliation conclusion" in desc
 
 
 # ---------------------------------------------------------------------------

@@ -18,6 +18,7 @@ const STATUS_META = {
   yellow: { label: '🟡 ყურადღება', color: '#eab308', bg: '#422006' },
   red: { label: '🔴 ხარვეზი', color: '#ef4444', bg: '#450a0a' },
   no_declared_data: { label: '⚪ declared არ მაქვს', color: '#94a3b8', bg: '#1e293b' },
+  insufficient_data: { label: '⚫ MAX data აკლია', color: '#cbd5e1', bg: '#0f172a' },
 };
 
 const CATEGORY_OPTIONS = [
