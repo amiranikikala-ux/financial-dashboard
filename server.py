@@ -603,6 +603,82 @@ async def post_debt_plan_save(request: Request, payload: dict = Body(...)):
 
 
 # ---------------------------------------------------------------------------
+# VAT reconciliation dashboard (Sprint 5.3)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/vat-reconciliation")
+@limiter.limit("60/minute")
+async def get_vat_reconciliation(request: Request):
+    """Returns the full ``vat_reconciliation`` section from data.json for the
+    dashboard page. All per-month fields + metadata; no filtering here, the
+    frontend chooses which months to render.
+    """
+    data = load_full_data()
+    vat = data.get("vat_reconciliation") or {}
+    return {
+        "by_month": vat.get("by_month") or [],
+        "summary": vat.get("summary") or {},
+        "red_flag_months": vat.get("red_flag_months") or [],
+        "needs_input_months": vat.get("needs_user_input_months") or [],
+        "audit_source": vat.get("uploaded_audit_source"),
+        "cash_journal_source": vat.get("cash_journal_source"),
+        "invoices_issued_source": vat.get("invoices_issued_source"),
+        "date_range": vat.get("date_range_iso"),
+        "thresholds": vat.get("thresholds"),
+        "generated_at": data.get("meta", {}).get("generated_at")
+            or data.get("generated_at"),
+    }
+
+
+@app.post("/api/vat-reconciliation/cash-outflow")
+@limiter.limit("30/minute")
+async def post_vat_cash_outflow(request: Request, payload: dict = Body(...)):
+    """Append a classified cash-outflow entry to cash_outflow_journal.csv.
+
+    Mirrors the AI `record_cash_outflow` tool for the dashboard's manual-entry
+    form. Does NOT regenerate data.json — the response includes an in-memory
+    preview of remaining unaccounted cash; totals update on next pipeline run.
+
+    Request body:
+        {
+            "period": "2024-08",
+            "amount_ge": 15000.0,
+            "purpose_ka": "ხელფასი გიორგის",
+            "category": "salary_cash",
+            "vat_applies": true,       (optional; defaults per category)
+            "notes": "..."             (optional)
+        }
+    """
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Body must be a JSON object.")
+
+    from dashboard_pipeline.ai.vat_tools import record_cash_outflow
+
+    try:
+        amount = float(payload.get("amount_ge"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="amount_ge must be a positive number.")
+
+    va = payload.get("vat_applies")
+    if va is not None and not isinstance(va, bool):
+        raise HTTPException(status_code=400, detail="vat_applies must be boolean or omitted.")
+
+    result = record_cash_outflow(
+        load_full_data,
+        project_root=os.path.dirname(os.path.abspath(__file__)),
+        period=payload.get("period"),
+        amount_ge=amount,
+        purpose_ka=payload.get("purpose_ka") or "",
+        category=payload.get("category"),
+        vat_applies=va,
+        notes=payload.get("notes") or "",
+    )
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+# ---------------------------------------------------------------------------
 # AI Advisor — Phase 1 MVP Chat
 # ---------------------------------------------------------------------------
 _ai_agent_lock = Lock()

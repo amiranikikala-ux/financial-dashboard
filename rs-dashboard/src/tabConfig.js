@@ -25,6 +25,7 @@ export const TAB_GROUPS = [
       { id: 'valuation', label: '🏆 შეფასება' },
       { id: 'executive', label: '👔 Executive' },
       { id: 'insights', label: '🧠 ინსაითები' },
+      { id: 'vat_audit', label: '🧾 VAT & აუდიტი' },
     ],
   },
 ];

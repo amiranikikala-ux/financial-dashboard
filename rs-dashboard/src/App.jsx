@@ -35,6 +35,7 @@ const SupplierModal = lazy(() => import('./SupplierModal.jsx'));
 const Suppliers = lazy(() => import('./Suppliers.jsx'));
 const Waybills = lazy(() => import('./Waybills.jsx'));
 const Insights = lazy(() => import('./Insights.jsx'));
+const VATAudit = lazy(() => import('./VATAudit.jsx'));
 
 const SAFE_PERIOD_REQUEST_TABS = new Set([
   'suppliers',
@@ -476,6 +477,10 @@ function App() {
               toDate={globalToDate}
               toTime={globalToTime}
             />
+          </Suspense>
+        ) : activeTab === 'vat_audit' ? (
+          <Suspense fallback={tabSuspenseFallback}>
+            <VATAudit reloadKey={reloadKey} />
           </Suspense>
         ) : null}
       </div>
