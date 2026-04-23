@@ -172,6 +172,60 @@ class TestPhase4C1PartAPokaYoke:
         assert "match" in desc.lower()
 
 
+class TestPhase4C1PartBPokaYoke:
+    """Phase 4C.1 Part B — routing hardening for 3 remaining gap tools.
+
+    After Part A (read_data_json + 4 investigator tools), the Part B survey
+    found only 3 tools with real Triggers/Anti-triggers gaps among the
+    remaining 12 candidates: compute_waybill_total had zero Triggers/Anti-
+    triggers blocks; analyze_dead_stock had the anti-trigger inline as a
+    single trailing line; journal_update_entry lacked structured blocks.
+    The other 9 (save_memory / recall_context / journal_add_entry /
+    journal_list_entries / prepare_supplier_brief / propose_feature /
+    analyze_product_profitability / find_promotion_candidates /
+    build_debt_repayment_plan) already carry the discipline.
+    """
+
+    def test_compute_waybill_total_has_routing_blocks(self):
+        desc = _tool_by_name("compute_waybill_total")["description"]
+        assert "Triggers" in desc
+        assert "Anti-triggers" in desc
+        # Routing partners for waybill-adjacent questions
+        assert "prepare_supplier_brief" in desc
+        assert "read_data_json" in desc
+        assert "supplier_aging" in desc
+        assert "forecast_revenue" in desc
+        # Date-field semantics MUST stay documented (wrong pick = wrong number)
+        for field in ("transport_start_date", "date", "delivery_date"):
+            assert field in desc
+
+    def test_analyze_dead_stock_anti_triggers_in_dedicated_block(self):
+        desc = _tool_by_name("analyze_dead_stock")["description"]
+        assert "Triggers" in desc
+        assert "Anti-triggers" in desc
+        # Critical routing: not every SKU question is dead-stock
+        assert "analyze_product_profitability" in desc
+        assert "find_promotion_candidates" in desc
+        assert "prepare_supplier_brief" in desc
+        assert "detect_trends" in desc
+        # Honesty rule on frozen_cash_estimate upper-bound still there
+        assert "UPPER BOUND" in desc
+        assert "matching_warning" in desc
+
+    def test_journal_update_entry_has_structured_blocks(self):
+        desc = _tool_by_name("journal_update_entry")["description"]
+        assert "Triggers" in desc
+        assert "Anti-triggers" in desc
+        # Routing partners
+        assert "journal_add_entry" in desc
+        assert "journal_list_entries" in desc
+        # Critical guardrails
+        assert "NEVER fabricate" in desc or "never fabricate" in desc.lower()
+        # Status semantics preserved
+        for status in ("done", "cancelled", "open"):
+            assert status in desc
+
+
 # ---------------------------------------------------------------------------
 # Allowlist / error paths
 # ---------------------------------------------------------------------------
