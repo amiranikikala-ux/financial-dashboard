@@ -141,5 +141,5 @@ All on `origin/main`. Older commits → `git log`.
 ## `მოამზადე ახალი ჩატისთვის` — rule
 
 - განაახლე ეს ფაილი (verified facts + do-not-touch + next step only).
-- **არ შეაყრო ისტორია** — ისტორია `HANDOFF.md`-ში, evidence `HANDOFF_ARCHIVE/`-ში, git log-ში.
+- **არ შეაყრო ისტორია** — git commit log = authoritative, `HANDOFF_ARCHIVE/` = preview-ები/evidence, `HANDOFF.md` = commit SHA → archive index.
 - Short brief target: **≤200 lines**. ისტორიული "წინა-სტატუსი" სექციები აკრძალულია.

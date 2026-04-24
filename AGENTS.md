@@ -1,12 +1,14 @@
 # Financial Dashboard — Agent Instructions
 
 ## სესიის დაწყება
-1. ჯერ წაიკითხე `PLAN.md`
-2. მერე წაიკითხე root `AGENTS.md`
-3. შემდეგ წაიკითხე `CONTEXT_HANDOFF.md`
-4. `HANDOFF.md` გახსენი მხოლოდ თუ საჭიროა ბოლო ცვლილებები, ზუსტი ისტორია, file-level evidence ან runtime caveat-ები
-5. მომხმარებლის ენა: **ქართული**, კოდი + commit: **ინგლისური**
-6. onboarding-ის გამო თავიდანვე ნუ უშვებ ყველა ტესტს ან build-ს; გაუშვი მხოლოდ task-ის საჭიროების მიხედვით
+1. ჯერ წაიკითხე `CONTEXT_HANDOFF.md` (ცოცხალი სტატუსი — canonical)
+2. მერე წაიკითხე `AGENTS.md` (ეს ფაილი — session rules)
+3. Phase overview გჭირდება? → `PHASE_STATUS_MATRIX.md`
+4. Closed milestone log / stack ref → `PLAN.md`
+5. Master roadmap (v2.1) → `AI_GENIUS_PARTNER_PLAN.md`
+6. Historical evidence (commit X-ის დეტალი) → `HANDOFF.md` (index) → `HANDOFF_ARCHIVE/`
+7. მომხმარებლის ენა: **ქართული**, კოდი + commit: **ინგლისური**
+8. onboarding-ის გამო თავიდანვე ნუ უშვებ ყველა ტესტს ან build-ს; გაუშვი მხოლოდ task-ის საჭიროების მიხედვით
 
 ## Stack
 - **Backend**: Python 3 + FastAPI + pandas + openpyxl + APScheduler
@@ -15,8 +17,9 @@
 - **Server/UI**: `server.py` (`:8000`), `rs-dashboard` (`:5173` dev)
 
 ## სამუშაო წესები
-- `HANDOFF.md` განაახლე მხოლოდ მაშინ, როცა რეალურად შეიცვალა სტატუსი, caveat-ი ან ბოლო სესიის summary
-- `PLAN.md` განაახლე მხოლოდ მაღალი დონის სტატუსის ცვლილებისას
+- `CONTEXT_HANDOFF.md` განაახლე goal-ის დახურვისას (per-session ერთადერთი ფაილი რომელიც ცოცხლად განაახლდება)
+- `PLAN.md` / `PHASE_STATUS_MATRIX.md` განაახლე მხოლოდ **phase-ის ან sprint-ის დახურვისას**, არა ყოველ commit-ზე
+- `HANDOFF.md` განაახლე მხოლოდ როცა არქივში რამეს გადაიტან (commit SHA → archive pointer)
 - ტესტები არ წაშალო/შეასუსტო მომხმარებლის მკაფიო მითითების გარეშე
 - build/test ვერიფიკაცია გააკეთე მხოლოდ შესაბამისი ცვლილების შემდეგ, არა onboarding-ის გამო
 
@@ -46,7 +49,7 @@
   - next recommended step
   - authoritative files
   - verification pending / not run
-- სრული ისტორია და დეტალური evidence დატოვე `HANDOFF.md`-ში
+- სრული ისტორია და დეტალური evidence დატოვე `HANDOFF_ARCHIVE/`-ში (ახალი preview-ები: `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_XX_NAME_PREVIEW.md`)
 
 ## GitNexus — მოკლე წესები
 - უცნობ კოდზე navigation-ისთვის გამოიყენე `query` / `context`
@@ -64,7 +67,7 @@
 ## Session Boundaries (Phase 4B.3 Rule 23 — `code.claude.com`)
 - **No kitchen-sink sessions.** ერთი session = ერთი logical goal (მაგ. "Sprint 4B.2 + tests + commit")
 - scope creep = bug. თუ გზაში "ოჰ, ესეც გავაკეთო" მომიტყდა — ახალი task რომ გავაკეთო, ამ session-ის goal უნდა დავასრულო ჯერ
-- HANDOFF.md / CONTEXT_HANDOFF.md — განაახლე მხოლოდ მიმდინარე goal-ის დახურვისას, არა ყოველ commit-ზე
+- `CONTEXT_HANDOFF.md` — განაახლე მხოლოდ მიმდინარე goal-ის დახურვისას, არა ყოველ commit-ზე
 - `/restart-session` command-ით ახალი session-ი, თუ იგივე შეცდომა 2-ჯერ გაკეთდა (Rule 25 ქვემოთ)
 
 ## Correction Escalation (Phase 4B.3 Rule 25 — `code.claude.com`)
