@@ -1,7 +1,7 @@
 # CONTEXT HANDOFF — short brief
 
-> **განახლდა**: 2026-04-25 (**Phase 2.3 mix_analyzer LANDED 533c02f**. Category mix analyzer: reads `retail_sales.by_category` (645 rows) → computes portfolio GM gap vs 20% target → surfaces DRAG (low-margin × high-share) / LIFT (high-margin headroom) / 🔒 PROTECTED cigarettes (3 label variants → 1 canonical, 33.87% share, 10.53% blended margin). Live dog-food **3/3 PASS** on Sonnet 4.6 `think=True` (~\$0.20); 21 new pytest tests green; tool count 26 → **27**.)
-> **სტატუსი**: Phase 4A/4B/4C.2/4C.3 CLOSED · **Phase 2.1/2.2/2.3/2.4/2.5/2.6/2.8/2.9 COMPLETE** · Tier 1 + Tier 2 Sprint 1/2/3a/**3b/3c/3d/3e/3f** COMPLETE (per-file cache series DONE) · **🧾 Sprint 5.1-5.6, 5.8-5.11 COMPLETE · 5.7 DROPPED (retail-only) · 5.12 evidence-only** · Phase 4C.1 VAT-tools-scoped ✅ · **Phase 2.3 mix_analyzer 533c02f**.
+> **განახლდა**: 2026-04-25 (**Phase 3.8 margin_radar LANDED 5dfbf19**. Time-series GM compression tracker: reads `retail_sales.by_category_by_month` (10,882 rows × 645 categories × 2024-07..2026-02), rolls N-month window (default 6), computes Δgm_pp per canonical category weighted by recent revenue, and surfaces 🔴 COMPRESSING / 🟢 EXPANDING / 🔒 PROTECTED-INFO buckets. Reuses mix_analyzer's `_canonicalize_protected` (cigarette variants merge per period). Live dog-food **3/3 PASS** on Sonnet 4.6 `think=True` (~\$0.19, 119s, 237K cache_read); 31 new pytest tests green; tool count 27 → **28**. Companion to Phase 2.3 mix_analyzer (snapshot rebalance) and Phase 2.9 detect_trends (single-period decomposition).)
+> **სტატუსი**: Phase 4A/4B/4C.2/4C.3 CLOSED · **Phase 2.1/2.2/2.3/2.4/2.5/2.6/2.8/2.9 + 3.8 COMPLETE** · Tier 1 + Tier 2 Sprint 1/2/3a/**3b/3c/3d/3e/3f** COMPLETE (per-file cache series DONE) · **🧾 Sprint 5.1-5.6, 5.8-5.11 COMPLETE · 5.7 DROPPED (retail-only) · 5.12 evidence-only** · Phase 4C.1 VAT-tools-scoped ✅ · **Phase 3.8 margin_radar 5dfbf19**.
 
 ---
 
@@ -28,7 +28,7 @@
 - **Backend**: Windows Service **`FinancialDashboardBackend`** (NSSM, auto-start + auto-restart 2s, `AI_ENABLE_THINKING=true` + `PYTHONUTF8=1`, logs rotate 10MB/24h in `logs/backend_{stdout,stderr}.log`)
 - **Service control**: `services.msc` · `Restart-Service FinancialDashboardBackend` (admin/UAC) · `C:\tools\nssm\nssm.exe {start|stop|restart|status|edit}`
 - **⚠️ Service-restart-for-new-code**: service loads prompt at module-import time. After prompt changes, `Restart-Service` picks them up. For in-process AI tests, use `_scratch_dogfood_*.py` pattern (no service needed).
-- **Tool surface (27)**: `read_data_json`(1), `compute_waybill_total`(2), `compute`(3), `forecast_revenue`(4), `recall_context`(5), `save_memory`(6), `journal_{add,list,update}_entry`(7-9), `analyze_dead_stock`(10), `prepare_supplier_brief`(11), `compute_cash_runway`(12), `compute_cash_flow_projection`(13), `build_debt_repayment_plan`(14), `simulate_scenario`(15), `mix_analyzer`(16), `analyze_product_profitability`(17), `find_promotion_candidates`(18), `detect_trends`(19), `get_vat_reconciliation_month`(20), `explain_unaccounted_cash`(21), `record_cash_outflow`(22), `read_source_code`(23), `grep_code`(24), `read_excel_source`(25), `validate_vs_source`(26), `propose_feature`(27).
+- **Tool surface (28)**: `read_data_json`(1), `compute_waybill_total`(2), `compute`(3), `forecast_revenue`(4), `recall_context`(5), `save_memory`(6), `journal_{add,list,update}_entry`(7-9), `analyze_dead_stock`(10), `prepare_supplier_brief`(11), `compute_cash_runway`(12), `compute_cash_flow_projection`(13), `build_debt_repayment_plan`(14), `simulate_scenario`(15), `mix_analyzer`(16), **`margin_radar`(17)**, `analyze_product_profitability`(18), `find_promotion_candidates`(19), `detect_trends`(20), `get_vat_reconciliation_month`(21), `explain_unaccounted_cash`(22), `record_cash_outflow`(23), `read_source_code`(24), `grep_code`(25), `read_excel_source`(26), `validate_vs_source`(27), `propose_feature`(28).
 
 ---
 
@@ -36,9 +36,9 @@
 
 | მეტრიკა | მნიშვნელობა |
 |---|---|
-| **pytest** | **2,134/2,134 green** (~135s full run; +21 Phase 2.3 mix_analyzer regression pins; 1 pre-existing ChromaDB-env failure independent of Phase 2.3) |
+| **pytest** | **2,166/2,166 green** (~80s full run; +31 Phase 3.8 margin_radar regression pins + 1 set-membership update + assorted count-bumps across 9 sibling test files) |
 | **`SYSTEM_PROMPT_KA`** | 1,163 lines |
-| **Tool surface** | 27 |
+| **Tool surface** | 28 |
 | **Dashboard tabs** | 15 (incl. Store Compare, 💀 Dead Stock, ⚠️ Supplier Concentration, 📋 Debt Plan, 🧾 VAT) |
 | **Pipeline cache** | 207 MB (was 864 MB — Sprint 3a slim-down) |
 | **`data.json`** | 131.7 MB, 26 sections, 21,233 waybills |

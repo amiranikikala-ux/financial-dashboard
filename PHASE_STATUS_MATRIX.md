@@ -91,7 +91,8 @@
 | 3.1 | Co-Designer Mode (PULL-ONLY, `propose_feature`) | ✅ 🎬 | 2026-04-20 |
 | 3.5 | Dead Stock page + Supplier Concentration widget | ✅ 🎬 | 2026-04-20 |
 | 3.7 | `compute_cash_runway` AI tool | ✅ 🎬 | 2026-04-20 |
-| 3.* | conversation_summary_on_demand · margin_compression_radar · monthly_strategy_page · gap_analysis | 📋 PLANNED | ~1 week |
+| 3.8 | `margin_radar` (time-series GM compression tracker, pin `5dfbf19`) | ✅ 🎬 | 2026-04-25 |
+| 3.* | conversation_summary_on_demand · monthly_strategy_page · gap_analysis | 📋 PLANNED | ~1 week |
 
 ### Phase 4 — Autonomous Strategist
 
