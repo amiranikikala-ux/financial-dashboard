@@ -419,11 +419,19 @@ class TestToolRegistryIntegration:
         assert "analyze_product_profitability" in names
 
     def test_tool_sits_after_simulate_scenario(self):
+        """Phase 2.3 inserted mix_analyzer between simulate_scenario and
+        analyze_product_profitability (Phase ordering 2.2 → 2.3 → 2.5). The
+        Phase 2.5 tool still sits in the 'strategic analysis' cluster —
+        right after mix_analyzer, one step later than before."""
         from dashboard_pipeline.ai.tools import TOOL_SCHEMAS
 
         names = [t["name"] for t in TOOL_SCHEMAS]
         assert (
             names[names.index("simulate_scenario") + 1]
+            == "mix_analyzer"
+        )
+        assert (
+            names[names.index("mix_analyzer") + 1]
             == "analyze_product_profitability"
         )
 

@@ -117,6 +117,42 @@ RETAIL_SALES_DUPLICATE_SUSPECTED_FILES = {
 }
 
 # ---------------------------------------------------------------------------
+# Phase 2.3 — Mix Analyzer (category mix optimization)
+# ---------------------------------------------------------------------------
+
+#: User-approved portfolio gross-margin target. Tool computes gap vs current
+#: weighted portfolio GM and proposes drag→lift category shifts to close it.
+USER_TARGET_GROSS_MARGIN_PCT = 20.0
+
+#: Category labels whose ``normalized_category`` contains any of these
+#: substrings are merged into a single PROTECTED entry — user decision:
+#: cigarettes hold current share/margin (good seller, regulated, don't touch).
+#: Live data.json has 3 cigarette labels ("0804 | სიგარეტი", "სიგარეტი",
+#: "ელ. სიგარეტი"). Tuple (immutable) so it cannot be mutated at runtime.
+PROTECTED_CATEGORY_SUBSTRINGS = ("სიგარეტ",)
+
+#: Categories below (portfolio_gm − band) are DRAG; above (portfolio_gm +
+#: band) are LIFT. 3pp is wide enough that borderline categories aren't
+#: recommended for reallocation — only clear dilutors/accelerators surface.
+MIX_ANALYZER_MARGIN_BAND_PP = 3.0
+
+#: Minimum portfolio share for a category to qualify as a drag candidate
+#: (1%). Removes long-tail noise — a 0.1%-share category with 2% margin
+#: isn't moving the needle even if reallocated fully.
+MIX_ANALYZER_MIN_DRAG_SHARE_PCT = 1.0
+
+#: Minimum portfolio share for a category to qualify as a lift candidate
+#: (0.5%). Lower than drag threshold because lift candidates must already
+#: be present to grow into; we just don't want to suggest tilting into
+#: a category that barely exists in today's mix.
+MIX_ANALYZER_MIN_LIFT_SHARE_PCT = 0.5
+
+#: Maximum fraction of a source category's revenue a single recommended
+#: shift can propose to move (20%). Realism cap — telling a retailer to
+#: shift 50% of bread revenue into drinks is not an executable action.
+MIX_ANALYZER_MAX_SHIFT_PCT = 20.0
+
+# ---------------------------------------------------------------------------
 # Object mapping defaults
 # ---------------------------------------------------------------------------
 

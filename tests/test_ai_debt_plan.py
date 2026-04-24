@@ -778,7 +778,7 @@ class TestDebtPlanToolSchema:
     def test_total_schemas_is_21(self):
         from dashboard_pipeline.ai.tools import TOOL_SCHEMAS
 
-        assert len(TOOL_SCHEMAS) == 26
+        assert len(TOOL_SCHEMAS) == 27
 
     def test_sits_after_cash_flow_projection(self):
         # Phase 2.1 inserted compute_cash_flow_projection between

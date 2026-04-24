@@ -2372,6 +2372,117 @@ RECORD_CASH_OUTFLOW_TOOL: Dict[str, Any] = {
 }
 
 
+MIX_ANALYZER_TOOL: Dict[str, Any] = {
+    "name": "mix_analyzer",
+    "description": (
+        "Phase 2.3 — Category Mix Analyzer. Reads the pre-computed "
+        "`retail_sales.by_category` bundle (645 category rows, each with "
+        "revenue_ge + cost_ge + profit_ge + gross_margin_pct + "
+        "object_breakdown) and answers 'how do I move portfolio gross "
+        "margin toward my target by tilting category mix, holding "
+        "cigarettes constant?'. Surfaces current portfolio GM, target gap, "
+        "🔴 DRAG categories (low margin × sizable share — diluting the "
+        "portfolio), 🟢 LIFT categories (high margin headroom — tilt "
+        "targets), and a short list of realistic revenue-shift "
+        "recommendations.\n\n"
+        "**Triggers (CRITICAL):** strategic margin / portfolio mix "
+        "questions: 'როგორ ავიდე 20% მარჟამდე?', 'კატეგორიების მიქსი "
+        "როგორ ვცვალო?', 'რომელი კატეგორიის წილი შევამცირო?', "
+        "'portfolio margin gap', 'რომელი კატეგორია მიზიდავს მარჟას?', "
+        "'mix tilt', 'რა კატეგორია უფრო მოგვიტანს?'.\n\n"
+        "**Anti-triggers (NEVER call):**\n"
+        "  • per-SKU / per-product margin drill → "
+        "`analyze_product_profitability` (this tool is category-level; "
+        "SKU-level is a different layer)\n"
+        "  • promotion / discount candidate list → `find_promotion_candidates`\n"
+        "  • time-series margin trend (MoM / YoY) → `detect_trends`\n"
+        "  • future price+volume simulation → `simulate_scenario`\n"
+        "  • dead-stock clean-up (aged inventory) → `analyze_dead_stock`.\n\n"
+        "**Protected categories (hard rule):** cigarettes are treated as "
+        "PROTECTED by default — user's explicit business decision. The "
+        "tool merges all variants whose normalized_category contains "
+        "'სიგარეტ' (e.g. '0804 | სიგარეტი', 'სიგარეტი', 'ელ. სიგარეტი') "
+        "into a single protected entry. No recommended shift will ever "
+        "target a protected category as `from_category`. If the user "
+        "explicitly asks 'what if cigarettes weren't protected?', pass "
+        "`protected_override=[]` (empty list) to rerun unconstrained.\n\n"
+        "**DRAG / LIFT bands:** DRAG = gross_margin_pct < portfolio_gm − "
+        "3pp AND portfolio_share_pct ≥ 1%. LIFT = gross_margin_pct > "
+        "portfolio_gm + 3pp AND portfolio_share_pct ≥ 0.5%. Categories "
+        "inside the ±3pp band are treated as 'neutral' — moving them "
+        "doesn't materially move portfolio GM.\n\n"
+        "**Realism cap:** one recommended shift moves at most 20% of the "
+        "source category's revenue (retail reality — you can't shift 80% "
+        "of bread volume into drinks overnight). If the gap cannot be "
+        "closed under these caps, the tool says so in `summary_ka` and "
+        "does NOT fabricate unrealistic shifts.\n\n"
+        "**Returns:** `{store, top_n, target_gross_margin_pct, "
+        "portfolio{revenue_ge, profit_ge, gross_margin_pct, "
+        "category_count}, target{gross_margin_pct, gap_pp, "
+        "gap_profit_ge}, protected_categories[], drag_categories[], "
+        "lift_categories[], recommended_shifts[{action_ka, from_category, "
+        "to_category, revenue_shift_ge, gm_impact_pp}], "
+        "projected_portfolio{if_all_recommendations_applied{"
+        "gross_margin_pct, delta_pp, reaches_target}}, summary_ka, "
+        "notes[]}`.\n\n"
+        "**Honesty rule:** ALWAYS surface `summary_ka` verbatim — it "
+        "states the live portfolio GM, the target gap, protected share, "
+        "biggest DRAG, best LIFT, and whether the recommendations close "
+        "the gap or not. Do NOT substitute memory-based approximations "
+        "(e.g. 'cigarettes are ~6%') for live data.json numbers. Do NOT "
+        "claim the target is reached if `reaches_target=false`."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "store": {
+                "type": "string",
+                "enum": ["total", "ოზურგეთი", "დვაბზუ"],
+                "description": (
+                    "Which store's mix to analyze. Default 'total' "
+                    "(aggregate). Per-store modes read the category's "
+                    "object_breakdown entries."
+                ),
+            },
+            "top_n": {
+                "type": "integer",
+                "minimum": 3,
+                "maximum": 15,
+                "description": (
+                    "How many entries to surface in drag_categories and "
+                    "lift_categories (each), and max recommended_shifts "
+                    "pairs. Default 5. Raise for deeper review."
+                ),
+            },
+            "target_gross_margin_pct": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100,
+                "description": (
+                    "Override the default portfolio GM target (20%). "
+                    "Useful for sensitivity probes like 'რა ხდება 18%-ზე?' "
+                    "without editing code."
+                ),
+            },
+            "protected_override": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": (
+                    "Override the default protected-category substring "
+                    "list (which is just 'სიგარეტ'). Pass `[]` (empty) "
+                    "to run UNCONSTRAINED — no category is held fixed. "
+                    "Only override when the user explicitly asks to "
+                    "reconsider or extend protection (e.g. add a newly "
+                    "flagged category)."
+                ),
+            },
+        },
+        "required": [],
+        "additionalProperties": False,
+    },
+}
+
+
 TOOL_SCHEMAS: List[Dict[str, Any]] = [
     READ_DATA_JSON_TOOL,
     COMPUTE_WAYBILL_TOTAL_TOOL,
@@ -2388,6 +2499,7 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
     COMPUTE_CASH_FLOW_PROJECTION_TOOL,
     BUILD_DEBT_PLAN_TOOL,
     SCENARIO_SIMULATOR_TOOL,
+    MIX_ANALYZER_TOOL,
     PRODUCT_PROFITABILITY_XRAY_TOOL,
     FIND_PROMOTION_CANDIDATES_TOOL,
     DETECT_TRENDS_TOOL,
@@ -2796,6 +2908,18 @@ class ToolDispatcher:
                 top_n=args.get("top_n"),
                 category_filter=args.get("category_filter"),
                 min_revenue_threshold_ge=args.get("min_revenue_threshold_ge"),
+            )
+        elif name == "mix_analyzer":
+            from dashboard_pipeline.ai.mix_analyzer import (
+                analyze_category_mix as _analyze_category_mix,
+            )
+
+            result = _analyze_category_mix(
+                self._data_loader,
+                store=args.get("store"),
+                top_n=args.get("top_n"),
+                target_gross_margin_pct=args.get("target_gross_margin_pct"),
+                protected_override=args.get("protected_override"),
             )
         elif name == "find_promotion_candidates":
             from dashboard_pipeline.ai.promotion_candidates import (

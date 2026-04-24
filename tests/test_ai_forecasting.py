@@ -139,7 +139,7 @@ class TestForecastToolSchema:
         Phase 5.1 added 3 VAT tools (get_vat_reconciliation_month,
         explain_unaccounted_cash, record_cash_outflow) → 25.
         Pin the current expected total to catch silent churn either direction."""
-        assert len(TOOL_SCHEMAS) == 26
+        assert len(TOOL_SCHEMAS) == 27
 
     def test_forecast_revenue_index(self):
         """Sits in the compute-family cluster (index 3 right after `compute`)."""
