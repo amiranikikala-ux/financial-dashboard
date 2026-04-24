@@ -376,7 +376,7 @@ def _collect_income_bundles(script_dir, object_mapping):
     )
 
     tbc_expenses_bundle = collect_tbc_expense_categories(
-        script_dir, object_mapping=object_mapping
+        script_dir, object_mapping=object_mapping, use_cache=True
     )
     _te_lines = sum(
         int(c.get("line_count") or 0)
@@ -388,7 +388,7 @@ def _collect_income_bundles(script_dir, object_mapping):
         f"{tbc_expenses_bundle.get('grand_total_ge', 0):,.2f}",
     )
     bog_expenses_bundle = collect_bog_expense_categories(
-        script_dir, object_mapping=object_mapping
+        script_dir, object_mapping=object_mapping, use_cache=True
     )
     _be_lines = sum(
         int(c.get("line_count") or 0)

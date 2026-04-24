@@ -364,7 +364,7 @@ def _merge_samurneo_file_payloads(payloads):
     }
 
 
-def _run_cached_samurneo(
+def _run_cached_per_file(
     files,
     *,
     processor,
@@ -372,7 +372,13 @@ def _run_cached_samurneo(
     use_cache,
     cache_path,
 ):
-    """Shared per-file cache orchestration for TBC/BOG samurneo."""
+    """Generic per-file cache orchestration.
+
+    Used by the samurneo pair (Sprint 3b) and the expense-categories pair
+    (Sprint 3c). ``processor(path) → dict`` must return a JSON-serializable
+    payload with a ``status`` key; only ``status == "ok"`` payloads are
+    cached.
+    """
     cache = empty_cache()
     resolved_cache_path = None
     if use_cache:
@@ -429,7 +435,7 @@ def collect_tbc_samurneo_flow(
     patterns, include_all = _load_samurneo_patterns(script_dir)
     fingerprint = _content_fingerprint_samurneo(patterns, include_all, bank="TBC")
     files = list(list_tbc_bank_statement_xlsx())
-    payloads = _run_cached_samurneo(
+    payloads = _run_cached_per_file(
         files,
         processor=lambda f: _process_tbc_samurneo_file(
             f, patterns=patterns, include_all=include_all
@@ -448,7 +454,7 @@ def collect_bog_samurneo_flow(
     patterns, include_all = _load_samurneo_patterns(script_dir)
     fingerprint = _content_fingerprint_samurneo(patterns, include_all, bank="BOG")
     files = list(list_bog_bank_statement_xlsx())
-    payloads = _run_cached_samurneo(
+    payloads = _run_cached_per_file(
         files,
         processor=lambda f: _process_bog_samurneo_file(
             f, patterns=patterns, include_all=include_all
@@ -882,120 +888,274 @@ def _normalize_cats_from_json(raw_cats):
     return cats_norm
 
 
-def collect_tbc_expense_categories(script_dir, object_mapping=None):
-    cfg_path = os.path.join(script_dir, "Financial_Analysis", "tbc_expense_categories.json")
-    empty = {"categories": [], "grand_total_ge": 0.0, "grand_total_operating_expense_ge": 0.0, "grand_total_state_treasury_ge": 0.0}
+def _empty_expense_bundle():
+    return {
+        "categories": [],
+        "grand_total_ge": 0.0,
+        "grand_total_operating_expense_ge": 0.0,
+        "grand_total_state_treasury_ge": 0.0,
+    }
+
+
+def _load_expense_categories_config(script_dir):
+    """Return (raw_cfg_blob, cats_norm) or (None, None) on missing/empty config.
+
+    ``raw_cfg_blob`` is the raw dict parsed from
+    `tbc_expense_categories.json` and feeds the content_fingerprint so any
+    config edit invalidates both TBC and BOG caches.
+    """
+    cfg_path = os.path.join(
+        script_dir, "Financial_Analysis", "tbc_expense_categories.json"
+    )
     if not os.path.isfile(cfg_path):
-        return empty
+        return None, None
     try:
-        with open(cfg_path, encoding="utf-8") as f:
-            cfg = json.load(f)
+        with open(cfg_path, encoding="utf-8") as handle:
+            cfg = json.load(handle)
     except Exception:
-        return empty
+        return None, None
     raw_cats = cfg.get("categories", [])
     if not raw_cats:
-        return empty
+        return cfg, None
     cats_norm = _normalize_cats_from_json(raw_cats)
     if not cats_norm:
-        return empty
+        return cfg, None
+    return cfg, cats_norm
 
-    other_cat = {"id": TBC_OTHER_EXPENSE_ID, "label_ka": TBC_OTHER_EXPENSE_LABEL_KA,
-                 "accounting_role": ACCOUNTING_ROLE_OPERATING, "patterns": [], "match_all": [], "ibans": []}
+
+def _content_fingerprint_expense_categories(
+    cfg_blob, object_mapping, bank, other_id
+):
+    """Fingerprint non-file inputs for expense-categories cache.
+
+    Covers the full config JSON blob, the object_mapping (per-run) and the
+    bank-scoped "other" category id so TBC/BOG caches stay disjoint.
+    """
+    blob = json.dumps(
+        {
+            "cfg": cfg_blob or {},
+            "mapping": object_mapping or {},
+            "bank": bank,
+            "other_id": other_id,
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+        default=str,
+    )
+    return hashlib.sha1(blob.encode("utf-8")).hexdigest()
+
+
+def _process_tbc_expense_categories_file(
+    path, *, cats_norm, object_mapping, other_id
+):
+    """Parse one TBC yearly xlsx into per-category row lists.
+
+    Returns ``{"status": "ok" | "read_error", "rows_by_category": {cat_id: [rows...]}}``.
+    Bucketing + grand totals happen at merge time.
+    """
+    rows_by_category = {}
+    try:
+        header_idx = find_header_row(path)
+        df = pd.read_excel(path, header=header_idx)
+    except Exception as exc:
+        logger.error("TBC expenses %s: %s", path, exc)
+        return {"status": "read_error", "rows_by_category": {}}
+
+    cols = list(df.columns)
+    debit_col = next((c for c in cols if "გასული თანხა" in str(c)), None)
+    if not debit_col:
+        return {"status": "ok", "rows_by_category": {}}
+
+    df = df[~df[debit_col].astype(str).str.contains(
+        "Paid|Out|Amount", case=False, na=False
+    )]
+    date_col = next((c for c in cols if "თარიღი" in str(c)), None)
+    file_name = os.path.basename(path)
+
+    for _, row in df.iterrows():
+        amt = pd.to_numeric(row[debit_col], errors="coerce")
+        if pd.isna(amt) or amt <= 0:
+            continue
+        raw = _tbc_income_row_text_join(row, cols, debit_col)
+        blob_lower = raw.lower()
+        mid = _match_tbc_expense_category(blob_lower, cats_norm)
+        if not mid:
+            if _is_non_operating_tbc_residual(blob_lower):
+                continue
+            mid = other_id
+        obj_source = "tbc_salary" if mid == "salary_payments" else "tbc_expense"
+        rows_by_category.setdefault(mid, []).append({
+            "კატეგორია_id": mid,
+            "ფაილი": file_name,
+            "თარიღი": _excel_cell(row, date_col),
+            "თანხა": float(amt),
+            "object": detect_object(
+                obj_source, text=raw, object_mapping=object_mapping
+            ),
+            "ტექსტი_მოკლე": (raw[:500] + "...") if len(raw) > 500 else raw,
+        })
+    return {"status": "ok", "rows_by_category": rows_by_category}
+
+
+def _process_bog_expense_categories_file(
+    path, *, cats_norm, object_mapping, other_id
+):
+    """Parse one BOG yearly xlsx into per-category row lists."""
+    rows_by_category = {}
+    try:
+        header_idx = find_header_row(path)
+        df = pd.read_excel(path, header=header_idx)
+    except Exception as exc:
+        logger.error("BOG expenses %s: %s", path, exc)
+        return {"status": "read_error", "rows_by_category": {}}
+
+    cols = list(df.columns)
+    debit_col = next(
+        (c for c in cols if "დებეტი" in str(c) and "ბრუნვა" not in str(c)),
+        None,
+    )
+    if not debit_col:
+        return {"status": "ok", "rows_by_category": {}}
+
+    date_col = next((c for c in cols if "თარიღი" in str(c)), None)
+    operation_col = next(
+        (c for c in cols if "ოპერაციის შინაარსი" in str(c)), None
+    )
+    purpose_col = _find_excel_column_danishnuleba(cols)
+    receiver_col = next(
+        (c for c in cols if "მიმღების დასახელება" in str(c)), None
+    )
+    file_name = os.path.basename(path)
+
+    for _, row in df.iterrows():
+        amt = pd.to_numeric(row[debit_col], errors="coerce")
+        if pd.isna(amt) or amt <= 0:
+            continue
+        text_parts = []
+        for col in (operation_col, purpose_col, receiver_col):
+            val = _excel_cell(row, col)
+            if val:
+                text_parts.append(val)
+        raw = " | ".join(text_parts).strip()
+        if not raw:
+            raw = _tbc_row_text_join_skip(row, cols, [debit_col])
+        blob_lower = raw.lower()
+        mid = _match_tbc_expense_category(blob_lower, cats_norm)
+        if not mid:
+            mid = other_id
+        obj_source = "tbc_salary" if mid == "salary_payments" else "tbc_expense"
+        rows_by_category.setdefault(mid, []).append({
+            "კატეგორია_id": mid,
+            "ფაილი": file_name,
+            "თარიღი": _excel_cell(row, date_col),
+            "თანხა": float(amt),
+            "object": detect_object(
+                obj_source, text=raw, object_mapping=object_mapping
+            ),
+            "ტექსტი_მოკლე": (raw[:500] + "...") if len(raw) > 500 else raw,
+        })
+    return {"status": "ok", "rows_by_category": rows_by_category}
+
+
+def _merge_expense_file_payloads(cats_with_other, payloads):
+    """Flatten per-file payloads into the bundle-shaped buckets.
+
+    File iteration order is preserved so row ordering matches the
+    pre-refactor behavior exactly.
+    """
+    buckets = {c["id"]: [] for c in cats_with_other}
+    for payload in payloads:
+        rows_by_category = payload.get("rows_by_category") or {}
+        for cat_id, rows in rows_by_category.items():
+            if cat_id in buckets:
+                buckets[cat_id].extend(rows)
+            else:
+                # Defensive — a cached payload may reference a category id
+                # that has since been removed from config. Drop it rather
+                # than crash; fingerprint change will rebuild the cache.
+                continue
+    return buckets
+
+
+def collect_tbc_expense_categories(
+    script_dir, object_mapping=None, *, use_cache: bool = False, cache_path=None
+):
+    """Aggregate TBC expense categories across all TBC yearly xlsx files.
+
+    When ``use_cache=True``, per-file payloads are cached in
+    ``.pipeline_cache.json`` (or ``cache_path`` override). The cache
+    invalidates whenever the expense-categories config, object_mapping, or
+    bank identity changes (via ``_content_fingerprint_expense_categories``).
+    """
+    cfg_blob, cats_norm = _load_expense_categories_config(script_dir)
+    if cats_norm is None:
+        return _empty_expense_bundle()
+
+    other_cat = {
+        "id": TBC_OTHER_EXPENSE_ID,
+        "label_ka": TBC_OTHER_EXPENSE_LABEL_KA,
+        "accounting_role": ACCOUNTING_ROLE_OPERATING,
+        "patterns": [],
+        "match_all": [],
+        "ibans": [],
+    }
     cats_with_other = list(cats_norm) + [other_cat]
     object_mapping = object_mapping or load_object_mapping(script_dir)
-    buckets = {c["id"]: [] for c in cats_with_other}
-    for f in list_tbc_bank_statement_xlsx():
-        try:
-            header_idx = find_header_row(f)
-            df = pd.read_excel(f, header=header_idx)
-            cols = list(df.columns)
-            debit_col = next((c for c in cols if "გასული თანხა" in str(c)), None)
-            if not debit_col:
-                continue
-            df = df[~df[debit_col].astype(str).str.contains("Paid|Out|Amount", case=False, na=False)]
-            date_col = next((c for c in cols if "თარიღი" in str(c)), None)
-            for _, row in df.iterrows():
-                amt = pd.to_numeric(row[debit_col], errors="coerce")
-                if pd.isna(amt) or amt <= 0:
-                    continue
-                raw = _tbc_income_row_text_join(row, cols, debit_col)
-                blob_lower = raw.lower()
-                mid = _match_tbc_expense_category(blob_lower, cats_norm)
-                if not mid:
-                    if _is_non_operating_tbc_residual(blob_lower):
-                        continue
-                    mid = TBC_OTHER_EXPENSE_ID
-                obj_source = "tbc_salary" if mid == "salary_payments" else "tbc_expense"
-                buckets[mid].append({
-                    "კატეგორია_id": mid, "ფაილი": os.path.basename(f), "თარიღი": _excel_cell(row, date_col),
-                    "თანხა": float(amt), "object": detect_object(obj_source, text=raw, object_mapping=object_mapping),
-                    "ტექსტი_მოკლე": (raw[:500] + "...") if len(raw) > 500 else raw,
-                })
-        except Exception as e:
-            logger.error("TBC expenses %s: %s", f, e)
-
+    fingerprint = _content_fingerprint_expense_categories(
+        cfg_blob, object_mapping, bank="TBC", other_id=TBC_OTHER_EXPENSE_ID
+    )
+    files = list(list_tbc_bank_statement_xlsx())
+    payloads = _run_cached_per_file(
+        files,
+        processor=lambda f: _process_tbc_expense_categories_file(
+            f,
+            cats_norm=cats_norm,
+            object_mapping=object_mapping,
+            other_id=TBC_OTHER_EXPENSE_ID,
+        ),
+        fingerprint=fingerprint,
+        use_cache=bool(use_cache),
+        cache_path=cache_path,
+    )
+    buckets = _merge_expense_file_payloads(cats_with_other, payloads)
     return _build_expense_result(cats_with_other, buckets)
 
 
-def collect_bog_expense_categories(script_dir, object_mapping=None):
-    cfg_path = os.path.join(script_dir, "Financial_Analysis", "tbc_expense_categories.json")
-    empty = {"categories": [], "grand_total_ge": 0.0, "grand_total_operating_expense_ge": 0.0, "grand_total_state_treasury_ge": 0.0}
-    if not os.path.isfile(cfg_path):
-        return empty
-    try:
-        with open(cfg_path, encoding="utf-8") as f:
-            cfg = json.load(f)
-    except Exception:
-        return empty
-    raw_cats = cfg.get("categories", [])
-    if not raw_cats:
-        return empty
-    cats_norm = _normalize_cats_from_json(raw_cats)
-    if not cats_norm:
-        return empty
+def collect_bog_expense_categories(
+    script_dir, object_mapping=None, *, use_cache: bool = False, cache_path=None
+):
+    """Aggregate BOG expense categories across all BOG yearly xlsx files."""
+    cfg_blob, cats_norm = _load_expense_categories_config(script_dir)
+    if cats_norm is None:
+        return _empty_expense_bundle()
 
-    other_cat = {"id": BOG_OTHER_EXPENSE_ID, "label_ka": BOG_OTHER_EXPENSE_LABEL_KA,
-                 "accounting_role": ACCOUNTING_ROLE_OPERATING, "patterns": [], "match_all": [], "ibans": []}
+    other_cat = {
+        "id": BOG_OTHER_EXPENSE_ID,
+        "label_ka": BOG_OTHER_EXPENSE_LABEL_KA,
+        "accounting_role": ACCOUNTING_ROLE_OPERATING,
+        "patterns": [],
+        "match_all": [],
+        "ibans": [],
+    }
     cats_with_other = list(cats_norm) + [other_cat]
     object_mapping = object_mapping or load_object_mapping(script_dir)
-    buckets = {c["id"]: [] for c in cats_with_other}
-    for f in list_bog_bank_statement_xlsx():
-        try:
-            header_idx = find_header_row(f)
-            df = pd.read_excel(f, header=header_idx)
-            cols = list(df.columns)
-            debit_col = next((c for c in cols if "დებეტი" in str(c) and "ბრუნვა" not in str(c)), None)
-            if not debit_col:
-                continue
-            date_col = next((c for c in cols if "თარიღი" in str(c)), None)
-            operation_col = next((c for c in cols if "ოპერაციის შინაარსი" in str(c)), None)
-            purpose_col = _find_excel_column_danishnuleba(cols)
-            receiver_col = next((c for c in cols if "მიმღების დასახელება" in str(c)), None)
-            for _, row in df.iterrows():
-                amt = pd.to_numeric(row[debit_col], errors="coerce")
-                if pd.isna(amt) or amt <= 0:
-                    continue
-                text_parts = []
-                for col in (operation_col, purpose_col, receiver_col):
-                    val = _excel_cell(row, col)
-                    if val:
-                        text_parts.append(val)
-                raw = " | ".join(text_parts).strip()
-                if not raw:
-                    raw = _tbc_row_text_join_skip(row, cols, [debit_col])
-                blob_lower = raw.lower()
-                mid = _match_tbc_expense_category(blob_lower, cats_norm)
-                if not mid:
-                    mid = BOG_OTHER_EXPENSE_ID
-                obj_source = "tbc_salary" if mid == "salary_payments" else "tbc_expense"
-                buckets[mid].append({
-                    "კატეგორია_id": mid, "ფაილი": os.path.basename(f), "თარიღი": _excel_cell(row, date_col),
-                    "თანხა": float(amt), "object": detect_object(obj_source, text=raw, object_mapping=object_mapping),
-                    "ტექსტი_მოკლე": (raw[:500] + "...") if len(raw) > 500 else raw,
-                })
-        except Exception as e:
-            logger.error("BOG expenses %s: %s", f, e)
-
+    fingerprint = _content_fingerprint_expense_categories(
+        cfg_blob, object_mapping, bank="BOG", other_id=BOG_OTHER_EXPENSE_ID
+    )
+    files = list(list_bog_bank_statement_xlsx())
+    payloads = _run_cached_per_file(
+        files,
+        processor=lambda f: _process_bog_expense_categories_file(
+            f,
+            cats_norm=cats_norm,
+            object_mapping=object_mapping,
+            other_id=BOG_OTHER_EXPENSE_ID,
+        ),
+        fingerprint=fingerprint,
+        use_cache=bool(use_cache),
+        cache_path=cache_path,
+    )
+    buckets = _merge_expense_file_payloads(cats_with_other, payloads)
     return _build_expense_result(cats_with_other, buckets)
 
 
