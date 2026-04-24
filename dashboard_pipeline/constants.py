@@ -153,6 +153,37 @@ MIX_ANALYZER_MIN_LIFT_SHARE_PCT = 0.5
 MIX_ANALYZER_MAX_SHIFT_PCT = 20.0
 
 # ---------------------------------------------------------------------------
+# Phase 3.8 — Margin Compression Radar (time-series GM decay tracker)
+# ---------------------------------------------------------------------------
+
+#: Default rolling window in months. 6 captures a quarter-and-a-half cycle —
+#: long enough to smooth single-month seasonality (December/January), short
+#: enough to surface live business signal (not ancient history).
+MARGIN_RADAR_DEFAULT_WINDOW_MONTHS = 6
+
+#: Hard min on user-supplied window_months. <3 cannot establish a trend
+#: (only 2 data points = a line, not a slope).
+MARGIN_RADAR_MIN_WINDOW_MONTHS = 3
+
+#: Hard max on user-supplied window_months. >12 reaches into pre-Sprint-5.5
+#: data (revenue formula was wrong before commit cf39cd3) — would corrupt
+#: the trend signal.
+MARGIN_RADAR_MAX_WINDOW_MONTHS = 12
+
+#: Minimum number of data points a category must have inside the window
+#: to be evaluated. <3 = spotty data, slope is meaningless.
+MARGIN_RADAR_MIN_MONTHS_IN_WINDOW = 3
+
+#: Noise floor on revenue_recent (avg of last 2 months in window). Below
+#: this, a 30pp margin swing is statistically meaningless — one bad day
+#: can move the number, not a real business trend.
+MARGIN_RADAR_MIN_REVENUE_FOR_TRACKING_GE = 1000.0
+
+#: A category is flagged as EXPANDING only when delta_pp > +1pp. Below
+#: this it's measurement noise, not a real margin lift.
+MARGIN_RADAR_EXPANSION_THRESHOLD_PP = 1.0
+
+# ---------------------------------------------------------------------------
 # Object mapping defaults
 # ---------------------------------------------------------------------------
 

@@ -605,7 +605,7 @@ class TestExtendedToolSchemas:
         #  analyze_product_profitability added in Phase 2.5 → 21;
         #  find_promotion_candidates added in Phase 2.6 → 22;
         #  Phase 5.1 added 3 VAT tools → 25.)
-        assert len(TOOL_SCHEMAS) == 27
+        assert len(TOOL_SCHEMAS) == 28  # Phase 3.8: +margin_radar
 
     def test_investigator_tool_names_set(self):
         assert set(INVESTIGATOR_TOOL_NAMES) == {

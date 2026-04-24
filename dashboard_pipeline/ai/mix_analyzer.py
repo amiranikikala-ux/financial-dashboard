@@ -752,4 +752,7 @@ __all__ = [
     "SOURCE_LABEL",
     "PROTECTED_REASON_KA",
     "analyze_category_mix",
+    # Phase 3.8 reuse: margin_radar imports this helper — it's stable API
+    # (tested, used in production) but still module-private by _ prefix.
+    "_canonicalize_protected",
 ]

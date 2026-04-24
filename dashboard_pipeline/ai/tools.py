@@ -2483,6 +2483,114 @@ MIX_ANALYZER_TOOL: Dict[str, Any] = {
 }
 
 
+MARGIN_RADAR_TOOL: Dict[str, Any] = {
+    "name": "margin_radar",
+    "description": (
+        "Phase 3.8 — Margin Compression Radar. Reads "
+        "`retail_sales.by_category_by_month` (per-category per-month bundle "
+        "with revenue_ge + cost_ge + profit_ge + gross_margin_pct) and "
+        "surfaces categories whose gross margin is decaying (compressing) "
+        "or improving (expanding) across a rolling window of months. "
+        "Sorts by *revenue-weighted* compression score — a 30pp drop on a "
+        "1,000 ₾ category does NOT outrank a 2pp drop on a 100,000 ₾ "
+        "category. Default window = 6 months (range 3..12).\n\n"
+        "**Triggers (CRITICAL):** time-series margin questions: "
+        "'რომელი კატეგორიის მარჟა კლებულობს?', 'სად ვკარგავ მარჟას ბოლო თვეებში?', "
+        "'მარჟის კომპრესია', 'მარჟა იცვლება?', 'რომელი კატეგორიის GM იშლება?', "
+        "'ბოლო X თვის მარჟის ცვლილება', 'margin slippage', 'margin decay', "
+        "'რომელი კატეგორია გვირღვევს მარჟას?'.\n\n"
+        "**Anti-triggers (NEVER call):**\n"
+        "  • snapshot mix rebalance to hit target GM → `mix_analyzer` "
+        "(this tool is a TIME-SERIES tracker; mix_analyzer is the snapshot "
+        "rebalancer)\n"
+        "  • single-period MoM/YoY price×volume decomposition → "
+        "`detect_trends` (radar covers MULTI-month trend; detect_trends "
+        "decomposes ONE comparison)\n"
+        "  • per-SKU / per-product margin drill → "
+        "`analyze_product_profitability` (this tool is category-level)\n"
+        "  • promotion / discount candidate list → `find_promotion_candidates`\n"
+        "  • future scenario simulation → `simulate_scenario`.\n\n"
+        "**Protected categories (hard rule):** cigarettes are PROTECTED "
+        "by default (user's explicit business decision). The tool merges "
+        "all variants whose normalized_category contains 'სიგარეტ' across "
+        "the entire window into one canonical entry placed in "
+        "`protected_info[]` — visible (so the AI can flag the signal in "
+        "honesty), but NEVER appears in `compressing_categories[]` and is "
+        "never a recommendation target. If the user explicitly asks 'what "
+        "if cigarettes weren't protected?', pass `protected_override=[]` "
+        "(empty list) to rerun unconstrained.\n\n"
+        "**Filters (data-quality):** category included only if (a) ≥3 "
+        "data points in the window, (b) all in-window margins inside "
+        "[-5%, +90%] (mirror trend_detector suspicious filter), (c) "
+        "recent revenue (avg of last 2 in-window months) ≥ 1,000 ₾ "
+        "(noise floor). Categories failing (a) or (c) → "
+        "`categories_skipped_thin_data`. Failing (b) → "
+        "`categories_skipped_suspicious`.\n\n"
+        "**Returns:** `{window{months,start_period,end_period}, top_n, "
+        "categories_evaluated, categories_skipped_thin_data, "
+        "categories_skipped_suspicious, target_gross_margin_pct, "
+        "compressing_categories[{category, raw_label, gm_first_pct, "
+        "gm_last_pct, delta_pp, revenue_recent_ge, compression_score, "
+        "months_in_window, flag}], expanding_categories[same shape], "
+        "protected_info[{canonical_label, raw_labels[], gm_first_pct, "
+        "gm_last_pct, delta_pp, revenue_recent_ge, compression_score, "
+        "reason_ka, flag}], summary_ka, notes[]}`.\n\n"
+        "**Honesty rule:** ALWAYS surface `summary_ka` verbatim — it "
+        "states the live window, the worst compression, top expansion, "
+        "and the protected entries' own delta. Do NOT extrapolate the "
+        "trend (Δpp is historical, not forecast). Do NOT substitute "
+        "memory-based approximations for live data.json numbers."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "window_months": {
+                "type": "integer",
+                "minimum": 3,
+                "maximum": 12,
+                "description": (
+                    "Rolling window size in months. Default 6 (covers a "
+                    "quarter-and-a-half cycle). Pass 3 for short-term "
+                    "signal, up to 12 for longer-term decay."
+                ),
+            },
+            "top_n": {
+                "type": "integer",
+                "minimum": 3,
+                "maximum": 15,
+                "description": (
+                    "How many entries to surface in compressing_categories "
+                    "and expanding_categories (each). Default 5."
+                ),
+            },
+            "target_gross_margin_pct": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100,
+                "description": (
+                    "Optional informational target line shown in summary. "
+                    "Default = USER_TARGET_GROSS_MARGIN_PCT (20%). Radar "
+                    "does NOT propose how to close any gap — it reports "
+                    "trends only. Use mix_analyzer for gap-closure plans."
+                ),
+            },
+            "protected_override": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": (
+                    "Override the default protected-category substring "
+                    "list ('სიგარეტ'). Pass `[]` (empty) to run "
+                    "UNCONSTRAINED — no category is held in "
+                    "protected_info. Only override on explicit user ask."
+                ),
+            },
+        },
+        "required": [],
+        "additionalProperties": False,
+    },
+}
+
+
 TOOL_SCHEMAS: List[Dict[str, Any]] = [
     READ_DATA_JSON_TOOL,
     COMPUTE_WAYBILL_TOTAL_TOOL,
@@ -2500,6 +2608,7 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
     BUILD_DEBT_PLAN_TOOL,
     SCENARIO_SIMULATOR_TOOL,
     MIX_ANALYZER_TOOL,
+    MARGIN_RADAR_TOOL,
     PRODUCT_PROFITABILITY_XRAY_TOOL,
     FIND_PROMOTION_CANDIDATES_TOOL,
     DETECT_TRENDS_TOOL,
@@ -2917,6 +3026,18 @@ class ToolDispatcher:
             result = _analyze_category_mix(
                 self._data_loader,
                 store=args.get("store"),
+                top_n=args.get("top_n"),
+                target_gross_margin_pct=args.get("target_gross_margin_pct"),
+                protected_override=args.get("protected_override"),
+            )
+        elif name == "margin_radar":
+            from dashboard_pipeline.ai.margin_radar import (
+                analyze_margin_compression as _analyze_margin_compression,
+            )
+
+            result = _analyze_margin_compression(
+                self._data_loader,
+                window_months=args.get("window_months"),
                 top_n=args.get("top_n"),
                 target_gross_margin_pct=args.get("target_gross_margin_pct"),
                 protected_override=args.get("protected_override"),

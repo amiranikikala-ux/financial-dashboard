@@ -399,7 +399,7 @@ class TestCashRunwayToolSchema:
     def test_tool_schemas_length_is_18(self):
         from dashboard_pipeline.ai.tools import TOOL_SCHEMAS
 
-        assert len(TOOL_SCHEMAS) == 27
+        assert len(TOOL_SCHEMAS) == 28  # Phase 3.8: +margin_radar
 
     def test_tool_sits_after_supplier_brief(self):
         from dashboard_pipeline.ai.tools import TOOL_SCHEMAS

@@ -420,9 +420,10 @@ class TestToolRegistryIntegration:
 
     def test_tool_sits_after_simulate_scenario(self):
         """Phase 2.3 inserted mix_analyzer between simulate_scenario and
-        analyze_product_profitability (Phase ordering 2.2 → 2.3 → 2.5). The
-        Phase 2.5 tool still sits in the 'strategic analysis' cluster —
-        right after mix_analyzer, one step later than before."""
+        analyze_product_profitability. Phase 3.8 then inserted margin_radar
+        between mix_analyzer and analyze_product_profitability — the radar
+        is the time-series sibling of the snapshot mix_analyzer, so they
+        live next to each other in the strategic-analysis cluster."""
         from dashboard_pipeline.ai.tools import TOOL_SCHEMAS
 
         names = [t["name"] for t in TOOL_SCHEMAS]
@@ -432,6 +433,10 @@ class TestToolRegistryIntegration:
         )
         assert (
             names[names.index("mix_analyzer") + 1]
+            == "margin_radar"
+        )
+        assert (
+            names[names.index("margin_radar") + 1]
             == "analyze_product_profitability"
         )
 
