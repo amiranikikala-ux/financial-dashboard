@@ -1,7 +1,7 @@
 # CONTEXT HANDOFF — short brief
 
-> **განახლდა**: 2026-04-24 (**Sprint 5.12 EVIDENCE-ONLY** — TBC 2023-08 → 2024-03 shortage diagnosed: root cause = TBC statement format change mid-2024 (SH046092/SH034467 transactions posted to transit-IBAN with merchant-ID tags only, no terminal ID in text). No safe auto-fix. Audit-defense unchanged.)
-> **სტატუსი**: Phase 4A/4B/4C.2/4C.3 CLOSED · **Phase 2.1/2.2/2.4/2.5/2.6/2.8/2.9 COMPLETE** · Tier 1 + Tier 2 Sprint 1/2/3a COMPLETE · **🧾 Sprint 5.1 → 5.11 COMPLETE · Sprint 5.12 evidence-only** · Phase 4C.1 VAT-tools-scoped ✅ · **Sprint 5.11 unit-fix landed** · **Sprint 5.12 evidence** (`HANDOFF_ARCHIVE/PREVIEWS/SPRINT_5_12_TBC_SHORTAGE_EVIDENCE.md`).
+> **განახლდა**: 2026-04-24 (**Sprint 3b LANDED** — per-file cache for bank samurneo (TBC+BOG): 200x TBC / 748x BOG speedup on cold→hot, digests byte-identical, 7 new regression tests. Unblocks the next 4 bank section sprints (3c/3d/3e).)
+> **სტატუსი**: Phase 4A/4B/4C.2/4C.3 CLOSED · **Phase 2.1/2.2/2.4/2.5/2.6/2.8/2.9 COMPLETE** · Tier 1 + Tier 2 Sprint 1/2/3a/**3b** COMPLETE · **🧾 Sprint 5.1 → 5.11 COMPLETE · Sprint 5.12 evidence-only** · Phase 4C.1 VAT-tools-scoped ✅ · **Sprint 3b samurneo cache landed 8bd01e8**.
 
 ---
 
@@ -36,7 +36,7 @@
 
 | მეტრიკა | მნიშვნელობა |
 |---|---|
-| **pytest** | **2,073/2,073 green** (~75s full run; +5 regression pins Sprint 5.11) |
+| **pytest** | **2,080/2,080 green** (~115s full run; +7 regression pins Sprint 3b samurneo incremental) |
 | **`SYSTEM_PROMPT_KA`** | 1,163 lines |
 | **Tool surface** | 26 |
 | **Dashboard tabs** | 15 (incl. Store Compare, 💀 Dead Stock, ⚠️ Supplier Concentration, 📋 Debt Plan, 🧾 VAT) |
@@ -50,6 +50,7 @@
 
 | commit | sprint | summary |
 |---|---|---|
+| `8bd01e8` | **3b** | **Bank samurneo per-file cache landed.** Extends Sprint 2 retail_sales cache template to `collect_tbc_samurneo_flow` + `collect_bog_samurneo_flow`. Adds `_load_samurneo_patterns`, `_content_fingerprint_samurneo` (bank-scoped SHA1 over patterns + include_all), `_process_{tbc,bog}_samurneo_file`, `_merge_samurneo_file_payloads`, `_run_cached_samurneo`. Both collectors now accept `use_cache`/`cache_path`; wired `use_cache=True` at `_collect_income_bundles:409-410`. **Live-verify on real corpus: TBC 6.66s→0.03s (200x), BOG 23.22s→0.03s (748x); digests byte-identical with no-cache run (TBC exp 77,270/ret 168,010, BOG exp 120,703.95/ret 76,390).** 7 new integration tests (`tests/test_samurneo_incremental.py`) mirror retail_sales incremental pattern. 2,080/2,080 pytest green. Sprint 5.12 TBC shortage numbers unchanged. Unblocks Sprint 3c/3d/3e (tax_flow, TBC card_income + BOG POS, expense_categories, foodmart cashback). |
 | `684eab8` | **5.12** | **TBC shortage diagnosis — evidence-only.** Per-row forensics on 2023-08..2024-03 + RS.ge source-of-truth + 8-bucket classification reveal TBC bank statement format changed in 2024-04: before the change, SH046092 and SH034467 terminal transactions were posted to transit-IBAN `GE69TB0000000251140006` with merchant-ID tags (`33001022152`, `33001023234`, `01301132349`) but no physical terminal ID embedded; after 2024-04 TBC started embedding terminal IDs in rollup rows. Sprint 5.2's terminal-ID filter correctly excludes merchant-ID rows (which would double-count in post-change months) but incidentally loses ~52K ₾ of real per-transaction income in the 8 pre-change months. No safe auto-fix: same row signature represents "real income" in pre-change months and "double-count aggregates" in post-change months. Audit's TBC figure (computed from RS.ge × 1/1.18) correctly captures all these transactions — pipeline's +90K independent gap verification is unaffected. See `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_5_12_TBC_SHORTAGE_EVIDENCE.md`. |
 | `3d41819` | **5.11** | **unit-error fix landed end-to-end** — `vat_reconciliation.py` now computes `gap_vs_declared_ge` = total_real_net − declared (NET basis, matches audit); adds `gap_gross_ge` + `total_real_net_ge` as explicit alternatives; removes hardcoded 98.5/94 claim from methodology; also fixes declared=0 placeholder case (was polluting gap sum by ~82K). Export + AI tools + frontend + tests (+5 new regression pins) + SYSTEM_PROMPT_KA all updated. `generate_dashboard_data.py` output log now exposes gross vs net. **2,073/2,073 pytest green.** data.json regenerated — UI/AI/Excel now show unit-correct numbers. |
 | `f876012` | **5.10** | **evidence-only session** — diagnosed unit error in `gap_vs_declared_ge` (gross − net mismatch inflating gap by +702K); identified 98.5/94 cross-match as hardcoded string, not computed; mapped fix blast radius (6 production files + tests + prompts). **No production code changed.** See `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_5_10_UNIT_ERROR_PREVIEW.md` + `_scratch_sprint5_10_*.json` evidence. |
@@ -108,14 +109,17 @@ All on `origin/main`. Older commits → `git log`.
 
 | # | item | size | risk | რატომ |
 |---|---|---|---|---|
-| **1** | **Tier 2 Sprint 3b — cache extension to bank / supplier / waybills** | **~1 session per section** | **MED** | applies Sprint 2/3a pattern per `project_pipeline_cache_pattern.md` memory. **PREVIEW DELIVERED** (`HANDOFF_ARCHIVE/PREVIEWS/SPRINT_3B_BANK_PREVIEW.md`): 9 collectors inventoried, output-shape audit complete (all JSON-safe), fingerprint inputs mapped, scoped recommendation = start with **samurneo pair only** (collect_tbc_samurneo_flow + collect_bog_samurneo_flow — smallest/cleanest), 7 tests mirroring retail_sales incremental. **← next session's recommended start (implementation only, decisions already made)** |
-| 2 | **Phase 4C.1 Part C (if gaps appear)** | evidence-driven | LOW | Parts A+B covered 8 tools. Remaining tools already carry Triggers + Anti-triggers + Returns + Honesty-rule blocks per evidence survey. Only open new schema-audit work if a live dog-food surfaces an actual routing miss. |
-| 3 | **Phase 2.3 `industry_benchmark`** | ~1 day | LOW | blocked on external data source decision (hardcoded retail medians? Excel import? public dataset?) — ask user |
-| 4 | **Phase 3 remaining (4 features)** | ~1 week | LOW | conversation_summary_on_demand · margin_compression_radar · monthly_strategy_page · gap_analysis |
-| 5 | **Phase 4 Advanced (9 features)** | ~2-3 weeks | MED | in `AI_GENIUS_PARTNER_PLAN.md` v2.1 |
-| 6 | **Parking Lot** | — | — | ~40 items in v2.1 plan |
+| **1** | **Tier 2 Sprint 3c — tax_flow + expense_categories cache** | **~1 session per section** | **MED** | samurneo template proven in 3b (`8bd01e8`). Next easiest targets: `collect_tax_flow` (cross-bank, tags rows with bank = per-file cache works fine; most complex fingerprint due to default_patterns + treasury_in_markers + TAX_TREASURY_CLUSTER_NOTE_KA) AND/OR `collect_tbc_expense_categories` + `collect_bog_expense_categories` (largest config fingerprints — most noise during development). Pick one per session. |
+| 2 | **Tier 2 Sprint 3d — POS terminal income cache (Sprint 5.12-sensitive)** | **~1 session** | **MED-HIGH** | `collect_tbc_card_income` + `collect_bog_pos_terminal_income`. Sprint 5.12 audit-defense depends on TBC card_income totals reproducing exactly. **Must add pin test** (`tests/test_tbc_card_income_cache_equivalence.py`) asserting pre-cache vs post-cache dict-identical output on the current `Financial_Analysis/თბს ბანკი ამონაწერი/` corpus BEFORE wiring use_cache=True. |
+| 3 | **Tier 2 Sprint 3e — foodmart cashback** | **~1 session** | LOW | `collect_tbc_foodmart_cashback` — smallest collector, easy follow-up once 3c/3d land. |
+| 4 | **Phase 4C.1 Part C (if gaps appear)** | evidence-driven | LOW | Parts A+B covered 8 tools. Remaining tools already carry Triggers + Anti-triggers + Returns + Honesty-rule blocks per evidence survey. Only open new schema-audit work if a live dog-food surfaces an actual routing miss. |
+| 5 | **Phase 2.3 `industry_benchmark`** | ~1 day | LOW | blocked on external data source decision (hardcoded retail medians? Excel import? public dataset?) — ask user |
+| 6 | **Phase 3 remaining (4 features)** | ~1 week | LOW | conversation_summary_on_demand · margin_compression_radar · monthly_strategy_page · gap_analysis |
+| 7 | **Phase 4 Advanced (9 features)** | ~2-3 weeks | MED | in `AI_GENIUS_PARTNER_PLAN.md` v2.1 |
+| 8 | **Parking Lot** | — | — | ~40 items in v2.1 plan |
 
 **Recently CLOSED** (drill into commit/evidence if needed, not open work):
+- Sprint 3b (`8bd01e8`) — samurneo per-file cache landed, 200x TBC / 748x BOG speedup, 7 new tests (2,080/2,080 green)
 - Sprint 5.12 (`684eab8`) — TBC shortage 2023-08→2024-03 diagnosed, no safe auto-fix, audit-defense unaffected (see `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_5_12_TBC_SHORTAGE_EVIDENCE.md`)
 - Sprint 5.11 (`bfeeee5` + `3d41819`) — VAT gap unit-error fixed end-to-end, live AI 1/1 PASS
 
