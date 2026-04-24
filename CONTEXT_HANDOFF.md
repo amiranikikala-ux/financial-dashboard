@@ -108,13 +108,16 @@ All on `origin/main`. Older commits → `git log`.
 
 | # | item | size | risk | რატომ |
 |---|---|---|---|---|
-| 1 | ~~TBC shortage 2023-08 → 2024-03 investigation~~ | **CLOSED (Sprint 5.12)** | — | **Evidence-only sprint delivered** (`HANDOFF_ARCHIVE/PREVIEWS/SPRINT_5_12_TBC_SHORTAGE_EVIDENCE.md`). Root cause: TBC bank statement format changed in 2024-04 — before that, SH046092/SH034467 transactions posted to transit-IBAN with merchant-ID tags only (no physical terminal ID in text). Sprint 5.2's terminal-ID filter correctly excludes merchant-ID rows in post-change months (where they're double-count aggregates) but incidentally loses ~52K ₾ real income in pre-change months. No safe auto-fix: signatures overlap between "real income" (pre-change) and "double-count aggregate" (post-change). Audit-defense unaffected — audit's own TBC figure is derived from RS.ge × 1/1.18 and already captures these transactions. |
-| 2 | **Phase 4C.1 Part C (if gaps appear)** | evidence-driven | LOW | Parts A+B covered 8 tools with real Triggers/Anti-triggers gaps. The remaining tools (forecast/math six + save_memory/recall_context/journal_add/journal_list + prepare_supplier_brief + analyze_product_profitability + find_promotion_candidates + build_debt_repayment_plan + propose_feature) were SKIPPED per evidence-based survey — they already carry Triggers + Anti-triggers + Returns + Honesty-rule blocks. Only open new schema-audit work if a live dog-food surfaces an actual routing miss. |
-| 3 | **Tier 2 Sprint 3b — cache extension to bank / supplier / waybills** | ~1 session each | MED | applies Sprint 2/3a pattern per `project_pipeline_cache_pattern.md` memory; audit all-rows fields before caching |
-| 4 | **Phase 2.3 `industry_benchmark`** | ~1 day | LOW | blocked on external data source decision (hardcoded retail medians? Excel import? public dataset?) — ask user |
-| 5 | **Phase 3 remaining (4 features)** | ~1 week | LOW | conversation_summary_on_demand · margin_compression_radar · monthly_strategy_page · gap_analysis |
-| 6 | **Phase 4 Advanced (9 features)** | ~2-3 weeks | MED | in `AI_GENIUS_PARTNER_PLAN.md` v2.1 |
-| 7 | **Parking Lot** | — | — | ~40 items in v2.1 plan |
+| **1** | **Tier 2 Sprint 3b — cache extension to bank / supplier / waybills** | **~1 session per section** | **MED** | applies Sprint 2/3a pattern per `project_pipeline_cache_pattern.md` memory; start with ONE section (bank recommended — highest blast radius, cleanest pay-off), audit `collect_*_bundle` output-fidelity before caching, 7-8 integration tests mirroring `tests/test_retail_sales_incremental.py`, live verify with `_scratch_sprint2_cache_verify.py`. **← next session's recommended start** |
+| 2 | **Phase 4C.1 Part C (if gaps appear)** | evidence-driven | LOW | Parts A+B covered 8 tools. Remaining tools already carry Triggers + Anti-triggers + Returns + Honesty-rule blocks per evidence survey. Only open new schema-audit work if a live dog-food surfaces an actual routing miss. |
+| 3 | **Phase 2.3 `industry_benchmark`** | ~1 day | LOW | blocked on external data source decision (hardcoded retail medians? Excel import? public dataset?) — ask user |
+| 4 | **Phase 3 remaining (4 features)** | ~1 week | LOW | conversation_summary_on_demand · margin_compression_radar · monthly_strategy_page · gap_analysis |
+| 5 | **Phase 4 Advanced (9 features)** | ~2-3 weeks | MED | in `AI_GENIUS_PARTNER_PLAN.md` v2.1 |
+| 6 | **Parking Lot** | — | — | ~40 items in v2.1 plan |
+
+**Recently CLOSED** (drill into commit/evidence if needed, not open work):
+- Sprint 5.12 (`684eab8`) — TBC shortage 2023-08→2024-03 diagnosed, no safe auto-fix, audit-defense unaffected (see `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_5_12_TBC_SHORTAGE_EVIDENCE.md`)
+- Sprint 5.11 (`bfeeee5` + `3d41819`) — VAT gap unit-error fixed end-to-end, live AI 1/1 PASS
 
 **Audit defense view** (rewritten 2026-04-24 after Sprint 5.11 unit-fix landed, TBC line sharpened by Sprint 5.12 diagnosis):
 
