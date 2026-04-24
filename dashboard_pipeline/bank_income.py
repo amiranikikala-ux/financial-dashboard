@@ -521,100 +521,317 @@ def write_tbc_samurneo_excel(bundle, download_dir):
 # Tax flow (საგადასახადო მოძრაობა — BOG + TBC)
 # ---------------------------------------------------------------------------
 
-def collect_tax_flow(script_dir):
-    cfg_path = os.path.join(script_dir, "Financial_Analysis", "tax_flow_patterns.json")
-    default_patterns = [
-        "საშემოსავლო", "გადასახად", "ბიუჯეტ", "revenue service", "rs.ge",
-        "treasury", "tresge22", "204931440", "ge24nb0330100200165022",
-        "ge60bg0000000667583800rs", "ge04bg0000000201978600rs",
-    ]
-    treasury_in_markers = ["tresge22", "სახელმწიფო ხაზინა", "204931440", "ge24nb0330100200165022"]
+TAX_FLOW_DEFAULT_PATTERNS = (
+    "საშემოსავლო", "გადასახად", "ბიუჯეტ", "revenue service", "rs.ge",
+    "treasury", "tresge22", "204931440", "ge24nb0330100200165022",
+    "ge60bg0000000667583800rs", "ge04bg0000000201978600rs",
+)
+TAX_FLOW_TREASURY_IN_MARKERS = (
+    "tresge22", "სახელმწიფო ხაზინა", "204931440", "ge24nb0330100200165022",
+)
+TAX_FLOW_LABEL_KA = (
+    "საგადასახადო / ბიუჯეტი / სახელმწიფო ხაზინა (ბანკის ფილტრი)"
+)
+TAX_FLOW_OUT_DIRECTION_KA = "საგადასახადო გადარიცხული"
+TAX_FLOW_IN_DIRECTION_KA = "საგადასახადო ჩარიცხული"
+TAX_FLOW_TREASURY_IN_DIRECTION_KA = "სახელმწიფო ხაზინიდან ჩარიცხული"
+
+
+def _load_tax_flow_config(script_dir):
+    """Read tax_flow_patterns.json or fall back to hardcoded defaults.
+
+    Returns ``(patterns, treasury_in_markers)``. ``treasury_in_markers`` is
+    not configurable today; it is returned for symmetry so the fingerprint
+    includes it.
+    """
+    cfg_path = os.path.join(
+        script_dir, "Financial_Analysis", "tax_flow_patterns.json"
+    )
+    default_patterns = list(TAX_FLOW_DEFAULT_PATTERNS)
     patterns = default_patterns
     if os.path.isfile(cfg_path):
         try:
-            with open(cfg_path, encoding="utf-8") as f:
-                cfg = json.load(f)
-            patterns = [str(x).lower() for x in (cfg.get("match_substrings") or []) if str(x).strip()] or default_patterns
+            with open(cfg_path, encoding="utf-8") as handle:
+                cfg = json.load(handle)
+            patterns = [
+                str(x).lower()
+                for x in (cfg.get("match_substrings") or [])
+                if str(x).strip()
+            ] or default_patterns
         except Exception:
             patterns = default_patterns
+    return patterns, list(TAX_FLOW_TREASURY_IN_MARKERS)
 
-    out_rows = []
-    in_rows = []
-    treasury_in_rows = []
 
-    # BOG
-    for f in list_bog_bank_statement_xlsx():
-        try:
-            header_idx = find_header_row(f)
-            df = pd.read_excel(f, header=header_idx)
-            cols = list(df.columns)
-            debit_col = next((c for c in cols if "დებეტი" in str(c) and "ბრუნვა" not in str(c)), None)
-            credit_col = next((c for c in cols if "კრედიტი" in str(c) and "ბრუნვა" not in str(c)), None)
-            if not debit_col and not credit_col:
-                continue
-            date_col = next((c for c in cols if "თარიღი" in str(c)), None)
-            for _, row in df.iterrows():
-                raw = _tbc_row_text_join_skip(row, cols, [debit_col, credit_col]).lower()
-                if not any(p in raw for p in patterns):
-                    continue
-                debit_amt = pd.to_numeric(row[debit_col], errors="coerce") if debit_col else float("nan")
-                credit_amt = pd.to_numeric(row[credit_col], errors="coerce") if credit_col else float("nan")
-                base = {"ბანკი": "BOG", "ფაილი": os.path.basename(f), "თარიღი": _excel_cell(row, date_col), "ტექსტი_მოკლე": raw[:500]}
-                if pd.notna(debit_amt) and float(debit_amt) > 0:
-                    out_rows.append({**base, "თანხა": float(debit_amt), "მიმართულება": "საგადასახადო გადარიცხული"})
-                if pd.notna(credit_amt) and float(credit_amt) > 0:
-                    in_rec = {**base, "თანხა": float(credit_amt), "მიმართულება": "საგადასახადო ჩარიცხული"}
-                    in_rows.append(in_rec)
-                    if any(m in raw for m in treasury_in_markers):
-                        treasury_in_rows.append({**in_rec, "მიმართულება": "სახელმწიფო ხაზინიდან ჩარიცხული"})
-        except Exception as e:
-            logger.error("BOG tax flow %s: %s", f, e)
+def _content_fingerprint_tax_flow(patterns, treasury_in_markers):
+    """Fingerprint non-file inputs so the cache invalidates on config shifts.
 
-    # TBC
-    for f in list_tbc_bank_statement_xlsx():
-        try:
-            header_idx = find_header_row(f)
-            df = pd.read_excel(f, header=header_idx)
-            cols = list(df.columns)
-            debit_col = next((c for c in cols if "გასული თანხა" in str(c)), None)
-            credit_col = next((c for c in cols if "შემოსული თანხა" in str(c)), None)
-            if not debit_col and not credit_col:
-                continue
-            date_col = next((c for c in cols if "თარიღი" in str(c)), None)
-            for _, row in df.iterrows():
-                raw = _tbc_row_text_join_skip(row, cols, [debit_col, credit_col]).lower()
-                if not any(p in raw for p in patterns):
-                    continue
-                debit_amt = pd.to_numeric(row[debit_col], errors="coerce") if debit_col else float("nan")
-                credit_amt = pd.to_numeric(row[credit_col], errors="coerce") if credit_col else float("nan")
-                base = {"ბანკი": "TBC", "ფაილი": os.path.basename(f), "თარიღი": _excel_cell(row, date_col), "ტექსტი_მოკლე": raw[:500]}
-                if pd.notna(debit_amt) and float(debit_amt) > 0:
-                    out_rows.append({**base, "თანხა": float(debit_amt), "მიმართულება": "საგადასახადო გადარიცხული"})
-                if pd.notna(credit_amt) and float(credit_amt) > 0:
-                    in_rec = {**base, "თანხა": float(credit_amt), "მიმართულება": "საგადასახადო ჩარიცხული"}
-                    in_rows.append(in_rec)
-                    if any(m in raw for m in treasury_in_markers):
-                        treasury_in_rows.append({**in_rec, "მიმართულება": "სახელმწიფო ხაზინიდან ჩარიცხული"})
-        except Exception as e:
-            logger.error("TBC tax flow %s: %s", f, e)
+    Covers the active ``patterns`` list, the hardcoded
+    ``treasury_in_markers`` list, and the ``TAX_TREASURY_CLUSTER_NOTE_KA``
+    ledger note (per Sprint 3d preview spec — the note is merge-time only,
+    but a change to it signals a semantic shift worth invalidating for).
+    """
+    blob = json.dumps(
+        {
+            "patterns": sorted(patterns or []),
+            "treasury_in_markers": sorted(treasury_in_markers or []),
+            "ledger_note": TAX_TREASURY_CLUSTER_NOTE_KA,
+            "default_patterns": sorted(TAX_FLOW_DEFAULT_PATTERNS),
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+    return hashlib.sha1(blob.encode("utf-8")).hexdigest()
+
+
+def _empty_tax_flow_payload(status):
+    return {
+        "status": status,
+        "out_rows": [],
+        "in_rows": [],
+        "treasury_in_rows": [],
+        "out_total_ge": 0.0,
+        "in_total_ge": 0.0,
+        "treasury_in_total_ge": 0.0,
+        "out_line_count": 0,
+        "in_line_count": 0,
+        "treasury_in_line_count": 0,
+    }
+
+
+def _process_bog_tax_flow_file(path, *, patterns, treasury_in_markers):
+    """Parse one BOG yearly xlsx into per-file tax-flow aggregates."""
+    try:
+        header_idx = find_header_row(path)
+        df = pd.read_excel(path, header=header_idx)
+    except Exception as exc:
+        logger.error("BOG tax flow %s: %s", path, exc)
+        return _empty_tax_flow_payload("read_error")
+
+    cols = list(df.columns)
+    debit_col = next(
+        (c for c in cols if "დებეტი" in str(c) and "ბრუნვა" not in str(c)),
+        None,
+    )
+    credit_col = next(
+        (c for c in cols if "კრედიტი" in str(c) and "ბრუნვა" not in str(c)),
+        None,
+    )
+    if not debit_col and not credit_col:
+        return _empty_tax_flow_payload("ok")
+
+    date_col = next((c for c in cols if "თარიღი" in str(c)), None)
+    file_name = os.path.basename(path)
+    out_rows, in_rows, treasury_in_rows = [], [], []
+    for _, row in df.iterrows():
+        raw = _tbc_row_text_join_skip(row, cols, [debit_col, credit_col]).lower()
+        if not any(p in raw for p in patterns):
+            continue
+        debit_amt = (
+            pd.to_numeric(row[debit_col], errors="coerce")
+            if debit_col
+            else float("nan")
+        )
+        credit_amt = (
+            pd.to_numeric(row[credit_col], errors="coerce")
+            if credit_col
+            else float("nan")
+        )
+        base = {
+            "ბანკი": "BOG",
+            "ფაილი": file_name,
+            "თარიღი": _excel_cell(row, date_col),
+            "ტექსტი_მოკლე": raw[:500],
+        }
+        if pd.notna(debit_amt) and float(debit_amt) > 0:
+            out_rows.append({
+                **base,
+                "თანხა": float(debit_amt),
+                "მიმართულება": TAX_FLOW_OUT_DIRECTION_KA,
+            })
+        if pd.notna(credit_amt) and float(credit_amt) > 0:
+            in_rec = {
+                **base,
+                "თანხა": float(credit_amt),
+                "მიმართულება": TAX_FLOW_IN_DIRECTION_KA,
+            }
+            in_rows.append(in_rec)
+            if any(m in raw for m in treasury_in_markers):
+                treasury_in_rows.append({
+                    **in_rec,
+                    "მიმართულება": TAX_FLOW_TREASURY_IN_DIRECTION_KA,
+                })
 
     out_total = sum(float(r.get("თანხა") or 0) for r in out_rows)
     in_total = sum(float(r.get("თანხა") or 0) for r in in_rows)
-    treasury_in_total = sum(float(r.get("თანხა") or 0) for r in treasury_in_rows)
+    treasury_in_total = sum(
+        float(r.get("თანხა") or 0) for r in treasury_in_rows
+    )
     return {
-        "label_ka": "საგადასახადო / ბიუჯეტი / სახელმწიფო ხაზინა (ბანკის ფილტრი)",
+        "status": "ok",
+        "out_rows": out_rows,
+        "in_rows": in_rows,
+        "treasury_in_rows": treasury_in_rows,
+        "out_total_ge": float(out_total),
+        "in_total_ge": float(in_total),
+        "treasury_in_total_ge": float(treasury_in_total),
+        "out_line_count": len(out_rows),
+        "in_line_count": len(in_rows),
+        "treasury_in_line_count": len(treasury_in_rows),
+    }
+
+
+def _process_tbc_tax_flow_file(path, *, patterns, treasury_in_markers):
+    """Parse one TBC yearly xlsx into per-file tax-flow aggregates."""
+    try:
+        header_idx = find_header_row(path)
+        df = pd.read_excel(path, header=header_idx)
+    except Exception as exc:
+        logger.error("TBC tax flow %s: %s", path, exc)
+        return _empty_tax_flow_payload("read_error")
+
+    cols = list(df.columns)
+    debit_col = next((c for c in cols if "გასული თანხა" in str(c)), None)
+    credit_col = next((c for c in cols if "შემოსული თანხა" in str(c)), None)
+    if not debit_col and not credit_col:
+        return _empty_tax_flow_payload("ok")
+
+    date_col = next((c for c in cols if "თარიღი" in str(c)), None)
+    file_name = os.path.basename(path)
+    out_rows, in_rows, treasury_in_rows = [], [], []
+    for _, row in df.iterrows():
+        raw = _tbc_row_text_join_skip(row, cols, [debit_col, credit_col]).lower()
+        if not any(p in raw for p in patterns):
+            continue
+        debit_amt = (
+            pd.to_numeric(row[debit_col], errors="coerce")
+            if debit_col
+            else float("nan")
+        )
+        credit_amt = (
+            pd.to_numeric(row[credit_col], errors="coerce")
+            if credit_col
+            else float("nan")
+        )
+        base = {
+            "ბანკი": "TBC",
+            "ფაილი": file_name,
+            "თარიღი": _excel_cell(row, date_col),
+            "ტექსტი_მოკლე": raw[:500],
+        }
+        if pd.notna(debit_amt) and float(debit_amt) > 0:
+            out_rows.append({
+                **base,
+                "თანხა": float(debit_amt),
+                "მიმართულება": TAX_FLOW_OUT_DIRECTION_KA,
+            })
+        if pd.notna(credit_amt) and float(credit_amt) > 0:
+            in_rec = {
+                **base,
+                "თანხა": float(credit_amt),
+                "მიმართულება": TAX_FLOW_IN_DIRECTION_KA,
+            }
+            in_rows.append(in_rec)
+            if any(m in raw for m in treasury_in_markers):
+                treasury_in_rows.append({
+                    **in_rec,
+                    "მიმართულება": TAX_FLOW_TREASURY_IN_DIRECTION_KA,
+                })
+
+    out_total = sum(float(r.get("თანხა") or 0) for r in out_rows)
+    in_total = sum(float(r.get("თანხა") or 0) for r in in_rows)
+    treasury_in_total = sum(
+        float(r.get("თანხა") or 0) for r in treasury_in_rows
+    )
+    return {
+        "status": "ok",
+        "out_rows": out_rows,
+        "in_rows": in_rows,
+        "treasury_in_rows": treasury_in_rows,
+        "out_total_ge": float(out_total),
+        "in_total_ge": float(in_total),
+        "treasury_in_total_ge": float(treasury_in_total),
+        "out_line_count": len(out_rows),
+        "in_line_count": len(in_rows),
+        "treasury_in_line_count": len(treasury_in_rows),
+    }
+
+
+def _merge_tax_flow_file_payloads(payloads):
+    """Combine per-file tax-flow payloads into the bundle shape.
+
+    Row order follows ``payloads`` iteration order (BOG first, TBC second —
+    matches the pre-cache collector).
+    """
+    all_out, all_in, all_treasury_in = [], [], []
+    for payload in payloads:
+        all_out.extend(payload.get("out_rows") or [])
+        all_in.extend(payload.get("in_rows") or [])
+        all_treasury_in.extend(payload.get("treasury_in_rows") or [])
+    out_total = sum(float(r.get("თანხა") or 0) for r in all_out)
+    in_total = sum(float(r.get("თანხა") or 0) for r in all_in)
+    treasury_in_total = sum(
+        float(r.get("თანხა") or 0) for r in all_treasury_in
+    )
+    return {
+        "label_ka": TAX_FLOW_LABEL_KA,
         "ledger_note_ka": TAX_TREASURY_CLUSTER_NOTE_KA,
-        "out_total_ge": float(out_total), "in_total_ge": float(in_total),
+        "out_total_ge": float(out_total),
+        "in_total_ge": float(in_total),
         "treasury_in_total_ge": float(treasury_in_total),
         "net_ge": float(in_total - out_total),
-        "out_line_count": len(out_rows), "in_line_count": len(in_rows),
-        "treasury_in_line_count": len(treasury_in_rows),
-        "out_rows_preview": out_rows[:300], "in_rows_preview": in_rows[:300],
-        "treasury_in_rows_preview": treasury_in_rows[:300],
-        "out_monthly_summary": _monthly_summary(out_rows),
-        "in_monthly_summary": _monthly_summary(in_rows),
-        "treasury_in_monthly_summary": _monthly_summary(treasury_in_rows),
+        "out_line_count": len(all_out),
+        "in_line_count": len(all_in),
+        "treasury_in_line_count": len(all_treasury_in),
+        "out_rows_preview": all_out[:300],
+        "in_rows_preview": all_in[:300],
+        "treasury_in_rows_preview": all_treasury_in[:300],
+        "out_monthly_summary": _monthly_summary(all_out),
+        "in_monthly_summary": _monthly_summary(all_in),
+        "treasury_in_monthly_summary": _monthly_summary(all_treasury_in),
     }
+
+
+def collect_tax_flow(script_dir, *, use_cache: bool = False, cache_path=None):
+    """Aggregate cross-bank tax-flow rows across BOG + TBC yearly xlsx files.
+
+    When ``use_cache=True``, per-file payloads are cached in
+    ``.pipeline_cache.json`` (or ``cache_path`` override) keyed by the
+    tax-flow content-fingerprint. BOG and TBC paths are disjoint (different
+    directories), so a single combined ``_run_cached_per_file`` call with a
+    path-dispatching processor keeps cache entries from both banks alive in
+    the same cache file (calling the helper twice would wipe the first
+    bank's entries as "stale" on the second pass).
+    """
+    patterns, treasury_in_markers = _load_tax_flow_config(script_dir)
+    fingerprint = _content_fingerprint_tax_flow(patterns, treasury_in_markers)
+
+    bog_files = list(list_bog_bank_statement_xlsx())
+    tbc_files = list(list_tbc_bank_statement_xlsx())
+    bog_norm = {os.path.normpath(p) for p in bog_files}
+    all_files = list(bog_files) + list(tbc_files)
+
+    def _dispatch(path):
+        if os.path.normpath(path) in bog_norm:
+            return _process_bog_tax_flow_file(
+                path,
+                patterns=patterns,
+                treasury_in_markers=treasury_in_markers,
+            )
+        return _process_tbc_tax_flow_file(
+            path,
+            patterns=patterns,
+            treasury_in_markers=treasury_in_markers,
+        )
+
+    payloads = _run_cached_per_file(
+        all_files,
+        processor=_dispatch,
+        fingerprint=fingerprint,
+        use_cache=bool(use_cache),
+        cache_path=cache_path,
+    )
+    return _merge_tax_flow_file_payloads(payloads)
 
 
 def write_tax_flow_excel(bundle, download_dir):
