@@ -120,6 +120,7 @@ Trigger: state audit for შპს ჯეო ფუდთაიმი; bookkeepe
 | 5.4 | Excel export for auditor | ✅ | `46afd00` |
 | 5.5 | Revenue formula fix (`unit_price × quantity`) | ✅ | `cf39cd3` |
 | 5.6 | VAT AI live dog-food 3/3 PASS | ✅ 🎬 | `e962857` |
+| 5.7 | RS outgoing waybill ingest → populate `invoices_ge` | ❌ DROPPED | 2026-04-24 — retail-only business, no B2B / wholesale / inter-store volume worth tracking. `invoices_ge` already populated via Sprint 5.1.1. Audit defense unaffected. |
 | 5.8 | Per-shop `by_shop` breakdown | ✅ | `6e5118d` |
 | 5.9 | MAX-data-gap `insufficient_data` status | ✅ 🎬 | `6a4ee1b` — 3/3 PASS live |
 | 5.10 | Unit error diagnosis (evidence-only, 906K claim withdrawn) | ✅ | `f876012` |

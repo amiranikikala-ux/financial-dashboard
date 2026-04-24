@@ -1,7 +1,7 @@
 # CONTEXT HANDOFF — short brief
 
 > **განახლდა**: 2026-04-24 (**Sprint 3b+3c LANDED** — per-file cache now covers bank samurneo + expense_categories (4 collectors, 2 xlsx corpora). Combined cold→hot speedups: samurneo 200x/748x, expense_categories 62x/246x, digests byte-identical. 14 new regression tests (7 per sprint).)
-> **სტატუსი**: Phase 4A/4B/4C.2/4C.3 CLOSED · **Phase 2.1/2.2/2.4/2.5/2.6/2.8/2.9 COMPLETE** · Tier 1 + Tier 2 Sprint 1/2/3a/**3b/3c** COMPLETE · **🧾 Sprint 5.1 → 5.11 COMPLETE · Sprint 5.12 evidence-only** · Phase 4C.1 VAT-tools-scoped ✅ · **Sprint 3b samurneo cache 8bd01e8** · **Sprint 3c expense_categories cache 0a81b86**.
+> **სტატუსი**: Phase 4A/4B/4C.2/4C.3 CLOSED · **Phase 2.1/2.2/2.4/2.5/2.6/2.8/2.9 COMPLETE** · Tier 1 + Tier 2 Sprint 1/2/3a/**3b/3c** COMPLETE · **🧾 Sprint 5.1-5.6, 5.8-5.11 COMPLETE · 5.7 DROPPED (retail-only) · 5.12 evidence-only** · Phase 4C.1 VAT-tools-scoped ✅ · **Sprint 3b samurneo cache 8bd01e8** · **Sprint 3c expense_categories cache 0a81b86**.
 
 ---
 
