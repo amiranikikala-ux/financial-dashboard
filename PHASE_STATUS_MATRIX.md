@@ -74,7 +74,7 @@
 |---|---|---|---|---|
 | 2.1 | Cash Flow Projection | `compute_cash_flow_projection` | ✅ 🎬 | 2026-04-22 |
 | 2.2 | Scenario Simulator | `simulate_scenario` | ✅ 🎬 | 2026-04-22 |
-| 2.3 | Industry Benchmark | `industry_benchmark` | 📋 PLANNED | needs external data source decision |
+| 2.3 | Category Mix Analyzer (reframed from Industry Benchmark) | `mix_analyzer` | ✅ 🎬 | 2026-04-25 (`533c02f`) |
 | 2.4 | Supplier Risk Radar (REDUCED) | `prepare_supplier_brief` portfolio | ✅ 🎬 | 2026-04-22 |
 | 2.5 | Product Profitability X-Ray | `analyze_product_profitability` | ✅ 🎬 | 2026-04-22 |
 | 2.6 | Promotion Candidate Finder | `find_promotion_candidates` | ✅ 🎬 | 2026-04-22 |
