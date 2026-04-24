@@ -867,34 +867,124 @@ def write_treasury_incoming_excel(bundle, download_dir):
 # Foodmart cashback (TBC)
 # ---------------------------------------------------------------------------
 
-def collect_tbc_foodmart_cashback(script_dir):
-    patterns = ["ფუდმარტ", "foodmart", "404460187", "ge06tb7064936020100010",
-                "ქეშბექ", "cashback", "cash back", "მომსახურების ღირებულება"]
+FOODMART_CASHBACK_DEFAULT_PATTERNS = (
+    "ფუდმარტ", "foodmart", "404460187", "ge06tb7064936020100010",
+    "ქეშბექ", "cashback", "cash back", "მომსახურების ღირებულება",
+)
+FOODMART_CASHBACK_LABEL_KA = "ფუდმარტის ქეშბექი/შემოსავალი"
+
+
+def _content_fingerprint_foodmart_cashback(patterns):
+    """Fingerprint non-file inputs for foodmart-cashback cache.
+
+    Patterns are hardcoded today (no config file on disk). Including them
+    in the fingerprint anyway means a future code-level change to the
+    default pattern tuple will invalidate stale caches automatically.
+    """
+    blob = json.dumps(
+        {
+            "patterns": sorted(patterns or []),
+            "default_patterns": sorted(FOODMART_CASHBACK_DEFAULT_PATTERNS),
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+    return hashlib.sha1(blob.encode("utf-8")).hexdigest()
+
+
+def _empty_foodmart_cashback_payload(status):
+    return {
+        "status": status,
+        "rows": [],
+        "total_ge": 0.0,
+        "line_count": 0,
+    }
+
+
+def _process_tbc_foodmart_cashback_file(path, *, patterns):
+    """Parse one TBC yearly xlsx into per-file foodmart-cashback payload.
+
+    Rows are returned in full (no truncation) — the bundle-level cap to
+    300 rows happens at merge time (matches samurneo template).
+    """
+    try:
+        header_idx = find_header_row(path)
+        df = pd.read_excel(path, header=header_idx)
+    except Exception as exc:
+        logger.error("TBC foodmart cashback %s: %s", path, exc)
+        return _empty_foodmart_cashback_payload("read_error")
+
+    cols = list(df.columns)
+    credit_col = next(
+        (c for c in cols if "შემოსული თანხა" in str(c)), None
+    )
+    if not credit_col:
+        return _empty_foodmart_cashback_payload("ok")
+
+    date_col = next((c for c in cols if "თარიღი" in str(c)), None)
+    file_name = os.path.basename(path)
     rows = []
     total = 0.0
-    for f in list_tbc_bank_statement_xlsx():
-        try:
-            header_idx = find_header_row(f)
-            df = pd.read_excel(f, header=header_idx)
-            cols = list(df.columns)
-            credit_col = next((c for c in cols if "შემოსული თანხა" in str(c)), None)
-            if not credit_col:
-                continue
-            date_col = next((c for c in cols if "თარიღი" in str(c)), None)
-            for _, row in df.iterrows():
-                amt = pd.to_numeric(row[credit_col], errors="coerce")
-                if pd.isna(amt) or float(amt) <= 0:
-                    continue
-                raw = _tbc_row_text_join_skip(row, cols, [credit_col]).lower()
-                if not any(p in raw for p in patterns):
-                    continue
-                total += float(amt)
-                rows.append({"ბანკი": "TBC", "ფაილი": os.path.basename(f),
-                             "თარიღი": _excel_cell(row, date_col), "თანხა": float(amt), "ტექსტი_მოკლე": raw[:500]})
-        except Exception as e:
-            logger.error("TBC foodmart cashback %s: %s", f, e)
-    return {"label_ka": "ფუდმარტის ქეშბექი/შემოსავალი", "total_ge": float(total),
-            "line_count": len(rows), "rows_preview": rows[:300], "monthly_summary": _monthly_summary(rows)}
+    for _, row in df.iterrows():
+        amt = pd.to_numeric(row[credit_col], errors="coerce")
+        if pd.isna(amt) or float(amt) <= 0:
+            continue
+        raw = _tbc_row_text_join_skip(row, cols, [credit_col]).lower()
+        if not any(p in raw for p in patterns):
+            continue
+        total += float(amt)
+        rows.append({
+            "ბანკი": "TBC",
+            "ფაილი": file_name,
+            "თარიღი": _excel_cell(row, date_col),
+            "თანხა": float(amt),
+            "ტექსტი_მოკლე": raw[:500],
+        })
+    return {
+        "status": "ok",
+        "rows": rows,
+        "total_ge": float(total),
+        "line_count": len(rows),
+    }
+
+
+def _merge_foodmart_cashback_payloads(payloads):
+    """Combine per-file foodmart-cashback payloads into the bundle shape."""
+    all_rows = []
+    for payload in payloads:
+        all_rows.extend(payload.get("rows") or [])
+    total = sum(float(r.get("თანხა") or 0) for r in all_rows)
+    return {
+        "label_ka": FOODMART_CASHBACK_LABEL_KA,
+        "total_ge": float(total),
+        "line_count": len(all_rows),
+        "rows_preview": all_rows[:300],
+        "monthly_summary": _monthly_summary(all_rows),
+    }
+
+
+def collect_tbc_foodmart_cashback(
+    script_dir, *, use_cache: bool = False, cache_path=None
+):
+    """Aggregate TBC foodmart cashback/income across all TBC yearly xlsx files.
+
+    When ``use_cache=True``, per-file payloads are cached keyed by a
+    fingerprint over the match patterns so a future change to the
+    hardcoded default list invalidates stale caches automatically.
+    """
+    patterns = list(FOODMART_CASHBACK_DEFAULT_PATTERNS)
+    fingerprint = _content_fingerprint_foodmart_cashback(patterns)
+    files = list(list_tbc_bank_statement_xlsx())
+    payloads = _run_cached_per_file(
+        files,
+        processor=lambda f: _process_tbc_foodmart_cashback_file(
+            f, patterns=patterns
+        ),
+        fingerprint=fingerprint,
+        use_cache=bool(use_cache),
+        cache_path=cache_path,
+    )
+    return _merge_foodmart_cashback_payloads(payloads)
 
 
 def write_tbc_foodmart_cashback_excel(bundle, download_dir):

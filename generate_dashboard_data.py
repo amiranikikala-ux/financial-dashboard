@@ -410,7 +410,9 @@ def _collect_income_bundles(script_dir, object_mapping):
     bog_samurneo_bundle = collect_bog_samurneo_flow(script_dir, use_cache=True)
     samurneo_bundle = merge_samurneo_flows(tbc_samurneo_bundle, bog_samurneo_bundle)
     tax_flow_bundle = collect_tax_flow(script_dir, use_cache=True)
-    tbc_foodmart_cashback_bundle = collect_tbc_foodmart_cashback(script_dir)
+    tbc_foodmart_cashback_bundle = collect_tbc_foodmart_cashback(
+        script_dir, use_cache=True
+    )
     logger.info(
         "სამეურნეო (BOG+TBC): გატანა %s ₾ | შემოტანა %s ₾ | net %s ₾",
         f"{samurneo_bundle['expense_total_ge']:,.2f}",
