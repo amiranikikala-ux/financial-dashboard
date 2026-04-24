@@ -1,6 +1,6 @@
 # CONTEXT HANDOFF — short brief
 
-> **განახლდა**: 2026-04-24 (**Sprint 3f LANDED** — TBC foodmart cashback per-file cache — **completes the per-file cache series** (retail_sales + samurneo + expense_categories + tax_flow + POS terminal income + foodmart cashback). Cold→hot 335x speedup. 7 new regression tests. Totals display-identical (313,725.75 ₾).)
+> **განახლდა**: 2026-04-24 (**Sprint 3f LANDED + Phase 2.3 mix_analyzer PREVIEW READY**. Sprint 3f completes the per-file cache series (all 6 income/expense collectors now cached, 335x hot speedup). Phase 2.3 reframed from rejected "industry_benchmark" to data-driven mix_analyzer; full evidence + scope in `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_2_3_MIX_ANALYZER_PREVIEW.md` — implementation-ready for fresh session.)
 > **სტატუსი**: Phase 4A/4B/4C.2/4C.3 CLOSED · **Phase 2.1/2.2/2.4/2.5/2.6/2.8/2.9 COMPLETE** · Tier 1 + Tier 2 Sprint 1/2/3a/**3b/3c/3d/3e/3f** COMPLETE (per-file cache series DONE) · **🧾 Sprint 5.1-5.6, 5.8-5.11 COMPLETE · 5.7 DROPPED (retail-only) · 5.12 evidence-only** · Phase 4C.1 VAT-tools-scoped ✅ · **Sprint 3f foodmart cache a1763a3**.
 
 ---
@@ -114,7 +114,7 @@ All on `origin/main`. Older commits → `git log`.
 | # | item | size | risk | რატომ |
 |---|---|---|---|---|
 | 1 | **Phase 4C.1 Part C (if gaps appear)** | evidence-driven | LOW | Parts A+B covered 8 tools. Remaining tools already carry Triggers + Anti-triggers + Returns + Honesty-rule blocks per evidence survey. Only open new schema-audit work if a live dog-food surfaces an actual routing miss. |
-| 2 | **Phase 2.3 `industry_benchmark`** | ~1 day | LOW | blocked on external data source decision (hardcoded retail medians? Excel import? public dataset?) — ask user |
+| 2 | **Phase 2.3 `mix_analyzer`** (preview ready) | ~1 session | MED-HIGH | **PREVIEW DONE** → `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_2_3_MIX_ANALYZER_PREVIEW.md`. Reframed from rejected "industry_benchmark" (external data) to data-driven mix analyzer: reads `retail_sales.by_category` (645 rows), computes gap from 14.96% → 20% target, surfaces DRAG/LIFT categories holding cigarettes (33.9% share, 10.5% blended margin — appears as 3 rows, must canonicalize) protected. v1 defaults hardcoded in constants; no config file, no frontend, text-tool only. ~800 LOC + 10 tests. Implementation-ready — "წაიკითხე preview.md, გააკეთე". |
 | 3 | **Phase 3 remaining (4 features)** | ~1 week | LOW | conversation_summary_on_demand · margin_compression_radar · monthly_strategy_page · gap_analysis |
 | 4 | **Phase 4 Advanced (9 features)** | ~2-3 weeks | MED | in `AI_GENIUS_PARTNER_PLAN.md` v2.1 |
 | 5 | **Parking Lot** | — | — | ~40 items in v2.1 plan |
