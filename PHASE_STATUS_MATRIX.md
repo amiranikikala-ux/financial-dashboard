@@ -1,8 +1,8 @@
 # Phase Status Matrix
 
-> **განახლდა:** 2026-04-24 · **ცოცხალი სტატუსი** → `CONTEXT_HANDOFF.md` · **master roadmap** → `AI_GENIUS_PARTNER_PLAN.md` · **closed milestone log** → `PLAN.md` · **evidence** → `HANDOFF.md` + `HANDOFF_ARCHIVE/`.
+> **განახლდა:** 2026-04-25 · **ცოცხალი სტატუსი** → `CONTEXT_HANDOFF.md` · **evidence** → `HANDOFF.md` + `HANDOFF_ARCHIVE/` · **historical roadmap** → `HANDOFF_ARCHIVE/AI_GENIUS_PARTNER_PLAN_v2.1_superseded_2026-04-25.md`.
 >
-> ეს ფაილი — "ყველა phase ერთი ცხრილით" დოკუმენტი. ახალ phase-ს რომ ვხურავთ, აქაც ვაახლებთ. Open work-ის ცხრილი აქ არ არის — `CONTEXT_HANDOFF.md:107-116` authoritative.
+> ეს ფაილი — "ყველა phase ერთი ცხრილით" დოკუმენტი. ახალ phase-ს რომ ვხურავთ, აქაც ვაახლებთ. Open work-ის ცხრილი აქ არ არის — `CONTEXT_HANDOFF.md` "Still-open work" authoritative.
 
 ---
 
@@ -14,15 +14,15 @@
 - 💤 **PARKED** — Parking Lot, not scheduled
 - ❌ **DROPPED** — superseded or rejected
 
-## Top-level metrics (2026-04-24)
+## Top-level metrics (2026-04-25)
 
 | | |
 |---|---|
-| pytest | **2,087/2,087 green** (~75s full) |
-| Tool surface | **26 tools** |
+| pytest | **2,166/2,166 green** (~80s full) |
+| Tool surface | **28 tools** |
 | Dashboard tabs | **15** (incl. Store Compare, 💀 Dead Stock, ⚠️ Supplier Concentration, 📋 Debt Plan, 🧾 VAT) |
 | `SYSTEM_PROMPT_KA` | **1,163 lines** |
-| Pipeline cache | `.pipeline_cache.json` — Sprint 2/3a/3b/3c extensions |
+| Pipeline cache | `.pipeline_cache.json` — Sprint 2/3a/3b/3c/3d/3e/3f (per-file series COMPLETE) |
 | `data.json` | **131.7 MB**, 26 sections, 21,233 waybills |
 
 ---
@@ -31,14 +31,14 @@
 
 | | |
 |---|---|
-| Phases 1–10 | ✅ — audit/refactor, APScheduler, E2E, PWA, performance, react-datepicker, Packet G unified date-range, Packet H calendar propagation. Detail → `PLAN.md` ცხრილი. |
+| Phases 1–10 | ✅ — audit/refactor, APScheduler, E2E, PWA, performance, react-datepicker, Packet G unified date-range, Packet H calendar propagation. |
 
 ## AI Advisor original MVP (2026-04-17 / 18) — **superseded 2026-04-18**
 
 | Phase | Status |
 |---|---|
 | AI Phase 0 Foundation, Phase 1 MVP Chat + Polish, Streaming SSE, Phase 2 Investigator Sprint 1–3, Waybill Fix | ✅ 🎬 |
-| Phase 3+ of original roadmap (Daily Briefing / Telegram / Voice) | ❌ DROPPED — superseded by `AI_GENIUS_PARTNER_PLAN.md` v2.1 |
+| Phase 3+ of original roadmap (Daily Briefing / Telegram / Voice) | ❌ DROPPED — superseded by v2.1 roadmap (now archived as `HANDOFF_ARCHIVE/AI_GENIUS_PARTNER_PLAN_v2.1_superseded_2026-04-25.md`) |
 
 ---
 
@@ -138,9 +138,9 @@ Trigger: state audit for შპს ჯეო ფუდთაიმი; bookkeepe
 | Sprint 3a | Cap retail_sales preview_rows (cache 864→207 MB) | ✅ | `efcc79a` |
 | Sprint 3b | Bank samurneo per-file cache (TBC 200× / BOG 748×) | ✅ | `8bd01e8` |
 | Sprint 3c | Bank expense_categories per-file cache (TBC 62× / BOG 246×) | ✅ | `0a81b86` |
-| Sprint 3d | tax_flow cache (cross-bank) | 📋 PLANNED | next recommended |
-| Sprint 3e | POS terminal income cache (Sprint 5.12-sensitive) | 📋 PLANNED | needs pin test first |
-| Sprint 3f | foodmart cashback cache | 📋 PLANNED | smallest, easy follow-up |
+| Sprint 3d | tax_flow cache (cross-bank, 561× hot) | ✅ | `7404af6` |
+| Sprint 3e | POS terminal income cache (TBC 14.9× / BOG 13.9×) + sum() precision fix | ✅ | `89338e4` |
+| Sprint 3f | foodmart cashback cache (335× hot) — **per-file cache series COMPLETE** | ✅ | `a1763a3` |
 
 ### Hotfixes & collateral (2026-04-19 → 04-21)
 

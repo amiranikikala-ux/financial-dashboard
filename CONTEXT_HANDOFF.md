@@ -11,10 +11,10 @@
 |---|---|
 | **`CONTEXT_HANDOFF.md`** (ეს) | ახალი ჩატის startup — verified facts + do-not-touch + next step |
 | **`PHASE_STATUS_MATRIX.md`** | ერთი ცხრილი ყველა phase-ის სტატუსით (live) |
-| **`AI_GENIUS_PARTNER_PLAN.md`** | authoritative roadmap v2.1 (predates Phase 5) |
-| **`PLAN.md`** | live status tracker (mixed narrative) |
-| **`AGENTS.md`** | session-start checklist + GitNexus rules + Windows-venv caveats + Prompt Hygiene + Session Boundaries + Correction Escalation |
-| **`HANDOFF.md`** | full evidence log (archival) |
+| **`AGENTS.md`** | session-start checklist + GitNexus rules + Prompt Hygiene + Session Pacing + Correction Escalation |
+| **`HANDOFF.md`** | evidence pointer (commit SHA → archive) |
+| **`README.md`** | GitHub entry |
+| `HANDOFF_ARCHIVE/AI_GENIUS_PARTNER_PLAN_v2.1_superseded_2026-04-25.md` | historical roadmap (archived 2026-04-25 — predates Phase 5 / 3.8 / Tier 2) |
 
 **ახალი ჩატის read order**: ეს ფაილი → `AGENTS.md` → (phase-specific drill) `PHASE_STATUS_MATRIX.md`.
 
@@ -119,7 +119,7 @@ All on `origin/main`. Older commits → `git log`.
 | 1 | **Phase 4C.1 Part C (if gaps appear)** | evidence-driven | LOW | Parts A+B covered 8 tools. Remaining tools already carry Triggers + Anti-triggers + Returns + Honesty-rule blocks per evidence survey. Only open new schema-audit work if a live dog-food surfaces an actual routing miss. |
 | 2 | **Phase 2.3 mix_analyzer — follow-ups** | ~1 session each | LOW-MED | (a) Frontend dashboard tab for mix visualization (would be 16th tab — separate UI sprint; deferred per preview §7). (b) Upstream category canonicalization in `retail_sales.py` so `analyze_product_profitability` + `detect_trends` see merged cigarette rows too (Option B of preview §4). (c) `user_targets.json` config externalization once targets settle. (d) Sensitivity probe dog-food ("რა ხდება 18%-ზე?") to verify `target_gross_margin_pct` override path under think=True. |
 | 3 | **Phase 3 remaining (3 features)** | ~1 week | LOW | conversation_summary_on_demand · monthly_strategy_page · gap_analysis (margin_compression_radar landed `5dfbf19`) |
-| 4 | **Phase 4 Advanced (9 features)** | ~2-3 weeks | MED | in `AI_GENIUS_PARTNER_PLAN.md` v2.1 |
+| 4 | **Phase 4 Advanced (9 features)** | ~2-3 weeks | MED | in archived v2.1 roadmap (`HANDOFF_ARCHIVE/AI_GENIUS_PARTNER_PLAN_v2.1_superseded_2026-04-25.md`) |
 | 5 | **Parking Lot** | — | — | ~40 items in v2.1 plan |
 
 **Recently CLOSED** (drill into commit/evidence if needed, not open work):

@@ -1,6 +1,6 @@
 # HANDOFF — Evidence index
 
-> **ცოცხალი სტატუსისთვის ეს ფაილი არ გახსნა.** → `CONTEXT_HANDOFF.md` · Phase overview → `PHASE_STATUS_MATRIX.md` · Roadmap → `AI_GENIUS_PARTNER_PLAN.md`.
+> **ცოცხალი სტატუსისთვის ეს ფაილი არ გახსნა.** → `CONTEXT_HANDOFF.md` · Phase overview → `PHASE_STATUS_MATRIX.md` · Historical roadmap → `HANDOFF_ARCHIVE/AI_GENIUS_PARTNER_PLAN_v2.1_superseded_2026-04-25.md`.
 > ეს ფაილი მხოლოდ **evidence pointer**-ია: commit SHA → archive location.
 
 ---
@@ -13,14 +13,24 @@
 
 ## Commit SHA → archive lookup
 
-### Tier 2 Pipeline Cache (Sprint 2, 3a, 3b, 3c)
+### Tier 2 Pipeline Cache (Sprint 2 / 3a / 3b / 3c / 3d / 3e / 3f — **per-file cache series COMPLETE**)
 
 | commit | sprint | თარიღი | evidence |
 |---|---|---|---|
+| `a1763a3` | 3f foodmart cashback | 2026-04-24 | `tests/test_foodmart_cashback_incremental.py` + git log |
+| `89338e4` | 3e POS terminal income + `sum()` precision fix | 2026-04-24 | `tests/test_pos_terminal_income_incremental.py` + git log |
+| `7404af6` | 3d tax_flow (cross-bank) | 2026-04-24 | `tests/test_tax_flow_incremental.py` + git log |
 | `0a81b86` | 3c expense_categories | 2026-04-24 | `CONTEXT_HANDOFF.md` commit-history + git log |
 | `8bd01e8` | 3b samurneo | 2026-04-24 | `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_3B_BANK_PREVIEW.md` |
 | `efcc79a` | 3a cache slim-down | 2026-04-23 | git log + `CONTEXT_HANDOFF.md` |
 | `481e474` | 2 retail_sales per-file | 2026-04-22 | `tests/test_retail_sales_incremental.py` |
+
+### Phase 2.3 & Phase 3.8 — Category / Margin AI tools
+
+| commit | phase | evidence |
+|---|---|---|
+| `5dfbf19` + `3942bb2` | Phase 3.8 `margin_radar` (time-series GM compression) | `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_3_8_MARGIN_RADAR_PREVIEW.md` |
+| `533c02f` | Phase 2.3 `mix_analyzer` (category mix / DRAG-LIFT) | `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_2_3_MIX_ANALYZER_PREVIEW.md` |
 
 ### Phase 5 VAT / Tax Audit (Sprint 5.1 → 5.12)
 
