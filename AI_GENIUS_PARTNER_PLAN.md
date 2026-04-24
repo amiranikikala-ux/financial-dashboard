@@ -1,8 +1,10 @@
 # AI Genius Financial Partner — Master Plan
 
-> **ვერსია:** 2.1 | **თარიღი:** 2026-04-18 | **სტატუსი:** Active
+> **ვერსია:** 2.1 | **თარიღი:** 2026-04-18 | **სტატუსი:** Active (v2.1 roadmap-ის ძირითადი სამუშაოები COMPLETE 2026-04-22-ის მდგომარეობით)
 > **პროექტი:** იოლი მარკეტი ფრენჩაიზი — Financial Dashboard
 > **Supersedes:** `AI_ADVISOR_ROADMAP.md` v1.0 (Phase 3+ deprecated), `AI_GENIUS_PARTNER_PLAN.md` v2.0
+>
+> ⚠️ **Phase 5 (Tax Audit System) არ არის ამ v2.1 plan-ში.** დამატებულია 2026-04-23-ს — triggered by state audit for შპს ჯეო ფუდთაიმი. Sprint 5.1 → 5.11 COMPLETE, Sprint 5.12 evidence-only. დეტალი `PHASE_STATUS_MATRIX.md` Phase 5 სექციაში; ცოცხალი სტატუსი `CONTEXT_HANDOFF.md`-ში.
 
 ---
 
@@ -268,77 +270,18 @@ Cost: ~$30-80/თვე heavy. ROI: 1 good decision > $1,000.
 
 ## 🅿️ Parking Lot — მომავალი იტერაციებისთვის (v2.1 არ მოიცავს)
 
-ქვემოთ ჩამოთვლილი ~40 feature **პროფესიული** AI advisor-ის სრულ arsenal-ს ქმნის, მაგრამ v2.1-ში არ შედის — execution focus-ის გამო. როცა Phase 0A + Phase 0B + Phase 1 + Phase 2 მზადაა, ვუბრუნდებით სიას და ვირჩევთ მომდევნო batch-ს.
+ქვემოთ ~58 feature დაჯგუფებულია phase-ის მიხედვით. **არცერთი მათგანი არ არის დაგეგმილი** — რეზერვია, როცა v2.1 roadmap-ის Phase 0A / 0B / 1 / 2 / 3 / 4 დასრულდება. Phase 5 (Tax Audit) აცდა ამ ყდას და cancel-ზე დადგა.
 
-### Phase 0 Advanced (8 feature)
-- 🎯 Confidence Calibration (ნამდვილი % — არა ცრუ "95%")
-- 📝 Reasoning Trace (AI-ს ფიქრი საჯარო)
-- ⚡ Parallel Tool Calls (სიჩქარე 5x)
-- 🗜 Context Compression (გრძელი ჩატი იკუმშება, recall რჩება)
-- 🛡 Fallback Mode (Anthropic API down → local minimum)
-- 🎚 Prompt Version Control + A/B testing
-- 🔐 Advanced Hallucination Detector (3-layer filter)
-- 📊 Per-call Cost Dashboard
+| ჯგუფი | feature-ების მაგალითი |
+|---|---|
+| **Phase 0 Advanced** (8) | Confidence Calibration · Reasoning Trace · Parallel Tool Calls · Context Compression · Fallback Mode · Prompt Version Control · Advanced Hallucination Detector · Per-call Cost Dashboard |
+| **Phase 1 Advanced** (10) | Georgian Financial Slang · Currency/Unit Normalization · Complex Time Logic · Georgian Holidays + Seasonality · Source-of-truth Conflict Protocol · "I don't know" Awareness · Data Freshness Tracker · Data Quality Guardrails · Communication Preferences Memory · Mode Adaptation |
+| **Phase 2 Advanced** (13) | ABC Analysis · Customer Basket Analysis · Supplier Payment Term Optimizer · POS-level Anomaly · Discount Effectiveness · Category Cannibalization · Price Elasticity per-SKU · Working Capital Cycle · Fraud / Cash Discrepancy · Employee Shift Performance · Shrinkage Quantification · Reorder Point · Vendor Contract Review |
+| **Phase 3 Advanced** (10) | Action Item Extractor · Decision Replay · Hypothesis Tracker · Multi-Level Memory · Teaching Moments · Risk Register · Growth Opportunities Board · Learning Log · Success Log · Audit Log |
+| **Phase 4 Advanced** (12) | Competitor Surveillance · Location Scoring · Macro Tracker (GEL/USD) · Regulatory Calendar · Customer Segmentation · Loyalty Program Designer · Seasonal Staffing · M&A Scenario · Exit Strategy · Long-term Trend · Business Health Score · Goal Progress |
+| **Dashboard Advanced** (5) | Today's Pulse Widget · Smart Notification Center · Mobile Quick-View Card · AI-Generated Weekly PDF · Regulatory Deadline Banner |
 
-### Phase 1 Advanced (10 feature)
-- 🇬🇪 ქართული ფინანსური ლექსიკა ("შავი/თეთრი", "ფრთხილი ხარჯი", "ქუდი")
-- 💵 ვალუტა/ერთეულის ნორმალიზება (USD/GEL/EUR, კგ/ლიტრი/ცალი)
-- ⏰ რთული დროის ლოგიკა ("წინა სამშაბათიდან ახლავე")
-- 🎄 Georgian Holidays + Seasonality (ახალი წელი, აღდგომა, 9 აპრილი, ტურისტული სეზონი)
-- ⚖ Source-of-truth Conflict Protocol (Excel vs data.json vs manual vs bank)
-- 🕳 "არ ვიცი" Awareness (data gap-ების აქტიური იდენტიფიცირება)
-- 🕘 Data Freshness Tracker (ფაილი ძველია — AI იცის)
-- 🚨 Data Quality Guardrails (feb 30, negative sales → AI ეჭვი)
-- 🎭 User Communication Preferences Memory
-- 🧠 Mode Adaptation (stress signals → ტონი რბილდება)
-
-### Phase 2 Advanced (13 feature)
-- 🔤 ABC Analysis (80/20 ფოკუსი)
-- 🛒 Customer Basket Analysis (POS co-occurrence)
-- 💸 Supplier Payment Term Optimizer
-- 🎰 POS-level Anomaly (ოზ.POS1 vs POS2 vs POS3)
-- 🏷 Discount Effectiveness Measurement
-- 🍴 Category Cannibalization Detector
-- 📐 Price Elasticity per-SKU
-- 💰 Working Capital Cycle Optimizer (cash-to-cash days)
-- 🦹 Fraud / Cash Discrepancy Radar (Z-report vs drawer vs bank)
-- 👷 Employee/Shift Performance (POS-attributable)
-- 📉 Shrinkage Quantification (inventory vs sales loss)
-- 🗓 Reorder Point + Stockout Prediction
-- 🏭 Vendor Contract Review (terms vs market)
-
-### Phase 3 Advanced (10 feature)
-- 📋 Action Item Extractor (ჩატი → todo)
-- 🎬 Decision Replay ("X თვის წინ რა გადავწყვიტე, შედეგი?")
-- 🧬 Hypothesis Tracker (AI-ს რჩევები vs რეალური outcome)
-- 🧠 Multi-Level Memory (short/medium/long + declarative/episodic/procedural)
-- 🎓 Teaching Moments (ახსნა inline)
-- 📊 Risk Register (ყველა რისკი ერთ ადგილას)
-- 🌱 Growth Opportunities Board
-- 📚 Learning Log ("რა ვიცი შენი ბიზნესის შესახებ")
-- 🏆 Success Log (რომელმა რჩევამ იმუშავა)
-- 🧾 Audit Log
-
-### Phase 4 Advanced (12 feature)
-- 🕵 Competitor Surveillance (web-monitored)
-- 🗺 Location Scoring (მე-3 მაღაზიის adres)
-- 📉 Macro Tracker (GEL/USD, ინფლაცია)
-- 🏛 Regulatory Calendar + Deadline Alerts
-- 🧑‍🤝‍🧑 Customer Segmentation (თუ ID data)
-- 🎁 Loyalty Program Designer
-- 📆 Seasonal Staffing Plan
-- 🤝 M&A Scenario (ყიდვა vs გახსნა)
-- 🚪 Exit Strategy (3-წლიანი valuation)
-- 📈 Long-term Trend Detection (3-წლიანი)
-- 🏥 Business Health Score (1-10)
-- 🎯 Goal Progress Tracker
-
-### Dashboard Advanced (5 feature)
-- 🌅 Today's Pulse Widget (header-permanent)
-- 🔔 Smart Notification Center
-- 📱 Mobile Quick-View Card
-- 📄 AI-Generated Weekly PDF
-- 🕐 Regulatory Deadline Banner
+**როცა Parking Lot-იდან აიღებ feature-ს**: prioritize → draft preview → approve → sprint. არცერთი აქედან არ არის "commit-ant" — მხოლოდ option menu.
 
 ---
 
@@ -405,20 +348,17 @@ ROI: 1 good decision > $1,000. No-brainer.
 
 ---
 
-## 🔄 Current Status (2026-04-18)
+## 🔄 Current Status (2026-04-24)
 
-**Active**: Pre-Phase 0A (approval + prerequisites).
+v2.1 roadmap-ის აქტიური Phase-ები **ყველა ჩაბარდა**:
 
-**Blockers**:
-1. Backend restart needed for Waybill live verify (user action)
-2. Phase 0A + 0B + Phase 1 (1.11, 1.12) + Phase 2 (2.11, 2.12) prompt text preview pending user review BEFORE code
+- Phase 0A ✅ · 0B Sprint 1–4 ✅ · Phase 1 Parts A–D ✅ · Phase 2 (2.1/2.2/2.4/2.5/2.6/2.8/2.9/2.11/2.12) ✅ · Phase 3.1 + 3.5 + 3.7 ✅ · Phase 4A + 4B + 4C.2 + 4C.3 ✅ · 4C.1 Parts A+B ✅ (Part C evidence-driven)
 
-**Next step**: 
-1. User approves v2.1 → ✅ DONE (2026-04-18 საღამოს)
-2. Cascade drafts Phase 0A Critical Foundation prompt text preview in plain Georgian
-3. User reviews + approves
-4. Phase 0A code implementation (2-3 დღე)
-5. Phase 0B Genius Core kickoff
+v2.1-ის **ქვეშ** მხოლოდ Phase 3 remaining (4 features) და Phase 4 Advanced (9 features parked) რჩება.
+
+**v2.1-ის გარეთ**: **Phase 5 (Tax Audit System)** 2026-04-23-ზე დაიწყო state audit-ის trigger-ით. Sprint 5.1 → 5.11 COMPLETE. Phase 5 არ არის ამ roadmap-ში — ცოცხალი სტატუსი `CONTEXT_HANDOFF.md`-ში, ისტორია `PHASE_STATUS_MATRIX.md`-ში.
+
+ასევე v2.1-ს გარეთ: **Tier 2 pipeline cache** (Sprint 2/3a/3b/3c COMPLETE, Sprint 3d/3e/3f planned) — scalability work, არა AI feature.
 
 ---
 
@@ -426,13 +366,13 @@ ROI: 1 good decision > $1,000. No-brainer.
 
 | File | Purpose |
 |---|---|
-| `AI_GENIUS_PARTNER_PLAN.md` (this, v2.1) | Master plan — authoritative |
-| `PLAN.md` | High-level status + pointer here |
-| `CONTEXT_HANDOFF.md` | Active packet + copy/paste brief |
-| `HANDOFF.md` | Slim banner + packet evidence |
-| `HANDOFF_ARCHIVE/` | Historical evidence |
-| `AGENTS.md` | Project rules (incl. plain Georgian rule) |
-| `AI_ADVISOR_ROADMAP.md` | Legacy — Phase 1-2 evidence, Phase 3+ deprecated |
+| `CONTEXT_HANDOFF.md` | **ცოცხალი სტატუსი** — startup brief, ყოველ სესიაში ვიხსნი |
+| `PHASE_STATUS_MATRIX.md` | ყველა phase-ის ცხრილი (ცოცხალი + ისტორიული) |
+| `AI_GENIUS_PARTNER_PLAN.md` (this, v2.1) | Master roadmap (predates Phase 5 — see banner) |
+| `PLAN.md` | Stack + closed milestones (lean log) |
+| `HANDOFF.md` | Evidence pointer (commit SHA → archive) |
+| `HANDOFF_ARCHIVE/` | Historical evidence, closed-phase previews |
+| `AGENTS.md` | Session checklist + rules |
 
 ---
 
