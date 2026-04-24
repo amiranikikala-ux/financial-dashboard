@@ -406,8 +406,8 @@ def _collect_income_bundles(script_dir, object_mapping):
         f"{bog_expenses_bundle.get('grand_total_operating_expense_ge', 0):,.2f}",
         f"{bog_expenses_bundle.get('grand_total_state_treasury_ge', 0):,.2f}",
     )
-    tbc_samurneo_bundle = collect_tbc_samurneo_flow(script_dir)
-    bog_samurneo_bundle = collect_bog_samurneo_flow(script_dir)
+    tbc_samurneo_bundle = collect_tbc_samurneo_flow(script_dir, use_cache=True)
+    bog_samurneo_bundle = collect_bog_samurneo_flow(script_dir, use_cache=True)
     samurneo_bundle = merge_samurneo_flows(tbc_samurneo_bundle, bog_samurneo_bundle)
     tax_flow_bundle = collect_tax_flow(script_dir)
     tbc_foodmart_cashback_bundle = collect_tbc_foodmart_cashback(script_dir)

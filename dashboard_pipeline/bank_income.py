@@ -3,6 +3,7 @@ Bank income & expense collection: POS terminal income (TBC/BOG),
 expense categories, samurneo flow, tax flow, foodmart cashback,
 and related Excel writers.
 """
+import hashlib
 import json
 import os
 import re
@@ -41,6 +42,16 @@ from dashboard_pipeline.file_utils import (
     _find_excel_column_danishnuleba,
 )
 from dashboard_pipeline.config_loaders import load_object_mapping
+from dashboard_pipeline.pipeline_cache import (
+    DEFAULT_CACHE_FILENAME,
+    compute_file_signature,
+    empty_cache,
+    file_has_changed,
+    get_payload,
+    load_cache,
+    put_entry,
+    save_cache,
+)
 
 logger = get_logger(__name__)
 
@@ -108,112 +119,345 @@ def _tbc_income_row_has_terminal(raw, terminal_ids):
 # Samurneo (საქმიანობისთვის აუცილებელი ხარჯი) — TBC + BOG
 # ---------------------------------------------------------------------------
 
-def collect_tbc_samurneo_flow(script_dir):
-    cfg_path = os.path.join(script_dir, "Financial_Analysis", "tbc_samurneo_patterns.json")
-    patterns = []
-    include_all = True
-    if os.path.isfile(cfg_path):
-        try:
-            with open(cfg_path, encoding="utf-8") as f:
-                cfg = json.load(f)
-            include_all = bool(cfg.get("include_all_transactions", True))
-            patterns = [str(x).lower() for x in (cfg.get("match_substrings") or []) if str(x).strip()]
-        except Exception:
-            include_all = True
-            patterns = []
+def _load_samurneo_patterns(script_dir):
+    """Read the shared samurneo config (returns (patterns, include_all)).
 
+    `collect_bog_samurneo_flow` intentionally reads the same
+    `tbc_samurneo_patterns.json` — the filter substrings are bank-agnostic.
+    """
+    cfg_path = os.path.join(
+        script_dir, "Financial_Analysis", "tbc_samurneo_patterns.json"
+    )
+    if not os.path.isfile(cfg_path):
+        return [], True
+    try:
+        with open(cfg_path, encoding="utf-8") as handle:
+            cfg = json.load(handle)
+    except Exception:
+        return [], True
+    include_all = bool(cfg.get("include_all_transactions", True))
+    patterns = [
+        str(x).lower()
+        for x in (cfg.get("match_substrings") or [])
+        if str(x).strip()
+    ]
+    return patterns, include_all
+
+
+def _content_fingerprint_samurneo(patterns, include_all, bank):
+    """Fingerprint the non-file inputs so the cache invalidates on config shifts.
+
+    Separate fingerprints per bank so a future config split (e.g. dedicated
+    bog_samurneo_patterns.json) only invalidates one side.
+    """
+    blob = json.dumps(
+        {
+            "bank": bank,
+            "patterns": sorted(patterns or []),
+            "include_all": bool(include_all),
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+    return hashlib.sha1(blob.encode("utf-8")).hexdigest()
+
+
+def _process_tbc_samurneo_file(path, *, patterns, include_all):
+    """Parse one TBC yearly xlsx into per-file samurneo aggregates.
+
+    Returns a JSON-serializable payload. Rows are stored in full (no
+    truncation) — the bundle-level truncation to 300 happens at merge time.
+    """
     out_exp = []
     out_ret = []
-    for f in list_tbc_bank_statement_xlsx():
-        try:
-            header_idx = find_header_row(f)
-            df = pd.read_excel(f, header=header_idx)
-            cols = list(df.columns)
-            debit_col = next((c for c in cols if "გასული თანხა" in str(c)), None)
-            credit_col = next((c for c in cols if "შემოსული თანხა" in str(c)), None)
-            if not debit_col and not credit_col:
-                continue
-            date_col = next((c for c in cols if "თარიღი" in str(c)), None)
-            for _, row in df.iterrows():
-                raw = _tbc_row_text_join_skip(row, cols, [debit_col, credit_col])
-                blob = raw.lower()
-                if (not include_all) and patterns and (not any(p in blob for p in patterns)):
-                    continue
-                debit_amt = pd.to_numeric(row[debit_col], errors="coerce") if debit_col else float("nan")
-                credit_amt = pd.to_numeric(row[credit_col], errors="coerce") if credit_col else float("nan")
-                base = {"ფაილი": os.path.basename(f), "თარიღი": _excel_cell(row, date_col),
-                        "ტექსტი_მოკლე": (raw[:500] + "...") if len(raw) > 500 else raw}
-                if pd.notna(debit_amt) and float(debit_amt) > 0:
-                    out_exp.append({**base, "თანხა": float(debit_amt), "მიმართულება": SAMURNEO_EXPENSE_DIRECTION_KA})
-                if pd.notna(credit_amt) and float(credit_amt) > 0:
-                    out_ret.append({**base, "თანხა": float(credit_amt), "მიმართულება": SAMURNEO_RETURN_DIRECTION_KA})
-        except Exception as e:
-            logger.error("TBC samurneo %s: %s", f, e)
+    try:
+        header_idx = find_header_row(path)
+        df = pd.read_excel(path, header=header_idx)
+    except Exception as exc:
+        logger.error("TBC samurneo %s: %s", path, exc)
+        return {
+            "status": "read_error",
+            "expense_rows": [],
+            "return_rows": [],
+            "expense_total_ge": 0.0,
+            "return_total_ge": 0.0,
+            "expense_line_count": 0,
+            "return_line_count": 0,
+        }
+
+    cols = list(df.columns)
+    debit_col = next((c for c in cols if "გასული თანხა" in str(c)), None)
+    credit_col = next((c for c in cols if "შემოსული თანხა" in str(c)), None)
+    if not debit_col and not credit_col:
+        return {
+            "status": "ok",
+            "expense_rows": [],
+            "return_rows": [],
+            "expense_total_ge": 0.0,
+            "return_total_ge": 0.0,
+            "expense_line_count": 0,
+            "return_line_count": 0,
+        }
+
+    date_col = next((c for c in cols if "თარიღი" in str(c)), None)
+    file_name = os.path.basename(path)
+    for _, row in df.iterrows():
+        raw = _tbc_row_text_join_skip(row, cols, [debit_col, credit_col])
+        blob = raw.lower()
+        if (not include_all) and patterns and (
+            not any(p in blob for p in patterns)
+        ):
+            continue
+        debit_amt = (
+            pd.to_numeric(row[debit_col], errors="coerce")
+            if debit_col
+            else float("nan")
+        )
+        credit_amt = (
+            pd.to_numeric(row[credit_col], errors="coerce")
+            if credit_col
+            else float("nan")
+        )
+        base = {
+            "ფაილი": file_name,
+            "თარიღი": _excel_cell(row, date_col),
+            "ტექსტი_მოკლე": (raw[:500] + "...") if len(raw) > 500 else raw,
+        }
+        if pd.notna(debit_amt) and float(debit_amt) > 0:
+            out_exp.append({
+                **base,
+                "თანხა": float(debit_amt),
+                "მიმართულება": SAMURNEO_EXPENSE_DIRECTION_KA,
+            })
+        if pd.notna(credit_amt) and float(credit_amt) > 0:
+            out_ret.append({
+                **base,
+                "თანხა": float(credit_amt),
+                "მიმართულება": SAMURNEO_RETURN_DIRECTION_KA,
+            })
 
     exp_total = sum(float(r.get("თანხა") or 0) for r in out_exp)
     ret_total = sum(float(r.get("თანხა") or 0) for r in out_ret)
     return {
-        "expense_total_ge": float(exp_total), "return_total_ge": float(ret_total),
-        "net_ge": float(ret_total - exp_total),
-        "expense_line_count": len(out_exp), "return_line_count": len(out_ret),
-        "expense_rows_preview": out_exp[:300], "return_rows_preview": out_ret[:300],
-        "expense_monthly_summary": _monthly_summary(out_exp),
-        "return_monthly_summary": _monthly_summary(out_ret),
+        "status": "ok",
+        "expense_rows": out_exp,
+        "return_rows": out_ret,
+        "expense_total_ge": float(exp_total),
+        "return_total_ge": float(ret_total),
+        "expense_line_count": len(out_exp),
+        "return_line_count": len(out_ret),
     }
 
 
-def collect_bog_samurneo_flow(script_dir):
-    cfg_path = os.path.join(script_dir, "Financial_Analysis", "tbc_samurneo_patterns.json")
-    patterns = []
-    include_all = True
-    if os.path.isfile(cfg_path):
-        try:
-            with open(cfg_path, encoding="utf-8") as f:
-                cfg = json.load(f)
-            include_all = bool(cfg.get("include_all_transactions", True))
-            patterns = [str(x).lower() for x in (cfg.get("match_substrings") or []) if str(x).strip()]
-        except Exception:
-            include_all = True
-            patterns = []
-
+def _process_bog_samurneo_file(path, *, patterns, include_all):
+    """Parse one BOG yearly xlsx into per-file samurneo aggregates."""
     out_exp = []
     out_ret = []
-    for f in list_bog_bank_statement_xlsx():
-        try:
-            header_idx = find_header_row(f)
-            df = pd.read_excel(f, header=header_idx)
-            cols = list(df.columns)
-            debit_col = next((c for c in cols if "დებეტი" in str(c) and "ბრუნვა" not in str(c)), None)
-            credit_col = next((c for c in cols if "კრედიტი" in str(c) and "ბრუნვა" not in str(c)), None)
-            if not debit_col and not credit_col:
-                continue
-            date_col = next((c for c in cols if "თარიღი" in str(c)), None)
-            for _, row in df.iterrows():
-                raw = _tbc_row_text_join_skip(row, cols, [debit_col, credit_col])
-                blob = raw.lower()
-                if (not include_all) and patterns and (not any(p in blob for p in patterns)):
-                    continue
-                debit_amt = pd.to_numeric(row[debit_col], errors="coerce") if debit_col else float("nan")
-                credit_amt = pd.to_numeric(row[credit_col], errors="coerce") if credit_col else float("nan")
-                base = {"ბანკი": "BOG", "ფაილი": os.path.basename(f), "თარიღი": _excel_cell(row, date_col),
-                        "ტექსტი_მოკლე": (raw[:500] + "...") if len(raw) > 500 else raw}
-                if pd.notna(debit_amt) and float(debit_amt) > 0:
-                    out_exp.append({**base, "თანხა": float(debit_amt), "მიმართულება": SAMURNEO_EXPENSE_DIRECTION_KA})
-                if pd.notna(credit_amt) and float(credit_amt) > 0:
-                    out_ret.append({**base, "თანხა": float(credit_amt), "მიმართულება": SAMURNEO_RETURN_DIRECTION_KA})
-        except Exception as e:
-            logger.error("BOG samurneo %s: %s", f, e)
+    try:
+        header_idx = find_header_row(path)
+        df = pd.read_excel(path, header=header_idx)
+    except Exception as exc:
+        logger.error("BOG samurneo %s: %s", path, exc)
+        return {
+            "status": "read_error",
+            "expense_rows": [],
+            "return_rows": [],
+            "expense_total_ge": 0.0,
+            "return_total_ge": 0.0,
+            "expense_line_count": 0,
+            "return_line_count": 0,
+        }
+
+    cols = list(df.columns)
+    debit_col = next(
+        (c for c in cols if "დებეტი" in str(c) and "ბრუნვა" not in str(c)),
+        None,
+    )
+    credit_col = next(
+        (c for c in cols if "კრედიტი" in str(c) and "ბრუნვა" not in str(c)),
+        None,
+    )
+    if not debit_col and not credit_col:
+        return {
+            "status": "ok",
+            "expense_rows": [],
+            "return_rows": [],
+            "expense_total_ge": 0.0,
+            "return_total_ge": 0.0,
+            "expense_line_count": 0,
+            "return_line_count": 0,
+        }
+
+    date_col = next((c for c in cols if "თარიღი" in str(c)), None)
+    file_name = os.path.basename(path)
+    for _, row in df.iterrows():
+        raw = _tbc_row_text_join_skip(row, cols, [debit_col, credit_col])
+        blob = raw.lower()
+        if (not include_all) and patterns and (
+            not any(p in blob for p in patterns)
+        ):
+            continue
+        debit_amt = (
+            pd.to_numeric(row[debit_col], errors="coerce")
+            if debit_col
+            else float("nan")
+        )
+        credit_amt = (
+            pd.to_numeric(row[credit_col], errors="coerce")
+            if credit_col
+            else float("nan")
+        )
+        base = {
+            "ბანკი": "BOG",
+            "ფაილი": file_name,
+            "თარიღი": _excel_cell(row, date_col),
+            "ტექსტი_მოკლე": (raw[:500] + "...") if len(raw) > 500 else raw,
+        }
+        if pd.notna(debit_amt) and float(debit_amt) > 0:
+            out_exp.append({
+                **base,
+                "თანხა": float(debit_amt),
+                "მიმართულება": SAMURNEO_EXPENSE_DIRECTION_KA,
+            })
+        if pd.notna(credit_amt) and float(credit_amt) > 0:
+            out_ret.append({
+                **base,
+                "თანხა": float(credit_amt),
+                "მიმართულება": SAMURNEO_RETURN_DIRECTION_KA,
+            })
 
     exp_total = sum(float(r.get("თანხა") or 0) for r in out_exp)
     ret_total = sum(float(r.get("თანხა") or 0) for r in out_ret)
     return {
-        "expense_total_ge": float(exp_total), "return_total_ge": float(ret_total),
-        "net_ge": float(ret_total - exp_total),
-        "expense_line_count": len(out_exp), "return_line_count": len(out_ret),
-        "expense_rows_preview": out_exp[:300], "return_rows_preview": out_ret[:300],
-        "expense_monthly_summary": _monthly_summary(out_exp),
-        "return_monthly_summary": _monthly_summary(out_ret),
+        "status": "ok",
+        "expense_rows": out_exp,
+        "return_rows": out_ret,
+        "expense_total_ge": float(exp_total),
+        "return_total_ge": float(ret_total),
+        "expense_line_count": len(out_exp),
+        "return_line_count": len(out_ret),
     }
+
+
+def _merge_samurneo_file_payloads(payloads):
+    """Combine per-file samurneo payloads into the bundle shape.
+
+    Row order follows file-iteration order (same as pre-refactor).
+    """
+    all_exp = []
+    all_ret = []
+    for payload in payloads:
+        all_exp.extend(payload.get("expense_rows") or [])
+        all_ret.extend(payload.get("return_rows") or [])
+    exp_total = sum(float(r.get("თანხა") or 0) for r in all_exp)
+    ret_total = sum(float(r.get("თანხა") or 0) for r in all_ret)
+    return {
+        "expense_total_ge": float(exp_total),
+        "return_total_ge": float(ret_total),
+        "net_ge": float(ret_total - exp_total),
+        "expense_line_count": len(all_exp),
+        "return_line_count": len(all_ret),
+        "expense_rows_preview": all_exp[:300],
+        "return_rows_preview": all_ret[:300],
+        "expense_monthly_summary": _monthly_summary(all_exp),
+        "return_monthly_summary": _monthly_summary(all_ret),
+    }
+
+
+def _run_cached_samurneo(
+    files,
+    *,
+    processor,
+    fingerprint,
+    use_cache,
+    cache_path,
+):
+    """Shared per-file cache orchestration for TBC/BOG samurneo."""
+    cache = empty_cache()
+    resolved_cache_path = None
+    if use_cache:
+        resolved_cache_path = cache_path or os.path.abspath(DEFAULT_CACHE_FILENAME)
+        cache = load_cache(
+            resolved_cache_path, content_fingerprint=fingerprint
+        )
+
+    payloads = []
+    for f in files:
+        payload = None
+        if use_cache:
+            try:
+                if not file_has_changed(f, cache):
+                    cached = get_payload(cache, f)
+                    if isinstance(cached, dict):
+                        payload = cached
+            except Exception:
+                payload = None
+        if payload is None:
+            payload = processor(f)
+            if use_cache and payload.get("status") == "ok":
+                try:
+                    sig = compute_file_signature(f)
+                    put_entry(cache, f, sig, payload)
+                except OSError:
+                    pass
+        payloads.append(payload)
+
+    if use_cache and resolved_cache_path:
+        expected_keys = {os.path.normpath(f) for f in files}
+        cache_files = cache.get("files") if isinstance(cache, dict) else None
+        if isinstance(cache_files, dict):
+            for stale in [k for k in cache_files.keys() if k not in expected_keys]:
+                cache_files.pop(stale, None)
+        try:
+            save_cache(resolved_cache_path, cache)
+        except OSError:
+            pass
+
+    return payloads
+
+
+def collect_tbc_samurneo_flow(
+    script_dir, *, use_cache: bool = False, cache_path=None
+):
+    """Aggregate TBC samurneo flow across all TBC yearly xlsx files.
+
+    When ``use_cache=True``, per-file payloads are cached in
+    ``.pipeline_cache.json`` (or ``cache_path`` override) keyed by the
+    samurneo content-fingerprint so unchanged files skip the Excel re-read
+    on subsequent runs.
+    """
+    patterns, include_all = _load_samurneo_patterns(script_dir)
+    fingerprint = _content_fingerprint_samurneo(patterns, include_all, bank="TBC")
+    files = list(list_tbc_bank_statement_xlsx())
+    payloads = _run_cached_samurneo(
+        files,
+        processor=lambda f: _process_tbc_samurneo_file(
+            f, patterns=patterns, include_all=include_all
+        ),
+        fingerprint=fingerprint,
+        use_cache=bool(use_cache),
+        cache_path=cache_path,
+    )
+    return _merge_samurneo_file_payloads(payloads)
+
+
+def collect_bog_samurneo_flow(
+    script_dir, *, use_cache: bool = False, cache_path=None
+):
+    """Aggregate BOG samurneo flow across all BOG yearly xlsx files."""
+    patterns, include_all = _load_samurneo_patterns(script_dir)
+    fingerprint = _content_fingerprint_samurneo(patterns, include_all, bank="BOG")
+    files = list(list_bog_bank_statement_xlsx())
+    payloads = _run_cached_samurneo(
+        files,
+        processor=lambda f: _process_bog_samurneo_file(
+            f, patterns=patterns, include_all=include_all
+        ),
+        fingerprint=fingerprint,
+        use_cache=bool(use_cache),
+        cache_path=cache_path,
+    )
+    return _merge_samurneo_file_payloads(payloads)
 
 
 def merge_samurneo_flows(tbc_bundle, bog_bundle):
