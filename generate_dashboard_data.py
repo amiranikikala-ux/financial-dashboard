@@ -350,10 +350,10 @@ def _collect_income_bundles(script_dir, object_mapping):
     """Collect all income, expense, samurneo, tax, and cashback bundles."""
     logger.info("Reading card and POS income sources...")
     tbc_card_income_bundle = collect_tbc_card_income(
-        script_dir, object_mapping=object_mapping
+        script_dir, object_mapping=object_mapping, use_cache=True
     )
     bog_pos_income_bundle = collect_bog_pos_terminal_income(
-        script_dir, object_mapping=object_mapping
+        script_dir, object_mapping=object_mapping, use_cache=True
     )
     pos_terminal_all_rows = list(tbc_card_income_bundle.get("lines") or []) + list(
         bog_pos_income_bundle.get("lines") or []

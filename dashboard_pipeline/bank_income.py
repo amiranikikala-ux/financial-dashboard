@@ -909,95 +909,320 @@ def write_tbc_foodmart_cashback_excel(bundle, download_dir):
 # POS terminal income (BOG + TBC)
 # ---------------------------------------------------------------------------
 
-def collect_bog_pos_terminal_income(script_dir, object_mapping=None):
-    cfg_path = os.path.join(script_dir, "Financial_Analysis", "bog_pos_terminal_income_patterns.json")
-    default_patterns = ["გადახდა - თარიღი", "ტერმინალის id", "ბარათი:", "ტრანზაქციის დეტალები",
-                        "დანიშნულება ჩარიცხვა", "pos", "პოს"]
-    patterns = default_patterns
-    if os.path.isfile(cfg_path):
-        try:
-            with open(cfg_path, encoding="utf-8") as f:
-                cfg = json.load(f)
-            patterns = [str(x).lower() for x in (cfg.get("match_substrings") or []) if str(x).strip()] or default_patterns
-        except Exception:
-            patterns = default_patterns
+BOG_POS_DEFAULT_PATTERNS = (
+    "გადახდა - თარიღი", "ტერმინალის id", "ბარათი:", "ტრანზაქციის დეტალები",
+    "დანიშნულება ჩარიცხვა", "pos", "პოს",
+)
+BOG_POS_LABEL_KA = "POS ტერმინალის შემოსავალი (BOG)"
 
-    object_mapping = object_mapping or load_object_mapping(script_dir)
+
+def _load_bog_pos_patterns(script_dir):
+    """Read bog_pos_terminal_income_patterns.json or fall back to defaults."""
+    cfg_path = os.path.join(
+        script_dir, "Financial_Analysis",
+        "bog_pos_terminal_income_patterns.json",
+    )
+    default_patterns = list(BOG_POS_DEFAULT_PATTERNS)
+    if not os.path.isfile(cfg_path):
+        return default_patterns
+    try:
+        with open(cfg_path, encoding="utf-8") as handle:
+            cfg = json.load(handle)
+    except Exception:
+        return default_patterns
+    patterns = [
+        str(x).lower()
+        for x in (cfg.get("match_substrings") or [])
+        if str(x).strip()
+    ]
+    return patterns or default_patterns
+
+
+def _content_fingerprint_bog_pos(patterns, object_mapping):
+    """Fingerprint non-file inputs for BOG POS income cache.
+
+    Covers the patterns list (bog_pos_terminal_income_patterns.json), the
+    hardcoded default list, and the object_mapping (affects the ``object``
+    field tagged on each cached line). Any change invalidates the cache.
+    """
+    blob = json.dumps(
+        {
+            "patterns": sorted(patterns or []),
+            "default_patterns": sorted(BOG_POS_DEFAULT_PATTERNS),
+            "mapping": object_mapping or {},
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+        default=str,
+    )
+    return hashlib.sha1(blob.encode("utf-8")).hexdigest()
+
+
+def _empty_bog_pos_payload(status):
+    return {
+        "status": status,
+        "lines": [],
+        "total_ge": 0.0,
+        "line_count": 0,
+    }
+
+
+def _process_bog_pos_terminal_income_file(path, *, patterns, object_mapping):
+    """Parse one BOG yearly xlsx into per-file POS-income aggregates."""
+    try:
+        header_idx = find_header_row(path)
+        df = pd.read_excel(path, header=header_idx)
+    except Exception as exc:
+        logger.error("BOG POS income %s: %s", path, exc)
+        return _empty_bog_pos_payload("read_error")
+
+    cols = list(df.columns)
+    credit_col = next(
+        (c for c in cols if "კრედიტი" in str(c) and "ბრუნვა" not in str(c)),
+        None,
+    )
+    if not credit_col:
+        return _empty_bog_pos_payload("ok")
+
+    date_col = next((c for c in cols if "თარიღი" in str(c)), None)
+    file_name = os.path.basename(path)
     lines = []
     total = 0.0
-    for f in list_bog_bank_statement_xlsx():
-        try:
-            header_idx = find_header_row(f)
-            df = pd.read_excel(f, header=header_idx)
-            cols = list(df.columns)
-            credit_col = next((c for c in cols if "კრედიტი" in str(c) and "ბრუნვა" not in str(c)), None)
-            if not credit_col:
-                continue
-            date_col = next((c for c in cols if "თარიღი" in str(c)), None)
-            for _, row in df.iterrows():
-                amt = pd.to_numeric(row[credit_col], errors="coerce")
-                if pd.isna(amt) or float(amt) <= 0:
-                    continue
-                raw = _tbc_row_text_join_skip(row, cols, [credit_col])
-                blob_lower = raw.lower()
-                if not any(p in blob_lower for p in patterns):
-                    continue
-                total += float(amt)
-                lines.append({"ბანკი": "BOG", "ფაილი": os.path.basename(f), "თარიღი": _excel_cell(row, date_col),
-                              "თანხა": float(amt), "object": detect_object("bog_pos", text=raw, object_mapping=object_mapping),
-                              "ტექსტი_მოკლე": (raw[:500] + "...") if len(raw) > 500 else raw})
-        except Exception as e:
-            logger.error("BOG POS income %s: %s", f, e)
-    return {"label_ka": "POS ტერმინალის შემოსავალი (BOG)", "total_ge": float(total), "line_count": len(lines), "lines": lines}
+    for _, row in df.iterrows():
+        amt = pd.to_numeric(row[credit_col], errors="coerce")
+        if pd.isna(amt) or float(amt) <= 0:
+            continue
+        raw = _tbc_row_text_join_skip(row, cols, [credit_col])
+        blob_lower = raw.lower()
+        if not any(p in blob_lower for p in patterns):
+            continue
+        total += float(amt)
+        lines.append({
+            "ბანკი": "BOG",
+            "ფაილი": file_name,
+            "თარიღი": _excel_cell(row, date_col),
+            "თანხა": float(amt),
+            "object": detect_object(
+                "bog_pos", text=raw, object_mapping=object_mapping
+            ),
+            "ტექსტი_მოკლე": (raw[:500] + "...") if len(raw) > 500 else raw,
+        })
+    return {
+        "status": "ok",
+        "lines": lines,
+        "total_ge": float(total),
+        "line_count": len(lines),
+    }
 
 
-def collect_tbc_card_income(script_dir, object_mapping=None):
-    cfg_path = os.path.join(script_dir, "Financial_Analysis", "tbc_card_income_patterns.json")
+def _merge_bog_pos_payloads(payloads):
+    """Combine per-file BOG POS-income payloads into bundle shape."""
+    all_lines = []
+    for payload in payloads:
+        all_lines.extend(payload.get("lines") or [])
+    total = sum(float(r.get("თანხა") or 0) for r in all_lines)
+    return {
+        "label_ka": BOG_POS_LABEL_KA,
+        "total_ge": float(total),
+        "line_count": len(all_lines),
+        "lines": all_lines,
+    }
+
+
+def collect_bog_pos_terminal_income(
+    script_dir, object_mapping=None, *, use_cache: bool = False, cache_path=None
+):
+    """Aggregate BOG POS terminal income across all BOG yearly xlsx files.
+
+    When ``use_cache=True``, per-file payloads are cached keyed by a
+    fingerprint covering patterns + object_mapping. The emitted ``object``
+    tag per line comes from ``object_mapping`` at read time, so any
+    mapping change must invalidate the cache — handled via fingerprint.
+    """
+    patterns = _load_bog_pos_patterns(script_dir)
+    object_mapping = object_mapping or load_object_mapping(script_dir)
+    fingerprint = _content_fingerprint_bog_pos(patterns, object_mapping)
+    files = list(list_bog_bank_statement_xlsx())
+    payloads = _run_cached_per_file(
+        files,
+        processor=lambda f: _process_bog_pos_terminal_income_file(
+            f, patterns=patterns, object_mapping=object_mapping
+        ),
+        fingerprint=fingerprint,
+        use_cache=bool(use_cache),
+        cache_path=cache_path,
+    )
+    return _merge_bog_pos_payloads(payloads)
+
+
+def _load_tbc_card_income_config(script_dir):
+    """Read tbc_card_income_patterns.json or fall back to defaults.
+
+    Returns ``(terminal_ids, label_ka)``. ``terminal_ids`` is the resolved
+    list (config override if non-empty, else ``_DEFAULT_TBC_TERMINAL_IDS``).
+    """
+    cfg_path = os.path.join(
+        script_dir, "Financial_Analysis", "tbc_card_income_patterns.json"
+    )
     label_ka = ""
     terminal_ids = list(_DEFAULT_TBC_TERMINAL_IDS)
-    if os.path.isfile(cfg_path):
-        try:
-            with open(cfg_path, encoding="utf-8") as f:
-                cfg = json.load(f)
-            label_ka = str(cfg.get("label_ka", "") or "")
-            cfg_ids = [str(x).strip() for x in (cfg.get("terminal_ids") or []) if str(x).strip()]
-            if cfg_ids:
-                terminal_ids = cfg_ids
-        except Exception:
-            pass
+    if not os.path.isfile(cfg_path):
+        return terminal_ids, label_ka
+    try:
+        with open(cfg_path, encoding="utf-8") as handle:
+            cfg = json.load(handle)
+    except Exception:
+        return terminal_ids, label_ka
+    label_ka = str(cfg.get("label_ka", "") or "")
+    cfg_ids = [
+        str(x).strip()
+        for x in (cfg.get("terminal_ids") or [])
+        if str(x).strip()
+    ]
+    if cfg_ids:
+        terminal_ids = cfg_ids
+    return terminal_ids, label_ka
 
-    empty = {"total_ge": 0.0, "lines": [], "line_count": 0, "label_ka": label_ka}
-    if not terminal_ids:
-        return empty
 
-    object_mapping = object_mapping or load_object_mapping(script_dir)
+def _content_fingerprint_tbc_card_income(
+    terminal_ids, label_ka, object_mapping
+):
+    """Fingerprint non-file inputs for TBC card-income cache.
+
+    Covers the active terminal_ids (Sprint 5.2/5.12-critical — the whole
+    point of the terminal-ID filter is to exclude transit-IBAN aggregates
+    that would double-count), label_ka, the hardcoded default terminal
+    list, and the object_mapping.
+    """
+    blob = json.dumps(
+        {
+            "terminal_ids": sorted(terminal_ids or []),
+            "default_terminal_ids": sorted(_DEFAULT_TBC_TERMINAL_IDS),
+            "label_ka": label_ka or "",
+            "mapping": object_mapping or {},
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+        default=str,
+    )
+    return hashlib.sha1(blob.encode("utf-8")).hexdigest()
+
+
+def _empty_tbc_card_income_payload(status):
+    return {
+        "status": status,
+        "lines": [],
+        "total_ge": 0.0,
+        "line_count": 0,
+    }
+
+
+def _process_tbc_card_income_file(path, *, terminal_ids, object_mapping):
+    """Parse one TBC yearly xlsx into per-file card-income aggregates.
+
+    Matches rows by ``terminal_ids`` (physical POS terminal IDs present
+    in the row text). This is the Sprint 5.2 filter that eliminates the
+    2.8M ₾ double-count from transit-IBAN aggregates; Sprint 5.12
+    diagnosed that pre-2024-04 TBC statements omit physical IDs on some
+    legitimate rows — the cache must not alter this filter semantics.
+    """
+    try:
+        header_idx = find_header_row(path)
+        df = pd.read_excel(path, header=header_idx)
+    except Exception as exc:
+        logger.error("TBC card income %s: %s", path, exc)
+        return _empty_tbc_card_income_payload("read_error")
+
+    cols = list(df.columns)
+    credit_col = next(
+        (c for c in cols if "შემოსული" in str(c) and "გასული" not in str(c)),
+        None,
+    )
+    if not credit_col:
+        credit_col = next(
+            (c for c in cols if "incoming" in str(c).lower()), None
+        )
+    if not credit_col:
+        return _empty_tbc_card_income_payload("ok")
+
+    date_col = next((c for c in cols if "თარიღი" in str(c)), None)
+    file_name = os.path.basename(path)
     lines = []
     total = 0.0
-    for f in list_tbc_bank_statement_xlsx():
-        try:
-            header_idx = find_header_row(f)
-            df = pd.read_excel(f, header=header_idx)
-            cols = list(df.columns)
-            credit_col = next((c for c in cols if "შემოსული" in str(c) and "გასული" not in str(c)), None)
-            if not credit_col:
-                credit_col = next((c for c in cols if "incoming" in str(c).lower()), None)
-            if not credit_col:
-                continue
-            date_col = next((c for c in cols if "თარიღი" in str(c)), None)
-            for _, row in df.iterrows():
-                amt = pd.to_numeric(row[credit_col], errors="coerce")
-                if pd.isna(amt) or amt <= 0:
-                    continue
-                raw = _tbc_income_row_text_join(row, cols, credit_col)
-                if not _tbc_income_row_has_terminal(raw, terminal_ids):
-                    continue
-                total += float(amt)
-                lines.append({"ფაილი": os.path.basename(f), "თარიღი": _excel_cell(row, date_col),
-                              "თანხა": float(amt), "object": detect_object("tbc_pos", text=raw, object_mapping=object_mapping),
-                              "ტექსტი_მოკლე": (raw[:500] + "...") if len(raw) > 500 else raw})
-        except Exception as e:
-            logger.error("TBC card income %s: %s", f, e)
-    return {"total_ge": total, "lines": lines, "line_count": len(lines), "label_ka": label_ka}
+    for _, row in df.iterrows():
+        amt = pd.to_numeric(row[credit_col], errors="coerce")
+        if pd.isna(amt) or amt <= 0:
+            continue
+        raw = _tbc_income_row_text_join(row, cols, credit_col)
+        if not _tbc_income_row_has_terminal(raw, terminal_ids):
+            continue
+        total += float(amt)
+        lines.append({
+            "ფაილი": file_name,
+            "თარიღი": _excel_cell(row, date_col),
+            "თანხა": float(amt),
+            "object": detect_object(
+                "tbc_pos", text=raw, object_mapping=object_mapping
+            ),
+            "ტექსტი_მოკლე": (raw[:500] + "...") if len(raw) > 500 else raw,
+        })
+    return {
+        "status": "ok",
+        "lines": lines,
+        "total_ge": float(total),
+        "line_count": len(lines),
+    }
+
+
+def _merge_tbc_card_income_payloads(payloads, label_ka):
+    """Combine per-file TBC card-income payloads into bundle shape."""
+    all_lines = []
+    for payload in payloads:
+        all_lines.extend(payload.get("lines") or [])
+    total = sum(float(r.get("თანხა") or 0) for r in all_lines)
+    return {
+        "total_ge": float(total),
+        "lines": all_lines,
+        "line_count": len(all_lines),
+        "label_ka": label_ka,
+    }
+
+
+def collect_tbc_card_income(
+    script_dir, object_mapping=None, *, use_cache: bool = False, cache_path=None
+):
+    """Aggregate TBC card-income across all TBC yearly xlsx files.
+
+    When ``use_cache=True``, per-file payloads are cached keyed by a
+    fingerprint covering terminal_ids + label_ka + object_mapping. The
+    terminal-ID filter is Sprint 5.2-critical (excludes transit-IBAN
+    aggregates that would double-count in post-2024-04 statements);
+    Sprint 3e preserves it byte-identically and only accelerates
+    repeat reads when no input has changed.
+    """
+    terminal_ids, label_ka = _load_tbc_card_income_config(script_dir)
+    if not terminal_ids:
+        return {
+            "total_ge": 0.0,
+            "lines": [],
+            "line_count": 0,
+            "label_ka": label_ka,
+        }
+    object_mapping = object_mapping or load_object_mapping(script_dir)
+    fingerprint = _content_fingerprint_tbc_card_income(
+        terminal_ids, label_ka, object_mapping
+    )
+    files = list(list_tbc_bank_statement_xlsx())
+    payloads = _run_cached_per_file(
+        files,
+        processor=lambda f: _process_tbc_card_income_file(
+            f, terminal_ids=terminal_ids, object_mapping=object_mapping
+        ),
+        fingerprint=fingerprint,
+        use_cache=bool(use_cache),
+        cache_path=cache_path,
+    )
+    return _merge_tbc_card_income_payloads(payloads, label_ka)
 
 
 def merge_pos_terminal_income(tbc_bundle, bog_bundle, object_mapping=None):
