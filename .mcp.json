@@ -32,6 +32,24 @@
         "--db-path",
         "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\financial-dashboard\\rs-dashboard\\public\\data.db"
       ]
+    },
+    "sequential-thinking": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-sequential-thinking"]
+    },
+    "memory": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-memory"],
+      "env": {
+        "MEMORY_FILE_PATH": "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\financial-dashboard\\.claude\\mcp-memory.json"
+      }
+    },
+    "brave-search": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@brave/brave-search-mcp-server"],
+      "env": {
+        "BRAVE_API_KEY": "REPLACE_WITH_FREE_KEY_FROM_https://api-dashboard.search.brave.com/"
+      }
     }
   }
 }
