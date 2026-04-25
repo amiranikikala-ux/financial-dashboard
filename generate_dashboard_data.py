@@ -206,6 +206,7 @@ from dashboard_pipeline.analytics_builders import (
     build_budget,
     build_company_valuation,
     build_executive_summary,
+    build_supplier_concentration,
     tbc_expenses_public_json,
     bog_expenses_public_json,
     publish_download_excels,
@@ -1504,6 +1505,10 @@ def run():
             "supplier_aging": supplier_aging_result["suppliers"],
             "aging_summary": supplier_aging_result["summary"],
             "ap_monthly_trend": ap_monthly_trend,
+            # supplier_concentration ცარიელ placeholder-ად ვამატებ; ქვემოთ
+            # data dict-ის აშენების მერე ვაქცევ რეალურ payload-ად რომ
+            # `prepare_supplier_brief` ხედავდეს ფინალურ suppliers + meta-ს.
+            "supplier_concentration": None,
             "meta": {
                 "manual_payments_total": manual_grand,
                 "manual_payments_rows_with_amount": len(
@@ -1601,6 +1606,30 @@ def run():
         data, inc, object_mapping, budget_config, sector_benchmarks,
         supplier_aging_result,
     )
+
+    # ----- მომწოდებლების კონცენტრაცია (HHI + Top-N + ბერკეტი) -----
+    # widget-ი UI-ში არსებობდა, მაგრამ pipeline ფუნქციას არ უძახდა — ე.ი.
+    # ცოცხალი მონაცემები არ გვქონდა. ახლა ვადგენ ფინალურ data-ზე
+    # (suppliers + analytics უკვე ჩაწერილია).
+    try:
+        data["supplier_concentration"] = build_supplier_concentration(data)
+        sc = data["supplier_concentration"]
+        if isinstance(sc, dict) and sc.get("available"):
+            conc = sc.get("concentration") or {}
+            logger.info(
+                "მომწოდებლების კონცენტრაცია: HHI=%s, Top-5=%.1f%%, Top-10=%.1f%%",
+                int(conc.get("hhi_index") or 0),
+                float(conc.get("top_5_share_pct") or 0),
+                float(conc.get("top_10_share_pct") or 0),
+            )
+        else:
+            logger.warning(
+                "მომწოდებლების კონცენტრაცია — ვერ აშენდა: %s",
+                (sc or {}).get("reason_ka") or "უცნობი",
+            )
+    except Exception as exc:
+        logger.warning("მომწოდებლების კონცენტრაცია — ვერ აშენდა: %s", exc)
+
     _write_outputs(data, script_dir, inc)
 
 if __name__ == "__main__":
