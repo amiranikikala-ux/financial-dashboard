@@ -50,6 +50,18 @@
       "env": {
         "BRAVE_API_KEY": "${BRAVE_API_KEY}"
       }
+    },
+    "time": {
+      "command": "cmd",
+      "args": ["/c", "uvx", "mcp-server-time", "--local-timezone=Asia/Tbilisi"]
+    },
+    "fetch": {
+      "command": "cmd",
+      "args": ["/c", "uvx", "mcp-server-fetch"]
+    },
+    "context7": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@upstash/context7-mcp"]
     }
   }
 }
