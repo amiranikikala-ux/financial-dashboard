@@ -10,6 +10,7 @@
 
 import json
 import os
+import re
 
 import pandas as pd
 
@@ -1205,6 +1206,47 @@ def _read_and_parse_rs(rs_files, object_mapping):
         for _, r in rs_object_agg.iterrows()
     )
     logger.info("RS ობიექტების ეფექტური ჯამი: %s", rs_object_summary or 'მონაცემი არ არის')
+
+    # ----- ორგანიზაციის სახელის ნორმალიზაცია (1) -----
+    # RS-ის ექსპორტი ხშირად ერთსა და იმავე ID-ს ორი ფორმით აჩვენებს:
+    #   "(415118535) შპს ვემედინა"      — ნაწილი ფაილებიდან
+    #   "(415118535-დღგ) შპს ვემედინა"  — ნაწილი ფაილებიდან (VAT ფლაგი)
+    # ეს groupby-ს თვალში ორი განსხვავებული "ორგანიზაცია"-ა და ერთი
+    # მომწოდებელი ცხრილში 2-ჯერ ჩნდება + ბანკის გადახდა (tax_id-ით) ორჯერვე
+    # ენიშნება → ცრუ overpayment. ნორმალიზაცია „(ID) NAME" ფორმაზე ერთიანად.
+    df['ორგანიზაცია'] = df['ორგანიზაცია'].astype(str).str.replace(
+        r'\(\s*(\d{8,11})\s*[^)]*\)', r'(\1)', regex=True,
+    )
+    # trailing whitespace/control chars (e.g. "შპს ტიტე 2024\r\r")
+    df['ორგანიზაცია'] = df['ორგანიზაცია'].str.replace(r'\s+$', '', regex=True)
+
+    # ----- ნორმალიზაცია (2): ერთი tax_id → ერთი კანონიკური სახელი -----
+    # ერთი ID-ით სხვადასხვა სახელი მაინც ხდება (RS ხან ლათინურად ხან
+    # ქართულად ხან „შპს" → „სს" გადააქცევს ერთსა და იმავე ID-ში). ვიჭერ
+    # ყველაზე გრძელ/ინფორმატიულ ვერსიას ყოველი tax_id-ისთვის და მთლიან
+    # df-ში იმავე სახელად ვცვლი — groupby ერთხაზიანად ხდება.
+    df['_tax_id'] = df['ორგანიზაცია'].apply(_extract_tax_id_from_org).fillna('')
+
+    def _strip_taxid_prefix(org):
+        return re.sub(r'^\(\s*\d{8,11}[^)]*\)\s*', '', str(org)).strip()
+
+    canonical_names_by_tax_id = (
+        df.assign(_clean_name=df['ორგანიზაცია'].apply(_strip_taxid_prefix))
+          .loc[df['_tax_id'] != '']
+          .groupby('_tax_id')['_clean_name']
+          .apply(lambda s: max((n for n in s.dropna() if n), key=len, default=''))
+          .to_dict()
+    )
+
+    def _canonicalize_org(row):
+        tid = row['_tax_id']
+        if not tid:
+            return row['ორგანიზაცია']
+        name = canonical_names_by_tax_id.get(tid, '')
+        return f'({tid}) {name}'.strip() if name else f'({tid})'
+
+    df['ორგანიზაცია'] = df.apply(_canonicalize_org, axis=1)
+    df = df.drop(columns=['_tax_id'])
 
     # Group by Organization
     agg_df = df.groupby('ორგანიზაცია').agg(
