@@ -14,11 +14,12 @@
   right: 0;
   top: 0;
   bottom: 0;
-  width: 380px;
+  /* პატარა ეკრანზე — სრული სიგანე; დიდზე — ფიქსირებული 720px */
+  width: clamp(420px, 52vw, 760px);
   max-width: 96vw;
   background: var(--bg-secondary);
   border-left: 1px solid var(--border-color);
-  padding: 2rem 1.5rem;
+  padding: 2rem 1.75rem;
   z-index: 1001;
   overflow-y: auto;
   animation: slideInRight 0.25s ease-out;
@@ -82,6 +83,286 @@
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
   padding: 0.75rem 0.85rem;
+}
+
+.supplier-modal-kpi .kpi-value {
+  font-size: 1.2rem;
+}
+
+.supplier-modal-kpi-hint {
+  margin-top: 4px;
+  font-size: 0.7rem;
+  color: #c7d2fe;
+  font-weight: 500;
+}
+
+.supplier-modal-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  margin-top: 0.55rem;
+}
+
+.supplier-modal-meta-row .supplier-modal-taxid {
+  margin: 0;
+}
+
+/* ანალიზი */
+.supplier-modal-analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.supplier-modal-analysis-cell {
+  background: rgba(99, 102, 241, 0.06);
+  border: 1px solid rgba(99, 102, 241, 0.18);
+  border-radius: 10px;
+  padding: 0.7rem 0.8rem;
+}
+
+.supplier-modal-analysis-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #a5b4fc;
+  letter-spacing: 0.02em;
+  margin-bottom: 4px;
+}
+
+.supplier-modal-analysis-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.supplier-modal-analysis-hint {
+  margin-top: 3px;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+/* სიგნალის pill — გადახდის ვადიანობის შეფასება */
+.supplier-modal-signal {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 10px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  margin-top: 0.4rem;
+}
+
+.supplier-modal-signal-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 0.78rem;
+  flex-shrink: 0;
+}
+
+.supplier-modal-signal--ok {
+  color: #bbf7d0;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.28);
+}
+.supplier-modal-signal--ok .supplier-modal-signal-icon {
+  background: rgba(34, 197, 94, 0.25);
+  color: #86efac;
+}
+
+.supplier-modal-signal--mild {
+  color: #fde68a;
+  background: rgba(234, 179, 8, 0.1);
+  border: 1px solid rgba(234, 179, 8, 0.28);
+}
+.supplier-modal-signal--mild .supplier-modal-signal-icon {
+  background: rgba(234, 179, 8, 0.25);
+  color: #facc15;
+}
+
+.supplier-modal-signal--medium {
+  color: #fed7aa;
+  background: rgba(249, 115, 22, 0.1);
+  border: 1px solid rgba(249, 115, 22, 0.32);
+}
+.supplier-modal-signal--medium .supplier-modal-signal-icon {
+  background: rgba(249, 115, 22, 0.28);
+  color: #fb923c;
+}
+
+.supplier-modal-signal--high,
+.supplier-modal-signal--critical {
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.32);
+}
+.supplier-modal-signal--high .supplier-modal-signal-icon,
+.supplier-modal-signal--critical .supplier-modal-signal-icon {
+  background: rgba(239, 68, 68, 0.28);
+  color: #fca5a5;
+}
+
+/* ხელით გადახდა მოდალში */
+.supplier-modal-pay {
+  background: linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(168,85,247,0.04) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.22);
+  border-radius: 12px;
+  padding: 0.8rem 0.95rem 0.9rem;
+  transition: box-shadow 200ms ease;
+}
+
+.supplier-modal-pay.is-flash {
+  animation: supplier-pay-flash 1400ms ease-out;
+}
+
+@keyframes supplier-pay-flash {
+  0%   { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+  20%  { box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.4); }
+  100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
+
+.supplier-modal-pay-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.55rem;
+}
+
+.supplier-modal-pay-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 200px;
+  min-width: 180px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.supplier-modal-pay-input-wrap:focus-within {
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.14);
+}
+
+.supplier-modal-pay-input {
+  flex: 1 1 auto;
+  width: 100%;
+  padding: 0.65rem 2rem 0.65rem 0.85rem;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.supplier-modal-pay-currency {
+  position: absolute;
+  right: 0.75rem;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.supplier-modal-pay-record {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.65rem 1.1rem;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 18px -8px rgba(99, 102, 241, 0.55);
+  transition: transform 120ms ease, filter 180ms ease;
+}
+
+.supplier-modal-pay-record:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+}
+
+.supplier-modal-pay-record:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: saturate(0.6);
+}
+
+.supplier-modal-pay-clear {
+  padding: 0.6rem 0.85rem;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 180ms ease, color 180ms ease, border-color 180ms ease;
+}
+
+.supplier-modal-pay-clear:hover {
+  color: #fda4af;
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.supplier-modal-pay-hint {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.supplier-modal-pay-hint code {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.72rem;
+  font-family: 'JetBrains Mono', 'Consolas', ui-monospace, monospace;
+  color: #c4b5fd;
+}
+
+.supplier-modal-pay-history {
+  margin-top: 0.45rem;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.78rem;
+  background: rgba(34, 197, 94, 0.06);
+  border: 1px solid rgba(34, 197, 94, 0.22);
+  border-radius: 8px;
+}
+
+.supplier-modal-split-hint {
+  margin-top: 3px;
+  font-size: 0.66rem;
+  color: #c7d2fe;
+}
+
+@media (max-width: 640px) {
+  .supplier-modal-analysis-grid {
+    grid-template-columns: 1fr;
+  }
+  .supplier-modal-pay-input-wrap {
+    flex-basis: 100%;
+  }
+  .supplier-modal-pay-record {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
 }
 
 .supplier-modal-section {

@@ -9,97 +9,49 @@ const fmtQuantity = (v) => QUANTITY.format(Number(v) || 0);
 
 const OBJECT_COLORS = { 'ოზურგეთი': '#4f8ef7', 'დვაბზუ': '#34c97e' };
 
-const PAYMENT_SCOPE_META = {
-  strict_bank_plus_manual: {
-    label: 'Strict + manual',
-    className: 'payment-scope-badge--split',
-  },
-  strict_bank_only: {
-    label: 'Strict bank only',
-    className: 'payment-scope-badge--strict',
-  },
-  manual_only: {
-    label: 'Manual only',
-    className: 'payment-scope-badge--manual',
-  },
-  unpaid_or_unmatched: {
-    label: 'No paid proof',
-    className: 'payment-scope-badge--unpaid',
-  },
-  negative_adjustment: {
-    label: 'Negative adj.',
-    className: 'payment-scope-badge--negative',
-  },
+const PAYMENT_SCOPE_KA = {
+  strict_bank_plus_manual: { label: 'ბანკი + ნაღდი', className: 'payment-scope-badge--split' },
+  strict_bank_only: { label: 'ბანკით დადასტურებული', className: 'payment-scope-badge--strict' },
+  manual_only: { label: 'მხოლოდ ნაღდი / ჟურნალი', className: 'payment-scope-badge--manual' },
+  unpaid_or_unmatched: { label: 'გადაუხდელი / დაუდგენელი', className: 'payment-scope-badge--unpaid' },
+  negative_adjustment: { label: 'უარყოფითი ცვლილება', className: 'payment-scope-badge--negative' },
 };
 
-const TRUTH_LAYER_LABELS = {
-  'bank.raw_tax_id': 'raw tax id',
-  'bank.extracted_tax_id': 'extracted tax id',
-  'supplier_matching_registry.official_name': 'registry official name',
-  'supplier_matching_registry.alias': 'registry alias',
-  'supplier_matching_registry.person_alias': 'registry person alias',
-  'supplier_matching_registry.iban': 'registry IBAN',
-  'supplier_matching_registry.account_hint': 'registry account hint',
-  'rs_waybills.organization_name': 'RS exact name',
-  'rs_waybills.waybill_reference': 'RS waybill reference',
-  'legacy_truth_assist.partner_iban_map': 'legacy IBAN audit-only',
-  'legacy_truth_assist.known_aliases': 'legacy alias audit-only',
+const OFFICIAL_NAME_SOURCE_KA = {
+  'supplier_matching_registry.official_name': { label: 'რეესტრი (ოფიციალური)', className: 'truth-source-badge--registry' },
+  'rs_waybills.organization_name': { label: 'RS-ის ზედნადები', className: 'truth-source-badge--rs' },
+};
+
+const AGING_BUCKET_KA = {
+  '0-30': '🟢 0–30 დღე',
+  '31-60': '🟡 31–60 დღე',
+  '61-90': '🟠 61–90 დღე',
+  '91-180': '🔴 91–180 დღე',
+  '180+': '🔴 180+ დღე',
+};
+
+const URGENCY_BY_BUCKET = {
+  '0-30': { tone: 'ok', text: 'ჩვეულებრივი — დროზე ვართ' },
+  '31-60': { tone: 'mild', text: 'ყურადღებით — ერთი თვე გავიდა' },
+  '61-90': { tone: 'medium', text: 'პრიორიტეტი — 2 თვეზე მეტი გავიდა' },
+  '91-180': { tone: 'high', text: 'მაღალი რისკი — 3 თვეზე მეტი ვალი' },
+  '180+': { tone: 'critical', text: 'კრიტიკული — ვალი ნახევარ წელზე მეტია გადაუხდელი' },
 };
 
 function getPaymentScopeMeta(scope) {
-  return PAYMENT_SCOPE_META[String(scope || '').trim()] || {
-    label: String(scope || 'Unknown scope'),
+  return PAYMENT_SCOPE_KA[String(scope || '').trim()] || {
+    label: 'სტატუსი დაუდგენელი',
     className: 'payment-scope-badge--unpaid',
   };
 }
 
 function getOfficialNameSourceMeta(source) {
   const raw = String(source || '').trim();
-  if (raw === 'supplier_matching_registry.official_name') {
-    return { label: 'Registry primary', className: 'truth-source-badge--registry' };
-  }
-  if (raw === 'rs_waybills.organization_name') {
-    return { label: 'RS backstop', className: 'truth-source-badge--rs' };
-  }
+  if (OFFICIAL_NAME_SOURCE_KA[raw]) return OFFICIAL_NAME_SOURCE_KA[raw];
   if (raw.startsWith('legacy_truth_assist.')) {
-    return { label: 'Legacy audit-only', className: 'truth-source-badge--legacy' };
+    return { label: 'ძველი ბაზიდან (აუდიტისთვის)', className: 'truth-source-badge--legacy' };
   }
-  if (raw) {
-    return { label: 'Other source', className: 'truth-source-badge--other' };
-  }
-  return { label: 'Truth pending', className: 'truth-source-badge--other' };
-}
-
-function normalizeTruthSources(raw) {
-  if (Array.isArray(raw)) {
-    return raw.map((value) => String(value || '').trim()).filter(Boolean);
-  }
-  const text = String(raw || '').trim();
-  return text ? [text] : [];
-}
-
-function formatTruthLayerLabel(source) {
-  return TRUTH_LAYER_LABELS[source] || source;
-}
-
-function buildTruthBoundaryBadges(summary) {
-  return [
-    {
-      key: 'registry',
-      label: `registry primary ${Number(summary?.registry_primary_supplier_count) || 0}`,
-      className: 'truth-source-badge--registry',
-    },
-    {
-      key: 'rs',
-      label: `RS backstop ${Number(summary?.rs_backstop_supplier_count) || 0}`,
-      className: 'truth-source-badge--rs',
-    },
-    {
-      key: 'legacy',
-      label: `legacy audit-only ${Number(summary?.legacy_truth_assist_supplier_count) || 0}`,
-      className: 'truth-source-badge--legacy',
-    },
-  ];
+  return { label: 'წყარო დაუდგენელი', className: 'truth-source-badge--other' };
 }
 
 function agingBadgeClass(bucket) {
@@ -121,11 +73,8 @@ function extractTaxIdFromOrg(org) {
 function cleanSupplierDisplay(value) {
   const text = String(value || '').trim();
   if (!text) return '';
-
   let cleaned = text;
-  // Full RS/tax prefix in parentheses, e.g. "(406181616-დღგ)" or "(406181616)" — must run before bare-ID replace
   cleaned = cleaned.replace(/^\(\d{8,11}[^)]*\)\s*/, '');
-  // Remnants when only the numeric id was stripped and "-დღგ)" was left behind
   cleaned = cleaned.replace(/^\([^)]*დღგ\)\s*/u, '');
   for (const taxId of cleaned.match(/\d{8,11}/g) || []) {
     cleaned = cleaned.replace(new RegExp(`\\(?\\s*${taxId}\\s*\\)?`, 'g'), ' ');
@@ -148,47 +97,44 @@ function normalizeSupplierName(value) {
 function formatDateRange(range) {
   const min = range?.min || null;
   const max = range?.max || null;
-  if (min && max) return min === max ? min : `${min} - ${max}`;
+  if (min && max) return min === max ? min : `${min} → ${max}`;
   return min || max || '—';
 }
 
 export default function SupplierModal({
   supplier,
   agingData: initialAgingData,
-  truthBoundarySummary,
+  localPayments = {},
+  persistLocalPayments,
+  allSuppliers,
   onClose,
 }) {
   const [fetchedAging, setFetchedAging] = useState(null);
   const [agingLoading, setAgingLoading] = useState(!initialAgingData || initialAgingData.length === 0);
   const [importedResult, setImportedResult] = useState({ key: '', detail: null, error: '' });
+  const [payAmount, setPayAmount] = useState('');
+  const [recordedFlash, setRecordedFlash] = useState(false);
 
   useEffect(() => {
     if (initialAgingData && initialAgingData.length > 0) {
       setTimeout(() => setAgingLoading(false), 0);
       return;
     }
-    
     let active = true;
-    setTimeout(() => {
-      if (active) setAgingLoading(true);
-    }, 0);
-    
+    setTimeout(() => { if (active) setAgingLoading(true); }, 0);
     fetch('/api/data?tab=working_capital')
-      .then(res => res.json())
-      .then(json => {
+      .then((res) => res.json())
+      .then((json) => {
         if (!active) return;
         setFetchedAging(json.supplier_aging || []);
         setAgingLoading(false);
       })
-      .catch(err => {
+      .catch((err) => {
         if (!active) return;
         console.error('Failed to fetch aging data:', err);
         setAgingLoading(false);
       });
-      
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [initialAgingData]);
 
   const agingData = (initialAgingData && initialAgingData.length > 0) ? initialAgingData : (fetchedAging || []);
@@ -208,14 +154,8 @@ export default function SupplierModal({
     const params = new URLSearchParams({ tab: 'imported_products_supplier_detail' });
     if (taxId) params.set('tax_id', taxId);
     if (normalizedSupplier) params.set('normalized_supplier', normalizedSupplier);
-
     fetch(`/api/data?${params.toString()}`, { signal: controller.signal })
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
-        }
-        return res.json();
-      })
+      .then((res) => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
       .then((json) => {
         setImportedResult({
           key: importedLookupKey,
@@ -226,13 +166,8 @@ export default function SupplierModal({
       .catch((err) => {
         if (err.name === 'AbortError') return;
         console.error('Failed to fetch imported products supplier detail:', err);
-        setImportedResult({
-          key: importedLookupKey,
-          detail: null,
-          error: err.message || 'უცნობი შეცდომა',
-        });
+        setImportedResult({ key: importedLookupKey, detail: null, error: err.message || 'უცნობი შეცდომა' });
       });
-
     return () => controller.abort();
   }, [importedLookupKey, normalizedSupplier, taxId]);
 
@@ -243,7 +178,9 @@ export default function SupplierModal({
   const importedTopProducts = Array.isArray(importedEntry?.top_products) ? importedEntry.top_products : [];
   const importedHasSource = Boolean(importedDetail?.has_source);
   const importedTopLimit = Number(importedDetail?.supplier_top_products_limit) || 0;
-  const importedSectionTitle = importedDetail?.label_ka || 'შემოტანილი პროდუქცია (reference)';
+  // backend label-ი ხშირად შეიცავს „(REFERENCE)" ინგლისურად — ვაცილებთ
+  // და ფიქსირებულ ქართულ სათაურს ვაჩვენებთ.
+  const importedSectionTitle = 'შემოტანილი პროდუქცია — შესამოწმებლად';
 
   const aging = agingData?.find((r) => {
     if (taxId && r.tax_id && String(r.tax_id) === String(taxId)) return true;
@@ -270,38 +207,68 @@ export default function SupplierModal({
   const obj = aging?.object || supplier.object;
   const strictBankPaid = Number(supplier.strict_bank_paid ?? aging?.strict_bank_paid) || 0;
   const manualPaid = Number(supplier.manual_paid ?? aging?.manual_paid) || 0;
+  const localPaidForThis = taxId ? Number(localPayments?.[taxId]) || 0 : 0;
+  const totalPaidIncludingLocal = paid + localPaidForThis;
+  const debtAfterLocal = Math.max(0, debt - localPaidForThis);
   const paymentScopeRaw =
     String(supplier.payment_scope || aging?.payment_scope || '').trim() || 'unpaid_or_unmatched';
-  const paymentScopeNote = String(
-    supplier.payment_scope_note || aging?.payment_scope_note || '',
-  ).trim();
   const paymentScopeMeta = getPaymentScopeMeta(paymentScopeRaw);
-  const supplierTruthSummary = String(
-    supplier.supplier_truth_summary || aging?.supplier_truth_summary || '',
-  ).trim();
   const officialNameTruthSource = String(
     supplier.official_name_truth_source || aging?.official_name_truth_source || '',
   ).trim();
   const officialNameSourceMeta = getOfficialNameSourceMeta(officialNameTruthSource);
-  const supplierTruthSources = normalizeTruthSources(
-    supplier.supplier_truth_sources ?? aging?.supplier_truth_sources,
-  );
-  const truthBoundaryBadges = buildTruthBoundaryBadges(truthBoundarySummary);
-  const truthBoundarySummaryText = String(truthBoundarySummary?.summary_ka || '').trim();
-  const paymentRatioRaw = effective > 0 ? (paid / effective) * 100 : 0;
+  const paymentRatioRaw = effective > 0 ? (totalPaidIncludingLocal / effective) * 100 : 0;
   const paymentRatio = Math.min(100, paymentRatioRaw);
   const prColor = paymentColor(paymentRatio);
   const waybillCount = Number(aging?.waybill_count ?? supplier.waybills_count ?? supplier.waybill_count) || 0;
+  const avgWaybillAmount = waybillCount > 0 ? effective / waybillCount : 0;
+
+  // პორტფელის წილი — ამ მომწოდებლის ბრუნვა / სულ ყველა მომწოდებლის ბრუნვა
+  const portfolioTotal = useMemo(() => {
+    if (!Array.isArray(allSuppliers)) return 0;
+    return allSuppliers.reduce((sum, s) => sum + (Number(s.total_effective) || 0), 0);
+  }, [allSuppliers]);
+  const portfolioSharePct = portfolioTotal > 0 ? (effective / portfolioTotal) * 100 : 0;
+
+  const urgency = URGENCY_BY_BUCKET[String(agingBucket)] || null;
+  const overpayment = Math.max(0, totalPaidIncludingLocal - effective);
+  const hasMeaningfulDebt = debtAfterLocal >= 1;
+  const hasOverpayment = overpayment >= 1;
+
+  const parseMoney = (raw) => {
+    const n = parseFloat(String(raw || '').replace(/\s/g, '').replace(',', '.'));
+    return Number.isNaN(n) ? 0 : Math.max(0, n);
+  };
+
+  const payVal = parseMoney(payAmount);
+  const canRecord = Boolean(taxId && payVal > 0 && persistLocalPayments);
+
+  const handleRecordPayment = () => {
+    if (!canRecord) return;
+    const next = { ...(localPayments || {}), [taxId]: (Number(localPayments?.[taxId]) || 0) + payVal };
+    persistLocalPayments(next);
+    setPayAmount('');
+    setRecordedFlash(true);
+    setTimeout(() => setRecordedFlash(false), 1400);
+  };
+
+  const handleClearLocal = () => {
+    if (!taxId || !persistLocalPayments) return;
+    if (!window.confirm('წავშალოთ ამ მომწოდებელზე ბრაუზერში ჩაწერილი ხელის გადახდები?')) return;
+    const next = { ...(localPayments || {}) };
+    delete next[taxId];
+    persistLocalPayments(next);
+  };
+
   let importedStatusClass = 'badge muted';
   let importedStatusLabel = 'იტვირთება...';
-
   if (!importedLoading) {
     if (importedError) {
       importedStatusClass = 'badge canceled';
       importedStatusLabel = 'შეცდომა';
     } else if (importedEntry && importedDetail?.match_type === 'tax_id') {
       importedStatusClass = 'badge active';
-      importedStatusLabel = 'ნაპოვნია (ID)';
+      importedStatusLabel = 'ნაპოვნია (ID-ით)';
     } else if (importedEntry) {
       importedStatusClass = 'badge return';
       importedStatusLabel = 'ნაპოვნია (სახელით)';
@@ -326,148 +293,198 @@ export default function SupplierModal({
         {/* Header */}
         <div className="supplier-modal-header">
           <div className="supplier-modal-org" id="supplier-modal-title">{displayOrg}</div>
-          {taxId && <div className="supplier-modal-taxid">ID: {taxId}</div>}
-          {waybillCount > 0 && <div className="supplier-modal-taxid">{waybillCount} ზედნადები</div>}
+          <div className="supplier-modal-meta-row">
+            {taxId && <span className="supplier-modal-taxid">ID: {taxId}</span>}
+            {waybillCount > 0 && <span className="supplier-modal-taxid">{waybillCount} ზედნადები</span>}
+            <span className={`badge payment-scope-badge ${paymentScopeMeta.className}`}>
+              {paymentScopeMeta.label}
+            </span>
+            {agingBucket && hasMeaningfulDebt && (
+              <span className={`badge ${agingBadgeClass(agingBucket)}`}>
+                {AGING_BUCKET_KA[String(agingBucket)] || agingBucket}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* 3 KPI */}
         <div className="supplier-modal-kpis">
           <div className="supplier-modal-kpi">
-            <div className="kpi-label">რეალური ჯამი</div>
-            <div className="kpi-value amount-neutral" style={{ fontSize: '1.2rem' }}>{fmt(effective)}</div>
+            <div className="kpi-label">რეალური ბრუნვა</div>
+            <div className="kpi-value amount-neutral">{fmt(effective)}</div>
           </div>
           <div className="supplier-modal-kpi">
             <div className="kpi-label">სულ გადახდილი</div>
-            <div className="kpi-value amount-positive" style={{ fontSize: '1.2rem' }}>{fmt(paid)}</div>
+            <div className="kpi-value amount-positive">{fmt(totalPaidIncludingLocal)}</div>
+            {localPaidForThis > 0 && (
+              <div className="supplier-modal-kpi-hint">+{fmt(localPaidForThis)} ბრაუზერიდან</div>
+            )}
           </div>
           <div className="supplier-modal-kpi">
-            <div className="kpi-label">დავალიანება</div>
-            <div className="kpi-value amount-negative" style={{ fontSize: '1.2rem' }}>{fmt(debt)}</div>
+            <div className="kpi-label">დარჩენილი ვალი</div>
+            <div className="kpi-value amount-negative">{fmt(debtAfterLocal)}</div>
           </div>
         </div>
 
+        {/* ანალიზი — გასაგები სიგნალები */}
         <div className="supplier-modal-section">
-          <div className="supplier-modal-section-title">Payment split</div>
+          <div className="supplier-modal-section-title">📊 ანალიზი</div>
+          <div className="supplier-modal-analysis-grid">
+            <div className="supplier-modal-analysis-cell">
+              <div className="supplier-modal-analysis-label">საშუალო ზედნადები</div>
+              <div className="supplier-modal-analysis-value">{fmt(avgWaybillAmount)}</div>
+              <div className="supplier-modal-analysis-hint">{waybillCount} ზედნადებიდან</div>
+            </div>
+            <div className="supplier-modal-analysis-cell">
+              <div className="supplier-modal-analysis-label">წილი პორტფელში</div>
+              <div className="supplier-modal-analysis-value">{portfolioSharePct.toFixed(2)}%</div>
+              <div className="supplier-modal-analysis-hint">სულ {fmt(portfolioTotal)}</div>
+            </div>
+            <div className="supplier-modal-analysis-cell">
+              <div className="supplier-modal-analysis-label">გადახდის წილი</div>
+              <div className="supplier-modal-analysis-value" style={{ color: prColor }}>
+                {paymentRatio.toFixed(1)}%
+              </div>
+              <div className="ratio-gauge" style={{ marginTop: 6 }}>
+                <div className="ratio-gauge-fill" style={{ width: `${paymentRatio}%`, background: prColor }} />
+              </div>
+            </div>
+          </div>
+          {/* წვრილი ცდომილება (≤1 ₾) ფაქტობრივი ვალი არ არის → არ ვიკიდოთ urgency */}
+          {urgency && hasMeaningfulDebt && (
+            <div className={`supplier-modal-signal supplier-modal-signal--${urgency.tone}`}>
+              <span className="supplier-modal-signal-icon" aria-hidden="true">⏱</span>
+              <span>{urgency.text}</span>
+            </div>
+          )}
+          {!hasMeaningfulDebt && debt >= 1 && localPaidForThis > 0 && (
+            <div className="supplier-modal-signal supplier-modal-signal--ok">
+              <span className="supplier-modal-signal-icon" aria-hidden="true">✓</span>
+              <span>ბრაუზერის გადახდები ფარავს ვალს — დაადასტურე ფინალურად Excel-ს</span>
+            </div>
+          )}
+          {hasOverpayment && (
+            <div className="supplier-modal-signal supplier-modal-signal--medium">
+              <span className="supplier-modal-signal-icon" aria-hidden="true">⚠</span>
+              <span>
+                ზედმეტად გადახდილი: <strong>{fmt(overpayment)}</strong> — გადაამოწმე ბანკის ან RS-ის წყაროდან
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* ხელით გადახდის ჩაწერა — მოდალში ჩასმული */}
+        {taxId && persistLocalPayments && (
+          <div className={`supplier-modal-section supplier-modal-pay ${recordedFlash ? 'is-flash' : ''}`}>
+            <div className="supplier-modal-section-title">💸 ხელით გადახდის ჩაწერა</div>
+            <div className="supplier-modal-pay-form">
+              <div className="supplier-modal-pay-input-wrap">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  className="supplier-modal-pay-input"
+                  placeholder="0"
+                  value={payAmount}
+                  onChange={(e) => setPayAmount(e.target.value)}
+                  autoComplete="off"
+                  aria-label="გადახდის თანხა"
+                />
+                <span className="supplier-modal-pay-currency" aria-hidden="true">₾</span>
+              </div>
+              <button
+                type="button"
+                className="supplier-modal-pay-record"
+                disabled={!canRecord}
+                onClick={handleRecordPayment}
+              >
+                ✓ ჩაწერა{payVal > 0 ? ` · ${fmt(payVal)}` : ''}
+              </button>
+              {localPaidForThis > 0 && (
+                <button
+                  type="button"
+                  className="supplier-modal-pay-clear"
+                  onClick={handleClearLocal}
+                  title="ამ მომწოდებლის ბრაუზერში ჩაწერილი გადახდების წაშლა"
+                >
+                  გასუფთავება
+                </button>
+              )}
+            </div>
+            <div className="supplier-modal-pay-hint">
+              ჩაიწერება ბრაუზერში · ემატება „სულ გადახდილს" · იკლებს „ვალს".
+              {' '}მუდმივად: მთავარი გვერდიდან <strong>CSV</strong> ჩამოტვირთვა და <code>manual_payments.csv</code>-ში ჩასმა.
+            </div>
+            {localPaidForThis > 0 && (
+              <div className="supplier-modal-pay-history">
+                <strong>ბრაუზერში ჩაწერილი ჯამი ამ მომწოდებელზე:</strong>{' '}
+                <span className="amount-positive">{fmt(localPaidForThis)}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* გადახდის ჩაშლა */}
+        <div className="supplier-modal-section">
+          <div className="supplier-modal-section-title">🧮 გადახდის ჩაშლა</div>
           <div className="supplier-modal-split-grid">
             <div className="supplier-modal-split-card supplier-modal-split-card--strict">
-              <div className="supplier-modal-split-label">Strict ბანკი</div>
+              <div className="supplier-modal-split-label">ბანკით დადასტურებული</div>
               <div className="supplier-modal-split-value amount-positive">{fmt(strictBankPaid)}</div>
             </div>
             <div className="supplier-modal-split-card supplier-modal-split-card--manual">
-              <div className="supplier-modal-split-label">Manual / off-bank</div>
-              <div className="supplier-modal-split-value amount-neutral">{fmt(manualPaid)}</div>
+              <div className="supplier-modal-split-label">ნაღდი / ჟურნალი</div>
+              <div className="supplier-modal-split-value amount-neutral">{fmt(manualPaid + localPaidForThis)}</div>
+              {localPaidForThis > 0 && (
+                <div className="supplier-modal-split-hint">+{fmt(localPaidForThis)} ბრაუზერიდან</div>
+              )}
             </div>
             <div className="supplier-modal-split-card supplier-modal-split-card--combined">
-              <div className="supplier-modal-split-label">Supplier total_paid</div>
-              <div className="supplier-modal-split-value amount-positive">{fmt(paid)}</div>
+              <div className="supplier-modal-split-label">სულ გადახდილი</div>
+              <div className="supplier-modal-split-value amount-positive">{fmt(totalPaidIncludingLocal)}</div>
             </div>
           </div>
-          <div className="supplier-modal-row">
-            <span className="supplier-modal-row-label">გადახდის scope</span>
-            <span
-              className={`badge payment-scope-badge ${paymentScopeMeta.className}`}
-              title={paymentScopeRaw}
-            >
-              {paymentScopeMeta.label}
-            </span>
-          </div>
-          {paymentScopeNote ? (
-            <div className="supplier-modal-note">{paymentScopeNote}</div>
-          ) : null}
         </div>
 
-        {/* Aging info */}
+        {/* ვადიანობა */}
         <div className="supplier-modal-section">
-          <div className="supplier-modal-section-title">Aging {agingLoading && <span style={{ fontSize: '0.8rem', color: '#8899aa', marginLeft: 8 }}>(იტვირთება...)</span>}</div>
+          <div className="supplier-modal-section-title">
+            📅 ვადიანობა{agingLoading && <span className="supplier-modal-section-hint"> (იტვირთება...)</span>}
+          </div>
           <div className="supplier-modal-row">
             <span className="supplier-modal-row-label">ბოლო ზედნადები</span>
             <span>{agingLoading ? '—' : lastDate}{days > 0 ? ` (${days} დღის წინ)` : ''}</span>
           </div>
-          {agingBucket && (
+          {obj && (
             <div className="supplier-modal-row">
-              <span className="supplier-modal-row-label">Aging Bucket</span>
-              <span className={`badge ${agingBadgeClass(agingBucket)}`}>{agingBucket}</span>
+              <span className="supplier-modal-row-label">ობიექტი</span>
+              <span className="badge" style={{
+                background: `${OBJECT_COLORS[obj] || '#8899aa'}22`,
+                color: OBJECT_COLORS[obj] || '#8899aa',
+                border: `1px solid ${OBJECT_COLORS[obj] || '#8899aa'}55`,
+              }}>{obj}</span>
             </div>
           )}
-          <div className="supplier-modal-row">
-            <span className="supplier-modal-row-label">Payment Ratio</span>
-            <span style={{ color: prColor, fontWeight: 700 }}>{paymentRatio.toFixed(1)}%</span>
-          </div>
-          <div className="ratio-gauge" style={{ marginTop: 6 }}>
-            <div className="ratio-gauge-fill" style={{ width: `${paymentRatio}%`, background: prColor }} />
-          </div>
         </div>
 
-        {/* Object */}
-        {obj && (
-          <div className="supplier-modal-section">
-            <div className="supplier-modal-section-title">ობიექტი</div>
-            <span className="badge" style={{
-              background: `${OBJECT_COLORS[obj] || '#8899aa'}22`,
-              color: OBJECT_COLORS[obj] || '#8899aa',
-              border: `1px solid ${OBJECT_COLORS[obj] || '#8899aa'}55`,
-            }}>
-              {obj}
-            </span>
-          </div>
-        )}
-
+        {/* წყარო (compact) */}
         <div className="supplier-modal-section">
-          <div className="supplier-modal-section-title">Strict supplier truth</div>
+          <div className="supplier-modal-section-title">🔍 წყარო</div>
           <div className="supplier-modal-row">
-            <span className="supplier-modal-row-label">Official name source</span>
-            <span
-              className={`badge truth-source-badge ${officialNameSourceMeta.className}`}
-              title={officialNameTruthSource || officialNameSourceMeta.label}
-            >
+            <span className="supplier-modal-row-label">სახელი</span>
+            <span className={`badge truth-source-badge ${officialNameSourceMeta.className}`}>
               {officialNameSourceMeta.label}
             </span>
           </div>
-
-          {supplierTruthSummary ? (
-            <div className="supplier-modal-note supplier-modal-note--truth">
-              {supplierTruthSummary}
-            </div>
-          ) : (
-            <div className="supplier-modal-note">
-              Strict truth summary ამ supplier-ზე ჯერ ცალკე არ ჩანს.
-            </div>
-          )}
-
-          {supplierTruthSources.length > 0 ? (
-            <div className="supplier-modal-chip-row">
-              {supplierTruthSources.map((source, i) => (
-                <span
-                  key={`truth-src-${i}-${String(source)}`}
-                  className="badge truth-layer-chip"
-                  title={source}
-                >
-                  {formatTruthLayerLabel(source)}
-                </span>
-              ))}
-            </div>
-          ) : null}
-
-          <div className="supplier-modal-chip-row">
-            {truthBoundaryBadges.map((item) => (
-              <span key={item.key} className={`badge truth-source-badge ${item.className}`}>
-                {item.label}
-              </span>
-            ))}
-          </div>
-
-          {truthBoundarySummaryText ? (
-            <div className="supplier-modal-note">{truthBoundarySummaryText}</div>
-          ) : null}
         </div>
 
+        {/* შემოტანილი პროდუქცია (cross-check) */}
         <div className="supplier-modal-section">
           <div className="supplier-modal-section-title">
-            {importedSectionTitle}
+            📦 {importedSectionTitle}
             {importedLoading && <span className="supplier-modal-section-hint"> (იტვირთება...)</span>}
           </div>
           <div className="supplier-modal-row">
-            <span className="supplier-modal-row-label">Reference ჩანაწერი</span>
+            <span className="supplier-modal-row-label">cross-check სტატუსი</span>
             <span className={importedStatusClass}>{importedStatusLabel}</span>
           </div>
 
@@ -494,80 +511,62 @@ export default function SupplierModal({
 
           {!importedLoading && !importedError && (
             <div className="supplier-modal-note">
-              Reference-only ბლოკია; supplier debt/AP ჯამებში არ შედის და სრული სურათი შეიძლება არ იყოს.
+              მინიშნება — ეს ბლოკი მხოლოდ შემოწმებისთვისაა; ვალის ჯამში არ შედის და სრული სურათი შეიძლება არ იყოს.
             </div>
           )}
-
           {!importedLoading && !importedError && importedDetail?.match_type === 'name_fallback' && (
             <div className="supplier-modal-note supplier-modal-note--warn">
-              ID-ით არა, სახელის ზუსტი ნორმალიზაციით დაემთხვა. გადაამოწმე ხელით.
+              ID-ით არა, მხოლოდ სახელის ნორმალიზებით დაემთხვა — გადაამოწმე ხელით.
             </div>
           )}
-
           {!importedLoading && !importedError && importedDetail?.ambiguous && !importedEntry && (
             <div className="supplier-modal-note supplier-modal-note--warn">
-              სახელით რამდენიმე შესაძლო დამთხვევა გამოჩნდა, ამიტომ ჩანაწერი არ ვაჩვენე.
+              სახელით რამდენიმე შესაძლო დამთხვევაა — ჩანაწერი არ ჩავწერე.
             </div>
           )}
-
           {!importedLoading && !importedError && !importedHasSource && (
-            <div className="supplier-modal-note">
-              Imported-products reference წყარო ამ ეტაპზე ცარიელია.
-            </div>
+            <div className="supplier-modal-note">cross-check წყარო ამ ეტაპზე ცარიელია.</div>
           )}
-
-          {!importedLoading && !importedError && importedDetail?.truncation_suspected_any && (
-            <div className="supplier-modal-note supplier-modal-note--warn">
-              ზოგ ფაილში truncate/export limit სავარაუდოა, ამიტომ ეს ბლოკი შეიძლება არასრული იყოს.
-            </div>
-          )}
-
           {importedError && (
             <div className="supplier-modal-note supplier-modal-note--error">
-              Imported-products ბლოკის ჩატვირთვა ვერ მოხერხდა: {importedError}
+              ბლოკის ჩატვირთვა ვერ მოხერხდა: {importedError}
             </div>
           )}
 
-          {importedEntry && (
+          {importedEntry && importedTopProducts.length > 0 && (
             <>
               <div className="supplier-modal-section-title" style={{ marginTop: 8 }}>
                 Top პროდუქტები
-                {importedTopLimit > 0 && (
-                  <span className="supplier-modal-section-hint"> (max {importedTopLimit})</span>
-                )}
+                {importedTopLimit > 0 && <span className="supplier-modal-section-hint"> (max {importedTopLimit})</span>}
               </div>
-              {importedTopProducts.length > 0 ? (
-                <div className="supplier-modal-products">
-                  {importedTopProducts.map((product, index) => (
-                    <div
-                      key={`${product.product_code || product.product_name || 'product'}-${index}`}
-                      className="supplier-modal-product"
-                    >
-                      <div className="supplier-modal-product-top">
-                        <span className="supplier-modal-product-name">
-                          {product.product_name || product.product_code || 'უცნობი პროდუქცია'}
-                        </span>
-                        <span className="supplier-modal-product-amount amount-neutral">
-                          {fmt(product.total_amount_ge)}
-                        </span>
-                      </div>
-                      <div className="supplier-modal-product-meta">
-                        {product.product_code ? (
-                          <span className="supplier-modal-product-code">{product.product_code}</span>
-                        ) : null}
-                        {product.unit ? <span>{product.unit}</span> : null}
-                        <span>{fmtCount(product.distinct_waybill_count)} ზედნადები</span>
-                        <span>
-                          {fmtQuantity(product.total_quantity)}
-                          {product.unit ? ` ${product.unit}` : ''}
-                        </span>
-                      </div>
+              <div className="supplier-modal-products">
+                {importedTopProducts.map((product, index) => (
+                  <div
+                    key={`${product.product_code || product.product_name || 'product'}-${index}`}
+                    className="supplier-modal-product"
+                  >
+                    <div className="supplier-modal-product-top">
+                      <span className="supplier-modal-product-name">
+                        {product.product_name || product.product_code || 'უცნობი პროდუქცია'}
+                      </span>
+                      <span className="supplier-modal-product-amount amount-neutral">
+                        {fmt(product.total_amount_ge)}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="supplier-modal-muted">Top პროდუქტები არ არის.</div>
-              )}
+                    <div className="supplier-modal-product-meta">
+                      {product.product_code ? (
+                        <span className="supplier-modal-product-code">{product.product_code}</span>
+                      ) : null}
+                      {product.unit ? <span>{product.unit}</span> : null}
+                      <span>{fmtCount(product.distinct_waybill_count)} ზედნადები</span>
+                      <span>
+                        {fmtQuantity(product.total_quantity)}
+                        {product.unit ? ` ${product.unit}` : ''}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </>
           )}
         </div>

@@ -489,6 +489,10 @@ function App() {
             supplier={selectedSupplier}
             agingData={supplierAging}
             truthBoundarySummary={truthBoundarySummary}
+            localPayments={localPayments}
+            persistLocalPayments={persistLocalPayments}
+            allSuppliers={data.suppliers}
+            formatNumber={formatNumber}
             onClose={() => setSelectedSupplier(null)}
           />
         </Suspense>
