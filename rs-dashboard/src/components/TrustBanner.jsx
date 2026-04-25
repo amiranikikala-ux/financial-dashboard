@@ -60,16 +60,22 @@ function toGeorgian(text) {
   return KA_TEXT_OVERRIDES[trimmed] || text;
 }
 
-function buildPaymentSplitCards(summary, localExtraTotal = 0) {
+function buildPaymentSplitCards(summary, localExtraTotal = 0, localExtraSuppliers = 0) {
   return PAYMENT_SPLIT_CARD_CONFIG.map((card) => {
     const baseAmount = Number(summary?.[card.amountKey]) || 0;
     const localBoost =
       card.key === 'manual' || card.key === 'combined' ? localExtraTotal : 0;
+    const localSupplierBoost =
+      card.key === 'manual' || card.key === 'combined' ? localExtraSuppliers : 0;
+    const baseCount = Number(summary?.[card.countKey]) || 0;
     return {
       ...card,
       amount: baseAmount + localBoost,
       localBoost,
-      supplierCount: Number(summary?.[card.countKey]) || 0,
+      // ბრაუზერიდან ჩაწერილი მომწოდებლები ბექენდის count-ში არ ფიგურირებენ,
+      // ამიტომ ვამატებთ — სხვაგვარად card-ი ჩვენებს „X ₾ → 0 მომწოდებელი".
+      supplierCount: baseCount + localSupplierBoost,
+      localSupplierBoost,
     };
   });
 }
@@ -141,7 +147,14 @@ export default function TrustBanner({
     (sum, v) => sum + (Number(v) || 0),
     0,
   );
-  const allPaymentSplitCards = buildPaymentSplitCards(paymentScopeSummary, localExtraTotal);
+  const localExtraSuppliers = Object.values(localPayments || {}).filter(
+    (v) => Number(v) > 0,
+  ).length;
+  const allPaymentSplitCards = buildPaymentSplitCards(
+    paymentScopeSummary,
+    localExtraTotal,
+    localExtraSuppliers,
+  );
   const manualCardAmount = allPaymentSplitCards.find((c) => c.key === 'manual')?.amount || 0;
   const hasManualPayments = manualCardAmount > 0;
   const paymentSplitCards = hasManualPayments
