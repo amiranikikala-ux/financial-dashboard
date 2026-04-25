@@ -48,7 +48,7 @@
       "command": "cmd",
       "args": ["/c", "npx", "-y", "@brave/brave-search-mcp-server"],
       "env": {
-        "BRAVE_API_KEY": "REPLACE_WITH_FREE_KEY_FROM_https://api-dashboard.search.brave.com/"
+        "BRAVE_API_KEY": "${BRAVE_API_KEY}"
       }
     }
   }
