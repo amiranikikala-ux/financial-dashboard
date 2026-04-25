@@ -822,6 +822,94 @@ def _build_base_meta(inc, retail_overall, retail_duplicate_policy):
     }
 
 
+def _audit_iban_taxid_conflicts(script_dir):
+    """ბანკის ამონაწერების სკანი: ვპოვებ ერთ IBAN-ს, რომელზეც სხვადასხვა
+    საგადასახადო ID-ით ხდება გადარიცხვა. ეს ჩვეულებრივ ნიშნავს, რომ ერთი
+    და იგივე იურიდიული პირი ჩაწერილია სხვადასხვა ID-ით RS-ში (მაგ. ფირმის
+    გადარქმევა / ხელახალი რეგისტრაცია), ან მონაცემების შეცდომაა.
+
+    ფუნქცია არ აერთიანებს row-ებს ცხრილში (user-ის წესი: სხვადასხვა ID =
+    სხვადასხვა კომპანია); მხოლოდ ლოგში გვაფრთხილებს, რომ ხელით გადამოწმდეს.
+    """
+    import glob
+
+    bank_dirs = [
+        ('TBC', os.path.join(script_dir, 'Financial_Analysis', 'თბს ბანკი ამონაწერი'), 'tbc'),
+        ('BOG', os.path.join(script_dir, 'Financial_Analysis', 'ბოგ ბანკი ამონაწერი'), 'bog'),
+    ]
+
+    iban_to_records = {}
+    iban_re = re.compile(r'^GE\d{2}[A-Z]{2}\d{16,19}[A-Z]{0,3}$')
+
+    def _add(iban, tax_id, name):
+        iban = str(iban or '').strip()
+        tax_id = str(tax_id or '').strip()
+        if not iban or not tax_id:
+            return
+        if not iban_re.match(iban):
+            return
+        if tax_id == OWN_TAX_ID:
+            return  # ჩვენი საკუთარი IBAN-ს არ ვიწერ
+        iban_to_records.setdefault(iban, {}).setdefault(tax_id, set()).add(str(name or '').strip())
+
+    for bank_name, bank_dir, kind in bank_dirs:
+        if not os.path.isdir(bank_dir):
+            continue
+        for path in sorted(glob.glob(os.path.join(bank_dir, '*.xlsx'))):
+            try:
+                if kind == 'tbc':
+                    df_b = pd.read_excel(path, dtype=str).fillna('')
+                    if 'პარტნიორის ანგარიში' not in df_b.columns:
+                        continue
+                    for _, row in df_b.iterrows():
+                        _add(
+                            row.get('პარტნიორის ანგარიში', ''),
+                            row.get('პარტნიორის საგადასახადო კოდი', ''),
+                            row.get('პარტნიორი', ''),
+                        )
+                else:  # bog — header at row index 8
+                    df_b = pd.read_excel(path, header=8, dtype=str).fillna('')
+                    # outgoing payments: recipient = supplier (col 16/17/18)
+                    if 'მიმღების ანგარიშის ნომერი' in df_b.columns:
+                        for _, row in df_b.iterrows():
+                            _add(
+                                row.get('მიმღების ანგარიშის ნომერი', ''),
+                                row.get('მიმღების საიდენტიფიკაციო კოდი', ''),
+                                row.get('მიმღების დასახელება', ''),
+                            )
+            except Exception as exc:
+                logger.warning('IBAN audit: ვერ წავიკითხე %s — %s', path, exc)
+                continue
+
+    # კონფლიქტის შემთხვევები — IBAN, რომელზეც > 1 ID
+    conflicts = {iban: ids for iban, ids in iban_to_records.items() if len(ids) > 1}
+    if not conflicts:
+        logger.info('IBAN audit: 0 კონფლიქტი (ერთი ანგარიში — ერთი ID).')
+        return []
+
+    summary_rows = []
+    for iban, ids_map in conflicts.items():
+        ids_list = sorted(ids_map.keys())
+        names_summary = ' / '.join(
+            f'{tid} → ' + ', '.join(sorted(n for n in names if n))
+            for tid, names in sorted(ids_map.items())
+        )
+        summary_rows.append({
+            'iban': iban,
+            'tax_ids': ids_list,
+            'names_summary': names_summary,
+        })
+        logger.warning(
+            'IBAN კონფლიქტი: %s ←→ %s ID (%s)', iban, len(ids_list), names_summary,
+        )
+    logger.warning(
+        'IBAN audit: სულ %s ანგარიში გვაქვს > 1 ID-ით. ხელით გადაამოწმე — '
+        'შეიძლება გადარქმევა ან მონაცემების შეცდომაა.',
+        len(conflicts),
+    )
+    return summary_rows
+
+
 def _process_rs_suppliers(df, agg_df, rs_files, supplier_registry_cfg, script_dir):
     """Bank reconciliation, supplier enrichment, aging, waybills, and excel writes.
 
@@ -1385,6 +1473,14 @@ def run():
         manual_grand = rs_result["manual_grand"]
         manual_only = rs_result["manual_only"]
 
+        # ----- IBAN/Tax-ID კონფლიქტის audit -----
+        # თუ ერთი ანგარიშის ნომერი ბანკის ამონაწერებში სხვადასხვა საგადასახადო
+        # ID-ით ფიქსირდება, ეს ჩვეულებრივ ნიშნავს ფირმის გადარქმევას ან
+        # ხელახალ რეგისტრაციას (იგივე იურიდიული პირი). user-ის წესი არ
+        # გვაერთიანებინებს ცხრილში (სხვადასხვა ID = სხვადასხვა კომპანია),
+        # მაგრამ წინასწარ ვაფრთხილებთ რომ ხელით შემოწმდეს.
+        iban_conflicts = _audit_iban_taxid_conflicts(script_dir)
+
         data = {
             "suppliers": suppliers_data,
             "waybills": waybills_data,
@@ -1414,6 +1510,7 @@ def run():
                     [a for a in manual_only.values() if a > 0]
                 ),
                 "suppliers_only_journal_or_bank": extra_supplier_count,
+                "iban_taxid_conflicts": iban_conflicts,
                 "bank_orphan_total_ge": float(bank_orphan),
                 "bank_unmatched_total_ge": float(bank_unmatched_sum),
                 "bank_unmatched_line_count": int(
