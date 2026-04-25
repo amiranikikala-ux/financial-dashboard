@@ -1,5 +1,3 @@
-import { useState } from 'react';
-
 const GEL = new Intl.NumberFormat('ka-GE', {
   style: 'currency',
   currency: 'GEL',
@@ -80,65 +78,16 @@ function buildPaymentSplitCards(summary, localExtraTotal = 0, localExtraSupplier
   });
 }
 
-function buildPaymentScopeBadges(summary) {
-  return [
-    {
-      key: 'strict-only',
-      label: `მხოლოდ ბანკი ${Number(summary?.strict_only_supplier_count) || 0}`,
-      className: 'payment-scope-badge--strict',
-    },
-    {
-      key: 'manual-only',
-      label: `მხოლოდ ნაღდი ${Number(summary?.manual_only_supplier_count) || 0}`,
-      className: 'payment-scope-badge--manual',
-    },
-    {
-      key: 'overlap',
-      label: `ორივე ${Number(summary?.strict_and_manual_overlap_count) || 0}`,
-      className: 'payment-scope-badge--split',
-    },
-  ];
-}
-
-function buildTruthBoundaryBadges(summary) {
-  const registryPrimary = Number(summary?.registry_primary_supplier_count) || 0;
-  const rsBackstop = Number(summary?.rs_backstop_supplier_count) || 0;
-  const legacyAssist = Number(summary?.legacy_truth_assist_supplier_count) || 0;
-  return [
-    {
-      key: 'registry',
-      className: 'truth-source-badge--registry',
-      label: `რეგისტრიდან ${registryPrimary}`,
-    },
-    {
-      key: 'rs',
-      className: 'truth-source-badge--rs',
-      label: `RS სარეზერვო ${rsBackstop}`,
-    },
-    {
-      key: 'legacy',
-      className: 'truth-source-badge--legacy',
-      label: `მხოლოდ აუდიტი ${legacyAssist}`,
-    },
-  ];
-}
-
 export default function TrustBanner({
   responseMeta,
   waybillsSummary,
   paymentScopeSummary,
-  truthBoundarySummary,
   suppliersOnlyJournalOrBank,
   localPayments,
 }) {
-  const [sourceExpanded, setSourceExpanded] = useState(false);
-
   if (!responseMeta) return null;
 
   const notes = Array.isArray(responseMeta.notes_ka) ? responseMeta.notes_ka : [];
-  const scopeNotes = Array.isArray(paymentScopeSummary?.scope_notes)
-    ? paymentScopeSummary.scope_notes.filter(Boolean)
-    : [];
   const partialReason = responseMeta.partial_reason || '';
   const trustClass = TRUST_CLASS_BY_LABEL[responseMeta.trust_label] || 'trust-banner--derived';
   const showPaymentScope =
@@ -160,15 +109,7 @@ export default function TrustBanner({
   const paymentSplitCards = hasManualPayments
     ? allPaymentSplitCards
     : allPaymentSplitCards.filter((c) => c.key === 'combined');
-  const paymentScopeBadges = buildPaymentScopeBadges(paymentScopeSummary);
   const showWaybillPartial = responseMeta.tab === 'waybills' && Boolean(waybillsSummary?.has_more);
-  const truthBoundaryBadges = buildTruthBoundaryBadges(truthBoundarySummary);
-  const truthBoundarySummaryText = String(truthBoundarySummary?.summary_ka || '').trim();
-
-  const sourceSummaryParts = [
-    ...paymentScopeBadges.map((b) => b.label),
-    ...truthBoundaryBadges.map((b) => b.label),
-  ];
 
   return (
     <div className={`trust-banner ${trustClass}`} role="note">
@@ -216,62 +157,6 @@ export default function TrustBanner({
             RS-ის გარეშე გადახდა: <strong>{suppliersOnlyJournalOrBank}</strong> მომწოდებელი
           </span>
         </div>
-      ) : null}
-
-      {showPaymentScope ? (
-        <>
-          <button
-            type="button"
-            className={`trust-banner-source-toggle ${sourceExpanded ? 'is-expanded' : ''}`}
-            onClick={() => setSourceExpanded((v) => !v)}
-            aria-expanded={sourceExpanded}
-          >
-            <span className="trust-banner-source-chev" aria-hidden="true">▾</span>
-            <span className="trust-banner-source-label">წყარო და დაფარვა</span>
-            {!sourceExpanded ? (
-              <span className="trust-banner-source-summary">
-                {sourceSummaryParts.join(' · ')}
-              </span>
-            ) : null}
-          </button>
-
-          {sourceExpanded ? (
-            <div className="trust-banner-source-panels">
-              <div className="trust-banner-source-panel">
-                <div className="trust-banner-source-title">გადახდის წყარო</div>
-                <div className="trust-banner-badges">
-                  {paymentScopeBadges.map((item) => (
-                    <span
-                      key={item.key}
-                      className={`badge payment-scope-badge ${item.className}`}
-                    >
-                      {item.label}
-                    </span>
-                  ))}
-                </div>
-                {scopeNotes.length > 0 ? (
-                  <div className="trust-banner-notes">{scopeNotes.join(' ')}</div>
-                ) : null}
-              </div>
-              <div className="trust-banner-source-panel">
-                <div className="trust-banner-source-title">მონაცემის საზღვარი</div>
-                <div className="trust-banner-badges">
-                  {truthBoundaryBadges.map((item) => (
-                    <span
-                      key={item.key}
-                      className={`badge truth-source-badge ${item.className}`}
-                    >
-                      {item.label}
-                    </span>
-                  ))}
-                </div>
-                {truthBoundarySummaryText ? (
-                  <div className="trust-banner-notes">{truthBoundarySummaryText}</div>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-        </>
       ) : null}
 
       {showWaybillPartial ? (

@@ -112,7 +112,6 @@ export default function Waybills({ formatNumber, reloadKey, fromDate, fromTime, 
         responseMeta={data.response_meta}
         waybillsSummary={waybillsSummary}
         paymentScopeSummary={{}}
-        truthBoundarySummary={{}}
         suppliersOnlyJournalOrBank={0}
       />
 

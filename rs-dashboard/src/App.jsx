@@ -364,7 +364,6 @@ function App() {
             responseMeta={currentResponseMeta}
             waybillsSummary={{}}
             paymentScopeSummary={paymentScopeSummary}
-            truthBoundarySummary={truthBoundarySummary}
             suppliersOnlyJournalOrBank={suppliersOnlyJournalOrBank}
             localPayments={localPayments}
           />
