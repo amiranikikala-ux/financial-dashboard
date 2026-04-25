@@ -75,19 +75,34 @@
   .tab-hero-title { font-size: 1rem; }
 
   .trust-banner {
-    padding: 0.9rem;
+    padding: 0.95rem 1rem 1rem;
   }
 
-  .trust-banner-context-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .trust-banner-main {
+  .trust-banner-header {
     flex-direction: column;
+    gap: 0.55rem;
   }
 
-  .trust-banner-split-grid {
+  .trust-banner-stats {
     grid-template-columns: 1fr;
+  }
+
+  .trust-banner-source-panels {
+    grid-template-columns: 1fr;
+  }
+
+  .trust-banner-source-toggle {
+    flex-wrap: wrap;
+  }
+
+  .trust-banner-source-summary {
+    margin-left: 0;
+    flex-basis: 100%;
+    white-space: normal;
+  }
+
+  .trust-stat-value {
+    font-size: 1.32rem;
   }
 
   .imported-ranking-item,

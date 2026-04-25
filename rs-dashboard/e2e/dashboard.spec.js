@@ -8,11 +8,7 @@ test.describe('Dashboard — Load & Header', () => {
   });
 
   test('page loads with correct title', async ({ page }) => {
-    await expect(page.locator('h1')).toHaveText('RS Dashboard');
-  });
-
-  test('subtitle is visible', async ({ page }) => {
-    await expect(page.locator('.subtitle')).toContainText('ფინანსური ანალიზი');
+    await expect(page.locator('h1.brand-name')).toHaveText('ჯეო ფუდთაიმი');
   });
 
   test('header shows period picker when data loaded', async ({ page }) => {

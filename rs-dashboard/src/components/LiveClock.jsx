@@ -3,40 +3,53 @@ import { useState, useEffect } from 'react';
 const TIME_FMT = new Intl.DateTimeFormat('ka-GE', {
   hour: '2-digit',
   minute: '2-digit',
-  second: '2-digit',
   hour12: false,
 });
 
-const DATE_FMT = new Intl.DateTimeFormat('ka-GE', {
-  year: 'numeric',
-  month: 'short',
-  day: 'numeric',
-});
+// ka-GE Intl.DateTimeFormat ფოლბექს ხშირად აბრუნებს ინგლისურ თვის სახელს ("Apr"),
+// ამიტომ ქართული მოკლე თვეები ხელით ვადგინოთ.
+const MONTH_SHORT_KA = [
+  'იან', 'თებ', 'მარ', 'აპრ', 'მაი', 'ივნ',
+  'ივლ', 'აგვ', 'სექ', 'ოქტ', 'ნოე', 'დეკ',
+];
+
+function formatDateKa(d) {
+  return `${d.getDate()} ${MONTH_SHORT_KA[d.getMonth()]}, ${d.getFullYear()}`;
+}
+
+function formatStampKa(d) {
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${formatDateKa(d)} ${hh}:${mm}`;
+}
 
 export default function LiveClock({ lastUpdated }) {
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
+    const tick = () => setNow(new Date());
+    let intervalId = null;
+    const msUntilNextMinute = 60_000 - (Date.now() % 60_000);
+    const timeoutId = setTimeout(() => {
+      tick();
+      intervalId = setInterval(tick, 60_000);
+    }, msUntilNextMinute);
+    return () => {
+      clearTimeout(timeoutId);
+      if (intervalId) clearInterval(intervalId);
+    };
   }, []);
 
-  const lastUpdatedLabel = lastUpdated
-    ? `${DATE_FMT.format(new Date(lastUpdated))} ${TIME_FMT.format(new Date(lastUpdated))}`
-    : null;
+  const tooltip = lastUpdated
+    ? `ბოლო მონაცემების განახლება: ${formatStampKa(new Date(lastUpdated))}`
+    : undefined;
 
   return (
-    <div className="live-clock">
-      <div className="live-clock-time">
-        <span className="live-clock-dot" />
-        {TIME_FMT.format(now)}
-      </div>
-      <div className="live-clock-date">{DATE_FMT.format(now)}</div>
-      {lastUpdatedLabel && (
-        <div className="live-clock-updated" title="ბოლო მონაცემების განახლება">
-          განახლდა: {lastUpdatedLabel}
-        </div>
-      )}
+    <div className="live-clock" title={tooltip}>
+      <span className="live-clock-dot" aria-hidden="true" />
+      <span className="live-clock-time">{TIME_FMT.format(now)}</span>
+      <span className="live-clock-divider" aria-hidden="true">·</span>
+      <span className="live-clock-date">{formatDateKa(now)}</span>
     </div>
   );
 }

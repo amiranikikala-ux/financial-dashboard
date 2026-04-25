@@ -1,4 +1,4 @@
-/* Service Worker for RS Dashboard PWA
+/* Service Worker for GeoFoodTime PWA
  *
  * Cache strategy (fixes stale-bundle bug 2026-04-18):
  *   - Navigation / HTML:            NETWORK-FIRST (fresh shell every load;

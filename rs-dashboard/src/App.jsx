@@ -289,15 +289,10 @@ function App() {
       ? data.meta ?? null
       : null;
   const showPeriodPicker = PERIOD_PICKER_TABS.has(activeTab);
-  const pickerLabel = currentMeta?.data_period_label || ((globalFromDate || globalToDate) ? 'არჩეული პერიოდი' : 'პერიოდი');
-  const showHeaderPaymentStats = Boolean(
-    currentMeta
-    && (
-      currentMeta.strict_bank_only_total != null
-      || currentMeta.combined_supplier_paid_total != null
-      || currentMeta.suppliers_only_journal_or_bank != null
-    )
-  );
+  const hasAppliedPeriod = Boolean(globalFromDate || globalToDate);
+  const pickerLabel = hasAppliedPeriod
+    ? (currentMeta?.data_period_label || 'არჩეული პერიოდი')
+    : null;
   const monthlyPnl = Array.isArray(data.monthly_pnl) ? data.monthly_pnl : [];
   const supplierAging = Array.isArray(data.supplier_aging) ? data.supplier_aging : [];
   const agingSummary = data.aging_summary || {};
@@ -331,8 +326,14 @@ function App() {
       <header>
         <div className="header-top-row">
           <div className="header-brand-block">
-            <h1>RS Dashboard</h1>
-            <div className="subtitle">ფინანსური ანალიზი და ზედნადებების კონტროლი</div>
+            <span className="brand-mark" aria-hidden="true">
+              <span className="brand-mark-letter">ჯ</span>
+            </span>
+            <h1 className="brand-name">
+              <span className="brand-name-geo">ჯეო</span>
+              {' '}
+              <span className="brand-name-rest">ფუდთაიმი</span>
+            </h1>
           </div>
           <div className="header-center">
             {showPeriodPicker && (
@@ -347,15 +348,6 @@ function App() {
                 onToTimeChange={setGlobalToTime}
                 label={pickerLabel}
               />
-            )}
-            {showHeaderPaymentStats && (
-                <span className="header-stats-compact">
-                  ბანკი: <span className="stat-val">{formatNumber(currentMeta.strict_bank_only_total)}</span>
-                  &nbsp;·&nbsp;გადახდილი: <span className="stat-val">{formatNumber(currentMeta.combined_supplier_paid_total)}</span>
-                  {Number(currentMeta.suppliers_only_journal_or_bank) > 0 && (
-                    <>&nbsp;·&nbsp;RS-ის გარეშე: <span className="stat-val">{currentMeta.suppliers_only_journal_or_bank}</span></>
-                  )}
-                </span>
             )}
           </div>
           <div className="header-right-controls">
@@ -374,6 +366,7 @@ function App() {
             paymentScopeSummary={paymentScopeSummary}
             truthBoundarySummary={truthBoundarySummary}
             suppliersOnlyJournalOrBank={suppliersOnlyJournalOrBank}
+            localPayments={localPayments}
           />
         )}
 

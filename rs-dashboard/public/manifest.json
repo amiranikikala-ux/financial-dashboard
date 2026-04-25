@@ -1,6 +1,6 @@
 {
-  "name": "RS Dashboard — ფინანსური ანალიზი",
-  "short_name": "RS Dashboard",
+  "name": "ჯეო ფუდთაიმი — ფინანსური ანალიზი",
+  "short_name": "ჯეო ფუდთაიმი",
   "description": "ფინანსური ანალიზი და ზედნადებების კონტროლი",
   "start_url": "/",
   "display": "standalone",

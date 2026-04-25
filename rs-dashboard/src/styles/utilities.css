@@ -238,50 +238,67 @@
 }
 
 /* ======================================================
-   LIVE CLOCK
+   LIVE CLOCK — status pill
 ====================================================== */
 .live-clock {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.42rem 0.9rem;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  backdrop-filter: blur(8px);
   flex-shrink: 0;
+  transition: border-color 180ms ease, background 180ms ease;
 }
 
-.live-clock-time {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-size: 1.35rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-  color: var(--text-primary);
+.live-clock:hover {
+  border-color: rgba(99, 102, 241, 0.32);
+  background: rgba(15, 23, 42, 0.72);
 }
 
 .live-clock-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--accent-green);
-  box-shadow: 0 0 6px var(--accent-green);
-  animation: clock-pulse 2s ease-in-out infinite;
+  box-shadow:
+    0 0 0 3px rgba(34, 197, 94, 0.15),
+    0 0 8px rgba(34, 197, 94, 0.45);
+  flex-shrink: 0;
+  animation: clock-breathe 3.6s ease-in-out infinite;
 }
 
-@keyframes clock-pulse {
-  0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--accent-green); }
-  50%      { opacity: 0.5; box-shadow: 0 0 2px var(--accent-green); }
+@keyframes clock-breathe {
+  0%, 100% {
+    box-shadow:
+      0 0 0 3px rgba(34, 197, 94, 0.15),
+      0 0 8px rgba(34, 197, 94, 0.45);
+  }
+  50% {
+    box-shadow:
+      0 0 0 5px rgba(34, 197, 94, 0.06),
+      0 0 12px rgba(34, 197, 94, 0.25);
+  }
+}
+
+.live-clock-time {
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+
+.live-clock-divider {
+  color: var(--text-muted);
+  opacity: 0.55;
+  user-select: none;
 }
 
 .live-clock-date {
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-  font-weight: 400;
-}
-
-.live-clock-updated {
-  font-size: 0.7rem;
   color: var(--text-muted);
   font-weight: 400;
 }
@@ -305,8 +322,11 @@
 .btn-refresh {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
   padding: 0.4rem 0.85rem;
+  /* Reserve enough width for the longer "მიმდინარეობს..." label so neighbours don't shift on state swap */
+  min-width: 9.6rem;
   background: rgba(59,130,246,0.1);
   border: 1px solid rgba(59,130,246,0.25);
   color: #60a5fa;
@@ -343,9 +363,42 @@
 }
 
 .refresh-age {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   font-size: 0.7rem;
   color: var(--text-muted);
   white-space: nowrap;
+  cursor: help;
+}
+
+.refresh-age-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(148, 163, 184, 0.5);
+  flex-shrink: 0;
+  transition: background 200ms ease, box-shadow 200ms ease;
+}
+
+.refresh-age--fresh .refresh-age-dot {
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.55);
+}
+
+.refresh-age--stale .refresh-age-dot {
+  background: #fbbf24;
+  box-shadow: 0 0 6px rgba(251, 191, 36, 0.45);
+}
+
+.refresh-age--very-stale .refresh-age-dot {
+  background: #ef4444;
+  box-shadow: 0 0 7px rgba(239, 68, 68, 0.55);
+}
+
+.refresh-age--very-stale {
+  color: #fca5a5;
 }
 
 .refresh-error-dot {
@@ -374,13 +427,6 @@
   flex-wrap: wrap;
 }
 
-.header-brand-block {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
 .header-center {
   display: flex;
   align-items: center;
@@ -406,24 +452,6 @@
   font-size: 0.85rem;
 }
 
-.header-stats-compact {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.3rem 0.75rem;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-.header-stats-compact .stat-val {
-  color: #818cf8;
-  font-weight: 600;
-}
-
 @media (max-width: 768px) {
   .header-top-row {
     flex-direction: column;
@@ -434,9 +462,6 @@
     flex-direction: row;
     width: 100%;
     justify-content: space-between;
-  }
-  .live-clock {
-    align-items: flex-start;
   }
   .refresh-age { display: none; }
   .header-center {

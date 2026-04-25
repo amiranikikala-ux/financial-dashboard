@@ -10,17 +10,17 @@ const fmt = (v) => GEL.format(Number(v) || 0);
 
 function hhiBand(hhi) {
   const value = Number(hhi) || 0;
-  if (value >= 2500) return { label: '🔴 Extreme', color: '#ef4444', noteKa: 'პორტფელი ძალიან კონცენტრირებულია' };
-  if (value >= 1500) return { label: '🟠 High', color: '#f97316', noteKa: 'მაღალი დამოკიდებულება Top-ზე' };
-  if (value >= 500) return { label: '🟡 Moderate', color: '#eab308', noteKa: 'ზომიერი კონცენტრაცია' };
-  return { label: '🟢 Low', color: '#22c55e', noteKa: 'კარგად გაფანტული პორტფელი' };
+  if (value >= 2500) return { label: '🔴 კრიტიკული', color: '#ef4444', noteKa: 'პორტფელი ძალიან კონცენტრირებულია' };
+  if (value >= 1500) return { label: '🟠 მაღალი', color: '#f97316', noteKa: 'მაღალი დამოკიდებულება Top-ზე' };
+  if (value >= 500) return { label: '🟡 ზომიერი', color: '#eab308', noteKa: 'ზომიერი კონცენტრაცია' };
+  return { label: '🟢 დაბალი', color: '#22c55e', noteKa: 'კარგად გაფანტული პორტფელი' };
 }
 
 function leverageBand(score) {
   const value = Number(score) || 0;
-  if (value >= 70) return { label: '🟢 HIGH', color: '#22c55e' };
-  if (value >= 40) return { label: '🟡 MEDIUM', color: '#eab308' };
-  return { label: '🟠 LOW', color: '#f97316' };
+  if (value >= 70) return { label: '🟢 მაღალი', color: '#22c55e' };
+  if (value >= 40) return { label: '🟡 საშუალო', color: '#eab308' };
+  return { label: '🟠 დაბალი', color: '#f97316' };
 }
 
 function MiniGauge({ value, maxValue = 10000, color }) {
@@ -76,7 +76,7 @@ export default function SupplierConcentrationWidget({ payload }) {
         color: '#cbd5e1',
         fontSize: 13,
       }}>
-        <strong>⚠️ Supplier Concentration</strong>
+        <strong>⚠️ მომწოდებლების კონცენტრაცია</strong>
         <span style={{ marginLeft: 10, color: '#94a3b8' }}>
           {data?.reason_ka || 'პორტფელის ანალიზი ჯერ არ გვაქვს — გადაატრიალე pipeline.'}
         </span>
@@ -114,7 +114,7 @@ export default function SupplierConcentrationWidget({ payload }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 14 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 6 }}>
-            <span style={{ color: '#94a3b8', fontSize: 11 }}>HHI Index</span>
+            <span style={{ color: '#94a3b8', fontSize: 11 }}>HHI ინდექსი</span>
             <span style={{ fontSize: 18, fontWeight: 700, color: band.color }}>
               {Math.round(Number(concentration.hhi_index) || 0)}
             </span>
@@ -158,7 +158,7 @@ export default function SupplierConcentrationWidget({ payload }) {
                 <th style={{ padding: '4px 6px', fontWeight: 500 }}>#</th>
                 <th style={{ padding: '4px 6px', fontWeight: 500 }}>მომწოდებელი</th>
                 <th style={{ padding: '4px 6px', fontWeight: 500, textAlign: 'right' }}>წილი %</th>
-                <th style={{ padding: '4px 6px', fontWeight: 500 }}>Leverage</th>
+                <th style={{ padding: '4px 6px', fontWeight: 500 }}>ბერკეტი</th>
                 <th style={{ padding: '4px 6px', fontWeight: 500, textAlign: 'right' }}>~წლიური დაზოგვა</th>
               </tr>
             </thead>
@@ -203,7 +203,7 @@ export default function SupplierConcentrationWidget({ payload }) {
       )}
 
       <div style={{ marginTop: 10, fontSize: 10, color: '#64748b' }}>
-        წყარო: data.json · prepare_supplier_brief (portfolio mode) · ranked by leverage × savings × spend
+        წყარო: data.json · prepare_supplier_brief (portfolio mode) · დახარისხებული ბერკეტი × დაზოგვა × ბრუნვით
       </div>
     </div>
   );

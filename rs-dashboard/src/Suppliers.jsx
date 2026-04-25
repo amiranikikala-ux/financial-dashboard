@@ -1,15 +1,64 @@
 import { useState, useCallback, useMemo } from 'react';
-import { STORAGE_KEY, extractTaxId, mergeSupplier } from './financeMerge.js';
+import { extractTaxId, mergeSupplier } from './financeMerge.js';
 import SupplierConcentrationWidget from './components/SupplierConcentrationWidget.jsx';
+import CollapsibleSection from './components/CollapsibleSection.jsx';
 
 const SUPPLIER_SORT_OPTIONS = [
-  { value: 'debt_asc', label: 'დავალიანება ზრდადობით' },
-  { value: 'debt_desc', label: 'დავალიანება კლებადობით' },
+  { value: 'debt_asc', label: 'ვალი ↑' },
+  { value: 'debt_desc', label: 'ვალი ↓' },
 ];
+
+const PAYMENT_SCOPE_LABEL_KA = {
+  strict_bank_only: 'ბანკით დადასტურებული',
+  manual_only: 'მხოლოდ ნაღდით / ჟურნალით',
+  strict_and_manual: 'ბანკით + ჟურნალით',
+  unpaid_or_unmatched: 'გადაუხდელი / დაუდგენელი',
+};
+
+function scopeLabel(scope) {
+  return PAYMENT_SCOPE_LABEL_KA[scope] || scope || '—';
+}
+
+const NON_RS_NAME_RX = /არა.?\s*RS\s+ზედნადებ/i;
+
+function isNonRsSyntheticRow(sup) {
+  return NON_RS_NAME_RX.test(String(sup?.['ორგანიზაცია'] || ''));
+}
 
 async function loadXlsxModule() {
   const xlsxModule = await import('xlsx');
   return xlsxModule.default || xlsxModule;
+}
+
+const AVATAR_GRADIENTS = [
+  'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+  'linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)',
+  'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)',
+  'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)',
+  'linear-gradient(135deg, #ec4899 0%, #a855f7 100%)',
+  'linear-gradient(135deg, #14b8a6 0%, #10b981 100%)',
+  'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)',
+  'linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%)',
+  'linear-gradient(135deg, #ef4444 0%, #f59e0b 100%)',
+  'linear-gradient(135deg, #a855f7 0%, #6366f1 100%)',
+];
+
+function stripTaxIdPrefix(org) {
+  return String(org || '').replace(/^\([^)]+\)\s*[-–—]?\s*/u, '').trim();
+}
+
+function orgInitial(org) {
+  const clean = stripTaxIdPrefix(org);
+  return (clean.charAt(0) || '?').toUpperCase();
+}
+
+function orgGradient(org) {
+  const str = stripTaxIdPrefix(org) || String(org || '');
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 31 + str.charCodeAt(i)) | 0;
+  }
+  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
 }
 
 export default function Suppliers({
@@ -25,6 +74,7 @@ export default function Suppliers({
   const [searchName, setSearchName] = useState('');
   const [supplierSortKey, setSupplierSortKey] = useState('debt_asc');
   const [payAmount, setPayAmount] = useState('');
+  const [recordedFlash, setRecordedFlash] = useState(false);
 
   const parseMoney = (raw) => {
     const n = parseFloat(String(raw || '').replace(/\s/g, '').replace(',', '.'));
@@ -64,22 +114,45 @@ export default function Suppliers({
     return sorted;
   }, [suppliers, nameNeedle, supplierSortKey, getDisplay]);
 
+  const { realSuppliers, nonRsRows } = useMemo(() => {
+    const real = [];
+    const nonRs = [];
+    for (const sup of filteredSuppliers) {
+      if (isNonRsSyntheticRow(sup)) nonRs.push(sup);
+      else real.push(sup);
+    }
+    return { realSuppliers: real, nonRsRows: nonRs };
+  }, [filteredSuppliers]);
+
+  const nonRsTotalBank = useMemo(
+    () => nonRsRows.reduce((sum, sup) => sum + (Number(getDisplay(sup).strictBankPaid) || 0), 0),
+    [nonRsRows, getDisplay],
+  );
+
   const payVal = parseMoney(payAmount);
+  const showCashColumn = useMemo(
+    () => realSuppliers.some((sup) => Number(getDisplay(sup).manualTotal) > 0),
+    [realSuppliers, getDisplay],
+  );
+  const tableColumnCount = showCashColumn ? 8 : 7;
   const periodMeta = meta?.period && typeof meta.period === 'object' ? meta.period : {};
   const periodLabel = periodMeta.label_ka || (periodMeta.applied ? 'არჩეული პერიოდი' : 'ყველა პერიოდი');
   const periodCaveat = responseMeta?.period_caveat_ka || meta?.period_caveat_ka || '';
-  const canRecord =
-    filteredSuppliers.length === 1 &&
-    payVal > 0 &&
-    extractTaxId(filteredSuppliers[0]['ორგანიზაცია']);
+  const selectedOne = realSuppliers.length === 1 ? realSuppliers[0] : null;
+  const selectedDisplay = selectedOne ? getDisplay(selectedOne) : null;
+  const canRecord = Boolean(
+    selectedOne && payVal > 0 && extractTaxId(selectedOne['ორგანიზაცია']),
+  );
 
   const handleRecordPayment = () => {
     if (!canRecord) return;
-    const tid = extractTaxId(filteredSuppliers[0]['ორგანიზაცია']);
+    const tid = extractTaxId(selectedOne['ორგანიზაცია']);
     if (!tid) return;
     const next = { ...localPayments, [tid]: (Number(localPayments[tid]) || 0) + payVal };
     persistLocalPayments(next);
     setPayAmount('');
+    setRecordedFlash(true);
+    setTimeout(() => setRecordedFlash(false), 1400);
   };
 
   const handleClearLocal = () => {
@@ -119,7 +192,7 @@ export default function Suppliers({
       if (Number(amt) > 0) rows.push([tid, '', String(amt), 'ბრაუზერიდან — ჩაამატე manual_payments.csv']);
     }
     if (rows.length < 2) return;
-    const bom = '\uFEFF';
+    const bom = '﻿';
     const body = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([bom + body], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
@@ -131,25 +204,47 @@ export default function Suppliers({
 
   return (
     <>
-      <SupplierConcentrationWidget payload={supplierConcentration} />
-      <div className="controls controls-filters">
-        <label className="filter-field">
-          <span className="filter-label">კომპანია</span>
+      <div className="sup-toolbar">
+        <div className="sup-toolbar-title">
+          <span className="sup-toolbar-glyph" aria-hidden="true">🏢</span>
+          <h2 className="sup-toolbar-h">მომწოდებლები</h2>
+          <span className="sup-toolbar-count" title={`სულ ${realSuppliers.length} მომწოდებელი${nonRsRows.length ? ` (+ ${nonRsRows.length} RS-ის გარეშე)` : ''}`}>
+            {realSuppliers.length}
+          </span>
+          <span className="sup-toolbar-period">{periodLabel}</span>
+        </div>
+
+        <div className="sup-toolbar-search">
+          <svg className="sup-toolbar-search-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
           <input
             type="text"
-            className="search-input search-input-compact"
-            placeholder="სახელი, ნაწილობრივი ტექსტი…"
+            className="sup-toolbar-search-input"
+            placeholder="ძებნა — სახელი ან ნაწილი…"
             value={searchName}
             onChange={(e) => setSearchName(e.target.value)}
             autoComplete="off"
           />
-        </label>
-        <label className="filter-field">
-          <span className="filter-label">სორტი</span>
+          {searchName.trim() ? (
+            <button
+              type="button"
+              className="sup-toolbar-search-clear"
+              onClick={() => setSearchName('')}
+              aria-label="ძებნის გასუფთავება"
+            >
+              ✕
+            </button>
+          ) : null}
+        </div>
+
+        <div className="sup-toolbar-sort">
           <select
-            className="pnl-month-select"
+            className="sup-toolbar-sort-select"
             value={supplierSortKey}
             onChange={(e) => setSupplierSortKey(e.target.value)}
+            aria-label="დალაგება"
           >
             {SUPPLIER_SORT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -157,188 +252,259 @@ export default function Suppliers({
               </option>
             ))}
           </select>
-        </label>
-        <label className="filter-field">
-          <span className="filter-label">თანხა (₾)</span>
-          <span className="filter-hint">
-            იმატებს „სულ გადახდილს", იკლებს „დავალიანებას"
-          </span>
-          <div className="filter-amount-row">
-            <input
-              type="text"
-              inputMode="decimal"
-              className="search-input search-input-compact search-input-amount"
-              placeholder="მაგ. 5000"
-              value={payAmount}
-              onChange={(e) => setPayAmount(e.target.value)}
-              autoComplete="off"
-            />
-            {payAmount.trim() ? (
-              <button
-                type="button"
-                className="btn-clear-filter"
-                onClick={() => setPayAmount('')}
-                title="გასუფთავება"
-              >
-                ✕
-              </button>
-            ) : null}
-          </div>
-        </label>
-        <div className="filter-field filter-field--actions">
-          <span className="filter-label">მოქმედება</span>
-          <div className="filter-amount-row">
-            <button
-              type="button"
-              className="btn-record-pay"
-              disabled={!canRecord}
-              onClick={handleRecordPayment}
-              title={
-                canRecord
-                  ? 'ჩაიწერება ბრაუზერში და ემატება სულ გადახდილს'
-                  : 'კომპანია უნდა იყოს ზუსტად ერთი ხაზი ძებნაში და თანხა > 0'
-              }
-            >
-              გადახდის ჩაწერა
-            </button>
-            <button
-              type="button"
-              className="btn-clear-local"
-              onClick={handleClearLocal}
-              title="ყველა ლოკალური გადახდის წაშლა"
-            >
-              გასუფთავება
-            </button>
-            <button
-              type="button"
-              className="btn-download-csv"
-              disabled={!hasLocalPayments}
-              onClick={handleDownloadCsv}
-              title="ჩამოტვირთე ხაზები manual_payments.csv-ში ჩასასმელად"
-            >
-              CSV ჩამოტვირთვა
-            </button>
-            <button
-              type="button"
-              className="btn-download-xlsx"
-              disabled={filteredSuppliers.length === 0}
-              onClick={handleDownloadSuppliersExcel}
-              title="ცხრილის მიხედვით (ძებნა თუ ცარიელია — ყველა). ნაღდი + გადახდილი + ვალი = იგივე რაც ეკრანზე"
-            >
-              Excel ჩამოტვირთვა
-            </button>
-          </div>
         </div>
-      </div>
 
-      {/* Tab Hero */}
-      <div className="tab-hero">
-        <span className="tab-hero-title">🏢 მომწოდებლები</span>
-        <span className="tab-hero-desc">RS ზედნადებების აგრეგაცია, ვალი და გადახდა · {periodLabel}</span>
-      </div>
-
-      <div className="controls controls-filters" style={{ marginTop: 12, marginBottom: 12 }}>
-        <span className="badge muted">პერიოდი: {periodLabel}</span>
-        <span className="badge muted">მომწოდებელი: {filteredSuppliers.length}</span>
-      </div>
-
-      <div className="local-pay-banner local-pay-banner--short" role="status">
-        ერთი კომპანია ძებნაში → თანხა → <strong>გადახდის ჩაწერა</strong>. strict ბანკი და manual/off-bank
-        journal ახლა ცალ-ცალკეა ნაჩვენები. სამუდამოდ: <strong>CSV ჩამოტვირთვა</strong> და ჩაამატე
-        ფაილში, შემდეგ გენერაცია.
+        <div className="sup-toolbar-actions">
+          <button
+            type="button"
+            className="sup-toolbar-action"
+            disabled={filteredSuppliers.length === 0}
+            onClick={handleDownloadSuppliersExcel}
+            title="ცხრილის Excel-ად ჩამოტვირთვა (ძებნა თუ ცარიელია — ყველა)"
+          >
+            <DownloadIcon />
+            <span>Excel</span>
+          </button>
+          <button
+            type="button"
+            className="sup-toolbar-action"
+            disabled={!hasLocalPayments}
+            onClick={handleDownloadCsv}
+            title="ბრაუზერში ჩაწერილი გადახდების CSV-ად ჩამოტვირთვა — manual_payments.csv-ში ჩასასმელად"
+          >
+            <DownloadIcon />
+            <span>CSV</span>
+          </button>
+        </div>
       </div>
 
       {periodCaveat ? (
-        <div className="trust-banner-sub trust-banner-sub--warn">
-          {periodCaveat}
+        <div className="trust-banner-sub trust-banner-sub--warn">{periodCaveat}</div>
+      ) : null}
+
+      {selectedOne ? (
+        <div className={`pay-card ${recordedFlash ? 'pay-card--flash' : ''}`} role="region" aria-label="გადახდის ჩაწერა">
+          <div className="pay-card-glow" aria-hidden="true" />
+          <div className="pay-card-head">
+            <span className="pay-card-tag">
+              <span className="pay-card-tag-dot" aria-hidden="true" />
+              სელექტირებული მომწოდებელი
+            </span>
+            <span className="pay-card-name">{selectedOne['ორგანიზაცია']}</span>
+          </div>
+
+          <div className="pay-card-stats">
+            <div className="pay-card-stat">
+              <span className="pay-card-stat-label">ვალი</span>
+              <span className={`pay-card-stat-value ${selectedDisplay.debt > 0 ? 'is-debt' : ''}`}>
+                {formatNumber(selectedDisplay.debt)}
+              </span>
+            </div>
+            <div className="pay-card-stat">
+              <span className="pay-card-stat-label">სულ გადახდილი</span>
+              <span className="pay-card-stat-value is-paid">{formatNumber(selectedDisplay.paid)}</span>
+            </div>
+            <div className="pay-card-stat">
+              <span className="pay-card-stat-label">ზედნადები</span>
+              <span className="pay-card-stat-value">{selectedOne.waybills_count ?? 0}</span>
+            </div>
+          </div>
+
+          <div className="pay-card-form">
+            <div className="pay-card-input-wrap">
+              <input
+                type="text"
+                inputMode="decimal"
+                className="pay-card-input"
+                placeholder="0"
+                value={payAmount}
+                onChange={(e) => setPayAmount(e.target.value)}
+                autoComplete="off"
+                aria-label="გადახდის თანხა"
+              />
+              <span className="pay-card-currency" aria-hidden="true">₾</span>
+              {payAmount.trim() ? (
+                <button
+                  type="button"
+                  className="pay-card-input-clear"
+                  onClick={() => setPayAmount('')}
+                  aria-label="თანხის გასუფთავება"
+                >
+                  ✕
+                </button>
+              ) : null}
+            </div>
+
+            <button
+              type="button"
+              className="pay-card-record"
+              disabled={!canRecord}
+              onClick={handleRecordPayment}
+            >
+              <span className="pay-card-record-glyph" aria-hidden="true">✓</span>
+              <span>ჩაწერა{payVal > 0 ? ` · ${formatNumber(payVal)}` : ''}</span>
+            </button>
+
+            {hasLocalPayments ? (
+              <button
+                type="button"
+                className="pay-card-clear"
+                onClick={handleClearLocal}
+                title="ბრაუზერში ჩაწერილი ყველა გადახდის წაშლა"
+              >
+                ბრაუზერის გასუფთავება
+              </button>
+            ) : null}
+          </div>
+
+          <div className="pay-card-hints">
+            <span className="pay-card-hint">
+              <span className="pay-card-hint-bullet" />
+              ჩაიწერება ბრაუზერში · ემატება „სულ გადახდილს" · იკლებს „ვალს"
+            </span>
+            <span className="pay-card-hint">
+              <span className="pay-card-hint-bullet" />
+              მუდმივად: <strong>CSV</strong> ჩამოტვირთვა და ჩაამატე{' '}
+              <code>manual_payments.csv</code>-ში
+            </span>
+          </div>
         </div>
       ) : null}
 
-      {payVal > 0 && filteredSuppliers.length > 1 && nameNeedle ? (
-        <div className="filter-warning" role="status">
-          <strong>რამდენიმე მომწოდებელი ჩანს.</strong> სანამ ჩაწერო, დააზუსტე სახელი, რომ ცხრილში{' '}
-          <strong>ერთი</strong> ხაზი დარჩეს.
+      {payVal > 0 && realSuppliers.length > 1 && nameNeedle ? (
+        <div className="sup-multi-warn" role="status">
+          <span className="sup-multi-warn-icon" aria-hidden="true">!</span>
+          <span>
+            <strong>{realSuppliers.length} მომწოდებელი ჩანს ძებნაში.</strong>{' '}
+            დააზუსტე სახელი, რომ ცხრილში ერთი ხაზი დარჩეს.
+          </span>
         </div>
       ) : null}
 
-      <div className="table-wrapper table-premium">
-        <table>
+      <div className="table-wrapper sup-table-wrapper">
+        <table className="sup-table">
           <thead>
             <tr>
-              <th>#</th>
-              <th>ორგანიზაცია</th>
-              <th>რაოდენობა</th>
-              <th title={"ყველა ხაზის \u201Eთანხის\u201C პირდაპირი ჯამი \u2014 გაუქმებულიც თუ ჩაწერილია თანხით. ეს არ არის ვალის ჯამი."}>
-                ნომინალური
-              </th>
-              <th title="უკან დაბრუნების ხაზების თანხების ჯამი (დადებითიც ჩანს, თუ RS ასე აქვს)">
-                დაბრუნებული
-              </th>
-              <th title="ფაქტობრივი ვალდებულება RS-ის მიხედვით: გაუქმებული = 0, უკან დაბრუნება = უარყოფითი. ამიტომ ხშირად ნაკლებია ნომინალზე — ეს ნორმაა.">
-                რეალური ჯამი
-              </th>
-              <th title="მხოლოდ strict bank reconciliation-ით დამტკიცებული supplier payment">
-                strict ბანკით გადახდა
-              </th>
-              <th title="manual_payments.csv + ამ ბრაუზერში ჩაწერილი გადახდები">ნაღდით გადახდა</th>
-              <th>სულ გადახდილი</th>
-              <th>დავალიანება</th>
-              <th>scope</th>
+              <th className="sup-th sup-th-num">#</th>
+              <th className="sup-th">ორგანიზაცია</th>
+              <th className="sup-th sup-th-num">რაოდ.</th>
+              <th className="sup-th sup-th-num" title="RS-ის რეალური ბრუნვა (ნომინალი მინუს დაბრუნებები)">ბრუნვა</th>
+              <th className="sup-th sup-th-num" title="ბანკით დადასტურებული გადახდა">ბანკი</th>
+              {showCashColumn && (
+                <th className="sup-th sup-th-num" title="manual_payments.csv + ბრაუზერში ჩაწერილი">ნაღდი</th>
+              )}
+              <th className="sup-th sup-th-num">სულ გადახდ.</th>
+              <th className="sup-th sup-th-num">ვალი</th>
             </tr>
           </thead>
           <tbody>
-            {filteredSuppliers.map((sup, idx) => {
+            {realSuppliers.map((sup, idx) => {
               const d = getDisplay(sup);
+              const isSelected = selectedOne && sup === selectedOne;
+              const hasDebt = d.debt > 0;
+              const returned = Number(sup.total_returned) || 0;
               return (
                 <tr
                   key={`${d.tid || 'x'}-${idx}`}
+                  className={`sup-row ${isSelected ? 'is-selected' : ''} ${hasDebt ? 'has-debt' : ''}`}
                   onClick={() => onSupplierClick(sup)}
-                  style={{ cursor: 'pointer' }}
                   title="კლიკი — დეტალები"
                 >
-                  <td>{idx + 1}</td>
-                  <td>{sup['ორგანიზაცია']}</td>
-                  <td>{sup.waybills_count}</td>
-                  <td className="amount-neutral">{formatNumber(sup.total_nominal ?? 0)}</td>
-                  <td
-                    className={
-                      Number(sup.total_returned) === 0
-                        ? 'amount-neutral'
-                        : Number(sup.total_returned) < 0
-                          ? 'amount-negative'
-                          : 'amount-neutral'
-                    }
-                  >
-                    {Number(sup.total_returned) !== 0 ? formatNumber(sup.total_returned) : '—'}
+                  <td className="sup-td-num sup-td-idx">
+                    <span
+                      className={`sup-row-dot sup-row-dot--${d.paymentScope}`}
+                      title={`${scopeLabel(d.paymentScope)}${d.paymentScopeNote ? ` · ${d.paymentScopeNote}` : ''}`}
+                      aria-hidden="true"
+                    />
+                    {idx + 1}
                   </td>
-                  <td className="amount-positive">{formatNumber(sup.total_effective)}</td>
-                  <td className="amount-positive">{formatNumber(d.strictBankPaid ?? 0)}</td>
-                  <td className="amount-neutral">{formatNumber(d.manualTotal ?? 0)}</td>
-                  <td className="amount-positive">{formatNumber(d.paid)}</td>
-                  <td
-                    className="amount-negative"
-                    style={d.debt > 0 ? { background: 'rgba(239,68,68,0.06)', fontWeight: 700 } : undefined}
-                  >
-                    {formatNumber(d.debt)}
-                  </td>
-                  <td>
-                    <span className="badge muted" title={d.paymentScopeNote}>
-                      {d.paymentScope}
+                  <td className="sup-td-org">
+                    <span
+                      className="sup-org-avatar"
+                      aria-hidden="true"
+                      style={{ background: orgGradient(sup['ორგანიზაცია']) }}
+                    >
+                      {orgInitial(sup['ორგანიზაცია'])}
                     </span>
+                    <span className="sup-org-name" title={sup['ორგანიზაცია']}>
+                      {stripTaxIdPrefix(sup['ორგანიზაცია']) || sup['ორგანიზაცია']}
+                    </span>
+                  </td>
+                  <td className="sup-td-num">{sup.waybills_count}</td>
+                  <td
+                    className="sup-td-num sup-td-emph sup-td-turnover"
+                    title={returned !== 0
+                      ? `ნომინ. ${formatNumber(sup.total_nominal ?? 0)} · დაბრუნ. ${formatNumber(returned)}`
+                      : undefined}
+                  >
+                    {formatNumber(sup.total_effective)}
+                    {returned !== 0 ? (
+                      <span className="sup-num-return-pill" aria-label="დაბრუნებული">
+                        {formatNumber(returned)}
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className="sup-td-num sup-num-bank">{formatNumber(d.strictBankPaid ?? 0)}</td>
+                  {showCashColumn && (
+                    <td className="sup-td-num sup-num-cash">{formatNumber(d.manualTotal ?? 0)}</td>
+                  )}
+                  <td className="sup-td-num sup-num-total">{formatNumber(d.paid)}</td>
+                  <td className={`sup-td-num sup-td-debt ${hasDebt ? 'is-on' : ''}`}>
+                    {formatNumber(d.debt)}
                   </td>
                 </tr>
               );
             })}
-            {filteredSuppliers.length === 0 && (
+            {realSuppliers.length === 0 ? (
               <tr>
-                <td colSpan="11" style={{ textAlign: 'center' }}>
+                <td colSpan={tableColumnCount} className="sup-empty">
                   {periodMeta.applied ? 'არჩეულ პერიოდში მონაცემები არ მოიძებნა' : 'მონაცემები არ მოიძებნა'}
                 </td>
               </tr>
-            )}
+            ) : null}
           </tbody>
         </table>
       </div>
+
+      {nonRsRows.length > 0 ? (
+        <CollapsibleSection
+          title="📌 RS-ის გარეშე გადახდები"
+          subtitle={`${nonRsRows.length} ჩანაწერი · ბანკით ${formatNumber(nonRsTotalBank)} — POS ტერმინალი ან merchant ID, რომელიც RS-ის ზედნადებებში არ იძებნება`}
+          defaultOpen={false}
+        >
+          <div className="non-rs-list">
+            {nonRsRows.map((sup, idx) => {
+              const d = getDisplay(sup);
+              const taxId = extractTaxId(sup['ორგანიზაცია']) || '—';
+              return (
+                <div key={`nonrs-${idx}`} className="non-rs-row">
+                  <span className="non-rs-row-id">{taxId}</span>
+                  <span className="non-rs-row-name">{stripTaxIdPrefix(sup['ორგანიზაცია']) || sup['ორგანიზაცია']}</span>
+                  <span className="non-rs-row-amount sup-num-bank">{formatNumber(d.strictBankPaid ?? 0)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </CollapsibleSection>
+      ) : null}
+
+      <CollapsibleSection
+        title="🎯 მომწოდებლების კონცენტრაცია"
+        subtitle="HHI Index · Top-N წილი · მოლაპარაკების კანდიდატები"
+        defaultOpen={false}
+      >
+        <SupplierConcentrationWidget payload={supplierConcentration} />
+      </CollapsibleSection>
     </>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg className="sup-toolbar-action-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
   );
 }

@@ -10,6 +10,15 @@ export default function RefreshButton({ status, refreshing, onRefresh }) {
     else ageLabel = `${Math.floor(dataAgeSec / 3600)} სთ ${Math.floor((dataAgeSec % 3600) / 60)} წთ`;
   }
 
+  // Freshness bucket — drives the small color dot before the age label.
+  // Thresholds: fresh < 1h, stale 1–12h, very-stale > 12h.
+  let ageBucket = null;
+  if (dataAgeSec != null) {
+    if (dataAgeSec < 3600) ageBucket = 'fresh';
+    else if (dataAgeSec < 12 * 3600) ageBucket = 'stale';
+    else ageBucket = 'very-stale';
+  }
+
   const scheduleMin = status?.pipeline?.schedule_interval_min;
 
   return (
@@ -41,8 +50,12 @@ export default function RefreshButton({ status, refreshing, onRefresh }) {
         {isRunning ? 'მიმდინარეობს...' : 'განახლება'}
       </button>
       {ageLabel && (
-        <span className="refresh-age" title={`მონაცემები: ${ageLabel} წინ${scheduleMin ? ` · ავტო: ყოველ ${scheduleMin} წთ` : ''}`}>
-          {ageLabel} წინ
+        <span
+          className={`refresh-age refresh-age--${ageBucket}`}
+          title={`მონაცემი ${ageLabel} წინ განახლდა${scheduleMin ? ` · ავტო-განახლება ყოველ ${scheduleMin} წუთში` : ''}`}
+        >
+          <span className="refresh-age-dot" aria-hidden="true" />
+          მონაცემი {ageLabel} წინ
         </span>
       )}
       {pipelineState === 'error' && (
