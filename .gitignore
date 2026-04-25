@@ -11,6 +11,11 @@ rs-dashboard/dist/
 
 # გენერირებული დეშბორდის მონაცემი (ძალიან დიდი; გაუშვი generate_dashboard_data.py)
 rs-dashboard/public/data.json
+rs-dashboard/public/data.json.tmp
+# data.json-დან ექსპორტირებული SQLite — Claude/MCP-სთვის ad-hoc SQL-ით
+rs-dashboard/public/data.db
+rs-dashboard/public/data.db-shm
+rs-dashboard/public/data.db-wal
 
 # სკრიპტის ჩამოტვირთვების საქაღალდე
 download/

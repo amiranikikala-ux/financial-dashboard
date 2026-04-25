@@ -755,6 +755,15 @@ def _write_outputs(data, script_dir, inc):
     logger.info("Data generated at %s", out_file)
     size_mb = float(os.path.getsize(out_file) / (1024 * 1024))
     logger.info("data.json size: %.2f MB", size_mb)
+
+    # data.json → data.db (SQLite) — Claude/MCP-სთვის ad-hoc ანალიტიკის
+    # SQL-ით (ბევრად სწრაფი ვიდრე JSON-ის parse-ი ყოველ კითხვაზე).
+    try:
+        from dashboard_pipeline.export_sqlite import export_data_json_to_sqlite
+        db_path = os.path.join(os.path.dirname(out_file), "data.db")
+        export_data_json_to_sqlite(out_file, db_path)
+    except Exception as exc:
+        logger.warning("SQLite ექსპორტი ჩავარდა: %s", exc)
     logger.info(
         "API artifacts: %s files | errors=%s | warnings=%s",
         data['meta']['api_artifact_manifest']['artifact_count'],

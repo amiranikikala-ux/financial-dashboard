@@ -22,6 +22,16 @@
     "github": {
       "command": "cmd",
       "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-github"]
+    },
+    "sqlite": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "uvx",
+        "mcp-server-sqlite",
+        "--db-path",
+        "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\financial-dashboard\\rs-dashboard\\public\\data.db"
+      ]
     }
   }
 }
