@@ -27,6 +27,7 @@ from backend_paths import (
 # Module imports — constants
 # ---------------------------------------------------------------------------
 from dashboard_pipeline.constants import (
+    OWN_TAX_ID,
     SAMURNEO_LEDGER_CLASS_KA,
     SAMURNEO_LABEL_KA,
     SAMURNEO_ACCOUNTING_NOTE_KA,
@@ -1025,9 +1026,37 @@ def _process_rs_suppliers(df, agg_df, rs_files, supplier_registry_cfg, script_di
 
     # Sort
     agg_df = agg_df.sort_values('total_effective', ascending=False)
-    
+
+    # ----- მომწოდებლების ცხრილის გაწმენდა (0% შეცდომის წესი) -----
+    # მხოლოდ კომპანიები, რომლებმაც RS-ის ზედნადებები გაწერეს, უნდა იყვნენ
+    # ცხრილში. გამოვაცილოთ:
+    #   1) საკუთარი კომპანია (OWN_TAX_ID) — შიდა ზედნადები / მაღაზიათშორისი
+    #      გადარიცხვა მომწოდებლად არ უნდა ჩაითვალოს;
+    #   2) ხაზები 0 ზედნადებით — ე.ი. „არაა RS ზედნადებში" სინთეტიკური
+    #      placeholder-ები manual journal-ის ან off-bank გადახდებისთვის.
+    pre_filter_count = len(agg_df)
+    own_company_mask = agg_df['supplier_id'] == OWN_TAX_ID
+    no_waybill_mask = agg_df['waybills_count'].fillna(0).astype(int) <= 0
+    drop_mask = own_company_mask | no_waybill_mask
+    if drop_mask.any():
+        own_company_dropped = int(own_company_mask.sum())
+        no_waybill_dropped = int(no_waybill_mask.sum())
+        agg_df = agg_df.loc[~drop_mask].copy()
+        # filter-მა მოაცილა "მხოლოდ ჟურნალი/ბანკი" placeholder-ები →
+        # extra_supplier_count გადავტვირთოთ რომ meta-მ TrustBanner-ს არ
+        # აჩვენოს warning ცხრილიდან გამქრალ row-ებზე.
+        extra_supplier_count = 0
+        logger.info(
+            "მომწოდებლების ცხრილი გაწმენდილია: -%s (%s+%s) → %s კომპანია "
+            "(საკუთარი ფირმა + 0-ზედნადებიანი placeholder-ები მოიხსნა)",
+            pre_filter_count - len(agg_df),
+            own_company_dropped,
+            no_waybill_dropped,
+            len(agg_df),
+        )
+
     # Cleanup
-    del agg_df['supplier_id'] 
+    del agg_df['supplier_id']
 
     suppliers_data = agg_df.replace({float('nan'): None}).to_dict(orient='records')
     supplier_aging_result = build_supplier_aging(suppliers_data, df)
