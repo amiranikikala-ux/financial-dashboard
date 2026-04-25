@@ -265,6 +265,17 @@ def collect_imported_products_bundle(
     supplier_stats = {}
     product_stats = {}
 
+    # ------- მონაცემთა deduplication ------
+    # CSV ფაილები ხშირად გადაფარვით ფიქსირდება (მაგ. „2025.csv" და
+    # „2026-01-02.csv" სადაც 2025 წლის ბოლო ჩანაწერებიც ფიგურირებს). pipeline-ს
+    # თუ ეს არ აღმოვაჩენი, ერთი row 2-ჯერ ემატება ჯამში → ცრუ overpayment
+    # მომწოდებელზე და ცრუ კონცენტრაცია მთლიან მონაცემთა ბაზაში. composite
+    # key (waybill + product code/name + amount + quantity) საკმაოდ სანდოა
+    # რათა ერთი ფიზიკური ხაზი მხოლოდ ერთხელ ითვლებოდეს.
+    seen_row_keys = set()
+    duplicate_rows_dropped = 0
+    duplicate_amount_dropped = 0.0
+
     for f in files:
         file_name = os.path.basename(f)
         file_ext = os.path.splitext(file_name)[1].lower()
@@ -322,6 +333,21 @@ def collect_imported_products_bundle(
                     continue
                 if dt < period_filter["from_ts"] or dt > period_filter["to_ts"]:
                     continue
+
+            # dedupe by composite key — same physical row across overlapping files
+            row_key = (
+                waybill_ref or "",
+                product_code or "",
+                product_name or "",
+                round(amount_ge, 2),
+                round(quantity, 4),
+            )
+            if row_key in seen_row_keys:
+                duplicate_rows_dropped += 1
+                duplicate_amount_dropped += amount_ge
+                continue
+            seen_row_keys.add(row_key)
+
             matched_rows += 1
             matched_file_row_count += 1
             month_key = dt.strftime("%Y-%m") if not pd.isna(dt) else "უცნობი თვე"
@@ -535,6 +561,8 @@ def collect_imported_products_bundle(
             "min": _fmt_date(min(all_dates)) if all_dates else None,
             "max": _fmt_date(max(all_dates)) if all_dates else None,
         },
+        "duplicate_rows_dropped": int(duplicate_rows_dropped),
+        "duplicate_amount_dropped_ge": round(float(duplicate_amount_dropped), 2),
     }
 
     bundle["by_status"] = [
