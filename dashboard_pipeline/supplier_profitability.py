@@ -26,7 +26,15 @@ Match precedence (deterministic, applied in order until single hit):
 3. imported.product_code + "x" == retail_sales.product_code/barcode
    (MAX deprecated-marker convention — the old code with an "x" suffix
    sometimes survives in the live retail export after MAX renumbers.)
-4. user-vetted alias from product_aliases.json
+4. unique normalized product_name match where retail.category is in the
+   PROTECTED set (cigarettes, alcohol). Names in protected categories
+   are highly specific (brand + variant + size all encoded), and the
+   Borjomi-glass-vs-plastic naming-collision risk does not apply because
+   beverages are not in the protected set. Without this step, suppliers
+   that ship under MAX's legacy 4-digit codes (since renumbered) like
+   ELIZI's full cigarette catalog stay 0% verified despite each SKU
+   having a clean unique-name match in retail.
+5. user-vetted alias from product_aliases.json
 
 The output object lives at ``data["imported_products"]["suppliers"][i]
 ["profitability"]`` so SupplierModal can read it without an extra fetch.
@@ -222,8 +230,10 @@ def _build_retail_name_index(
 
 def _match_product(
     imported_code: str,
+    imported_name: str,
     by_barcode: Dict[str, List[Dict[str, Any]]],
     by_product_code: Dict[str, List[Dict[str, Any]]],
+    name_index: Dict[str, List[Dict[str, Any]]],
     alias_lookup: Dict[str, str],
 ) -> Tuple[Optional[Dict[str, Any]], str]:
     """Return ``(retail_row, match_kind)``.
@@ -237,6 +247,14 @@ def _match_product(
       internal "deprecated marker" convention where the live retail
       export still carries the old code with a trailing "x" after a
       partial renumber. Treated as a full match in totals.
+    * ``"name_in_protected_category"`` — exactly 1 retail row has the
+      same normalized name AND that retail row's category is in the
+      PROTECTED set (cigarettes / alcohol). Triggers only when every
+      code-based path failed. Names in protected categories carry the
+      brand + variant + size as a single string ("ქემელი 1913 ორიგინალ
+      ბლუ"), and beverages susceptible to the glass-vs-plastic naming
+      collision are not protected, so the Borjomi rule from
+      project_product_match_barcode_only.md is not violated.
     * ``"alias"`` — user-vetted alias hit (alias points at a single
       retail key, so by definition unambiguous)
     * ``"ambiguous"`` — code hits 2+ retail rows; without a user alias to
@@ -273,7 +291,7 @@ def _match_product(
             return rows[0], "product_code"
         return None, "ambiguous"
 
-    # Last deterministic shot — MAX "x" suffix convention.
+    # Last deterministic code-based shot — MAX "x" suffix convention.
     # Only triggers when neither barcode nor product_code has any hit
     # at all (so there is no ambiguity with a "current" code).
     code_x = imported_code + "x"
@@ -285,6 +303,17 @@ def _match_product(
         rows = by_barcode[code_x]
         if len(rows) == 1:
             return rows[0], "barcode_x_suffix"
+
+    # Final deterministic shot — unique name in a PROTECTED category.
+    # Cigarette / alcohol SKUs encode brand + variant + size in the name,
+    # so a single retail row sharing the normalized name is reliable.
+    # Only protected categories qualify so beverages (where Borjomi-glass
+    # vs Borjomi-plastic share names) cannot trigger this path.
+    nm = _normalize_name(imported_name)
+    if nm and nm in name_index:
+        rows = name_index[nm]
+        if len(rows) == 1 and _is_protected_category(rows[0].get("category", "")):
+            return rows[0], "name_in_protected_category"
 
     return None, "none"
 
@@ -358,7 +387,12 @@ def _aggregate_supplier(
         cost_imported_total_ge += cost_paid
 
         retail_row, kind = _match_product(
-            imp_code, by_barcode, by_product_code, alias_lookup
+            imp_code,
+            prod.get("product_name", ""),
+            by_barcode,
+            by_product_code,
+            name_index,
+            alias_lookup,
         )
 
         if retail_row is None:

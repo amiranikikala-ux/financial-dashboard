@@ -667,11 +667,13 @@ def test_x_suffix_skipped_when_ambiguous():
 # name_candidate hint (alias workflow surface)
 # ---------------------------------------------------------------------------
 
-def test_name_candidate_attached_when_unique_name_match():
-    """Unmatched code → if name uniquely matches a retail row, surface as
-    candidate so UI can show "alias confirm?" workflow."""
-    sup = _supplier("100", "Ц", [_imp_product("9999", "ქემელი 1913 ორიგინალ ბლუ (PP)*", 10, 60.0)])
-    retail = [_retail_product("777", "barcA", "ქემელი 1913 ორიგინალ ბლუ (PP)*", "სიგარეტი", 70.0, 60.0)]
+def test_name_candidate_attached_when_unique_name_match_non_protected():
+    """Unmatched code → if name uniquely matches a retail row in a
+    NON-PROTECTED category, surface as candidate (alias workflow). For
+    protected categories the auto-match rule kicks in instead and is
+    covered by `test_name_in_protected_category_auto_matches`."""
+    sup = _supplier("100", "Ц", [_imp_product("9999", "ჩერო მულტიხილი 1ლ", 10, 60.0)])
+    retail = [_retail_product("777", "barcA", "ჩერო მულტიხილი 1ლ", "წვენი პეტი", 70.0, 60.0)]
     out = build_supplier_profitability(_data([sup], retail), today=TODAY)
     p = out["per_supplier"][0]["profitability"]
 
@@ -682,7 +684,7 @@ def test_name_candidate_attached_when_unique_name_match():
     assert cand is not None
     assert cand["retail_product_code"] == "777"
     assert cand["retail_barcode"] == "barcA"
-    assert cand["retail_category"] == "სიგარეტი"
+    assert cand["retail_category"] == "წვენი პეტი"
 
     # coverage stats expose the actionable opportunity
     assert p["coverage"]["unmatched_with_candidate_count"] == 1
@@ -705,9 +707,11 @@ def test_name_candidate_none_when_multiple_retail_rows_share_name():
 
 
 def test_name_candidate_normalizes_whitespace_and_punctuation():
-    """„ქემელი (PP)*" should match „ქემელი (PP) *" (different whitespace/punct)."""
-    sup = _supplier("100", "Ц", [_imp_product("9999", "ქემელი 1913 ორიგინალ ბლუ  (PP)*", 10, 60.0)])
-    retail = [_retail_product("777", "barcA", "ქემელი 1913 ორიგინალ ბლუ (PP) *", "სიგარეტი", 70.0, 60.0)]
+    """„X (Y)*" should match „X (Y) *" (different whitespace/punct).
+    Use a non-protected category so the auto-merge rule doesn't fire and
+    the candidate hint stays in unmatched_preview."""
+    sup = _supplier("100", "Ц", [_imp_product("9999", "ფანტა მსხალი  0.5ლ*", 10, 60.0)])
+    retail = [_retail_product("777", "barcA", "ფანტა მსხალი 0.5ლ *", "გაზ.სასმელი", 70.0, 60.0)]
     out = build_supplier_profitability(_data([sup], retail), today=TODAY)
     p = out["per_supplier"][0]["profitability"]
 
@@ -734,6 +738,70 @@ def test_name_candidate_attached_to_ambiguous_rows_too():
     assert cand is not None
     assert cand["retail_barcode"] == "BC2"  # name "Borjomi 1L Plastic" → uniquely BC2
     assert p["coverage"]["ambiguous_with_candidate_count"] == 1
+
+
+def test_name_in_protected_category_auto_matches_cigarette():
+    """Cigarette names encode brand+variant+size — unique name in a
+    PROTECTED retail category auto-merges (covers ELIZI-style suppliers
+    that ship under MAX's legacy 4-digit codes)."""
+    sup = _supplier("100", "Elizi", [_imp_product("2158", "ქემელი 1913 ორიგინალ ბლუ  (PP)*", 100, 5800.0)])
+    retail = [_retail_product("2267277", "4860126910180", "ქემელი 1913 ორიგინალ ბლუ (PP)", "სიგარეტი", 7000.0, 5800.0)]
+    out = build_supplier_profitability(_data([sup], retail), today=TODAY)
+    p = out["per_supplier"][0]["profitability"]
+
+    assert p["totals"]["products_matched"] == 1
+    assert p["totals"]["products_unmatched"] == 0
+    matched = p["top_margin"][0]
+    assert matched["match_kind"] == "name_in_protected_category"
+    assert matched["retail_product_code"] == "2267277"
+
+
+def test_name_in_protected_category_does_not_fire_for_beverages():
+    """Borjomi rule — beverages are NOT protected; even if a unique
+    retail row has the same name, do NOT auto-merge (glass vs plastic
+    have same name but different SKUs)."""
+    sup = _supplier("100", "X", [_imp_product("9999", "ბორჯომი 1ლ", 10, 9.0)])
+    # category lacks any protected substring
+    retail = [_retail_product("AA", "11", "ბორჯომი 1ლ", "მინერალური წყალი", 12.0, 9.0)]
+    out = build_supplier_profitability(_data([sup], retail), today=TODAY)
+    p = out["per_supplier"][0]["profitability"]
+
+    # Should stay unmatched but carry candidate hint
+    assert p["totals"]["products_matched"] == 0
+    assert p["totals"]["products_unmatched"] == 1
+    cand = p["unmatched_preview"][0]["name_candidate"]
+    assert cand is not None  # hint surfaces, but auto-merge does not
+
+
+def test_name_in_protected_category_skipped_when_multiple_retail_rows():
+    """Even within a protected category, if 2+ retail rows share the
+    name, do NOT auto-merge (could be different SKUs with reused name)."""
+    sup = _supplier("100", "X", [_imp_product("9999", "ლუდი ბავარია", 100, 5000.0)])
+    retail = [
+        _retail_product("A", "11", "ლუდი ბავარია", "ლუდი ქართული ფეტი", 6000.0, 5000.0),
+        _retail_product("B", "22", "ლუდი ბავარია", "ლუდი იმპ. შუშა", 6500.0, 5500.0),
+    ]
+    out = build_supplier_profitability(_data([sup], retail), today=TODAY)
+    p = out["per_supplier"][0]["profitability"]
+
+    assert p["totals"]["products_matched"] == 0
+    assert p["totals"]["products_unmatched"] == 1
+
+
+def test_name_in_protected_category_does_not_override_code_match():
+    """If imported code already hits a retail row directly, do NOT search
+    by name. Code wins."""
+    sup = _supplier("100", "X", [_imp_product("12345", "ქემელი 1913 ორიგინალ ბლუ", 100, 5000.0)])
+    retail = [
+        _retail_product("12345", "AA", "ვინსტონი XS ბლუ", "სიგარეტი", 6000.0, 5000.0),
+        _retail_product("99", "BB", "ქემელი 1913 ორიგინალ ბლუ", "სიგარეტი", 7000.0, 5500.0),
+    ]
+    out = build_supplier_profitability(_data([sup], retail), today=TODAY)
+    p = out["per_supplier"][0]["profitability"]
+
+    matched = p["top_margin"][0]
+    assert matched["match_kind"] == "product_code"
+    assert matched["retail_product_code"] == "12345"
 
 
 def test_portfolio_summary_aggregates_candidate_counts():
