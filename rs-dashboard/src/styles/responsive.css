@@ -163,6 +163,15 @@
     grid-template-columns: 1fr;
   }
 
+  /* პროდუქციული მოგების KPI-ები — 4 ცელი ტელეფონზე ვიწრო, 2x2-ად */
+  .supplier-modal-profit-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* 3 ბაკეტი ტელეფონზე ერთ სვეტად — ვერტიკალური სკროლი მოსახერხებელია */
+  .supplier-modal-profit-bucket-grid {
+    grid-template-columns: 1fr;
+  }
+
   /* Valuation */
   .val-header-grid { grid-template-columns: 1fr; }
   .val-swot-grid { grid-template-columns: 1fr; }

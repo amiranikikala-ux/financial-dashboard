@@ -1,13 +1,39 @@
 import { useEffect, useMemo, useState } from 'react';
 
 const GEL = new Intl.NumberFormat('ka-GE', { style: 'currency', currency: 'GEL', maximumFractionDigits: 0 });
+const GEL_PRECISE = new Intl.NumberFormat('ka-GE', { style: 'currency', currency: 'GEL', maximumFractionDigits: 2 });
 const COUNT = new Intl.NumberFormat('ka-GE', { maximumFractionDigits: 0 });
 const QUANTITY = new Intl.NumberFormat('ka-GE', { maximumFractionDigits: 2 });
 const fmt = (v) => GEL.format(Number(v) || 0);
+const fmtPrecise = (v) => GEL_PRECISE.format(Number(v) || 0);
 const fmtCount = (v) => COUNT.format(Number(v) || 0);
 const fmtQuantity = (v) => QUANTITY.format(Number(v) || 0);
+const fmtPct = (v, decimals = 1) => {
+  const n = Number(v);
+  if (!isFinite(n)) return '—';
+  return `${n.toFixed(decimals)}%`;
+};
 
 const OBJECT_COLORS = { 'ოზურგეთი': '#4f8ef7', 'დვაბზუ': '#34c97e' };
+
+// მარჟის ფერი — მკვეთრად მაღალი მწვანე, საშუალო ცისფერი, დაბალი ყვითელი, უარყოფითი წითელი.
+// "Perfect or silent" — მცირე ცდომილების ფერი (≤2pp 0-დან) ნეიტრალურად.
+function marginColor(pct) {
+  const n = Number(pct);
+  if (!isFinite(n)) return 'var(--text-secondary)';
+  if (n >= 15) return '#86efac';
+  if (n >= 5) return '#bbf7d0';
+  if (n >= 0) return '#fde68a';
+  return '#fecaca';
+}
+
+const PROFITABILITY_STATUS_META = {
+  verified: { label: '✅ ანალიზი დადასტურებულია', tone: 'ok', hint: 'ბარკოდები ემთხვევა MAX-ის ბაზას — რიცხვები 100%-ით სანდოა.' },
+  partial: { label: '🟡 ანალიზი ნაწილობრივი', tone: 'mild', hint: 'ნაწილი პროდუქცია ჯერ ვერ დაუკავშირდა MAX-ის ბაზას — ქვემოთ ხედავ რა აკლია.' },
+  protected: { label: '🔒 დაცული კატეგორია', tone: 'medium', hint: 'სიგარეტი/ალკოჰოლი — მარჟის ოპტიმიზაციის რჩევები არ მოქმედებს.' },
+  unverified: { label: '📋 ჯერ ვერ ანალიზდება', tone: 'muted', hint: 'სუპლაიერი იყენებს შიდა SKU კოდს — საჭიროა ხელით ალიასი.' },
+  empty: { label: '— პროდუქცია არ არის შემოტანილი', tone: 'muted', hint: '' },
+};
 
 const PAYMENT_SCOPE_KA = {
   strict_bank_plus_manual: { label: 'ბანკი + ნაღდი', className: 'payment-scope-badge--split' },
@@ -101,6 +127,109 @@ function formatDateRange(range) {
   return min || max || '—';
 }
 
+// ერთი მატჩი (verified product) — top/bottom/dead სიებში გამოიყენება ერთნაირი ფორმით,
+// მხოლოდ accent ფერი იცვლება (top=green, bottom=red, dead=orange).
+function ProfitProductRow({ product, accent }) {
+  const margin = Number(product?.margin_pct);
+  const marginText = isFinite(margin) && (Number(product?.revenue_sold_ge) || 0) > 0 ? fmtPct(margin) : '—';
+  const isProtected = !!product?.is_protected;
+  const isDead = !!product?.is_dead_stock;
+  const profit = Number(product?.profit_ge) || 0;
+  return (
+    <div className={`supplier-modal-product supplier-modal-profit-product supplier-modal-profit-product--${accent}`}>
+      <div className="supplier-modal-product-top">
+        <span className="supplier-modal-product-name">
+          {product?.imported_name || product?.retail_name || product?.imported_code || 'უცნობი'}
+          {isProtected && <span className="supplier-modal-profit-protected-tag" title="დაცული კატეგორია">🔒</span>}
+        </span>
+        <span
+          className="supplier-modal-product-amount"
+          style={{ color: marginColor(margin), fontWeight: 700 }}
+        >
+          {marginText}
+        </span>
+      </div>
+      <div className="supplier-modal-product-meta">
+        <span>შემოვიდა {fmt(product?.cost_imported_ge)}</span>
+        <span>გაიყიდა {fmt(product?.revenue_sold_ge)}</span>
+        <span style={{ color: profit >= 0 ? '#bbf7d0' : '#fecaca', fontWeight: 600 }}>
+          მოგება {fmtPrecise(profit)}
+        </span>
+        {isDead && product?.last_sale_date && (
+          <span className="supplier-modal-profit-dead-tag">
+            ბოლო გაყიდვა: {product.last_sale_date}
+            {product?.days_since_last_sale != null ? ` (${product.days_since_last_sale} დღის წინ)` : ''}
+          </span>
+        )}
+        {isDead && !product?.last_sale_date && (
+          <span className="supplier-modal-profit-dead-tag">არცერთხელ არ გაიყიდა</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Unmatched/ambiguous პროდუქცია — ჯერ ვერ დაუკავშირდა MAX-ს, ალიასის კანდიდატია.
+// მარჟა/მოგება უცნობია — ვაჩვენებთ კოდს/ერთეულს/ხარჯს. თუ pipeline-მა იპოვა
+// ცოცხალი name-candidate (1 retail row ემთხვევა სახელით), ვაჩვენებთ inline-ად
+// რომ user-მა „დადასტურება" ხელით გააკეთოს Financial_Analysis/product_aliases.json-ში.
+function UnmatchedProductRow({ product, ambiguous = false }) {
+  const candidate = product?.name_candidate || null;
+  const variantCls = candidate
+    ? 'has-candidate'
+    : ambiguous
+    ? 'ambiguous'
+    : 'unmatched';
+  return (
+    <div
+      className={`supplier-modal-product supplier-modal-profit-product supplier-modal-profit-product--${variantCls}`}
+    >
+      <div className="supplier-modal-product-top">
+        <span className="supplier-modal-product-name">
+          {product?.imported_name || product?.imported_code || 'უცნობი'}
+          {ambiguous && (
+            <span className="supplier-modal-profit-ambiguous-tag" title="რამდენიმე შესაძლო დამთხვევა">⚖️</span>
+          )}
+          {candidate && (
+            <span className="supplier-modal-profit-candidate-tag" title="MAX-ში სახელით ემთხვევა — დადასტურება ერთი ნაბიჯია">💡</span>
+          )}
+        </span>
+        <span className="supplier-modal-product-amount amount-neutral">{fmt(product?.cost_imported_ge)}</span>
+      </div>
+      <div className="supplier-modal-product-meta">
+        {product?.imported_code && <span className="supplier-modal-product-code">კოდი: {product.imported_code}</span>}
+        {product?.imported_unit && <span>{product.imported_unit}</span>}
+        {product?.quantity_imported != null && (
+          <span>
+            {fmtQuantity(product.quantity_imported)}
+            {product?.imported_unit ? ` ${product.imported_unit}` : ''}
+          </span>
+        )}
+      </div>
+      {candidate && (
+        <div className="supplier-modal-profit-candidate">
+          <div className="supplier-modal-profit-candidate-arrow">→</div>
+          <div className="supplier-modal-profit-candidate-body">
+            <div className="supplier-modal-profit-candidate-title">MAX-ის შესაძლო შესაბამისობა</div>
+            <div className="supplier-modal-profit-candidate-name">
+              {candidate.retail_name || '—'}
+            </div>
+            <div className="supplier-modal-profit-candidate-meta">
+              {candidate.retail_product_code && (
+                <span className="supplier-modal-product-code">კოდი: {candidate.retail_product_code}</span>
+              )}
+              {candidate.retail_barcode && (
+                <span className="supplier-modal-product-code">ბარკოდი: {candidate.retail_barcode}</span>
+              )}
+              {candidate.retail_category && <span>{candidate.retail_category}</span>}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SupplierModal({
   supplier,
   agingData: initialAgingData,
@@ -114,6 +243,8 @@ export default function SupplierModal({
   const [importedResult, setImportedResult] = useState({ key: '', detail: null, error: '' });
   const [payAmount, setPayAmount] = useState('');
   const [recordedFlash, setRecordedFlash] = useState(false);
+  // per-store toggle: 'total' = ყველა მაღაზია; სხვა მნიშვნელობა = კონკრეტული object (ოზურგეთი / დვაბზუ / ...)
+  const [profitStoreFilter, setProfitStoreFilter] = useState('total');
 
   useEffect(() => {
     if (initialAgingData && initialAgingData.length > 0) {
@@ -182,6 +313,63 @@ export default function SupplierModal({
   // და ფიქსირებულ ქართულ სათაურს ვაჩვენებთ.
   const importedSectionTitle = 'შემოტანილი პროდუქცია — შესამოწმებლად';
 
+  // === Profitability — Sprint A მონაცემი ===
+  // pipeline-ი წერს `profitability` ველს თითოეულ supplier-ზე;
+  // თუ pipeline ძველია (pre Sprint A), ვერ ვიპოვნით — section ჩუმად დაიმალება.
+  const profitability = importedEntry?.profitability || null;
+
+  // useMemo-ით ვასტაბილურებთ მითითებას — ცარიელი მასივი ყოველ render-ზე ახალი იქნებოდა და
+  // downstream useMemo-ები უსარგებლოდ გადააიგებდნენ.
+  const perStoreBreakdown = useMemo(
+    () => (Array.isArray(profitability?.per_store_breakdown) ? profitability.per_store_breakdown : []),
+    [profitability],
+  );
+
+  // toggle-ის options — ჯამი + ყოველი მაღაზია, რომელსაც აქვს რაიმე მასა (cost ან revenue ≠ 0).
+  const profitStoreOptions = useMemo(() => {
+    const opts = [{ key: 'total', label: 'ჯამი' }];
+    for (const entry of perStoreBreakdown) {
+      const name = entry?.object || '';
+      if (!name) continue;
+      const hasMass =
+        Math.abs(Number(entry.cost_imported_ge) || 0) +
+          Math.abs(Number(entry.revenue_sold_ge) || 0) >
+        0;
+      if (hasMass) opts.push({ key: name, label: name });
+    }
+    return opts;
+  }, [perStoreBreakdown]);
+
+  // Effective filter — თუ user-ის არჩევანი აღარ არის options-ში (სხვა supplier-ზე გადასვლა),
+  // ვუბრუნდებით 'total'-ს render-ის დროს. setState useEffect-ში არ გვჭირდება.
+  const effectiveProfitFilter = profitStoreOptions.some((o) => o.key === profitStoreFilter)
+    ? profitStoreFilter
+    : 'total';
+
+  // KPI ცხრილში ნაჩვენები ციფრები — ჯამური „totals" ან კონკრეტული მაღაზიის row.
+  const profitView = useMemo(() => {
+    if (!profitability) return null;
+    if (effectiveProfitFilter === 'total') {
+      const t = profitability.totals || {};
+      return {
+        cost_imported_ge: Number(t.cost_imported_ge) || 0,
+        revenue_sold_ge: Number(t.revenue_sold_ge) || 0,
+        profit_ge: Number(t.profit_ge) || 0,
+        margin_pct: Number(t.margin_pct) || 0,
+        scope_label: 'ყველა მაღაზია',
+      };
+    }
+    const row = perStoreBreakdown.find((e) => e?.object === effectiveProfitFilter);
+    if (!row) return null;
+    return {
+      cost_imported_ge: Number(row.cost_imported_ge) || 0,
+      revenue_sold_ge: Number(row.revenue_sold_ge) || 0,
+      profit_ge: Number(row.profit_ge) || 0,
+      margin_pct: Number(row.margin_pct) || 0,
+      scope_label: row.object,
+    };
+  }, [profitability, effectiveProfitFilter, perStoreBreakdown]);
+
   const aging = agingData?.find((r) => {
     if (taxId && r.tax_id && String(r.tax_id) === String(taxId)) return true;
     const rOrg = String(r.org || '').trim();
@@ -195,6 +383,14 @@ export default function SupplierModal({
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
+
+  // პორტფელის ჯამი — ამ მომწოდებლის წილისთვის. useMemo უნდა დარჩეს early-return-ის
+  // წინ, რომ React Hook Rules-ის წესი არ დაირღვეს (ყოველ render-ზე იმავე რიგში
+  // იწვევოდეს, supplier=null შემთხვევაშიც).
+  const portfolioTotal = useMemo(() => {
+    if (!Array.isArray(allSuppliers)) return 0;
+    return allSuppliers.reduce((sum, s) => sum + (Number(s.total_effective) || 0), 0);
+  }, [allSuppliers]);
 
   if (!supplier) return null;
 
@@ -223,11 +419,8 @@ export default function SupplierModal({
   const waybillCount = Number(aging?.waybill_count ?? supplier.waybills_count ?? supplier.waybill_count) || 0;
   const avgWaybillAmount = waybillCount > 0 ? effective / waybillCount : 0;
 
-  // პორტფელის წილი — ამ მომწოდებლის ბრუნვა / სულ ყველა მომწოდებლის ბრუნვა
-  const portfolioTotal = useMemo(() => {
-    if (!Array.isArray(allSuppliers)) return 0;
-    return allSuppliers.reduce((sum, s) => sum + (Number(s.total_effective) || 0), 0);
-  }, [allSuppliers]);
+  // პორტფელის წილი — ამ მომწოდებლის ბრუნვა / სულ ყველა მომწოდებლის ბრუნვა.
+  // portfolioTotal უკვე გამოანგარიშებულია early-return-ის წინ (Hook Rules).
   const portfolioSharePct = portfolioTotal > 0 ? (effective / portfolioTotal) * 100 : 0;
 
   const urgency = URGENCY_BY_BUCKET[String(agingBucket)] || null;
@@ -372,6 +565,238 @@ export default function SupplierModal({
             </div>
           )}
         </div>
+
+        {/* 📊 პროდუქციული მოგება — Sprint A: cost vs revenue per matched product, per store, top/bottom/dead-stock */}
+        {profitability && profitability.status !== 'empty' && (
+          <div className="supplier-modal-section supplier-modal-profit">
+            <div className="supplier-modal-section-title">
+              📊 პროდუქციული მოგება
+              {importedLoading && <span className="supplier-modal-section-hint"> (იტვირთება...)</span>}
+            </div>
+
+            {/* Status badge */}
+            <div
+              className={`supplier-modal-profit-status supplier-modal-profit-status--${
+                PROFITABILITY_STATUS_META[profitability.status]?.tone || 'muted'
+              }`}
+            >
+              <strong>
+                {PROFITABILITY_STATUS_META[profitability.status]?.label || profitability.status}
+              </strong>
+              {profitability.coverage?.cost_pct != null &&
+                profitability.status !== 'unverified' &&
+                profitability.status !== 'protected' && (
+                  <span className="supplier-modal-profit-coverage">
+                    {' '}— შემოტანილი ღირებულების {fmtPct(profitability.coverage.cost_pct)} დაუკავშირდა MAX-ს
+                  </span>
+                )}
+            </div>
+            {PROFITABILITY_STATUS_META[profitability.status]?.hint && (
+              <div className="supplier-modal-profit-hint">
+                {PROFITABILITY_STATUS_META[profitability.status].hint}
+              </div>
+            )}
+
+            {/* unverified — ცარიელი KPI ვერ ვაჩვენებ (memory: maximize, never silent gap),
+                მაგრამ ვაჩვენებ 3 ბაკეტს: დაკავშირებული / ალიასით გადარჩება / source აკლია.
+                + ცოცხალი 10 candidate ხელით დასადასტურებლად. */}
+            {profitability.status === 'unverified' && (
+              <>
+                {(() => {
+                  const totals = profitability.totals || {};
+                  const cov = profitability.coverage || {};
+                  const totalCost = Number(totals.cost_imported_ge) || 0;
+                  const matchedCost = Number(totals.cost_matched_ge) || 0;
+                  const candidateCost = Number(cov.unmatched_with_candidate_cost_ge) || 0;
+                  const candidateCount = Number(cov.unmatched_with_candidate_count) || 0;
+                  const noSourceCost = Math.max(0, totalCost - matchedCost - candidateCost);
+                  const noSourceCount = Math.max(
+                    0,
+                    Number(totals.products_unmatched) - candidateCount,
+                  );
+                  return (
+                    <div className="supplier-modal-profit-bucket-grid">
+                      <div className="supplier-modal-profit-bucket supplier-modal-profit-bucket--available">
+                        <div className="supplier-modal-profit-bucket-icon">💡</div>
+                        <div className="supplier-modal-profit-bucket-body">
+                          <div className="supplier-modal-profit-bucket-label">ალიასით გადარჩება</div>
+                          <div className="supplier-modal-profit-bucket-value">{fmt(candidateCost)}</div>
+                          <div className="supplier-modal-profit-bucket-hint">
+                            {fmtCount(candidateCount)} პროდუქცია · ხელით დადასტურებას სჭირდება
+                          </div>
+                        </div>
+                      </div>
+                      <div className="supplier-modal-profit-bucket supplier-modal-profit-bucket--missing">
+                        <div className="supplier-modal-profit-bucket-icon">❓</div>
+                        <div className="supplier-modal-profit-bucket-body">
+                          <div className="supplier-modal-profit-bucket-label">MAX-ში არ არის</div>
+                          <div className="supplier-modal-profit-bucket-value">{fmt(noSourceCost)}</div>
+                          <div className="supplier-modal-profit-bucket-hint">
+                            {fmtCount(noSourceCount)} პროდუქცია · ცალკე source სჭირდება
+                          </div>
+                        </div>
+                      </div>
+                      <div className="supplier-modal-profit-bucket supplier-modal-profit-bucket--total">
+                        <div className="supplier-modal-profit-bucket-icon">📦</div>
+                        <div className="supplier-modal-profit-bucket-body">
+                          <div className="supplier-modal-profit-bucket-label">სულ შემოვიდა</div>
+                          <div className="supplier-modal-profit-bucket-value">{fmt(totalCost)}</div>
+                          <div className="supplier-modal-profit-bucket-hint">
+                            {fmtCount(totals.products_imported)} პროდუქცია
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+                {(profitability.unmatched_preview || []).length > 0 && (
+                  <>
+                    <div className="supplier-modal-section-title" style={{ marginTop: 8 }}>
+                      ალიასის კანდიდატები
+                      <span className="supplier-modal-section-hint">
+                        {' '}· ყველაზე ფასიანი {profitability.unmatched_preview.length} პროდუქცია · 💡 = MAX-ში სახელით ემთხვევა
+                      </span>
+                    </div>
+                    <div className="supplier-modal-products">
+                      {profitability.unmatched_preview.map((p, idx) => (
+                        <UnmatchedProductRow key={`u-${idx}`} product={p} />
+                      ))}
+                    </div>
+                    <div className="supplier-modal-note">
+                      ალიასების დადასტურება — დაამატე ხელით <code>Financial_Analysis/product_aliases.json</code>-ში
+                      და გაუშვი pipeline-ი ხელახლა (ბრაუზერის ალიასის ფლოუ მომდევნო ეტაპზე ჩაშენდება).
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+
+            {/* verified / partial / protected — full KPI + per-store + სიები */}
+            {(profitability.status === 'verified' ||
+              profitability.status === 'partial' ||
+              profitability.status === 'protected') && (
+              <>
+                {profitStoreOptions.length > 1 && (
+                  <div className="supplier-modal-profit-toggle" role="tablist">
+                    {profitStoreOptions.map((opt) => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        role="tab"
+                        aria-selected={effectiveProfitFilter === opt.key}
+                        className={`supplier-modal-profit-toggle-btn ${
+                          effectiveProfitFilter === opt.key ? 'is-active' : ''
+                        }`}
+                        onClick={() => setProfitStoreFilter(opt.key)}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {profitView && (
+                  <div className="supplier-modal-profit-grid">
+                    <div className="supplier-modal-profit-cell">
+                      <div className="supplier-modal-profit-label">შემოვიდა</div>
+                      <div className="supplier-modal-profit-value">{fmt(profitView.cost_imported_ge)}</div>
+                    </div>
+                    <div className="supplier-modal-profit-cell">
+                      <div className="supplier-modal-profit-label">გავიდა</div>
+                      <div className="supplier-modal-profit-value">{fmt(profitView.revenue_sold_ge)}</div>
+                    </div>
+                    <div className="supplier-modal-profit-cell">
+                      <div className="supplier-modal-profit-label">მოგება</div>
+                      <div
+                        className="supplier-modal-profit-value"
+                        style={{ color: marginColor(profitView.margin_pct) }}
+                      >
+                        {fmt(profitView.profit_ge)}
+                      </div>
+                    </div>
+                    <div className="supplier-modal-profit-cell">
+                      <div className="supplier-modal-profit-label">მარჟა</div>
+                      <div
+                        className="supplier-modal-profit-value"
+                        style={{ color: marginColor(profitView.margin_pct) }}
+                      >
+                        {profitView.revenue_sold_ge > 0 ? fmtPct(profitView.margin_pct) : '—'}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {(profitability.top_margin || []).length > 0 && (
+                  <>
+                    <div className="supplier-modal-section-title" style={{ marginTop: 8 }}>
+                      ⭐ ყველაზე მომგებიანი (top {profitability.top_margin.length})
+                      <span className="supplier-modal-section-hint">
+                        {' '}· სუპლაიერის ჯამი ყველა მაღაზიაზე
+                      </span>
+                    </div>
+                    <div className="supplier-modal-products">
+                      {profitability.top_margin.map((p, idx) => (
+                        <ProfitProductRow key={`top-${idx}`} product={p} accent="top" />
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {profitability.status !== 'protected' &&
+                  (profitability.bottom_margin || []).length > 0 && (
+                    <>
+                      <div className="supplier-modal-section-title" style={{ marginTop: 8 }}>
+                        ⚠️ დაბალი მარჟით ({profitability.bottom_margin.length})
+                        <span className="supplier-modal-section-hint">
+                          {' '}· ფასის ან ფასდაკლების გადახედვის კანდიდატი
+                        </span>
+                      </div>
+                      <div className="supplier-modal-products">
+                        {profitability.bottom_margin.map((p, idx) => (
+                          <ProfitProductRow key={`bot-${idx}`} product={p} accent="bottom" />
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                {(profitability.dead_stock || []).length > 0 && (
+                  <>
+                    <div className="supplier-modal-section-title" style={{ marginTop: 8 }}>
+                      🐌 დიდი ხანია არ იყიდება ({profitability.dead_stock.length})
+                      <span className="supplier-modal-section-hint">
+                        {' '}· 120+ დღე გაუყიდავი ან 0 გაყიდვა
+                      </span>
+                    </div>
+                    <div className="supplier-modal-products">
+                      {profitability.dead_stock.map((p, idx) => (
+                        <ProfitProductRow key={`dead-${idx}`} product={p} accent="dead" />
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {profitability.status === 'partial' &&
+                  Number(profitability.totals?.products_unmatched) > 0 && (
+                    <div className="supplier-modal-note">
+                      📋 <strong>{fmtCount(profitability.totals.products_unmatched)}</strong>{' '}
+                      პროდუქცია ({fmt(
+                        (Number(profitability.totals.cost_imported_ge) || 0) -
+                          (Number(profitability.totals.cost_matched_ge) || 0)
+                      )}) ჯერ ვერ დაუკავშირდა — ანალიზში არ შედის.
+                    </div>
+                  )}
+
+                {Number(profitability.coverage?.ambiguous_cost_pct) > 0 && (
+                  <div className="supplier-modal-note supplier-modal-note--warn">
+                    ⚖️ <strong>{fmtPct(profitability.coverage.ambiguous_cost_pct)}</strong>{' '}
+                    ({fmt(profitability.totals?.cost_ambiguous_ge)}) — კოდი ჰქონდათ MAX-ში
+                    რამდენიმე პროდუქტთან საერთო, ანალიზში არ ჩავთვალე ხელით ალიასამდე.
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
         {/* ხელით გადახდის ჩაწერა — მოდალში ჩასმული */}
         {taxId && persistLocalPayments && (
