@@ -9,6 +9,11 @@ from collections import Counter, defaultdict
 
 import pandas as pd
 
+#: RS waybill status string for cancelled-but-still-in-export rows.
+#: Kept module-level so tests can override or assert against the same
+#: literal the row loop filters on.
+CANCELLED_STATUS_KA = "გაუქმებული"
+
 from dashboard_pipeline.constants import (
     IMPORTED_PRODUCTS_PRODUCTS_LIMIT,
     IMPORTED_PRODUCTS_PRODUCT_TOP_SUPPLIERS_LIMIT,
@@ -335,6 +340,19 @@ def collect_imported_products_bundle(
     duplicate_rows_dropped = 0
     duplicate_amount_dropped = 0.0
 
+    # ------- გაუქმებული-სტატუსის ფილტრი --------
+    # RS-ში "გაუქმებული" სტატუსის ზედნადები — ეს არის ოპერაცია, რომელიც
+    # შეიქმნა RS.ge-ში, მაგრამ მისი დასრულება გაუქმდა; საქონელი ფაქტობრივად
+    # არ მოვიდა, ფული არ გადაგვირიცხავს. თუ pipeline-ი ამას არ აშორებს,
+    # cost_imported, supplier total_amount_ge და supplier_profitability
+    # ცრუ-ად გაიზრდება გაუქმებული თანხით (ცოცხლად portfolio-ზე ≈110K ₾).
+    # გაფილტრვა dedup-ის წინაა — ცარიელი status-ების composite key-ები
+    # არ უნდა მოწამლონ seen-set რომ შემდგომი ლეგიტიმური row-ი არ
+    # ჩამოვდრიფტოს „დუბლიკატის" სახელით. tally bundle.overall-ში
+    # უძღვება duplicate_rows_dropped-ის სიმეტრიულად.
+    cancelled_rows_dropped = 0
+    cancelled_amount_dropped = 0.0
+
     for f in files:
         file_name = os.path.basename(f)
         file_ext = os.path.splitext(file_name)[1].lower()
@@ -371,6 +389,10 @@ def collect_imported_products_bundle(
             amount_ge = _coerce_float(row.get("საქონლის ფასი"))
             quantity = _coerce_float(row.get("რაოდ."))
             status = _clean_text(row.get("სტატუსი"), "უცნობი სტატუსი")
+            if status == CANCELLED_STATUS_KA:
+                cancelled_rows_dropped += 1
+                cancelled_amount_dropped += amount_ge
+                continue
             supplier_name = _clean_text(row.get("გამყიდველი"), "უცნობი მომწოდებელი")
             supplier_display = _clean_supplier_display(supplier_name) or supplier_name
             supplier_tax_ids = _extract_tax_ids_from_text(supplier_name)
@@ -631,6 +653,8 @@ def collect_imported_products_bundle(
         },
         "duplicate_rows_dropped": int(duplicate_rows_dropped),
         "duplicate_amount_dropped_ge": round(float(duplicate_amount_dropped), 2),
+        "cancelled_rows_dropped": int(cancelled_rows_dropped),
+        "cancelled_amount_dropped_ge": round(float(cancelled_amount_dropped), 2),
     }
 
     bundle["by_status"] = [
