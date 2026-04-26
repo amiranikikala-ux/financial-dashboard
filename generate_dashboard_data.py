@@ -11,6 +11,7 @@
 import json
 import os
 import re
+from pathlib import Path
 
 import pandas as pd
 
@@ -251,6 +252,10 @@ from dashboard_pipeline.retail_sales import (
     collect_retail_sales_bundle,
     empty_retail_sales_bundle,
 )
+from dashboard_pipeline.supplier_profitability import (
+    build_supplier_profitability,
+)
+from dashboard_pipeline._validate_aliases import load_and_validate as _load_aliases
 
 # ---------------------------------------------------------------------------
 # Module imports — API contracts, config validation, export, sources, truth
@@ -1638,6 +1643,54 @@ def run():
             )
     except Exception as exc:
         logger.warning("მომწოდებლების კონცენტრაცია — ვერ აშენდა: %s", exc)
+
+    # ----- per-supplier პროდუქციული მოგება (strict barcode JOIN) -----
+    # imported_products (ვინ-რა-მომიტანა) ↔ retail_sales.by_product
+    # (რა-რა-ფასად-გავყიდე) — barcode/code-ით 1:1, name-fuzzy-ი
+    # აკრძალულია (memory: project_product_match_barcode_only).
+    # შედეგი წერს per-supplier "profitability" ობიექტს მათ entry-ში
+    # data["imported_products"]["suppliers"][i]-ზე, რომ SupplierModal-მ
+    # extra fetch-ის გარეშე წაიკითხოს.
+    try:
+        retail_by_product = ((data.get("retail_sales") or {}).get("by_product") or [])
+        retail_known_keys = set()
+        for row in retail_by_product:
+            bc = (row.get("barcode") or "").strip()
+            pc = (row.get("product_code") or "").strip()
+            if bc:
+                retail_known_keys.add(bc)
+            if pc:
+                retail_known_keys.add(pc)
+        aliases_path = Path(script_dir) / "Financial_Analysis" / "product_aliases.json"
+        safe_aliases, alias_errors = _load_aliases(aliases_path, retail_known_keys)
+        for err in alias_errors:
+            logger.warning("product_aliases.json: %s", err)
+
+        prof = build_supplier_profitability(data, aliases=safe_aliases)
+        # ჩაწერე profitability უკან თითოეულ supplier-ზე (tax_id-ით lookup)
+        per_sup_by_taxid = {row["tax_id"]: row["profitability"] for row in prof["per_supplier"]}
+        for sup_entry in (data.get("imported_products") or {}).get("suppliers") or []:
+            tx = sup_entry.get("tax_id") or ""
+            if tx in per_sup_by_taxid:
+                sup_entry["profitability"] = per_sup_by_taxid[tx]
+        # summary ცალკე გასცეს — DataQualityPage-ი წაიკითხავს
+        data.setdefault("imported_products", {})["profitability_summary"] = prof["summary"]
+
+        sc = prof["summary"]["supplier_counts"]
+        port = prof["summary"]["portfolio"]
+        logger.info(
+            "პროდუქციული მოგება: %d verified, %d partial, %d unverified, "
+            "%d protected, %d empty · ფინანსური დაფარვა %.1f%% (%.0f / %.0f ₾) · "
+            "მომგება %.1f%% (%.0f / %.0f ₾)",
+            sc.get("verified", 0), sc.get("partial", 0), sc.get("unverified", 0),
+            sc.get("protected", 0), sc.get("empty", 0),
+            port.get("coverage_cost_pct", 0),
+            port.get("cost_matched_ge", 0), port.get("cost_imported_ge", 0),
+            port.get("margin_pct", 0),
+            port.get("profit_ge", 0), port.get("revenue_sold_ge", 0),
+        )
+    except Exception as exc:
+        logger.warning("პროდუქციული მოგება — ვერ აშენდა: %s", exc)
 
     _write_outputs(data, script_dir, inc)
 
