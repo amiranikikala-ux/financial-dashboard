@@ -696,34 +696,57 @@ export default function SupplierModal({
                 )}
 
                 {profitView && (
-                  <div className="supplier-modal-profit-grid">
-                    <div className="supplier-modal-profit-cell">
-                      <div className="supplier-modal-profit-label">შემოვიდა</div>
-                      <div className="supplier-modal-profit-value">{fmt(profitView.cost_imported_ge)}</div>
-                    </div>
-                    <div className="supplier-modal-profit-cell">
-                      <div className="supplier-modal-profit-label">გავიდა</div>
-                      <div className="supplier-modal-profit-value">{fmt(profitView.revenue_sold_ge)}</div>
-                    </div>
-                    <div className="supplier-modal-profit-cell">
-                      <div className="supplier-modal-profit-label">მოგება</div>
-                      <div
-                        className="supplier-modal-profit-value"
-                        style={{ color: marginColor(profitView.margin_pct) }}
-                      >
-                        {fmt(profitView.profit_ge)}
+                  <>
+                    {/* Scope clarifier — KPI ცხრილში ერთად ფიგურირებენ ორი სცენაარი:
+                        „შემოვიდა" = სულ შემოდინება (matched + unmatched), მაგრამ
+                        „გავიდა / მოგება / მარჟა" = მხოლოდ matched პროდუქცია. ცალკე
+                        ცხრილების ცდის გარეშე ცარიელი ცდის ცადა აიწყობა — ცხადი
+                        scope-ბანერი აიძულებს მკითხველს გაიგოს რა ნაწილს ეხება ციფრი. */}
+                    {profitability.totals && profitability.totals.products_imported > 0 && (
+                      <div className="supplier-modal-profit-scope">
+                        <span className="supplier-modal-profit-scope-icon" aria-hidden="true">📐</span>
+                        <span>
+                          ანალიზი ეფუძნება <strong>{fmtCount(profitability.totals.products_matched)}</strong> პროდუქცია{' '}
+                          <strong>{fmtCount(profitability.totals.products_imported)}</strong>-დან
+                          {profitability.coverage?.cost_pct != null && (
+                            <>
+                              {' '}({fmtPct(profitability.coverage.cost_pct)} შემოდინების ღირებულებიდან).{' '}
+                            </>
+                          )}
+                          „შემოვიდა" = ყველა შემოდინება. „გავიდა / მოგება / მარჟა" =
+                          მხოლოდ ანალიზდილი ნაწილი.
+                        </span>
+                      </div>
+                    )}
+                    <div className="supplier-modal-profit-grid">
+                      <div className="supplier-modal-profit-cell">
+                        <div className="supplier-modal-profit-label">შემოვიდა (სულ)</div>
+                        <div className="supplier-modal-profit-value">{fmt(profitView.cost_imported_ge)}</div>
+                      </div>
+                      <div className="supplier-modal-profit-cell">
+                        <div className="supplier-modal-profit-label">გავიდა (ანალიზდა)</div>
+                        <div className="supplier-modal-profit-value">{fmt(profitView.revenue_sold_ge)}</div>
+                      </div>
+                      <div className="supplier-modal-profit-cell">
+                        <div className="supplier-modal-profit-label">მოგება (ანალიზდა)</div>
+                        <div
+                          className="supplier-modal-profit-value"
+                          style={{ color: marginColor(profitView.margin_pct) }}
+                        >
+                          {fmt(profitView.profit_ge)}
+                        </div>
+                      </div>
+                      <div className="supplier-modal-profit-cell">
+                        <div className="supplier-modal-profit-label">მარჟა (ანალიზდა)</div>
+                        <div
+                          className="supplier-modal-profit-value"
+                          style={{ color: marginColor(profitView.margin_pct) }}
+                        >
+                          {profitView.revenue_sold_ge > 0 ? fmtPct(profitView.margin_pct) : '—'}
+                        </div>
                       </div>
                     </div>
-                    <div className="supplier-modal-profit-cell">
-                      <div className="supplier-modal-profit-label">მარჟა</div>
-                      <div
-                        className="supplier-modal-profit-value"
-                        style={{ color: marginColor(profitView.margin_pct) }}
-                      >
-                        {profitView.revenue_sold_ge > 0 ? fmtPct(profitView.margin_pct) : '—'}
-                      </div>
-                    </div>
-                  </div>
+                  </>
                 )}
 
                 {(profitability.top_margin || []).length > 0 && (

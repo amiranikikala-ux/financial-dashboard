@@ -590,6 +590,34 @@
   padding: 0 0.2rem;
 }
 
+/* Scope-clarifier strip — KPI-ის წინ. ცხადად ვიჩვენებთ რას ეფუძნება ცხრილი
+   რომ ცდის ხელი არ აიწყოს მისგან რომ „შემოვიდა (სულ)" და „მოგება (ანალიზდა)"
+   ცარიელი ერთი მთლიანი ცხრილისაა. */
+.supplier-modal-profit-scope {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  padding: 0.55rem 0.7rem;
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.supplier-modal-profit-scope-icon {
+  font-size: 0.95rem;
+  line-height: 1;
+  margin-top: 2px;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+.supplier-modal-profit-scope strong {
+  color: var(--text-primary);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 .supplier-modal-profit-summary {
   display: flex;
   flex-direction: column;
