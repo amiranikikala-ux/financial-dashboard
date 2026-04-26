@@ -128,6 +128,23 @@ Trigger: state audit for შპს ჯეო ფუდთაიმი; bookkeepe
 | 5.11 | Unit-fix landed end-to-end (NET basis primary) | ✅ 🎬 | `bfeeee5` + `3d41819` — 1/1 PASS live |
 | 5.12 | TBC shortage 2023-08→2024-03 diagnosis (statement format change; no safe auto-fix) | ✅ | `684eab8` |
 
+### Supplier Profitability — strict barcode JOIN (2026-04-26)
+
+Trigger: user request — „რამდენ ლარის პროდუქცია გაყიდა, % მოგება, რომელი იყიდება დაბალი %-ით". Foundational rule (memory): JOIN by barcode/code only — never by name (Borjomi glass ≠ plastic). UI rule: 100% verified or explicit step-by-step path to fill the gap (no cul-de-sac status).
+
+| Sprint | Feature | Status | Commit |
+|---|---|---|---|
+| Sprint A | `supplier_profitability.py` module (~480 line) — strict barcode/code JOIN; PROTECTED detection (cigarettes + alcohol); top/bottom margin / dead-stock / ambiguous / unmatched; 5 status (verified/partial/unverified/protected/empty); per-supplier output payload | ✅ | `3a80cd1` |
+| Sprint A | Pipeline wiring in `generate_dashboard_data.run()`; companion `_validate_aliases.py`; empty `product_aliases.json` seed | ✅ | `8455486` + `97e7330` |
+| Sprint A | Per-store breakdown via destination tracking (longest-variant-wins resolver) — ოზურგეთი vs დვაბზუ vs გაუნაწილებელი | ✅ | `1018900` |
+| Sprint B | SupplierModal UI — status-aware section, KPI grid (2x2), per-store toggle, top-3 / bottom-3 / dead-stock product cards with margin colors, ambiguous note | ✅ | `_pending_` |
+| x-suffix rule | Pipeline `code + "x"` deterministic match (MAX deprecated marker convention) — +64K ₾ portfolio coverage (65.6% → 66.8%) | ✅ | `_pending_` |
+| Name candidate hints | Each unmatched/ambiguous row carries `name_candidate` payload for the alias-confirm workflow; portfolio-wide stats `unmatched_with_candidate_*` | ✅ | `_pending_` |
+| UNVERIFIED workflow UI | 3-bucket grid (ალიასით გადარჩება / MAX-ში არ არის / სულ შემოვიდა) + inline candidate hint per product card with arrow→retail mapping | ✅ | `_pending_` |
+| Hook Rules fix | `portfolioTotal` useMemo moved above early return (was pre-existing eslint error) | ✅ | `_pending_` |
+| Sprint C — alias UI mutation | Browser POST → write to `product_aliases.json` (currently user edits JSON manually + reruns pipeline) | 📋 PLANNED | next session |
+| AI tool wrapper | `analyze_supplier_profitability(tax_id)` Claude tool | 📋 PLANNED | follow-up |
+
 ### Tier 2 — Pipeline cache scalability
 
 | Phase | Feature | Status | Commit |
