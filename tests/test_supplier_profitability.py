@@ -67,6 +67,7 @@ def _retail_product(
     cost: float,
     qty: float = 1.0,
     last_sale: str = "2026-04-01",
+    object_breakdown=None,
 ):
     return {
         "product_code": pcode,
@@ -83,8 +84,17 @@ def _retail_product(
         "distinct_object_count": 1,
         "distinct_month_count": 1,
         "date_range": {"min": "2025-01-01", "max": last_sale},
-        "object_breakdown": [],
+        "object_breakdown": object_breakdown or [],
     }
+
+
+def _supplier_with_objects(tax_id, name, products, object_breakdown):
+    """Same as _supplier but stamps object_breakdown on the supplier
+    entry (mimicking the real imported_products output after the
+    destination-tracking change)."""
+    s = _supplier(tax_id, name, products)
+    s["object_breakdown"] = object_breakdown
+    return s
 
 
 def _data(suppliers, by_product):
@@ -464,6 +474,128 @@ def test_zero_revenue_does_not_divide():
     retail = [_retail_product("a", "11111111", "free", "სხვა", 0, 0)]
     out = build_supplier_profitability(_data([sup], retail), today=TODAY)
     assert out["per_supplier"][0]["profitability"]["totals"]["margin_pct"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Per-store breakdown
+# ---------------------------------------------------------------------------
+
+def test_per_store_breakdown_joins_imported_and_retail_by_object():
+    """Supplier ships to two stores; retail records sales at both. Output
+    must show per-store cost-imported, revenue, and margin matching
+    hand-computed numbers."""
+    sup = _supplier_with_objects(
+        "100",
+        "X",
+        [_imp_product("11111111", "X", 50, 500)],  # 500₾ imported total
+        object_breakdown=[
+            {"object": "ოზურგეთი", "row_count": 30, "total_amount_ge": 300, "total_quantity": 30},
+            {"object": "დვაბზუ", "row_count": 20, "total_amount_ge": 200, "total_quantity": 20},
+        ],
+    )
+    retail = [
+        _retail_product(
+            "9", "11111111", "X", "სხვა", 700, 500, qty=50,
+            object_breakdown=[
+                {"object": "ოზურგეთი", "row_count": 30, "total_quantity": 30,
+                 "revenue_ge": 420, "cost_ge": 300, "profit_ge": 120, "gross_margin_pct": 28.57},
+                {"object": "დვაბზუ", "row_count": 20, "total_quantity": 20,
+                 "revenue_ge": 280, "cost_ge": 200, "profit_ge": 80, "gross_margin_pct": 28.57},
+            ],
+        )
+    ]
+    out = build_supplier_profitability(_data([sup], retail), today=TODAY)
+    p = out["per_supplier"][0]["profitability"]
+    per_store = {s["object"]: s for s in p["per_store_breakdown"]}
+
+    assert "ოზურგეთი" in per_store
+    assert "დვაბზუ" in per_store
+    assert per_store["ოზურგეთი"]["cost_imported_ge"] == 300
+    assert per_store["ოზურგეთი"]["revenue_sold_ge"] == 420
+    assert per_store["ოზურგეთი"]["profit_ge"] == 120
+    assert per_store["ოზურგეთი"]["margin_pct"] == pytest.approx(28.57, abs=0.01)
+    assert per_store["დვაბზუ"]["cost_imported_ge"] == 200
+    assert per_store["დვაბზუ"]["revenue_sold_ge"] == 280
+
+
+def test_per_store_breakdown_handles_only_imported_no_retail():
+    """A supplier delivered to a store but the product never sold (or
+    barcode didn't match) → store appears with cost only, revenue 0."""
+    sup = _supplier_with_objects(
+        "100",
+        "X",
+        [_imp_product("11111111", "X", 10, 100)],
+        object_breakdown=[
+            {"object": "ოზურგეთი", "row_count": 10, "total_amount_ge": 100, "total_quantity": 10},
+        ],
+    )
+    out = build_supplier_profitability(_data([sup], []), today=TODAY)  # no retail
+    p = out["per_supplier"][0]["profitability"]
+    per_store = {s["object"]: s for s in p["per_store_breakdown"]}
+    assert per_store["ოზურგეთი"]["cost_imported_ge"] == 100
+    assert per_store["ოზურგეთი"]["revenue_sold_ge"] == 0
+    assert per_store["ოზურგეთი"]["margin_pct"] == 0
+
+
+def test_per_store_breakdown_sorted_by_imported_cost_desc():
+    sup = _supplier_with_objects(
+        "100",
+        "X",
+        [_imp_product("11111111", "X", 100, 1000)],
+        object_breakdown=[
+            {"object": "ოზურგეთი", "row_count": 50, "total_amount_ge": 200, "total_quantity": 20},
+            {"object": "დვაბზუ", "row_count": 50, "total_amount_ge": 800, "total_quantity": 80},
+        ],
+    )
+    out = build_supplier_profitability(_data([sup], []), today=TODAY)
+    p = out["per_supplier"][0]["profitability"]
+    objs = [s["object"] for s in p["per_store_breakdown"]]
+    assert objs == ["დვაბზუ", "ოზურგეთი"]  # bigger cost first
+
+
+def test_per_store_breakdown_empty_when_no_object_breakdown_anywhere():
+    """If imported has no object_breakdown and retail rows have empty
+    object_breakdown, per_store_breakdown is empty (not error)."""
+    sup = _supplier("100", "X", [_imp_product("11111111", "X", 10, 100)])
+    # supplier has NO object_breakdown field
+    retail = [_retail_product("9", "11111111", "X", "სხვა", 130, 100)]
+    out = build_supplier_profitability(_data([sup], retail), today=TODAY)
+    p = out["per_supplier"][0]["profitability"]
+    assert p["per_store_breakdown"] == []
+
+
+def test_destination_resolver_long_variant_wins():
+    """Critical bug-prevention test: 'ოზურგეთი სოფ. გაღმა დვაბზუ' contains
+    both 'ოზურგეთი' and 'გაღმა დვაბზუ' substrings — longer match (more
+    specific) must win, otherwise dvabzu shipments get assigned to
+    ozurgeti store."""
+    from dashboard_pipeline.imported_products import (
+        _build_destination_lookup,
+        _resolve_destination_object,
+    )
+    mapping = {
+        "rs_location_to_object": {
+            "ოზურგეთი": ["ოზურგეთი"],
+            "დვაბზუ": ["დვაბზუ", "გაღმა დვაბზუ", "სოფ.დვაბზუ", "სოფელი დვაბზუ"],
+        },
+        "default_object": "გაუნაწილებელი",
+    }
+    lookup = _build_destination_lookup(mapping)
+    assert _resolve_destination_object(
+        "ოზურგეთი სოფ. გაღმა დვაბზუ", lookup, "გაუნაწილებელი"
+    ) == "დვაბზუ"
+    assert _resolve_destination_object(
+        "ოზურგეთის რაიონი სოფელი დვაბზუ", lookup, "გაუნაწილებელი"
+    ) == "დვაბზუ"
+    assert _resolve_destination_object(
+        "ოზურგეთი სოფ. ოზურგეთი", lookup, "გაუნაწილებელი"
+    ) == "ოზურგეთი"
+    assert _resolve_destination_object(
+        "სხვა ქალაქი", lookup, "გაუნაწილებელი"
+    ) == "გაუნაწილებელი"
+    assert _resolve_destination_object(
+        "", lookup, "გაუნაწილებელი"
+    ) == "გაუნაწილებელი"
 
 
 def test_alias_with_non_user_confirmed_by_is_ignored_at_lookup():

@@ -246,6 +246,13 @@ def _aggregate_supplier(
     cost_ambiguous_ge = 0.0
     cost_protected_ge = 0.0
 
+    # per-store revenue/cost-sold accumulators built from each matched
+    # product's retail-side object_breakdown. Joined later with the
+    # supplier-level imported_object_breakdown (cost-paid per store) to
+    # produce the per_store_breakdown output.
+    revenue_by_object: Dict[str, float] = {}
+    cost_sold_by_object: Dict[str, float] = {}
+
     for prod in products:
         imp_code = _norm_code(prod.get("product_code"))
         cost_paid = float(prod.get("total_amount_ge") or 0)
@@ -288,6 +295,13 @@ def _aggregate_supplier(
             rev_ge <= 0
             or (days_since_sale is not None and days_since_sale > DEAD_STOCK_THRESHOLD_DAYS)
         )
+
+        # accumulate per-store revenue/cost from this matched product's
+        # retail object_breakdown (every retail row carries it)
+        for ob in retail_row.get("object_breakdown") or []:
+            obj_name = ob.get("object") or "უცნობი"
+            revenue_by_object[obj_name] = revenue_by_object.get(obj_name, 0.0) + float(ob.get("revenue_ge") or 0)
+            cost_sold_by_object[obj_name] = cost_sold_by_object.get(obj_name, 0.0) + float(ob.get("cost_ge") or 0)
 
         matched_rows.append(
             {
@@ -391,6 +405,41 @@ def _aggregate_supplier(
         ambiguous_rows, key=lambda r: r["cost_imported_ge"], reverse=True
     )[:5]
 
+    # ---- per-store breakdown ---------------------------------------------
+    # Cost-imported per store comes straight from the supplier-level
+    # imported `object_breakdown` (every shipment row carries its
+    # destination). Revenue/cost-sold per store comes from each matched
+    # retail row's `object_breakdown` (POS records track the till).
+    # We outer-join on the store name so a store can appear with cost
+    # only (we imported but POS never sold) or revenue only (POS sold
+    # something we never imported through this supplier).
+    imported_by_object: Dict[str, float] = {}
+    qty_imported_by_object: Dict[str, float] = {}
+    for ob in supplier_entry.get("object_breakdown") or []:
+        name = ob.get("object") or "უცნობი"
+        imported_by_object[name] = float(ob.get("total_amount_ge") or 0)
+        qty_imported_by_object[name] = float(ob.get("total_quantity") or 0)
+
+    all_objects = set(imported_by_object) | set(revenue_by_object) | set(cost_sold_by_object)
+    per_store: List[Dict[str, Any]] = []
+    for name in sorted(all_objects, key=lambda o: -imported_by_object.get(o, 0)):
+        cost_imp = imported_by_object.get(name, 0.0)
+        rev = revenue_by_object.get(name, 0.0)
+        cs = cost_sold_by_object.get(name, 0.0)
+        prof = rev - cs
+        margin = (prof / rev * 100.0) if rev > 0 else 0.0
+        per_store.append(
+            {
+                "object": name,
+                "cost_imported_ge": round(cost_imp, 2),
+                "quantity_imported": round(qty_imported_by_object.get(name, 0.0), 4),
+                "revenue_sold_ge": round(rev, 2),
+                "cost_sold_ge": round(cs, 2),
+                "profit_ge": round(prof, 2),
+                "margin_pct": round(margin, 2),
+            }
+        )
+
     return {
         "status": status,
         "minimal_display": minimal_display,
@@ -413,6 +462,7 @@ def _aggregate_supplier(
             "ambiguous_cost_pct": ambiguous_cost_pct,
             "protected_cost_share_pct": protected_cost_share_pct,
         },
+        "per_store_breakdown": per_store,
         "top_margin": top_margin,
         "bottom_margin": bottom_margin,
         "dead_stock": dead_stock,

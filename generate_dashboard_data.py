@@ -1388,7 +1388,9 @@ def run():
 
     logger.info("Reading RS files...")
     rs_files = list_rs_waybill_files()
-    imported_products_bundle = collect_imported_products_bundle(rs_files)
+    imported_products_bundle = collect_imported_products_bundle(
+        rs_files, object_mapping=object_mapping
+    )
     imported_overall = imported_products_bundle.get("overall") or {}
     logger.info(
         "შემოტანილი პროდუქცია (reference): %s ფაილი, %s ხაზი, %s ₾",

@@ -37,6 +37,49 @@ from dashboard_pipeline.supplier_matching import (
 
 
 # ---------------------------------------------------------------------------
+# Destination resolver — turns RS waybill "ტრანსპორტირების დასრულება" free
+# text into a canonical store object. Iterates variant strings by length
+# descending so the more-specific match wins (avoids false ოზურგეთი match
+# on "ოზურგეთი სოფ. გაღმა დვაბზუ" which contains both keywords).
+# ---------------------------------------------------------------------------
+
+def _build_destination_lookup(object_mapping):
+    """Return a list of (variant_text, target_object) sorted longest first.
+
+    ``object_mapping`` is the parsed `Financial_Analysis/object_mapping.json`
+    blob — uses the ``rs_location_to_object`` section. Variants are matched
+    case-sensitively against the destination text. The returned list is the
+    pre-sorted lookup table the row loop reuses for every imported row.
+    """
+    rs_map = (object_mapping or {}).get("rs_location_to_object") or {}
+    pairs = []
+    for obj, variants in rs_map.items():
+        if not obj:
+            continue
+        for variant in variants or []:
+            v = (variant or "").strip()
+            if v:
+                pairs.append((len(v), v, str(obj)))
+    pairs.sort(reverse=True)  # longest variant first → most-specific wins
+    return [(v, obj) for _, v, obj in pairs]
+
+
+def _resolve_destination_object(text, lookup_pairs, default_object):
+    """Return the canonical object name for an imported destination string.
+
+    Falls back to ``default_object`` when no variant matches. Empty / None
+    text also returns the default — keeps the caller arithmetic simple.
+    """
+    if not text:
+        return default_object
+    blob = str(text)
+    for variant, obj in lookup_pairs:
+        if variant in blob:
+            return obj
+    return default_object
+
+
+# ---------------------------------------------------------------------------
 # empty_imported_products_bundle
 # ---------------------------------------------------------------------------
 
@@ -114,13 +157,21 @@ def empty_imported_products_bundle(period_filter=None):
 # ---------------------------------------------------------------------------
 
 def collect_imported_products_bundle(
-    rs_files=None, period_filter=None, known_rs_refs=None
+    rs_files=None, period_filter=None, known_rs_refs=None,
+    object_mapping=None,
 ):
     files = list_imported_product_files()
     bundle = empty_imported_products_bundle(period_filter=period_filter)
     bundle["files_found_count"] = len(files)
     if not files:
         return bundle
+
+    # Pre-compute destination → object lookup once per run. None mapping
+    # gracefully degrades to "გაუნაწილებელი" for every row, so the
+    # downstream object_breakdown lists stay populated even if the caller
+    # forgot to pass mapping.
+    _dest_lookup = _build_destination_lookup(object_mapping)
+    _dest_default = (object_mapping or {}).get("default_object") or "გაუნაწილებელი"
     file_exts = {os.path.splitext(path)[1].lower() for path in files}
     if file_exts == {".csv"}:
         bundle["source_format"] = "csv"
@@ -200,6 +251,14 @@ def collect_imported_products_bundle(
         target["display_names"].update(source.get("display_names") or Counter())
         _update_entry_date_range(target, source.get("min_date"))
         _update_entry_date_range(target, source.get("max_date"))
+        # merge per-destination buckets (defaultdict on target)
+        if "objects" not in target:
+            target["objects"] = defaultdict(lambda: {"row_count": 0, "total_ge": 0.0, "quantity": 0.0})
+        for obj_key, obj_stats in (source.get("objects") or {}).items():
+            bucket = target["objects"][obj_key]
+            bucket["row_count"] += int(obj_stats.get("row_count") or 0)
+            bucket["total_ge"] += float(obj_stats.get("total_ge") or 0)
+            bucket["quantity"] += float(obj_stats.get("quantity") or 0)
         for product_key, product_item in (source.get("products") or {}).items():
             target_product = target["products"].setdefault(
                 product_key,
@@ -324,6 +383,10 @@ def collect_imported_products_bundle(
             unit = _clean_text(row.get("ზომის ერთეული"))
             waybill_number = _clean_text(row.get("ზედნადების ნომერი"))
             waybill_ref = _normalize_waybill_ref(waybill_number)
+            destination_text = _clean_text(row.get("ტრანსპორტირების დასრულება"))
+            destination_object = _resolve_destination_object(
+                destination_text, _dest_lookup, _dest_default
+            )
             dt = _pick_date(row)
             if dt is not None and not pd.isna(dt):
                 dt = pd.Timestamp(dt)
@@ -385,6 +448,7 @@ def collect_imported_products_bundle(
                     "max_date": None,
                     "display_names": Counter(),
                     "products": {},
+                    "objects": defaultdict(lambda: {"row_count": 0, "total_ge": 0.0, "quantity": 0.0}),
                 },
             )
             if supplier_display and supplier_entry["supplier"] == "უცნობი მომწოდებელი":
@@ -403,6 +467,10 @@ def collect_imported_products_bundle(
             if month_key != "უცნობი თვე":
                 supplier_entry["month_keys"].add(month_key)
             _update_entry_date_range(supplier_entry, dt)
+            obj_bucket = supplier_entry["objects"][destination_object]
+            obj_bucket["row_count"] += 1
+            obj_bucket["total_ge"] += amount_ge
+            obj_bucket["quantity"] += quantity
 
             product_entry = product_stats.setdefault(
                 product_key,
@@ -602,6 +670,18 @@ def collect_imported_products_bundle(
                 "min": _fmt_date(item.get("min_date")),
                 "max": _fmt_date(item.get("max_date")),
             },
+            "object_breakdown": [
+                {
+                    "object": obj_key,
+                    "row_count": int(obj_stats["row_count"]),
+                    "total_amount_ge": round(float(obj_stats["total_ge"]), 2),
+                    "total_quantity": float(obj_stats["quantity"]),
+                }
+                for obj_key, obj_stats in sorted(
+                    (item.get("objects") or {}).items(),
+                    key=lambda x: -float(x[1]["total_ge"]),
+                )
+            ],
             "top_products": [
                 {
                     "product_code": product_item["product_code"],
