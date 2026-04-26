@@ -138,8 +138,9 @@ Trigger: user request — „რამდენ ლარის პროდუ�
 | Sprint A | Pipeline wiring in `generate_dashboard_data.run()`; companion `_validate_aliases.py`; empty `product_aliases.json` seed | ✅ | `8455486` + `97e7330` |
 | Sprint A | Per-store breakdown via destination tracking (longest-variant-wins resolver) — ოზურგეთი vs დვაბზუ vs გაუნაწილებელი | ✅ | `1018900` |
 | Sprint B | SupplierModal UI — status-aware section, KPI grid (2x2), per-store toggle, top-3 / bottom-3 / dead-stock product cards with margin colors, ambiguous note | ✅ | `_pending_` |
-| x-suffix rule | Pipeline `code + "x"` deterministic match (MAX deprecated marker convention) — +64K ₾ portfolio coverage (65.6% → 66.8%) | ✅ | `_pending_` |
-| Name candidate hints | Each unmatched/ambiguous row carries `name_candidate` payload for the alias-confirm workflow; portfolio-wide stats `unmatched_with_candidate_*` | ✅ | `_pending_` |
+| x-suffix rule | Pipeline `code + "x"` deterministic match (MAX deprecated marker convention) — +64K ₾ portfolio coverage (65.6% → 66.8%) | ✅ | `2e685dc` |
+| Name candidate hints | Each unmatched/ambiguous row carries `name_candidate` payload for the alias-confirm workflow; portfolio-wide stats `unmatched_with_candidate_*` | ✅ | `2e685dc` |
+| name-in-PROTECTED rule | Cigarettes / alcohol auto-merge by unique normalized name when retail.category is PROTECTED. Beverages excluded (Borjomi-glass-vs-plastic rule preserved). +132K ₾ portfolio (66.8% → **69.3%**); ELIZI 0% → 34.7% verified | ✅ | `da03514` |
 | UNVERIFIED workflow UI | 3-bucket grid (ალიასით გადარჩება / MAX-ში არ არის / სულ შემოვიდა) + inline candidate hint per product card with arrow→retail mapping | ✅ | `_pending_` |
 | Hook Rules fix | `portfolioTotal` useMemo moved above early return (was pre-existing eslint error) | ✅ | `_pending_` |
 | Sprint C — alias UI mutation | Browser POST → write to `product_aliases.json` (currently user edits JSON manually + reruns pipeline) | 📋 PLANNED | next session |
