@@ -99,3 +99,8 @@ To check whether embeddings exist, inspect `.gitnexus/meta.json` — the `stats.
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
 
 <!-- gitnexus:end -->
+
+## Project Rules
+
+- **Financial/source-data proof gate** — Excel/CSV/JSON-იდან ამოღებულ ფინანსურ, გაყიდვების, მარჟის, მაღაზიის ან პროდუქტის ციფრზე "დასრულებულია" აკრძალულია, სანამ არ არსებობს source→calculation→output მტკიცებულება. Source ფაილების canonical მისამართი: `C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\Financial_Analysis`. მტკიცებულებაში უნდა იყოს: წყაროს რიგების count/თანხა, გამოყენებული ფორმულა, output-ის ჯამი, სხვაობა, და მინიმუმ 5 representative spot-check. სხვაობა უნდა იყოს 0 ან ცალკე ახსნილი source-level მიზეზით; თუ ვერ დამტკიცდა, დაწერე "კოდი გავაკეთე, მაგრამ ციფრები ჯერ არ დამიმტკიცებია".
+- **General logical proof gate** — ნებისმიერი task-ზე "დასრულებულია" აკრძალულია, სანამ არ არსებობს goal→implementation→verification მტკიცებულება: user-ის მოთხოვნა სწორად არის გაგებული, ცვლილება ზუსტად ამ მოთხოვნას ემსახურება, შედეგი შიგნით არ ეწინააღმდეგება საკუთარ ლოგიკას, გვერდითი ეფექტი/გაფუჭების რისკი შემოწმებულია, და verification შედეგი მკაფიოდ წერია. თუ ვერ დამტკიცდა, დაწერე: "გაკეთებულია, მაგრამ ბოლომდე დამტკიცებული არ არის".
