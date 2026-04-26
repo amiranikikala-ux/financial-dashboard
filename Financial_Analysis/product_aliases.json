@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "comment_ka": "ხელით ვერიფიცირებული product-mapping. დაამატე entry მხოლოდ მაშინ, როცა ცხადია რომ imported_code (RS.ge ზედნადებიდან) და retail_code_or_barcode (MAX POS გაყიდვებიდან) ერთსა და იმავე ფიზიკურ პროდუქციას ემთხვევა. confirmed_by ყოველთვის \"user\" — pipeline ავტომატურ entry-ს უარყოფს.",
+  "schema": {
+    "imported_code": "string — RS.ge waybill product_code (4-15 chars)",
+    "imported_supplier_taxid": "string — supplier tax_id where this code appeared (audit trail)",
+    "imported_name_sample": "string — product name as it appears in waybill (audit trail, not used for matching)",
+    "retail_code_or_barcode": "string — target either retail_sales.barcode (preferred, EAN-13) or retail_sales.product_code (MAX internal)",
+    "confirmed_by": "string — must equal \"user\"",
+    "confirmed_at": "string — ISO date when user verified",
+    "note": "string — optional explanation"
+  },
+  "aliases": []
+}
