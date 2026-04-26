@@ -137,12 +137,14 @@ Trigger: user request — „რამდენ ლარის პროდუ�
 | Sprint A | `supplier_profitability.py` module (~480 line) — strict barcode/code JOIN; PROTECTED detection (cigarettes + alcohol); top/bottom margin / dead-stock / ambiguous / unmatched; 5 status (verified/partial/unverified/protected/empty); per-supplier output payload | ✅ | `3a80cd1` |
 | Sprint A | Pipeline wiring in `generate_dashboard_data.run()`; companion `_validate_aliases.py`; empty `product_aliases.json` seed | ✅ | `8455486` + `97e7330` |
 | Sprint A | Per-store breakdown via destination tracking (longest-variant-wins resolver) — ოზურგეთი vs დვაბზუ vs გაუნაწილებელი | ✅ | `1018900` |
-| Sprint B | SupplierModal UI — status-aware section, KPI grid (2x2), per-store toggle, top-3 / bottom-3 / dead-stock product cards with margin colors, ambiguous note | ✅ | `_pending_` |
+| Sprint B | SupplierModal UI — status-aware section, KPI grid (2x2), per-store toggle, top-3 / bottom-3 / dead-stock product cards with margin colors, ambiguous note | ✅ | `c61f19f` |
 | x-suffix rule | Pipeline `code + "x"` deterministic match (MAX deprecated marker convention) — +64K ₾ portfolio coverage (65.6% → 66.8%) | ✅ | `2e685dc` |
 | Name candidate hints | Each unmatched/ambiguous row carries `name_candidate` payload for the alias-confirm workflow; portfolio-wide stats `unmatched_with_candidate_*` | ✅ | `2e685dc` |
 | name-in-PROTECTED rule | Cigarettes / alcohol auto-merge by unique normalized name when retail.category is PROTECTED. Beverages excluded (Borjomi-glass-vs-plastic rule preserved). +132K ₾ portfolio (66.8% → **69.3%**); ELIZI 0% → 34.7% verified | ✅ | `da03514` |
-| UNVERIFIED workflow UI | 3-bucket grid (ალიასით გადარჩება / MAX-ში არ არის / სულ შემოვიდა) + inline candidate hint per product card with arrow→retail mapping | ✅ | `_pending_` |
-| Hook Rules fix | `portfolioTotal` useMemo moved above early return (was pre-existing eslint error) | ✅ | `_pending_` |
+| UNVERIFIED workflow UI | 3-bucket grid (ალიასით გადარჩება / MAX-ში არ არის / სულ შემოვიდა) + inline candidate hint per product card with arrow→retail mapping | ✅ | `c61f19f` |
+| Hook Rules fix | `portfolioTotal` useMemo moved above early return (was pre-existing eslint error) | ✅ | `c61f19f` |
+| KPI scope clarifier | „შემოვიდა (სულ)" / „... (ანალიზდა)" labels + 📐 banner above grid clarifying matched vs imported scope (fixes user-flagged self-contradicting KPI: 559K imported with −2.1% margin) — browser-verified live ELIZI ჯამი + ოზურგეთი | ✅ | `9f73254` |
+| **Proof gate closure** | **Source→calc→output proof for ELIZI: 4,428→3,211 rows / 833,560→559,372 ₾ via composite-key dedup; 12/12 top suppliers reconcile to data.json at ₾0.00. Sprint A/B PROOFED.** | ✅ | `a6d2beb` |
 | Sprint C — alias UI mutation | Browser POST → write to `product_aliases.json` (currently user edits JSON manually + reruns pipeline) | 📋 PLANNED | next session |
 | AI tool wrapper | `analyze_supplier_profitability(tax_id)` Claude tool | 📋 PLANNED | follow-up |
 
