@@ -612,3 +612,140 @@ def test_alias_with_non_user_confirmed_by_is_ignored_at_lookup():
     p = out["per_supplier"][0]["profitability"]
     # Module trusts what it's given — confirms the validator separation
     assert p["totals"]["products_matched"] == 1
+
+
+# ---------------------------------------------------------------------------
+# x-suffix rule (MAX deprecated-marker convention)
+# ---------------------------------------------------------------------------
+
+def test_x_suffix_match_uniq_rescues_deprecated_max_code():
+    """imported '2157' should hit retail '2157x' uniquely → verified."""
+    sup = _supplier("100", "Ц", [_imp_product("2157", "ქემელი 1913 ორიგინალ იელოუ (PP)*", 100, 6500.0)])
+    retail = [_retail_product("2157x", "4860126910173x", "ქემელი 1913 ორიგინალ იელოუ (PP)*", "სიგარეტი", 8000.0, 6500.0)]
+    out = build_supplier_profitability(_data([sup], retail), today=TODAY)
+    p = out["per_supplier"][0]["profitability"]
+
+    assert p["totals"]["products_matched"] == 1
+    assert p["totals"]["products_unmatched"] == 0
+    matched = p["top_margin"][0] if p["top_margin"] else None
+    assert matched is not None
+    assert matched["match_kind"] in ("product_code_x_suffix", "barcode_x_suffix")
+
+
+def test_x_suffix_does_not_override_direct_pcode_hit():
+    """If '2157' already hits retail directly, x-suffix is not consulted."""
+    sup = _supplier("100", "Ц", [_imp_product("2157", "ქემელი", 100, 5000.0)])
+    retail = [
+        _retail_product("2157", "barcA", "ქემელი — current", "სიგარეტი", 7000.0, 5000.0),
+        _retail_product("2157x", "barcB", "ქემელი — old (deprecated)", "სიგარეტი", 9999.0, 1000.0),
+    ]
+    out = build_supplier_profitability(_data([sup], retail), today=TODAY)
+    p = out["per_supplier"][0]["profitability"]
+
+    matched = p["top_margin"][0]
+    assert matched["match_kind"] == "product_code"
+    assert matched["retail_name"] == "ქემელი — current"
+
+
+def test_x_suffix_skipped_when_ambiguous():
+    """If '2157x' has 2+ retail rows, x-suffix is not used (no automatic
+    disambiguation)."""
+    sup = _supplier("100", "Ц", [_imp_product("2157", "ქემელი", 10, 50.0)])
+    retail = [
+        _retail_product("2157x", "barcA", "ქემელი A", "სიგარეტი", 70.0, 50.0),
+        _retail_product("2157x", "barcB", "ქემელი B", "სიგარეტი", 80.0, 60.0),
+    ]
+    out = build_supplier_profitability(_data([sup], retail), today=TODAY)
+    p = out["per_supplier"][0]["profitability"]
+
+    # No match — falls through to "none"
+    assert p["totals"]["products_matched"] == 0
+    assert p["totals"]["products_unmatched"] == 1
+
+
+# ---------------------------------------------------------------------------
+# name_candidate hint (alias workflow surface)
+# ---------------------------------------------------------------------------
+
+def test_name_candidate_attached_when_unique_name_match():
+    """Unmatched code → if name uniquely matches a retail row, surface as
+    candidate so UI can show "alias confirm?" workflow."""
+    sup = _supplier("100", "Ц", [_imp_product("9999", "ქემელი 1913 ორიგინალ ბლუ (PP)*", 10, 60.0)])
+    retail = [_retail_product("777", "barcA", "ქემელი 1913 ორიგინალ ბლუ (PP)*", "სიგარეტი", 70.0, 60.0)]
+    out = build_supplier_profitability(_data([sup], retail), today=TODAY)
+    p = out["per_supplier"][0]["profitability"]
+
+    assert p["totals"]["products_matched"] == 0
+    assert p["totals"]["products_unmatched"] == 1
+    unmatched = p["unmatched_preview"][0]
+    cand = unmatched["name_candidate"]
+    assert cand is not None
+    assert cand["retail_product_code"] == "777"
+    assert cand["retail_barcode"] == "barcA"
+    assert cand["retail_category"] == "სიგარეტი"
+
+    # coverage stats expose the actionable opportunity
+    assert p["coverage"]["unmatched_with_candidate_count"] == 1
+    assert p["coverage"]["unmatched_with_candidate_cost_ge"] == 60.0
+
+
+def test_name_candidate_none_when_multiple_retail_rows_share_name():
+    """Two retail rows with same name → unsafe to suggest one → candidate stays None."""
+    sup = _supplier("100", "Ц", [_imp_product("9999", "ბორჯომი 1ლ", 10, 9.0)])
+    retail = [
+        _retail_product("AA", "11", "ბორჯომი 1ლ", "წყალი (მინა)", 12.0, 9.0),
+        _retail_product("BB", "22", "ბორჯომი 1ლ", "წყალი (პლასტიკი)", 11.0, 8.5),
+    ]
+    out = build_supplier_profitability(_data([sup], retail), today=TODAY)
+    p = out["per_supplier"][0]["profitability"]
+
+    unmatched = p["unmatched_preview"][0]
+    assert unmatched["name_candidate"] is None
+    assert p["coverage"]["unmatched_with_candidate_count"] == 0
+
+
+def test_name_candidate_normalizes_whitespace_and_punctuation():
+    """„ქემელი (PP)*" should match „ქემელი (PP) *" (different whitespace/punct)."""
+    sup = _supplier("100", "Ц", [_imp_product("9999", "ქემელი 1913 ორიგინალ ბლუ  (PP)*", 10, 60.0)])
+    retail = [_retail_product("777", "barcA", "ქემელი 1913 ორიგინალ ბლუ (PP) *", "სიგარეტი", 70.0, 60.0)]
+    out = build_supplier_profitability(_data([sup], retail), today=TODAY)
+    p = out["per_supplier"][0]["profitability"]
+
+    cand = p["unmatched_preview"][0]["name_candidate"]
+    assert cand is not None
+    assert cand["retail_product_code"] == "777"
+
+
+def test_name_candidate_attached_to_ambiguous_rows_too():
+    """Code with 2+ retail rows → ambiguous → still show name candidate if
+    name uniquely identifies one row (gives user a path to disambiguate)."""
+    sup = _supplier("100", "Ц", [_imp_product("CODE", "Borjomi 1L Plastic", 1, 10)])
+    retail = [
+        # 2 rows with same code → ambiguous
+        _retail_product("CODE", "BC1", "Borjomi 1L Glass", "მინა", 12, 10),
+        _retail_product("CODE", "BC2", "Borjomi 1L Plastic", "პლასტიკი", 11, 9),
+    ]
+    out = build_supplier_profitability(_data([sup], retail), today=TODAY)
+    p = out["per_supplier"][0]["profitability"]
+
+    assert p["totals"]["products_ambiguous"] == 1
+    amb = p["ambiguous_preview"][0]
+    cand = amb["name_candidate"]
+    assert cand is not None
+    assert cand["retail_barcode"] == "BC2"  # name "Borjomi 1L Plastic" → uniquely BC2
+    assert p["coverage"]["ambiguous_with_candidate_count"] == 1
+
+
+def test_portfolio_summary_aggregates_candidate_counts():
+    """Summary's portfolio block exposes total alias-confirmable opportunities."""
+    sup_a = _supplier("100", "A", [_imp_product("9991", "Product A", 1, 50)])
+    sup_b = _supplier("200", "B", [_imp_product("9992", "Product B", 1, 70)])
+    retail = [
+        _retail_product("777", "BC1", "Product A", "cat1", 60, 50),  # name match for sup_a
+        _retail_product("888", "BC2", "Product B", "cat2", 80, 70),  # name match for sup_b
+    ]
+    out = build_supplier_profitability(_data([sup_a, sup_b], retail), today=TODAY)
+
+    summary = out["summary"]["portfolio"]
+    assert summary["unmatched_with_candidate_count"] == 2
+    assert summary["unmatched_with_candidate_cost_ge"] == 120.0

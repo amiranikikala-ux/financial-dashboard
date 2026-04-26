@@ -8,19 +8,25 @@ the only safe linker is barcode/code numerical match.
 Foundational rules (memory: feedback_perfect_or_silent +
 project_product_match_barcode_only):
 
-* JOIN by barcode/code only; never by product_name (Borjomi glass and
-  plastic share the same name but are different SKUs with different cost
-  and margin).
-* No fuzzy/normalized name matching anywhere in this module.
-* Each supplier carries an explicit ``status`` so downstream UI can show
-  a 100% verified analysis or an explicit "ჯერ უცნობია" state — never a
-  silent partial result with confidence-% disclaimer.
+* JOIN by barcode/code only; never auto-match by product_name (Borjomi
+  glass and plastic share the same name but are different SKUs with
+  different cost and margin).
+* Name match is allowed only as a *candidate hint* attached to unmatched
+  rows so UI can surface "user, please confirm this alias" — pipeline
+  itself never substitutes a name match for a code match in totals.
+* Each supplier carries an explicit ``status`` and unmatched rows carry
+  ``name_candidate`` info so downstream UI can show 100% verified totals
+  AND a concrete next-step path (alias confirm / missing source) instead
+  of a silent dead-end "ჯერ უცნობია".
 
-Match precedence:
+Match precedence (deterministic, applied in order until single hit):
 
 1. imported.product_code == retail_sales.barcode  (EAN-13 in code field)
 2. imported.product_code == retail_sales.product_code (MAX internal code)
-3. user-vetted alias from product_aliases.json
+3. imported.product_code + "x" == retail_sales.product_code/barcode
+   (MAX deprecated-marker convention — the old code with an "x" suffix
+   sometimes survives in the live retail export after MAX renumbers.)
+4. user-vetted alias from product_aliases.json
 
 The output object lives at ``data["imported_products"]["suppliers"][i]
 ["profitability"]`` so SupplierModal can read it without an extra fetch.
@@ -28,6 +34,7 @@ The output object lives at ``data["imported_products"]["suppliers"][i]
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -89,6 +96,30 @@ def _norm_code(value: Any) -> str:
     if value is None:
         return ""
     return str(value).strip()
+
+
+# Used only for name-candidate hint generation (alias-candidate suggestions).
+# NEVER used to auto-merge totals — that path is forbidden by memory rule
+# project_product_match_barcode_only.md.
+_NAME_NORMALIZE_PUNCT_RE = re.compile(r"[*\(\)/\\\[\]]+")
+_NAME_NORMALIZE_WS_RE = re.compile(r"\s+")
+
+
+def _normalize_name(value: Any) -> str:
+    """Lowercase + strip punctuation/asterisks + collapse whitespace.
+
+    Intentionally aggressive on quirks MAX retail exports use ("(PP)*",
+    double spaces, mixed case) — but DOES NOT translate or substring,
+    so „ბორჯომი მინა" never collapses with „ბორჯომი პლასტიკი".
+    """
+    if value is None:
+        return ""
+    text = str(value).strip().lower()
+    if not text:
+        return ""
+    text = _NAME_NORMALIZE_PUNCT_RE.sub(" ", text)
+    text = _NAME_NORMALIZE_WS_RE.sub(" ", text)
+    return text.strip()
 
 
 def _safe_div(numer: float, denom: float) -> float:
@@ -166,6 +197,25 @@ def _build_alias_lookup(
     return lookup
 
 
+def _build_retail_name_index(
+    by_product: List[Dict[str, Any]],
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Index retail rows by normalized name for alias-candidate lookup.
+
+    Used ONLY to generate hints for unmatched/ambiguous rows so the UI
+    can surface "this imported product probably maps to that retail row,
+    please confirm" workflow. Never consumed by ``_match_product`` —
+    every entry that ends up in supplier totals must come from a code
+    hit or a user-vetted alias, per memory project_product_match_barcode_only.md.
+    """
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    for row in by_product:
+        nm = _normalize_name(row.get("product_name"))
+        if nm:
+            out.setdefault(nm, []).append(row)
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Match logic
 # ---------------------------------------------------------------------------
@@ -182,6 +232,11 @@ def _match_product(
 
     * ``"barcode"`` — direct barcode hit, exactly 1 retail row
     * ``"product_code"`` — MAX internal code hit, exactly 1 retail row
+    * ``"product_code_x_suffix"`` / ``"barcode_x_suffix"`` —
+      ``imported_code + "x"`` hits exactly 1 retail row. Catches MAX's
+      internal "deprecated marker" convention where the live retail
+      export still carries the old code with a trailing "x" after a
+      partial renumber. Treated as a full match in totals.
     * ``"alias"`` — user-vetted alias hit (alias points at a single
       retail key, so by definition unambiguous)
     * ``"ambiguous"`` — code hits 2+ retail rows; without a user alias to
@@ -218,7 +273,46 @@ def _match_product(
             return rows[0], "product_code"
         return None, "ambiguous"
 
+    # Last deterministic shot — MAX "x" suffix convention.
+    # Only triggers when neither barcode nor product_code has any hit
+    # at all (so there is no ambiguity with a "current" code).
+    code_x = imported_code + "x"
+    if code_x in by_product_code:
+        rows = by_product_code[code_x]
+        if len(rows) == 1:
+            return rows[0], "product_code_x_suffix"
+    if code_x in by_barcode:
+        rows = by_barcode[code_x]
+        if len(rows) == 1:
+            return rows[0], "barcode_x_suffix"
+
     return None, "none"
+
+
+def _name_candidate_for(
+    imported_name: str,
+    name_index: Dict[str, List[Dict[str, Any]]],
+) -> Optional[Dict[str, Any]]:
+    """If a single retail row has the same normalized product_name,
+    return a hint payload UI can use to suggest "alias?" workflow.
+
+    Returns None if zero or multiple retail rows share the name —
+    multiple matches mean we can't pick one safely (would have been
+    ambiguous as an automatic match too).
+    """
+    nm = _normalize_name(imported_name)
+    if not nm:
+        return None
+    rows = name_index.get(nm)
+    if not rows or len(rows) != 1:
+        return None
+    r = rows[0]
+    return {
+        "retail_barcode": _norm_code(r.get("barcode")),
+        "retail_product_code": _norm_code(r.get("product_code")),
+        "retail_name": r.get("product_name", "") or "",
+        "retail_category": r.get("category", "") or "",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -231,9 +325,11 @@ def _aggregate_supplier(
     by_product_code: Dict[str, Dict[str, Any]],
     alias_lookup: Dict[str, str],
     today: date,
+    name_index: Optional[Dict[str, List[Dict[str, Any]]]] = None,
 ) -> Dict[str, Any]:
     """Compute the profitability payload for one supplier."""
 
+    name_index = name_index or {}
     products = supplier_entry.get("top_products") or []
     total_products = len(products)
 
@@ -245,6 +341,8 @@ def _aggregate_supplier(
     cost_matched_ge = 0.0
     cost_ambiguous_ge = 0.0
     cost_protected_ge = 0.0
+    cost_unmatched_with_candidate_ge = 0.0
+    cost_ambiguous_with_candidate_ge = 0.0
 
     # per-store revenue/cost-sold accumulators built from each matched
     # product's retail-side object_breakdown. Joined later with the
@@ -264,18 +362,24 @@ def _aggregate_supplier(
         )
 
         if retail_row is None:
+            candidate = _name_candidate_for(prod.get("product_name", ""), name_index)
             entry = {
                 "imported_code": imp_code,
                 "imported_name": prod.get("product_name", ""),
                 "imported_unit": prod.get("unit", ""),
                 "cost_imported_ge": round(cost_paid, 2),
                 "quantity_imported": qty_bought,
+                "name_candidate": candidate,
             }
             if kind == "ambiguous":
                 ambiguous_rows.append(entry)
                 cost_ambiguous_ge += cost_paid
+                if candidate is not None:
+                    cost_ambiguous_with_candidate_ge += cost_paid
             else:
                 unmatched_rows.append(entry)
+                if candidate is not None:
+                    cost_unmatched_with_candidate_ge += cost_paid
             continue
 
         cost_matched_ge += cost_paid
@@ -397,13 +501,22 @@ def _aggregate_supplier(
         reverse=True,
     )[:5]
 
-    # ---- unmatched + ambiguous previews (top-5 by cost — alias candidates) -
+    # ---- unmatched + ambiguous previews -----------------------------------
+    # Bumped from 5 to 10 — for unverified/partial suppliers UI shows this
+    # as the "alias workflow checklist", and 10 covers the bulk of cost mass
+    # for the live dataset (top-12 supplier cost cumulatively ≈ 75%).
     unmatched_top = sorted(
         unmatched_rows, key=lambda r: r["cost_imported_ge"], reverse=True
-    )[:5]
+    )[:10]
     ambiguous_top = sorted(
         ambiguous_rows, key=lambda r: r["cost_imported_ge"], reverse=True
-    )[:5]
+    )[:10]
+    unmatched_with_candidate_count = sum(
+        1 for r in unmatched_rows if r.get("name_candidate")
+    )
+    ambiguous_with_candidate_count = sum(
+        1 for r in ambiguous_rows if r.get("name_candidate")
+    )
 
     # ---- per-store breakdown ---------------------------------------------
     # Cost-imported per store comes straight from the supplier-level
@@ -461,6 +574,14 @@ def _aggregate_supplier(
             "product_pct": coverage_product_pct,
             "ambiguous_cost_pct": ambiguous_cost_pct,
             "protected_cost_share_pct": protected_cost_share_pct,
+            # Alias workflow surface — how many gap rows have a name match in
+            # retail (one user-confirmation away from being matched). Lets
+            # the UI render "X products / Y ₾ ხელით დადასტურებას სჭირდება"
+            # instead of a silent dead-end "ჯერ უცნობია" cell.
+            "unmatched_with_candidate_count": unmatched_with_candidate_count,
+            "unmatched_with_candidate_cost_ge": round(cost_unmatched_with_candidate_ge, 2),
+            "ambiguous_with_candidate_count": ambiguous_with_candidate_count,
+            "ambiguous_with_candidate_cost_ge": round(cost_ambiguous_with_candidate_ge, 2),
         },
         "per_store_breakdown": per_store,
         "top_margin": top_margin,
@@ -509,6 +630,7 @@ def build_supplier_profitability(
     by_product = ((data or {}).get("retail_sales") or {}).get("by_product") or []
 
     by_bc, by_pc = _build_retail_indices(by_product)
+    name_index = _build_retail_name_index(by_product)
     alias_lookup = _build_alias_lookup(aliases)
 
     per_supplier: List[Dict[str, Any]] = []
@@ -524,9 +646,13 @@ def build_supplier_profitability(
     portfolio_cost_ambiguous = 0.0
     portfolio_revenue = 0.0
     portfolio_profit = 0.0
+    portfolio_unmatched_with_candidate_count = 0
+    portfolio_unmatched_with_candidate_cost = 0.0
+    portfolio_ambiguous_with_candidate_count = 0
+    portfolio_ambiguous_with_candidate_cost = 0.0
 
     for s in suppliers:
-        prof = _aggregate_supplier(s, by_bc, by_pc, alias_lookup, today)
+        prof = _aggregate_supplier(s, by_bc, by_pc, alias_lookup, today, name_index=name_index)
         per_supplier.append(
             {
                 "tax_id": s.get("tax_id") or "",
@@ -540,6 +666,11 @@ def build_supplier_profitability(
         portfolio_cost_ambiguous += prof["totals"].get("cost_ambiguous_ge", 0)
         portfolio_revenue += prof["totals"]["revenue_sold_ge"]
         portfolio_profit += prof["totals"]["profit_ge"]
+        cov = prof.get("coverage") or {}
+        portfolio_unmatched_with_candidate_count += int(cov.get("unmatched_with_candidate_count") or 0)
+        portfolio_unmatched_with_candidate_cost += float(cov.get("unmatched_with_candidate_cost_ge") or 0)
+        portfolio_ambiguous_with_candidate_count += int(cov.get("ambiguous_with_candidate_count") or 0)
+        portfolio_ambiguous_with_candidate_cost += float(cov.get("ambiguous_with_candidate_cost_ge") or 0)
 
     portfolio_coverage_cost_pct = (
         round((portfolio_cost_matched / portfolio_cost_imported) * 100.0, 2)
@@ -569,6 +700,13 @@ def build_supplier_profitability(
             "margin_pct": portfolio_margin_pct,
             "coverage_cost_pct": portfolio_coverage_cost_pct,
             "ambiguous_cost_pct": portfolio_ambiguous_cost_pct,
+            # Alias workflow surface — total user-confirmable opportunities
+            # across every supplier. UI/admin page reports this as the
+            # "actionable gap" (vs. the genuinely-missing source bucket).
+            "unmatched_with_candidate_count": portfolio_unmatched_with_candidate_count,
+            "unmatched_with_candidate_cost_ge": round(portfolio_unmatched_with_candidate_cost, 2),
+            "ambiguous_with_candidate_count": portfolio_ambiguous_with_candidate_count,
+            "ambiguous_with_candidate_cost_ge": round(portfolio_ambiguous_with_candidate_cost, 2),
         },
         "alias_count": len(alias_lookup),
         "today": today.isoformat(),
