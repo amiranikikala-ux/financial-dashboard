@@ -457,7 +457,7 @@ def test_mix_analyzer_tool_registered_in_schemas() -> None:
     }
     # Tool count sanity: 28 entries after Phase 3.8 margin_radar lands
     # (was 27 after Phase 2.3 mix_analyzer).
-    assert len(TOOL_SCHEMAS) == 28
+    assert len(TOOL_SCHEMAS) == 29
 
 
 def test_dispatcher_routes_mix_analyzer_to_analyze_category_mix() -> None:

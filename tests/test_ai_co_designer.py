@@ -701,9 +701,10 @@ class TestProposeFeatureToolSchema:
         # Phase 4A: 17; Phase 2.1: 18; Phase 2.2: 19; Phase 2.5: 20;
         # Phase 2.6: 21; Phase 5.1: 24 (+3 VAT tools); Phase 2.9: 25 (+detect_trends);
         # Phase 2.3: 26 (+mix_analyzer inserted before analyze_product_profitability);
-        # Phase 3.8: 27 (+margin_radar inserted between mix_analyzer and product_profitability).
+        # Phase 3.8: 27 (+margin_radar inserted between mix_analyzer and product_profitability);
+        # Sprint 2026-04-27: 28 (+data_quality_guard inserted before compute_cash_runway).
         assert TOOL_SCHEMAS[-1]["name"] == "propose_feature"
-        assert TOOL_SCHEMAS[27]["name"] == "propose_feature"
+        assert TOOL_SCHEMAS[28]["name"] == "propose_feature"
 
 
 # ---------------------------------------------------------------------------

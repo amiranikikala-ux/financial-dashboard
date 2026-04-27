@@ -1344,6 +1344,72 @@ COMPUTE_WAYBILL_TOTAL_TOOL: Dict[str, Any] = {
 }
 
 
+DATA_QUALITY_GUARD_TOOL: Dict[str, Any] = {
+    "name": "data_quality_guard",
+    "description": (
+        "Scan source/data identity fields before analysis to catch typo / alias / "
+        "mapping risks that would make the AI group rows under the wrong store, "
+        "address, company, or supplier. This is a read-only guardrail: it never "
+        "edits raw data and never auto-merges identities.\n\n"
+        "**Triggers (CRITICAL):**\n"
+        "  • user mentions spelling variants / typos / aliases "
+        "('დვაბზუ vs დვაზუ', 'ოზურგეთო', 'same company different name')\n"
+        "  • before relying on store/address breakdowns from imported products\n"
+        "  • before merging supplier/company names without exact tax_id evidence\n"
+        "  • when a dashboard total looks right but per-store / per-company "
+        "breakdown could be wrong.\n\n"
+        "**Returns:** `risk_level`, `summary_ka`, `stores.issues[]` for "
+        "destination/store alias suspects, and `suppliers.issues[]` for company "
+        "/ supplier name variants. Each issue includes original value, suggested "
+        "canonical target, confidence, source row/file when available, and a "
+        "review action.\n\n"
+        "**Honesty rule:** if `risk_level` is HIGH or MEDIUM, explicitly tell "
+        "the user that the analysis is blocked or provisional until those rows "
+        "are reviewed. Do NOT silently replace names in your answer."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "focus": {
+                "type": "string",
+                "enum": ["all", "stores", "suppliers"],
+                "description": (
+                    "Which identity area to scan. Default 'all'. Use 'stores' "
+                    "for დვაბზუ/ოზურგეთი address typos; 'suppliers' for company "
+                    "name variants."
+                ),
+            },
+            "top_n": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "description": "Maximum issues returned per area. Default 20.",
+            },
+            "min_similarity": {
+                "type": "number",
+                "minimum": 0.6,
+                "maximum": 0.98,
+                "description": (
+                    "Fuzzy-match threshold, 0.60–0.98. Default 0.82. Raise "
+                    "for stricter matching; lower only for broad audits."
+                ),
+            },
+            "max_rows": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 500000,
+                "description": (
+                    "Maximum imported-products source rows to scan for store / "
+                    "address aliases. Default 100000."
+                ),
+            },
+        },
+        "required": [],
+        "additionalProperties": False,
+    },
+}
+
+
 COMPUTE_CASH_RUNWAY_TOOL: Dict[str, Any] = {
     "name": "compute_cash_runway",
     "description": (
@@ -2603,6 +2669,7 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
     JOURNAL_UPDATE_ENTRY_TOOL,
     ANALYZE_DEAD_STOCK_TOOL,
     PREPARE_SUPPLIER_BRIEF_TOOL,
+    DATA_QUALITY_GUARD_TOOL,
     COMPUTE_CASH_RUNWAY_TOOL,
     COMPUTE_CASH_FLOW_PROJECTION_TOOL,
     BUILD_DEBT_PLAN_TOOL,
@@ -2953,6 +3020,19 @@ class ToolDispatcher:
                 benchmark_n=args.get("benchmark_n"),
                 sort_by=args.get("sort_by"),
             )
+        elif name == "data_quality_guard":
+            from dashboard_pipeline.ai.data_quality_guard import (
+                audit_data_quality as _audit_data_quality,
+            )
+
+            result = _audit_data_quality(
+                self._data_loader,
+                focus=args.get("focus"),
+                top_n=args.get("top_n"),
+                min_similarity=args.get("min_similarity"),
+                max_rows=args.get("max_rows"),
+                project_root=self._project_root,
+            )
         elif name == "compute_cash_runway":
             from dashboard_pipeline.ai.cash_runway import (
                 compute_cash_runway as _compute_cash_runway,
@@ -3266,6 +3346,13 @@ _SUMMARY_KEYS: Tuple[str, ...] = (
     "total_suppliers",
     "total_spend_ge",
     "sort_mode",
+    "focus",
+    "top_n",
+    "max_rows",
+    "min_similarity",
+    "risk_level",
+    "stores",
+    "suppliers",
     # Phase 3.1 Co-Designer tool fields (propose_feature + cleanup_stale_proposals)
     "problem",
     "benefit",

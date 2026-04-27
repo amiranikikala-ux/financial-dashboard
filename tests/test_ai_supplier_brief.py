@@ -1073,7 +1073,7 @@ class TestToolSurface:
 
         names = [s["name"] for s in TOOL_SCHEMAS]
         assert "prepare_supplier_brief" in names
-        assert len(TOOL_SCHEMAS) == 28  # Phase 3.8 added margin_radar
+        assert len(TOOL_SCHEMAS) == 29  # Phase 3.8 added margin_radar
 
     def test_tool_schema_has_required_properties(self):
         from dashboard_pipeline.ai.tools import PREPARE_SUPPLIER_BRIEF_TOOL
