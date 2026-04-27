@@ -43,44 +43,86 @@ from dashboard_pipeline.supplier_matching import (
 
 # ---------------------------------------------------------------------------
 # Destination resolver — turns RS waybill "ტრანსპორტირების დასრულება" free
-# text into a canonical store object. Iterates variant strings by length
-# descending so the more-specific match wins (avoids false ოზურგეთი match
-# on "ოზურგეთი სოფ. გაღმა დვაბზუ" which contains both keywords).
+# text into a canonical store object.
+#
+# Algorithm: keyword-priority. Targets are checked in the order declared by
+# ``rs_location_priority_order`` (more-specific stores listed first). For
+# each target we scan its core variants and return the FIRST target whose
+# any variant appears as a substring in the destination text.
+#
+# Why priority-order, not longest-variant-first: RS source text frequently
+# contains BOTH store names ("ოზურგეთი, სოფ. დვაბზუ" — meaning a delivery
+# to the დვაბზუ branch in the ოზურგეთი district). Length-based ordering
+# only works if the mapping enumerates every compound surface form
+# ("სოფ. დვაბზუ", "სოფ.დვაბზუ", "სოფ, დვაბზუ", "ს.დვაბზუ" …); in practice
+# the RS data has 70+ such variants while the mapping had 7, so most
+# დვაბზუ rows fell through and matched "ოზურგეთი" — silently misclassifying
+# ~16% of imported rows portfolio-wide (commit landing this fix).
 # ---------------------------------------------------------------------------
 
 def _build_destination_lookup(object_mapping):
-    """Return a list of (variant_text, target_object) sorted longest first.
+    """Return ``(priority_order, target_to_variants)`` for the row loop.
 
-    ``object_mapping`` is the parsed `Financial_Analysis/object_mapping.json`
-    blob — uses the ``rs_location_to_object`` section. Variants are matched
-    case-sensitively against the destination text. The returned list is the
-    pre-sorted lookup table the row loop reuses for every imported row.
+    ``object_mapping`` is the parsed ``Financial_Analysis/object_mapping.json``
+    blob.
+
+    * ``priority_order`` — list of canonical target names in the order they
+      should be tested. Source: ``rs_location_priority_order`` if present,
+      otherwise the insertion order of ``rs_location_to_object`` (Python 3.7+
+      dict preserves order). Targets present in the mapping but missing from
+      the priority list are appended at the end (defensive).
+    * ``target_to_variants`` — dict ``target → tuple(variant_strings)``.
+      Variants are stripped; empty strings dropped.
     """
     rs_map = (object_mapping or {}).get("rs_location_to_object") or {}
-    pairs = []
-    for obj, variants in rs_map.items():
-        if not obj:
+    declared_priority = (object_mapping or {}).get("rs_location_priority_order")
+
+    target_to_variants = {}
+    for target, variants in rs_map.items():
+        if not target:
             continue
-        for variant in variants or []:
-            v = (variant or "").strip()
-            if v:
-                pairs.append((len(v), v, str(obj)))
-    pairs.sort(reverse=True)  # longest variant first → most-specific wins
-    return [(v, obj) for _, v, obj in pairs]
+        cleaned = tuple(
+            (v or "").strip() for v in (variants or []) if (v or "").strip()
+        )
+        if cleaned:
+            target_to_variants[str(target)] = cleaned
+
+    if declared_priority:
+        priority_seed = [str(t) for t in declared_priority if t]
+    else:
+        priority_seed = list(target_to_variants.keys())
+
+    seen = set()
+    priority_order = []
+    for t in priority_seed:
+        if t in target_to_variants and t not in seen:
+            priority_order.append(t)
+            seen.add(t)
+    # Defensive: any mapping target not covered by the declared priority
+    # still gets a chance, appended at the end in mapping-insertion order.
+    for t in target_to_variants:
+        if t not in seen:
+            priority_order.append(t)
+            seen.add(t)
+
+    return priority_order, target_to_variants
 
 
-def _resolve_destination_object(text, lookup_pairs, default_object):
+def _resolve_destination_object(text, lookup, default_object):
     """Return the canonical object name for an imported destination string.
 
+    ``lookup`` is the tuple returned by :func:`_build_destination_lookup`.
     Falls back to ``default_object`` when no variant matches. Empty / None
     text also returns the default — keeps the caller arithmetic simple.
     """
     if not text:
         return default_object
     blob = str(text)
-    for variant, obj in lookup_pairs:
-        if variant in blob:
-            return obj
+    priority_order, target_to_variants = lookup
+    for target in priority_order:
+        for variant in target_to_variants.get(target, ()):
+            if variant in blob:
+                return target
     return default_object
 
 

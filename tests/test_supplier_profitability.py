@@ -564,38 +564,113 @@ def test_per_store_breakdown_empty_when_no_object_breakdown_anywhere():
     assert p["per_store_breakdown"] == []
 
 
-def test_destination_resolver_long_variant_wins():
-    """Critical bug-prevention test: 'ოზურგეთი სოფ. გაღმა დვაბზუ' contains
-    both 'ოზურგეთი' and 'გაღმა დვაბზუ' substrings — longer match (more
-    specific) must win, otherwise dvabzu shipments get assigned to
-    ozurgeti store."""
+def test_destination_resolver_priority_order_wins():
+    """Critical bug-prevention test (rewritten 2026-04-27 from longest-variant
+    heuristic to keyword-priority — 16% of imported rows portfolio-wide
+    were misclassified because RS source uses surface variants like
+    'ოზურგეთი, სოფ. დვაბზუ' that were not enumerated in the mapping, so
+    'ოზურგეთი' matched first via length-fallback).
+
+    New rule: rs_location_priority_order declares which target is checked
+    first. For each target in priority order, the first variant substring
+    match wins.
+    """
     from dashboard_pipeline.imported_products import (
         _build_destination_lookup,
         _resolve_destination_object,
     )
     mapping = {
+        "rs_location_priority_order": ["დვაბზუ", "ოზურგეთი"],
         "rs_location_to_object": {
-            "ოზურგეთი": ["ოზურგეთი"],
-            "დვაბზუ": ["დვაბზუ", "გაღმა დვაბზუ", "სოფ.დვაბზუ", "სოფელი დვაბზუ"],
+            "დვაბზუ": ["დვაბზუ", "დუაბზო", "დავაბზუ", "დვაბზე"],
+            "ოზურგეთი": ["ოზურგეთი", "ოზურგეთო", "ოზუეგეთი"],
         },
         "default_object": "გაუნაწილებელი",
     }
     lookup = _build_destination_lookup(mapping)
-    assert _resolve_destination_object(
-        "ოზურგეთი სოფ. გაღმა დვაბზუ", lookup, "გაუნაწილებელი"
-    ) == "დვაბზუ"
-    assert _resolve_destination_object(
-        "ოზურგეთის რაიონი სოფელი დვაბზუ", lookup, "გაუნაწილებელი"
-    ) == "დვაბზუ"
+
+    # Plain ოზურგეთი delivery — only ოზურგეთი keyword present.
     assert _resolve_destination_object(
         "ოზურგეთი სოფ. ოზურგეთი", lookup, "გაუნაწილებელი"
     ) == "ოზურგეთი"
+    # Plain დვაბზუ delivery — only დვაბზუ keyword present.
+    assert _resolve_destination_object(
+        "სოფელი დვაბზუ", lookup, "გაუნაწილებელი"
+    ) == "დვაბზუ"
+    # Default + empty.
     assert _resolve_destination_object(
         "სხვა ქალაქი", lookup, "გაუნაწილებელი"
     ) == "გაუნაწილებელი"
     assert _resolve_destination_object(
         "", lookup, "გაუნაწილებელი"
     ) == "გაუნაწილებელი"
+
+    # Bug regression cases: source contains BOTH ოზურგეთი AND a დვაბზუ
+    # variant. Pre-fix the resolver returned ოზურგეთი (length-fallback
+    # since the compound 'სოფ. დვაბზუ' was not enumerated). Priority-order
+    # MUST return დვაბზუ for all of these.
+    bug_cases = [
+        "ოზურგეთი, სოფ. დვაბზუ",         # ELIZI top variant — 172,926 ₾
+        "ოზურგეთის რ/ნ, სოფ. დვაბზუ",     # Iberia Refreshments — 42,649 ₾
+        "ოზურგეთი სოფ. გაღმა დვაბზუ",     # historical case
+        "ოზურგეთის რაიონი სოფელი დვაბზუ",
+        "ოზურგეთი, სოფ დავაბზუ",          # Coca-Cola Guria — 148,629 ₾
+        "ოზურგეთი სოფ დუაბზო",            # Zedazeni Achara — 74,254 ₾
+        "ოზურგეთი, სოფ.დვაბზე",
+        "ოზურგეთი, დვაბზუ",               # Kanti — 28,137 ₾
+        "ოზურგეთი ს. ზედა დვაბზუ",
+        "ოზურგეთი, სოფ. დვაბზუ (Foodmart)",
+        "ოზურგეთი ს.დვაბზუ",
+    ]
+    for text in bug_cases:
+        assert _resolve_destination_object(text, lookup, "გაუნაწილებელი") == "დვაბზუ", (
+            f"priority-order regression: {text!r} should resolve to 'დვაბზუ', "
+            f"got {_resolve_destination_object(text, lookup, 'გაუნაწილებელი')!r}"
+        )
+
+
+def test_destination_resolver_priority_falls_back_to_insertion_order():
+    """If rs_location_priority_order is absent, the mapping's dict insertion
+    order is used. Keeps the resolver functional for legacy mappings; the
+    expected guarantee is documented in object_mapping.json."""
+    from dashboard_pipeline.imported_products import (
+        _build_destination_lookup,
+        _resolve_destination_object,
+    )
+    mapping = {
+        "rs_location_to_object": {
+            "დვაბზუ": ["დვაბზუ"],
+            "ოზურგეთი": ["ოზურგეთი"],
+        },
+        "default_object": "გაუნაწილებელი",
+    }
+    lookup = _build_destination_lookup(mapping)
+    priority_order, _ = lookup
+    assert priority_order == ["დვაბზუ", "ოზურგეთი"]
+    assert _resolve_destination_object(
+        "ოზურგეთი, სოფ. დვაბზუ", lookup, "გაუნაწილებელი"
+    ) == "დვაბზუ"
+
+
+def test_destination_resolver_priority_appends_undeclared_targets():
+    """Defensive: if a target is in the mapping but missing from
+    rs_location_priority_order, it is appended at the end so the resolver
+    never silently ignores configured destinations."""
+    from dashboard_pipeline.imported_products import _build_destination_lookup
+    mapping = {
+        "rs_location_priority_order": ["ოზურგეთი"],
+        "rs_location_to_object": {
+            "დვაბზუ": ["დვაბზუ"],
+            "ოზურგეთი": ["ოზურგეთი"],
+            "ბათუმი": ["ბათუმი"],
+        },
+        "default_object": "გაუნაწილებელი",
+    }
+    priority_order, _ = _build_destination_lookup(mapping)
+    assert priority_order[0] == "ოზურგეთი"
+    assert "დვაბზუ" in priority_order
+    assert "ბათუმი" in priority_order
+    assert len(priority_order) == 3
 
 
 def test_alias_with_non_user_confirmed_by_is_ignored_at_lookup():

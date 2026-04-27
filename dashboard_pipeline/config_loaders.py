@@ -35,6 +35,7 @@ def load_object_mapping(script_dir):
                     "notes",
                     "bog_terminal_to_object",
                     "tbc_text_to_object",
+                    "rs_location_priority_order",
                     "rs_location_to_object",
                     "salary_text_to_object",
                     "default_object",
@@ -64,6 +65,18 @@ def load_object_mapping(script_dir):
         if clean_variants:
             rs_loc[str(obj)] = clean_variants
     mapping["rs_location_to_object"] = rs_loc
+    # rs_location_priority_order — list of canonical target names; the
+    # destination resolver tests these first-to-last so the more specific
+    # store wins when multiple keywords appear in the same source text
+    # (e.g. "ოზურგეთი, სოფ. დვაბზუ" → დვაბზუ if დვაბზუ is listed first).
+    raw_priority = mapping.get("rs_location_priority_order")
+    if raw_priority is None:
+        clean_priority = []
+    else:
+        if not isinstance(raw_priority, list):
+            raw_priority = [raw_priority]
+        clean_priority = [str(t).strip() for t in raw_priority if _safe_text(t).strip()]
+    mapping["rs_location_priority_order"] = clean_priority
     mapping["salary_text_to_object"] = {
         str(k): str(v)
         for k, v in (mapping.get("salary_text_to_object") or {}).items()

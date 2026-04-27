@@ -219,25 +219,10 @@ DEFAULT_OBJECT_MAPPING = {
         OBJECT_OZURGETI: OBJECT_OZURGETI,
         OBJECT_DVABZU: OBJECT_DVABZU,
     },
+    "rs_location_priority_order": [OBJECT_DVABZU, OBJECT_OZURGETI],
     "rs_location_to_object": {
-        OBJECT_OZURGETI: [
-            "ოზურგეთი",
-            "ოზურგეთო",
-            "ოზუეგეთი",
-            "სოფ. ოზურგეთი",
-            "სოფ.ოზურგეთი",
-            "სოფ ოზურგეთი",
-            "ქ. ოზურგეთი",
-        ],
-        OBJECT_DVABZU: [
-            "დვაბზუ",
-            "დუაბზო",
-            "დავაბზუ",
-            "გაღმა დვაბზუ",
-            "სოფ.დვაბზუ",
-            "სოფ დვაბზუ",
-            "სოფელი დვაბზუ",
-        ],
+        OBJECT_DVABZU: ["დვაბზუ", "დუაბზო", "დავაბზუ", "დვაბზე"],
+        OBJECT_OZURGETI: ["ოზურგეთი", "ოზურგეთო", "ოზუეგეთი"],
     },
     "salary_text_to_object": {
         OBJECT_OZURGETI: OBJECT_OZURGETI,
@@ -501,7 +486,14 @@ def detect_object(source, text="", object_mapping=None, rs_location=None):
     if src == "rs_waybill":
         location_blob = _normalize_for_match(rs_location if rs_location is not None else text)
         rs_map = mapping.get("rs_location_to_object") or {}
-        for obj, variants in rs_map.items():
+        # Priority order: explicit list wins, fallback to mapping insertion
+        # order. Aligns with imported_products._resolve_destination_object —
+        # when source text contains both store names ("ოზურგეთი, სოფ. დვაბზუ"),
+        # the first-listed target wins instead of falling through to the
+        # less-specific keyword.
+        priority = mapping.get("rs_location_priority_order") or list(rs_map.keys())
+        for obj in priority:
+            variants = rs_map.get(obj) or []
             for variant in variants:
                 v = _normalize_for_match(variant)
                 if v and v in location_blob:
@@ -717,7 +709,14 @@ def detect_object(source, text="", object_mapping=None, rs_location=None):
     if src == "rs_waybill":
         location_blob = _normalize_for_match(rs_location if rs_location is not None else text)
         rs_map = mapping.get("rs_location_to_object") or {}
-        for obj, variants in rs_map.items():
+        # Priority order: explicit list wins, fallback to mapping insertion
+        # order. Aligns with imported_products._resolve_destination_object —
+        # when source text contains both store names ("ოზურგეთი, სოფ. დვაბზუ"),
+        # the first-listed target wins instead of falling through to the
+        # less-specific keyword.
+        priority = mapping.get("rs_location_priority_order") or list(rs_map.keys())
+        for obj in priority:
+            variants = rs_map.get(obj) or []
             for variant in variants:
                 v = _normalize_for_match(variant)
                 if v and v in location_blob:
