@@ -1,3 +1,56 @@
+# financial-dashboard — Agent Brief
+
+> ეს ფაილი ავტომატურად იტვირთება Claude Code-ში სესიის დასაწყისში.
+> სრული წესები: `AGENTS.md` · ცოცხალი სტატუსი: `CONTEXT_HANDOFF.md`
+
+---
+
+## 🔴 CRITICAL — მომხმარებელთან კომუნიკაცია
+
+- **მომხმარებელი არ არის პროგრამისტი.** ლაპარაკი მხოლოდ ქართულად. ტექნიკური ჟარგონი — მხოლოდ ახსნით.
+- ფაილის/ფუნქციის სახელი ახსენე მხოლოდ თუ user-მა თვითონ იხსენია.
+- ყოველი feature 3 ფენაში: **რას აკეთებს + რატომ გჭირდება + რა შედეგი იქნება**.
+- კოდის block მხოლოდ თუ: (ა) user-მა მოითხოვა, (ბ) business value ცხადი diff-ია.
+- გაგზავნამდე ჰკითხე თავს: **"არაპროგრამისტი გაიგებდა?"** — თუ არა, გადაწერე.
+- Code, commit message, PR title = **ინგლისური**. User-თან საუბარი = **ქართული**.
+
+## 🔴 CRITICAL — სესიის წესები
+
+- **სესიის დაწყების სავალდებულო read order** (ვიდრე პირველ tool-ს გამოიყენებ):
+  1. `CONTEXT_HANDOFF.md` — ცოცხალი state (ახლა სად ვართ)
+  2. `docs/MASTER_PLAN.md` — roadmap (რომელ სექციაში / Sprint Step-ში ვართ)
+  3. `AGENTS.md` — სრული წესები (როგორ ვმუშაობთ + proof gate + ენა)
+
+  მხოლოდ ამის შემდეგ ხელი მოჰკიდე user-ის ამოცანას. ეს order ემთხვევა `CONTEXT_HANDOFF.md`-ის ხაზ 5-ს და `AGENTS.md`-ის სესიის დაწყების სექციას — ნუ შეცვლი.
+- **Context ~60%-ზე**: შესთავაზე handoff (CONTEXT_HANDOFF.md განახლება + ახალი სესია). არასოდეს გააგრძელო silently "კიდევ ერთი goal".
+- **იგივე შეცდომა 2-ჯერ ერთ სესიაში → STOP.** შესთავაზე restart, არ გააგრძელო გასწორების ციკლი (context უკვე დაბინძურდა). 3-ჯერ — არასოდეს.
+- **Scope creep = bug.** "ოჰ, ესეც გავაკეთო" — ჯერ ჰკითხე user-ს.
+- ტესტები არ წაშალო/შეასუსტო user-ის მკაფიო მითითების გარეშე.
+- Build/test ვერიფიკაცია მხოლოდ რეალური ცვლილების შემდეგ — არა "onboarding"-ისთვის.
+
+## Stack (1-წუთიანი ცოდნა)
+
+- **Backend**: Python 3 + FastAPI + pandas + openpyxl + APScheduler · service `FinancialDashboardBackend` (NSSM, port `8000`)
+- **Frontend**: React + Vite (`rs-dashboard/`, dev port `5173`)
+- **Data flow**: Excel → `generate_dashboard_data.py` → `data.json` → `/api/data`
+- **Python interpreter**: parent venv ONLY (`...\AI აგენტი\venv\Scripts\python.exe`). NEVER `.venv` / system Python.
+- **Service restart for new prompt/code**: `Restart-Service FinancialDashboardBackend` (admin/UAC). In-process tests — `_scratch_dogfood_*.py` pattern.
+
+## დოკუმენტების რუკა
+
+> ცოცხალი governance = 4 ფაილი. CLAUDE.md (ეს) auto-loaded entry point-ია — მხოლოდ pointer-ები + GitNexus block.
+
+| # | ფაილი | რისთვის | როდის |
+|---|------|--------|------|
+| 1 | **`CONTEXT_HANDOFF.md`** | ცოცხალი state — ახლა სად ვართ + verified facts + open work + do-not-touch | **session-start #1** (ყოველთვის) |
+| 2 | **`docs/MASTER_PLAN.md`** | ერთადერთი 18-სექციის roadmap (A→F sequence, 6-step sprint cycle, data inventory, VAT cross-cutting) | **session-start #2** (ყოველთვის) |
+| 3 | **`AGENTS.md`** | სრული წესები — 3-ფენიანი proof gate, ენა, scope, escalation, GitNexus scope, prompt hygiene | **session-start #3** (ყოველთვის) |
+| 4 | `HANDOFF.md` | commit SHA → archive evidence pointer index | მხოლოდ წარსული commit-ის drill-down |
+| — | `HANDOFF_ARCHIVE/` | ისტორიული evidence + superseded roadmaps (მათ შორის ძველი `PHASE_STATUS_MATRIX`) | ღრმა არქივის წაკითხვა |
+| — | `README.md` | GitHub-ის სტუმრებისთვის (არ არის agent governance) | არასოდეს agent მუშაობისას |
+
+---
+
 > **🚨 Read `AGENTS.md` alongside this file.** `AGENTS.md` **scopes the GitNexus rules below** — `gitnexus_impact` is required only for **shared/load-bearing function/class/method edits**. JSON mapping updates, docs changes, constant changes, and isolated frontend tweaks are **EXEMPT** from impact analysis overhead. Apply the relaxed AGENTS.md scope, not the strict block below verbatim.
 
 <!-- gitnexus:start -->
@@ -101,14 +154,3 @@ To check whether embeddings exist, inspect `.gitnexus/meta.json` — the `stats.
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
 
 <!-- gitnexus:end -->
-
-## Project governance
-
-ეს ფაილი მხოლოდ GitNexus-ის ცნობარია (auto-generated). სრული წესები + workflow:
-
-| რა გჭირდება | სად |
-|---|---|
-| ცოცხალი სტატუსი (ახლა სად ვართ) | `CONTEXT_HANDOFF.md` |
-| Roadmap (18 სექცია, sprint cycle, data inventory) | `docs/MASTER_PLAN.md` |
-| Session rules (proof gate, ენა, scope, escalation) | `AGENTS.md` |
-| Commit SHA → archive evidence | `HANDOFF.md` |

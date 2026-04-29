@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat .claude/hooks/session_start_reminder.json",
+            "shell": "bash",
+            "timeout": 5,
+            "statusMessage": "Loading session governance reminder"
+          }
+        ]
+      }
+    ]
+  }
+}
