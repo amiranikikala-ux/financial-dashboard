@@ -18,7 +18,7 @@
 - **CAL Step 2 (Data inventory)**: ✅ pipeline-ში per-day aggregation **არ არსებობს** (only `by_month` / `by_category_by_month`). Source per-row datetime ცხადია (`დრო` სვეტი), ifqli matched products უკვე გამოთვლილია `supplier_profitability`-ში. **საჭიროა ახალი aggregation**: `supplier.profitability.daily_breakdown[]` sparse (per-day × per-store)
 - **CAL Step 3-6**: spot-check + implement + verify + user review — ⏳ ვიდრე user-ის ცხადი „გადავიდეთ"
 
-**ბოლო commit-ები** (`origin/main`-ზე 48 ahead, push არ გაკეთებულა):
+**ბოლო commit-ები** (`origin/main`-ზე 5 ahead, push არ გაკეთებულა):
 ```
 8dd1637  docs(governance): correct AGENTS.md proof-gate path + flesh out Session Pacing
 f11439b  feat(.claude): regression-detection Stop hook + handoff template fix
