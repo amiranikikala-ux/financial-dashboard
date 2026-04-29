@@ -87,3 +87,7 @@ rs-dashboard/playwright-report/
 # Machine-specific Claude Code settings (per-user overrides)
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# Regression-detection hook runtime state (machine-local, ephemeral)
+.claude/regression_count.txt
+.claude/regression_detected.flag
