@@ -1,63 +1,89 @@
 # Financial Dashboard — Agent Instructions
 
+> **3 ფაილი მართავს მუშაობას:** `CONTEXT_HANDOFF.md` (ცოცხალი state) · `docs/MASTER_PLAN.md` (roadmap) · ეს ფაილი (rules).
+
 ## სესიის დაწყება
-1. ჯერ წაიკითხე `CONTEXT_HANDOFF.md` (ცოცხალი სტატუსი — canonical)
-2. მერე წაიკითხე `AGENTS.md` (ეს ფაილი — session rules)
-3. Phase overview გჭირდება? → `PHASE_STATUS_MATRIX.md`
-4. Historical evidence (commit X-ის დეტალი) → `HANDOFF.md` (index) → `HANDOFF_ARCHIVE/`
-5. მომხმარებლის ენა: **ქართული**, კოდი + commit: **ინგლისური**
+
+1. წაიკითხე `CONTEXT_HANDOFF.md` — ახლა სად ვართ
+2. წაიკითხე `docs/MASTER_PLAN.md` — რა სექციაში და რა Sprint Step-ში ვართ
+3. წაიკითხე ეს ფაილი — როგორ ვმუშაობთ
+4. ისტორიული evidence (commit X-ის დეტალი) → `HANDOFF.md` (index) → `HANDOFF_ARCHIVE/`
+5. ენა: მომხმარებელთან **ქართული**, კოდი + commit message **ინგლისური**
 
 ## Stack
-- **Backend**: Python 3 + FastAPI + pandas + openpyxl + APScheduler
-- **Frontend**: React + Vite
-- **Data flow**: Excel -> `generate_dashboard_data.py` -> `data.json` -> `/api/data`
-- **Server/UI**: `server.py` (`:8000`), `rs-dashboard` (`:5173` dev)
+
+- **Backend**: Python 3 + FastAPI + pandas + openpyxl + APScheduler · `server.py` (`:8000`)
+- **Frontend**: React + Vite · `rs-dashboard/` (`:5173` dev)
+- **Pipeline**: Excel/CSV → `generate_dashboard_data.py` → `data.json` → `/api/data`
+- **AI**: Anthropic SDK + tool-use (29 tools) + Sonnet 4.6 default (Opus available)
 
 ## სამუშაო წესები
-- `CONTEXT_HANDOFF.md` განაახლე მხოლოდ მიმდინარე goal-ის დახურვისას, არა ყოველ commit-ზე (per-session ერთადერთი ცოცხალი ფაილი)
-- `PHASE_STATUS_MATRIX.md` განაახლე მხოლოდ **phase-ის ან sprint-ის დახურვისას**
-- `HANDOFF.md` განაახლე მხოლოდ როცა არქივში რამეს გადაიტან (commit SHA → archive pointer)
-- ტესტები არ წაშალო/შეასუსტო მომხმარებლის მკაფიო მითითების გარეშე
-- build/test ვერიფიკაცია გააკეთე მხოლოდ შესაბამისი ცვლილების შემდეგ, არა onboarding-ის გამო
-- ახალი task-ის დაწყებამდე ნუ კითხულობ ზედმეტ ფაილებს, თუ მოთხოვნა ამას არ საჭიროებს
-- **Surgical edits** — ცვლილება უნდა უკავშირდებოდეს task-ს. სტილი, ფორმატირება, "უკეთესად დავწერდი" რეფაქტორი — არ შეეხო
-- **Task-ის გარე bug** — თუ შემთხვევით ნახე რეალური შეცდომა, რომელიც task-ს არ ეხება, ცალკე აცნობე user-ს და იკითხე "გავასწორო ახლავე თუ ცალკე?". ნუ გაასწორებ ჩუმად იმავე commit-ში
-- **Financial/source-data proof gate** — Excel/CSV/JSON-იდან ამოღებულ ფინანსურ, გაყიდვების, მარჟის, მაღაზიის ან პროდუქტის ციფრზე "დასრულებულია" აკრძალულია, სანამ არ არსებობს source→calculation→output მტკიცებულება. Source ფაილების canonical მისამართი: `C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\Financial_Analysis`. მტკიცებულებაში უნდა იყოს: წყაროს რიგების count/თანხა, გამოყენებული ფორმულა, output-ის ჯამი, სხვაობა, და მინიმუმ 5 representative spot-check. სხვაობა უნდა იყოს 0 ან ცალკე ახსნილი source-level მიზეზით; თუ ვერ დამტკიცდა, დაწერე "კოდი გავაკეთე, მაგრამ ციფრები ჯერ არ დამიმტკიცებია".
-- **General logical proof gate** — ნებისმიერი task-ზე "დასრულებულია" აკრძალულია, სანამ არ არსებობს goal→implementation→verification მტკიცებულება: user-ის მოთხოვნა სწორად არის გაგებული, ცვლილება ზუსტად ამ მოთხოვნას ემსახურება, შედეგი შიგნით არ ეწინააღმდეგება საკუთარ ლოგიკას, გვერდითი ეფექტი/გაფუჭების რისკი შემოწმებულია, და verification შედეგი მკაფიოდ წერია. თუ ვერ დამტკიცდა, დაწერე: "გაკეთებულია, მაგრამ ბოლომდე დამტკიცებული არ არის".
-- **Breakdown proof gate** — aggregate-ის proof არ ნიშნავს decomposition-ის proof-ს. თუ მონაცემი UI-ში breakdown-ით (per-store, per-month, per-product, per-category) ან AI tool-ში per-X view-ით ცხადდება, ყოველი breakdown ცალკე უნდა შემოწმდეს წყაროსთან: `sum(breakdown_i) == total`. თუ ერთი breakdown-იც ვერ-დადასტურდა (ან მოულოდნელად ნულია, ან აშკარად მცირე source-თან შედარებით), total-ის proof **ღიად ითვლება**. „PROOFED" — აკრძალულია სანამ ყველა breakdown-ი არ დაჯდა. ცრუ-დახურვის ტიპური ნიშანი: total ₾0.00 dif, magram per-store-ში ერთი მაღაზია 0 და მე არ შევამოწმე ცრუ-ცარიელი, თუ რეალური (e.g., 2026-04-27 ELIZI დვაბზუ — 280K წყაროში / 0 data.json-ში resolver bug-ის გამო).
-- **Pause-before-claim rule** — task-ს „დასრულდა"/„დახურულია" მოვუნიშნო მხოლოდ მას შემდეგ რაც ცხადად ჩამოვწერ: (1) რა field-ები შემოწმდა source-თან 1:1, (2) რა field-ები derived-ია verified-დან (და ცხადია რომ derivation სწორია), (3) რა field-ები **არ შემოწმდა**. თუ #3 არცარიელია → claim-ი იქნება „ნაწილობრივ დახურულია, ღია gap-ები: ...". ცრუ „end-to-end PROOFED" აკრძალულია — checklist მუსაიფი ცხადი იყოს.
-- **Inherited-code audit** — როცა ცოცხალ მონაცემში bug ვიპოვი ან ფიქრობ რომ ვასწორებ რამეს, არ დავენდე უკვე-არსებულ helper-ებს (resolver, parser, mapping, normalizer). სანამ proof-ს დავხურავ, თითოეული upstream helper რომელიც ცოცხალ მონაცემს შეარჩევს, ერთხელ მაინც უნდა გავატესტო რეალურ წყაროზე — output spot-check-ით. „თუ ფუნქცია ადრე არსებობდა, სავარაუდოდ მუშაობს" — ცრუ ვარაუდია (e.g., 2026-04-27 destination resolver — object_mapping.json-ში 7 ვარიანტი, წყაროში 70+ → ნახევარი მონაცემი ცრუ-კლასიფიცირებული).
+
+- `CONTEXT_HANDOFF.md` განაახლე **ყოველი session-ის ბოლოს** ან context 60%-ზე მისვლისას
+- `docs/MASTER_PLAN.md` განაახლე მხოლოდ **სექციის Step 6 (User review) დახურვაზე** — სტატუსის სვეტი 🟢, deliverable SHA
+- `HANDOFF.md` განაახლე მხოლოდ მაშინ, როცა archive-ში რამე გადადის (commit SHA → archive pointer)
+- ტესტები არ წაშალო/შეასუსტო user-ის ცხადი მითითების გარეშე
+- Build/test ვერიფიკაცია გააკეთე მხოლოდ შესაბამისი ცვლილების შემდეგ
+- ახალი task-ის დაწყებამდე ნუ კითხულობ ზედმეტ ფაილებს
+- **Surgical edits** — ყოველი ცვლილებული ხაზი task-ს უკავშირდება. სტილი/ფორმატირება/„უკეთესად დავწერდი" — არ შეეხო
+- **Task-გარე bug** — შემთხვევით ნახო რეალური შეცდომა task-ს გარეთ → ცალკე აცნობე user-ს, იკითხე „გავასწორო ახლავე თუ ცალკე?". ნუ გაასწორებ ჩუმად იმავე commit-ში
+
+## Proof gate (consolidated — Source-first principle)
+
+ციფრი/feature „დასრულებული"-ა მხოლოდ მას შემდეგ, რაც **3-ფენიანი checklist** სრულდება:
+
+1. **რა შემოწმდა source-თან 1:1** — Excel/CSV/JSON-დან ამოღებული ფინანსურ/გაყიდვების/მარჟის/მაღაზიის/პროდუქტის ციფრს უნდა ჰქონდეს: წყაროს row count + sum, ფორმულა, output sum, diff, **5+ representative spot-checks**. Source canonical: `C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\Financial_Analysis`. Diff = 0 ან source-level მიზეზით ახსნილი.
+2. **რა derived-ია verified-დან** — derivation logic ცხადია, internal contradiction არ აქვს (e.g., KPI cells with mismatched scope = self-contradicting → fail).
+3. **რა არ შემოწმდა** — ცარიელი slot-ის სიტყვით: „უცნობი" / „მონაცემი აკლია" / „candidate ვერ ამოვიღეთ". არასოდეს silent gap.
+
+**Breakdown rule**: aggregate proof ≠ breakdown proof. UI-ში per-store / per-month / per-product breakdown → ყოველი ცალკე უნდა შემოწმდეს. ცრუ-ცარიელი 0 ₾ საეჭვოა — წყაროს ცადე, არ ჩაითვალოს „რეალური ნული".
+
+**Inherited-code audit**: უკვე-არსებულ helper-ებს (resolver, parser, mapping, normalizer) არ ვენდე — spot-check რეალურ წყაროზე ვიდრე proof დავხურო. „ფუნქცია ადრე არსებობდა, სავარაუდოდ მუშაობს" = ცრუ ვარაუდი.
+
+**ვერ დამტკიცდი** → დაწერე: „გაკეთებულია, მაგრამ ბოლომდე დამტკიცებული არ არის" + ცხადი open gap-ების სია. ცრუ „end-to-end PROOFED" აკრძალულია.
 
 ## მომხმარებელთან საუბრის ენა (CRITICAL)
+
 - მომხმარებელი **არ არის პროგრამისტი** — plain ქართული, არასდროს technical jargon ახსნის გარეშე
-- ფაილის/ფუნქციის სახელი ახსენე მხოლოდ მაშინ, როცა user თვითონ ცალკე იხსენიებს
+- ფაილის/ფუნქციის სახელი ახსენე მხოლოდ მაშინ, როცა user თვითონ იხსენიებს
 - ყოველი feature ახსენი **სამ ფენაში**: რას აკეთებს + რატომ გჭირდება + შედეგი რა იქნება
-- ტექნიკური ცნება (pipeline, tool, cache, deploy, commit, embedding, RAG, schema, endpoint) — ჯერ მაგალითი/ახსნა, მერე სახელი (optional)
-- ცხრილი / bullet list / emoji — თვალსაჩინოდ
+- ცხრილი / bullet / emoji — თვალსაჩინოდ
 - კოდის block გამოიყენე მხოლოდ: (ა) user-მა თვითონ იხსენია, (ბ) business value ცხადი diff-ია
-- გაგზავნის წინ თავი ჰკითხე: **"თუ user პროგრამისტი არ იყო, გასაგები იქნებოდა?"** — თუ არა, გადაწერე
+- გაგზავნამდე ყოველ ქართულ სიტყვას ცალ-ცალკე გადავიხედო — **სრული, ცნობილი, ნამდვილი** ქართული თუა (filler-words / partial tokens / English glue აკრძალულია)
+- გაგზავნის წინ თავი ჰკითხე: „თუ user პროგრამისტი არ იყო, გასაგები იქნებოდა?"
 
-## Session Pacing (Phase 4B.3 Rule 23 — updated 2026-04-24)
-- **~60% context usage ceiling** — სანამ context 60%-ს არ მიუახლოვდება, რამდენი goal-იც ეტევა იმდენი გავაკეთოთ ერთ session-ში; 60%-ზე მისვლისას შევთავაზო handoff
-- *(ძველი "one sprint per session" / "no kitchen-sink" წესი გაუქმებულია 2026-04-24 — context window არის ცოცხალი ზღვარი, არა artificial sprint-count)*
-- scope creep = bug. silent "ოჰ, ესეც გავაკეთო" ⇒ ჯერ ვკითხო user-ს, არ შევცვალო უთქმელად
-- `/restart-session` — თუ იგივე შეცდომა 2-ჯერ გაკეთდა (Rule 25 ქვემოთ)
+## Session Pacing
 
-## Prompt Hygiene (Phase 4B.3 Rule 22)
-- **Ruthlessly prune.** თუ prompt-ი სწორად მუშაობს მოცემული ინსტრუქციის გარეშე — წაშალე. >1000-line CLAUDE.md/system prompt half-ignored ხდება
-- ახალი წესის დამატებამდე ჯერ ნახე, ხომ არ ვრცელდება უკვე არსებულ წესით
-- დუბლიკატი section-ები აკრძალულია — consolidate
-- verbose narrative intro ⇒ table or 2-line rule
-- ყოველი rule-ს უნდა ჰქონდეს grep-assertion `test_ai_prompts_phase*.py`-ში, სხვაგვარად refactor-ის დროს silently ქრება
+- **~60% context ceiling** — სანამ context 60%-ს არ მიუახლოვდება, რამდენი goal-იც ეტევა იმდენი გავაკეთოთ; 60%-ზე — handoff შევთავაზო
+- Scope creep = bug. „ოჰ, ესეც გავაკეთო" → ჯერ ვიკითხო user-ს
 
-## Correction Escalation (Phase 4B.3 Rule 25)
-- User-მა **იგივე შეცდომა** 2-ჯერ გამისწორა ერთ session-ში → **restart**. context დაბინძურდა, fix-ების კასკადი აღარ მუშაობს
+## Correction Escalation
+
+- User-მა **იგივე შეცდომა** 2-ჯერ გამისწორა ერთ session-ში → **restart** (`/restart-session` skill). Context დაბინძურდა, fix-ების კასკადი აღარ მუშაობს.
+- 3-ჯერ იგივე შეცდომა **არასოდეს** — restart 2-ზე.
+- **🚨 Cross-session pattern** (2026-04-29): partial Georgian tokens / filler-words / English-glue (e.g., „magram", „magari", „და-ცა") — ეს კონკრეტული შეცდომა **3 session-ზე** გამოვლინდა. მე-4 cross-session occurrence = **სასწრაფო restart**, არ ველოდები იმავე-session 2-rule-ს.
 - restart = ახალი ჩატი + `CONTEXT_HANDOFF.md`-ის ცოცხალი წაკითხვა + user-ის ბოლო ცხადი მოთხოვნის განმეორება
-- 3-ჯერ იგივე შეცდომა **არასოდეს** — restart 2-ზე
 
-## GitNexus — მოკლე წესები
-- უცნობ კოდზე navigation-ისთვის გამოიყენე `query` / `context`
-- shared symbol-ის შეცვლამდე შეამოწმე impact
-- commit-მდე გადაამოწმე ცვლილებების scope
-- თუ index stale-ა, მხოლოდ მაშინ განაახლე
-- სრული წესები → `CLAUDE.md`
+## GitNexus (scoped — function edits only)
+
+- **MUST** run `gitnexus_impact` ვიდრე shared/load-bearing function/class/method-ს ცვლი — სხვა callers-ის blast radius
+- **EXEMPT**: JSON mapping update, docs ცვლილება, constant change, isolated frontend tweak
+- HIGH/CRITICAL risk warning → user-ს ვუთხრა ვიდრე გავაგრძელო
+- შესწორებამდე exploration: `gitnexus_query({query})` / `gitnexus_context({name})` (გრეპი-ს ცვლი)
+- **Refactor (rename/extract)**: `gitnexus_rename({dry_run: true})` ჯერ; მერე `dry_run: false`
+- Tools quick-reference + risk-level table + index-freshness ბრძანებები → `CLAUDE.md` GitNexus block. ⚠️ `CLAUDE.md`-ის strict „MUST run for ANY symbol" ფრაზებს ნუ აიღებ verbatim — ამ ფაილის scope-ი (shared function only) ვრცელდება
+
+## Prompt Hygiene (SYSTEM_PROMPT_KA edits only)
+
+- ruthlessly prune — დუბლიკატი section-ი წავშალო, verbose narrative → table or 2-line rule
+- ყოველი rule-ს უნდა ჰქონდეს grep-assertion `tests/test_ai_prompts_phase*.py`-ში — სხვაგვარად refactor-ის დროს silently ქრება
+- ახალი წესის დამატებამდე — ხომ არ ვრცელდება უკვე არსებულ წესით?
+
+## Project Rules (current values)
+
+- **Excel Georgian path**: `tools.py::_resolve_safe_path` uses `Path.absolute()`, NOT `Path.resolve()`
+- **Supplier-product JOIN**: barcode/code only (1:1, exactly-one-row); name-fuzzy auto-match FORBIDDEN (Borjomi glass ≠ plastic). Exception: unique normalized name in PROTECTED retail category (cigarettes/alcohol per `SUPPLIER_PROFITABILITY_PROTECTED_SUBSTRINGS`)
+- **retail_sales revenue**: `unit_price × quantity` per row. Pinned `tests/test_retail_sales_revenue_formula.py`
+- **Destination resolver**: `rs_location_priority_order` keyword scan. New variants → `object_mapping.json:rs_location_to_object` + `tests/test_supplier_data_invariants.py`
+- **ChromaDB 1.5.x `$lt`/`$gt`** don't work on string metadata — Python post-fetch filter mandatory
+- **`.claude/scheduled_tasks.lock`** gitignored (Claude Code ScheduleWakeup artifact, machine-specific)

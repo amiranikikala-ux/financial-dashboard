@@ -1,74 +1,81 @@
 # HANDOFF — Evidence index
 
-> **ცოცხალი სტატუსისთვის ეს ფაილი არ გახსნა.** → `CONTEXT_HANDOFF.md` · Phase overview → `PHASE_STATUS_MATRIX.md` · Historical roadmap → `HANDOFF_ARCHIVE/AI_GENIUS_PARTNER_PLAN_v2.1_superseded_2026-04-25.md`.
-> ეს ფაილი მხოლოდ **evidence pointer**-ია: commit SHA → archive location.
-
----
-
-## რისთვის არის ეს ფაილი
-
-`CONTEXT_HANDOFF.md` ცოცხალი სტატუსის ჩანაწერია — აქ **არასდროს არ ინახება ისტორია**. როცა გჭირდება ძველი phase-ის სრული evidence, არქივი + git log-ი არის authoritative.
+> **ცოცხალი სტატუსისთვის ეს ფაილი არ გახსნა** → `CONTEXT_HANDOFF.md`
+> **Roadmap** → `docs/MASTER_PLAN.md` · **Rules** → `AGENTS.md`
+>
+> ეს ფაილი მხოლოდ **commit SHA → archive pointer** index-ია.
 
 ---
 
 ## Commit SHA → archive lookup
 
-### Tier 2 Pipeline Cache (Sprint 2 / 3a / 3b / 3c / 3d / 3e / 3f — **per-file cache series COMPLETE**)
+### Master Plan §1 (ზედნადები) — 4-store mapping
 
-| commit | sprint | თარიღი | evidence |
+| commit | სპრინტი | თარიღი | evidence |
 |---|---|---|---|
-| `a1763a3` | 3f foodmart cashback | 2026-04-24 | `tests/test_foodmart_cashback_incremental.py` + git log |
-| `89338e4` | 3e POS terminal income + `sum()` precision fix | 2026-04-24 | `tests/test_pos_terminal_income_incremental.py` + git log |
-| `7404af6` | 3d tax_flow (cross-bank) | 2026-04-24 | `tests/test_tax_flow_incremental.py` + git log |
-| `0a81b86` | 3c expense_categories | 2026-04-24 | `CONTEXT_HANDOFF.md` commit-history + git log |
-| `8bd01e8` | 3b samurneo | 2026-04-24 | `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_3B_BANK_PREVIEW.md` |
-| `efcc79a` | 3a cache slim-down | 2026-04-23 | git log + `CONTEXT_HANDOFF.md` |
-| `481e474` | 2 retail_sales per-file | 2026-04-22 | `tests/test_retail_sales_incremental.py` |
+| `666edd3` | Tbilisi (closed store) bucket | 2026-04-29 | `tests/test_supplier_data_invariants.py` + git log |
+| `a318a91` | resolver fix + 3-tier safety net | 2026-04-28 | `scripts/reconcile_suppliers.py` + git log |
+| `3d3ac07` | `data_quality_guard` AI tool | 2026-04-28 | git log |
+| `020a555` | cancelled-status filter | 2026-04-27 | `tests/test_imported_products_cancelled_filter.py` |
 
-### Phase 2.3 & Phase 3.8 — Category / Margin AI tools
+### Master Plan §2 (მომწოდებლები) — Supplier Profitability (strict barcode JOIN)
 
-| commit | phase | evidence |
+| commit | სპრინტი | evidence |
 |---|---|---|
-| `5dfbf19` + `3942bb2` | Phase 3.8 `margin_radar` (time-series GM compression) | `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_3_8_MARGIN_RADAR_PREVIEW.md` |
-| `533c02f` | Phase 2.3 `mix_analyzer` (category mix / DRAG-LIFT) | `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_2_3_MIX_ANALYZER_PREVIEW.md` |
+| `a6d2beb` + `9f73254` | Sprint A/B PROOFED + KPI scope clarifier | `HANDOFF_ARCHIVE/PREVIEWS/ELIZI_252K_PROOF_2026-04-26.md` |
+| `c61f19f` | Sprint B UI + UNVERIFIED workflow + Hook Rules fix | git log |
+| `da03514` | name-in-PROTECTED rule (cigarettes/alcohol auto-merge) | git log |
+| `2e685dc` | x-suffix + name candidate hints | git log |
+| `1018900` | per-store breakdown via destination tracking | git log |
+| `3a80cd1` + `8455486` + `97e7330` | Sprint A module + wiring + alias seed | git log |
+| `b57ed2d` | Sprint A preview | `HANDOFF_ARCHIVE/PREVIEWS/SUPPLIER_PROFITABILITY_STRICT_PREVIEW.md` |
 
-### Phase 5 VAT / Tax Audit (Sprint 5.1 → 5.12)
+### Master Plan §18 (VAT & აუდიტი) — Phase 5 closed
 
 | sprint | commit | evidence |
 |---|---|---|
 | 5.12 | `684eab8` | `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_5_12_TBC_SHORTAGE_EVIDENCE.md` |
-| 5.11 | `bfeeee5` + `3d41819` | `CONTEXT_HANDOFF.md` commit-history |
+| 5.11 | `bfeeee5` + `3d41819` | git log |
 | 5.10 | `f876012` | `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_5_10_UNIT_ERROR_PREVIEW.md` |
-| 5.1–5.9 | see `CONTEXT_HANDOFF.md:51-68` | git log + commit messages |
+| 5.1–5.9 | see `git log --grep="Sprint 5"` | commit messages |
+
+### Tier 2 — Pipeline cache (per-file series complete)
+
+| commit | sprint | თარიღი |
+|---|---|---|
+| `a1763a3` | 3f foodmart cashback | 2026-04-24 |
+| `89338e4` | 3e POS terminal income + `sum()` precision fix | 2026-04-24 |
+| `7404af6` | 3d tax_flow (cross-bank, 561× hot) | 2026-04-24 |
+| `0a81b86` | 3c expense_categories | 2026-04-24 |
+| `8bd01e8` | 3b samurneo | 2026-04-24 |
+| `efcc79a` | 3a cache slim-down (864→207 MB) | 2026-04-23 |
+| `481e474` | 2 retail_sales per-file | 2026-04-22 |
+
+### Phase 2.3 + Phase 3.8 — Category / Margin AI tools
+
+| commit | tool | evidence |
+|---|---|---|
+| `5dfbf19` + `3942bb2` | `margin_radar` | `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_3_8_MARGIN_RADAR_PREVIEW.md` |
+| `533c02f` | `mix_analyzer` | `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_2_3_MIX_ANALYZER_PREVIEW.md` |
 
 ### Phase 4C.1 — Tool Schema Poka-yoke
 
-| part | commit | evidence |
-|---|---|---|
-| 4C.1 Part B | `3d13e8b` | live dog-food 4/4 PASS in `CONTEXT_HANDOFF.md:81-85` |
-| 4C.1 Part A | `eacc59b` | live dog-food 4/4 PASS in `CONTEXT_HANDOFF.md:81-85` |
-
-### Earlier (Packet H, Phase 0–4B) — pre-2026-04-22 historical narrative
-
-- Full evidence log (1,106 ხაზი): **`HANDOFF_ARCHIVE/HANDOFF_2026-04-22.md`**
-- Packet H foundations: `HANDOFF_ARCHIVE/2026-04-packet-h.md`
-- Superseded AI roadmap v1.0: `HANDOFF_ARCHIVE/AI_ADVISOR_ROADMAP_v1.0_superseded_2026-04-18.md`
-- Phase 4B prompt tuning preview: `HANDOFF_ARCHIVE/PREVIEWS/PHASE_4B_PROMPT_TUNING_PREVIEW.md`
-
----
-
-## როდის დაუბრუნდე არქივს
-
-| სცენარი | სად |
+| part | commit |
 |---|---|
-| "რატომ `_resolve_safe_path`-ში `Path.absolute()` და არა `resolve()`?" | `HANDOFF_ARCHIVE/HANDOFF_2026-04-22.md` + commit message |
-| "რა იყო Phase 1 Part D-ის acceptance criteria?" | `HANDOFF_ARCHIVE/HANDOFF_2026-04-22.md` Section 5 |
-| "რა მოხდა Sprint 5.12 TBC shortage-ში?" | `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_5_12_TBC_SHORTAGE_EVIDENCE.md` |
-| "რა ცვლილება იყო Sprint 3b cache-ში?" | `git show 8bd01e8` + `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_3B_BANK_PREVIEW.md` |
+| 4C.1 Part B | `3d13e8b` |
+| 4C.1 Part A | `eacc59b` |
+
+### Earlier (pre-2026-04-22 historical narrative)
+
+- Full evidence log: `HANDOFF_ARCHIVE/HANDOFF_2026-04-22.md`
+- Packet H: `HANDOFF_ARCHIVE/2026-04-packet-h.md`
+- AI roadmap v1.0 (superseded): `HANDOFF_ARCHIVE/AI_ADVISOR_ROADMAP_v1.0_superseded_2026-04-18.md`
+- AI roadmap v2.1 (superseded by Master Plan): `HANDOFF_ARCHIVE/AI_GENIUS_PARTNER_PLAN_v2.1_superseded_2026-04-25.md`
+- Phase tracker (superseded by Master Plan): `HANDOFF_ARCHIVE/PHASE_STATUS_MATRIX_v2.1_superseded_2026-04-29.md`
+- Phase 4B prompt tuning preview: `HANDOFF_ARCHIVE/PREVIEWS/PHASE_4B_PROMPT_TUNING_PREVIEW.md`
 
 ---
 
 ## მომავალი evidence
 
-ახალი preview-ები → `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_XX_NAME_PREVIEW.md` (Sprint 3b-ს pattern-ი).
-არც ერთი ახალი evidence არ ემატება ამ ფაილს — ეს უბრალოდ index-ია.
+ახალი preview-ები → `HANDOFF_ARCHIVE/PREVIEWS/SECTION_X_NAME_PREVIEW.md` (Master Plan section-ის ნომრით).
