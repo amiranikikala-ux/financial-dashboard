@@ -1,6 +1,8 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-04-30 late evening (`_parse_rs_datetime` cleanup — commit `2ab4a05`, 48 ხაზი dead code წაიშალა) — გრძელი წაკითხვა საჭირო **არ არის**. ეს ფაილი ცოცხალი state-ია. Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`. Evidence → `HANDOFF.md` + `HANDOFF_ARCHIVE/`.
+> **განახლდა**: 2026-04-30 late evening (OneDrive→C:\\ migration Phase 1 + imported_products bug discovered) — გრძელი წაკითხვა საჭირო **არ არის**. ეს ფაილი ცოცხალი state-ია. Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`. Evidence → `HANDOFF.md` + `HANDOFF_ARCHIVE/`.
+>
+> 🚨 **ღია bug** (user reported, tab unconfirmed): C:\\-ზე dashboard-ი „გაყიდულ პროდუქტებს არ აჩვენებს". Cause likely: `imported_products` სექცია data.json-ში **0 MB ცარიელია** C:\\-ზე (vs 44.70 MB OneDrive-ზე). წყარო: `Financial_Analysis/შემოტანილი პროდუქცია/` ფოლდერი გადატანილია `_to_delete_2026-04-29/02_financial_analysis_orphan/`-ში (81 MB). მოგვარების გზა: folder-ი უკან გადავიტანოთ, ან წყარო სხვა მისამართიდან გავარკვიოთ. **ხვალ პირველი ნაბიჯი** — user-ისგან tab-ის სახელი მოვიკითხოთ (რომელი ჩანს ცარიელი).
 >
 > **ახალი ჩატის read order**: ეს ფაილი → `docs/MASTER_PLAN.md` → `AGENTS.md`.
 >
@@ -10,7 +12,10 @@
 
 ## 1. ახლა სად ვართ
 
-- **ეს session (2026-04-30 late evening — `_parse_rs_datetime` cleanup)**: წინა session-ის ღია task დაიხურა — `_parse_rs_datetime` divergent ვერსიის spot-check გაკეთდა (5 წლის RS data + 3 თვის retail = ყველგან ISO format), dead first def + dead constant + dead import წაიშალა (commit `2ab4a05`, 48 ხაზი). Live behavior უცვლელია, 21 targeted ტესტი green. user-ი თავდაპირველად ყოყმანობდა წაშლაზე ("იქნება და იყოს") — გავარკვიე რომ ფუნქცია უკვე override-ულია L657-ით → user-მა confirm გააკეთა "თუ მსგავსია წაიშალოს".
+- **ეს session (2026-04-30 late evening — 3 ნაწილი)**:
+  - **ნაწილი A (cleanup)** — `_parse_rs_datetime` divergent ვერსიის spot-check (5 წლის RS data + 3 თვის retail = ყველგან ISO format) → dead first def + dead constant + dead import წაიშალა (commit `2ab4a05`, 48 ხაზი). Live behavior უცვლელია, 21 targeted ტესტი green. user თავდაპირველად ყოყმანობდა, შემდეგ confirm-ი „თუ მსგავსია წაიშალოს".
+  - **ნაწილი B (OneDrive→C:\\ migration Phase 1 — DONE)** — push origin (8 commit GitHub durable backup) + C:\\ stash + git pull (fast-forward `bf7b091..57cf383`) + .claude/hooks/check_regression.sh + settings.json Stop hook synced via pull. Verify: ✅ HEAD match, ✅ service running, ✅ API 200, ✅ pipeline ცოცხალი. **Phase 2 (user-side restart Claude Code C:\\-დან) NOT done — user ძილში წავიდა**.
+  - **ნაწილი C (BUG, ცოცხალი)** — user-მა შენიშნა, რომ dashboard-ი „გაყიდულ პროდუქტებს არ აჩვენებს". per-section size diff: `imported_products` 0 MB C:\\-ზე vs 44.70 MB OneDrive-ზე. tab name unconfirmed (user ძილში წავიდა). შემდეგ session-ის პირველი ნაბიჯი — user-ისგან tab-ის სახელი მოვიკითხოთ, შემდეგ folder-ის უკან გადატანის გადაწყვეტილება.
 - **წინა session (2026-04-30 evening — handoff close-out)**: წინა NSSM-migration session-ის working-copy state ფორმალურად დახურდა — 5 commit landed (constants.py duplicates, retired imported-products CSVs + regression-runtime gitignore, regression-detection Stop hook + handoff template v1.1, AGENTS.md proof-gate path + Session Pacing rewrite, CONTEXT-ის განახლება). ენობრივი regression — „ცადო" filler-ი user-მა გამოაცადა მე-7 cross-session occurrence-ად; გასწორდა inline (filler → „გავაკეთო/მოკლე/შემოწმება").
 - **წინა session (2026-04-30 morning — NSSM migration COMPLETE)**: `C:\financial-dashboard\` უკვე დასახლებული იყო (user-ის ხელით 04-29 evening + venv 04-30 00:00:06). NSSM 4 paths გადარედირექტდა (Application + AppDirectory + AppStdout + AppStderr) → service restart → data.json copy from OneDrive → manual pipeline trigger → **pipeline 7.2 წთ-ში სრულდა**, data.json fresh 54.2 MB, 28 API artifacts, 0 errors. OneDrive copy untouched (fallback). Auto-handoff hook + AGENTS.md path fix + handoff skill template v1.1 ამავე session-ში მომზადდა working-copy-ში; დახურდა ამ session-ში 5 commit-ით.
 - **წინა-წინა session (2026-04-29 evening, არც ერთი commit არ მომხდარა)**: workspace structural cleanup — parent folder-დან ~863 MB orphan/duplicate ფაილი გადატანილი `_to_delete_2026-04-29\` staging-ში. დეტალები §2-ში.
