@@ -32,7 +32,7 @@
 
 ციფრი/feature „დასრულებული"-ა მხოლოდ მას შემდეგ, რაც **3-ფენიანი checklist** სრულდება:
 
-1. **რა შემოწმდა source-თან 1:1** — Excel/CSV/JSON-დან ამოღებული ფინანსურ/გაყიდვების/მარჟის/მაღაზიის/პროდუქტის ციფრს უნდა ჰქონდეს: წყაროს row count + sum, ფორმულა, output sum, diff, **5+ representative spot-checks**. Source canonical: `C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\Financial_Analysis`. Diff = 0 ან source-level მიზეზით ახსნილი.
+1. **რა შემოწმდა source-თან 1:1** — Excel/CSV/JSON-დან ამოღებული ფინანსურ/გაყიდვების/მარჟის/მაღაზიის/პროდუქტის ციფრს უნდა ჰქონდეს: წყაროს row count + sum, ფორმულა, output sum, diff, **5+ representative spot-checks**. Source canonical (pipeline view): `C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\financial-dashboard\Financial_Analysis\` — 15 JSON config + `შემოტანილი პროდუქცია\` real folder + 5 symlink folders → parent's `Financial_Analysis\` (full structure: `CONTEXT_HANDOFF.md` §7). Diff = 0 ან source-level მიზეზით ახსნილი.
 2. **რა derived-ია verified-დან** — derivation logic ცხადია, internal contradiction არ აქვს (e.g., KPI cells with mismatched scope = self-contradicting → fail).
 3. **რა არ შემოწმდა** — ცარიელი slot-ის სიტყვით: „უცნობი" / „მონაცემი აკლია" / „candidate ვერ ამოვიღეთ". არასოდეს silent gap.
 
@@ -54,8 +54,11 @@
 
 ## Session Pacing
 
-- **~60% context ceiling** — სანამ context 60%-ს არ მიუახლოვდება, რამდენი goal-იც ეტევა იმდენი გავაკეთოთ; 60%-ზე — handoff შევთავაზო
-- Scope creep = bug. „ოჰ, ესეც გავაკეთო" → ჯერ ვიკითხო user-ს
+- **Context size — 1M tokens (Opus 4.7, verified 2026-04-30 via WebSearch + official docs)**. 60% ceiling (600K tokens) გრძელ workflow-ში იშვიათად reach-ვდება — context space არ არის ძირითადი regression trigger.
+- **Real regression trigger — output pattern detection** (size-independent): filler tokens (e.g., „ცადო" 3+ in single response), partial Latin tokens („magram", „magari"), self-correction loops, post-complex-tool-output degradation. Pattern detected → handoff offer.
+- **Mitigation BEFORE restart** (per memory `feedback_session_discipline.md` row 19 — „ცალკე უნდა მოვაგვარო, არა სესიის შეჩერებით"): (a) smaller response, less parallel complexity; (b) avoid mixing Georgian + English + file-paths in one paragraph; (c) short cool-down — minimal-content reply, let pattern decay; (d) restart only if mitigation fails.
+- **Why regression happens** (4 verified causes, size-independent): (1) **output distribution drift** — ქართული პასუხი ინგლისურ/technical content-ს მიჰყვება → token distribution shifts; (2) **token salience** — recently-used token returns as filler; (3) **mixed-language tool output background** — large non-Georgian blob affects subsequent Georgian generation; (4) **self-attention pattern lock** — one partial-token error fixates, similar errors compound.
+- Scope creep = bug. „ოჰ, ესეც გავაკეთო" → ჯერ ვიკითხო user-ს.
 
 ## Correction Escalation
 
