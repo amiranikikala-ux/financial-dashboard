@@ -1,6 +1,6 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-04-30 evening (handoff close-out — NSSM migration session ფორმალურად დახურულია, 5 commit landed) — გრძელი წაკითხვა საჭირო **არ არის**. ეს ფაილი ცოცხალი state-ია. Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`. Evidence → `HANDOFF.md` + `HANDOFF_ARCHIVE/`.
+> **განახლდა**: 2026-04-30 late evening (`_parse_rs_datetime` cleanup — commit `2ab4a05`, 48 ხაზი dead code წაიშალა) — გრძელი წაკითხვა საჭირო **არ არის**. ეს ფაილი ცოცხალი state-ია. Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`. Evidence → `HANDOFF.md` + `HANDOFF_ARCHIVE/`.
 >
 > **ახალი ჩატის read order**: ეს ფაილი → `docs/MASTER_PLAN.md` → `AGENTS.md`.
 >
@@ -10,7 +10,8 @@
 
 ## 1. ახლა სად ვართ
 
-- **ეს session (2026-04-30 evening — handoff close-out)**: წინა NSSM-migration session-ის working-copy state ფორმალურად დახურდა — 5 commit landed (constants.py duplicates, retired imported-products CSVs + regression-runtime gitignore, regression-detection Stop hook + handoff template v1.1, AGENTS.md proof-gate path + Session Pacing rewrite, ეს განახლება). ენობრივი regression — „ცადო" filler-ი user-მა გამოაცადა მე-7 cross-session occurrence-ად; გასწორდა inline (filler → „გავაკეთო/მოკლე/შემოწმება"); ცადო-სგან გასუფთავება იწყება ამ ფაილიდან.
+- **ეს session (2026-04-30 late evening — `_parse_rs_datetime` cleanup)**: წინა session-ის ღია task დაიხურა — `_parse_rs_datetime` divergent ვერსიის spot-check გაკეთდა (5 წლის RS data + 3 თვის retail = ყველგან ISO format), dead first def + dead constant + dead import წაიშალა (commit `2ab4a05`, 48 ხაზი). Live behavior უცვლელია, 21 targeted ტესტი green. user-ი თავდაპირველად ყოყმანობდა წაშლაზე ("იქნება და იყოს") — გავარკვიე რომ ფუნქცია უკვე override-ულია L657-ით → user-მა confirm გააკეთა "თუ მსგავსია წაიშალოს".
+- **წინა session (2026-04-30 evening — handoff close-out)**: წინა NSSM-migration session-ის working-copy state ფორმალურად დახურდა — 5 commit landed (constants.py duplicates, retired imported-products CSVs + regression-runtime gitignore, regression-detection Stop hook + handoff template v1.1, AGENTS.md proof-gate path + Session Pacing rewrite, CONTEXT-ის განახლება). ენობრივი regression — „ცადო" filler-ი user-მა გამოაცადა მე-7 cross-session occurrence-ად; გასწორდა inline (filler → „გავაკეთო/მოკლე/შემოწმება").
 - **წინა session (2026-04-30 morning — NSSM migration COMPLETE)**: `C:\financial-dashboard\` უკვე დასახლებული იყო (user-ის ხელით 04-29 evening + venv 04-30 00:00:06). NSSM 4 paths გადარედირექტდა (Application + AppDirectory + AppStdout + AppStderr) → service restart → data.json copy from OneDrive → manual pipeline trigger → **pipeline 7.2 წთ-ში სრულდა**, data.json fresh 54.2 MB, 28 API artifacts, 0 errors. OneDrive copy untouched (fallback). Auto-handoff hook + AGENTS.md path fix + handoff skill template v1.1 ამავე session-ში მომზადდა working-copy-ში; დახურდა ამ session-ში 5 commit-ით.
 - **წინა-წინა session (2026-04-29 evening, არც ერთი commit არ მომხდარა)**: workspace structural cleanup — parent folder-დან ~863 MB orphan/duplicate ფაილი გადატანილი `_to_delete_2026-04-29\` staging-ში. დეტალები §2-ში.
 - **Active section** (Master Plan): §5 გაყიდვები — **CAL mini-sprint** Step 2-ის ბოლოზეა (იგივე წერტილი, არ შეცვლილა).
@@ -18,8 +19,11 @@
 - **CAL Step 2 (Data inventory)**: ✅ pipeline-ში per-day aggregation **არ არსებობს** (only `by_month` / `by_category_by_month`). Source per-row datetime ცხადია (`დრო` სვეტი), ifqli matched products უკვე გამოთვლილია `supplier_profitability`-ში. **საჭიროა ახალი aggregation**: `supplier.profitability.daily_breakdown[]` sparse (per-day × per-store)
 - **CAL Step 3-6**: spot-check + implement + verify + user review — ⏳ ვიდრე user-ის ცხადი „გადავიდეთ"
 
-**ბოლო commit-ები** (`origin/main`-ზე 5 ahead, push არ გაკეთებულა):
+**ბოლო commit-ები** (`origin/main`-ზე 7 ahead, push არ გაკეთებულა):
 ```
+2ab4a05  chore(pipeline): drop dead _parse_rs_datetime first def + unused Georgian-month constant
+45c6bb6  docs(handoff): correct ahead-of-main count (48 → 5)
+3c54aab  docs(handoff): close NSSM-migration session — 5 commits landed, file rotated
 8dd1637  docs(governance): correct AGENTS.md proof-gate path + flesh out Session Pacing
 f11439b  feat(.claude): regression-detection Stop hook + handoff template fix
 e21e9e0  chore: drop retired imported-products CSVs + gitignore regression runtime
@@ -27,9 +31,6 @@ e21e9e0  chore: drop retired imported-products CSVs + gitignore regression runti
 bf7b091  docs(handoff): commit working-copy state — Financial_Analysis duplicate finding + restart trigger
 b1ccb93  docs(governance): SessionStart hook + flesh out CLAUDE.md Agent Brief
 4deed3a  docs(governance): consolidate to 4-file structure — MASTER_PLAN as single roadmap
-f75dfd0  docs(handoff): Section 1 (Tbilisi) closure + stale-CONTEXT corrections
-666edd3  feat(imported-products): add Tbilisi (closed store) to object_mapping
-3a9df66  docs(handoff): pin a318a91 + 3d3ac07 SHAs
 ```
 
 ---
@@ -127,7 +128,7 @@ _to_delete_2026-04-29\                         ← grace folder (1 week → perm
 | **🚨 0c** | dashboard „ანალიზდა" KPI ცრუობს partial-coverage სცენარში | 1 sprint | **HIGH** | ELIZI ground-truth: cost 297,685 / sales 313,456 / margin **+5.3%**. Dashboard: −2.13%. 4 ვარიანტი: (A) alias 35→80%; (B) UI banner; (C) ცალკე KPI „matched-only margin"; (D) ground-truth Excel pipeline-ში. user-ი არჩევს |
 | **🚧 CAL** | calendar heatmap supplier modal-ში — Step 3 (spot-check) ღიაა | ~1 session | LOW | scope locked, data inventory done; საჭიროა new daily aggregation `supplier_profitability`-ში |
 | **✅ DONE 2026-04-30** | ~~`dashboard_pipeline/constants.py` duplicate functions~~ — **REAL SCOPE WAS 10 FUNCTIONS, NOT 1**. Verified: 9 character-identical (`_object_order_for_pos`, `_object_order_for_monthly_pnl`, `_month_sort_key`, `_match_text_to_object`, `detect_object`, `_extract_tax_id_from_org`, `_pick_aging_bucket`, `_empty_aging_summary`, `_to_waybills_df`) → first copies deleted (lines 434-541, 109 lines removed, file 797→688). 50 targeted tests green, syntax OK, all 10 names still callable. | — | — | dead code removed |
-| **🚨 NEW** | `_parse_rs_datetime` — TWO DIVERGENT versions remain (L320 Georgian-aware via `IMPORTED_PRODUCTS_MONTH_TOKEN_TO_MM`, L543 generic format-list). Live = L543 (last def wins). Question: Georgian month parsing logic was lost when generic version was added — does RS.ge data ever contain Georgian month names in datetime fields? If yes → Georgian version may need restoration. If no → delete L320 first copy. **Spot-check needed**: sample a `რს ზედნადები` Excel file's datetime column. | ~15 წთ spot-check + decision | MEDIUM | divergent dead code; behavior currently masks the better version |
+| **✅ DONE 2026-04-30** | ~~`_parse_rs_datetime` — TWO DIVERGENT versions~~ — Spot-check across 5 RS waybill files (2022-2026) + 3 retail sales files (01-03.2026) confirmed ALL datetime values use ISO `%Y-%m-%d %H:%M[:%S]` format. No Georgian month tokens anywhere. Dead first def (L434-463) + dead `IMPORTED_PRODUCTS_MONTH_TOKEN_TO_MM` constant + unused import in `generate_dashboard_data.py` removed (commit `2ab4a05`, 48 lines deleted). 21 targeted tests green. Live behavior unchanged (L657 was already overriding L434). | — | — | divergent dead code resolved; only one canonical `_parse_rs_datetime` remains |
 | 🛡 0b | Safety net follow-ups (Pandera ანალიზის შემდეგ) | 1-2 session | LOW | (a) `vulture` dead-code; (b) `jsonschema` config-ფაილებზე; (c) golden snapshot data.json-ისთვის; (d) reconcile_suppliers.py გავრცელება; (e) Pandera RS.ge CSV reader |
 | 1 | Supplier Profitability Sprint C — alias UI mutation workflow | ~1 session | LOW | browser-ში „✓ დაადასტურე ალიასი" → POST → `product_aliases.json` write |
 | 2 | AI tool wrapper `analyze_supplier_profitability(tax_id)` | ~1 session | LOW | TOOL_SCHEMAS 29 → 30 |
