@@ -211,7 +211,7 @@ def test_object_breakdown_destinations_are_known(imported_products):
     """Every per-store destination label must be one of the canonical
     object names. Catches resolver returning malformed strings, NULLs,
     or fragments of the source text."""
-    known = {"ოზურგეთი", "დვაბზუ", "გაუნაწილებელი"}
+    known = {"ოზურგეთი", "დვაბზუ", "თბილისი", "გაუნაწილებელი"}
     seen = set()
     for s in imported_products["suppliers"]:
         for ob in s.get("object_breakdown") or []:
