@@ -91,21 +91,6 @@ IMPORTED_PRODUCTS_TOP_SUPPLIER_PRODUCT_PAIRS_LIMIT = FULL_ROLLUP_ROW_CAP
 IMPORTED_PRODUCTS_TRUNCATION_ROW_COUNT = 1_048_576
 IMPORTED_PRODUCTS_READ_ERROR_LIMIT = 20
 IMPORTED_PRODUCTS_CSV_ENCODINGS = ("utf-8-sig", "utf-8", "cp1251", "cp1252")
-IMPORTED_PRODUCTS_MONTH_TOKEN_TO_MM = {
-    "იან": "01",
-    "თებ": "02",
-    "მარ": "03",
-    "აპრ": "04",
-    "მაი": "05",
-    "ივნ": "06",
-    "ივლ": "07",
-    "აგვ": "08",
-    "სექ": "09",
-    "სეპ": "09",
-    "ოქტ": "10",
-    "ნოე": "11",
-    "დეკ": "12",
-}
 
 # ---------------------------------------------------------------------------
 # Retail sales
@@ -429,38 +414,6 @@ def _ordered_unique(values):
         seen.add(v)
         out.append(v)
     return out
-
-
-def _parse_rs_datetime(value):
-    if value is None:
-        return pd.NaT
-    if isinstance(value, float) and pd.isna(value):
-        return pd.NaT
-    s = str(value).strip()
-    if not s:
-        return pd.NaT
-    dt = pd.to_datetime(s, errors="coerce", format="%Y-%m-%d %H:%M:%S")
-    if pd.isna(dt):
-        m = re.match(r"^\s*(\d{1,2})-([^-]+)-(\d{4})(.*)$", s)
-        if m:
-            day, month_token, year, rest = m.groups()
-            normalized_month = re.sub(r"[^ა-ჰa-zA-Z]", "", month_token.lower())
-            for token, mm in IMPORTED_PRODUCTS_MONTH_TOKEN_TO_MM.items():
-                if normalized_month.startswith(token):
-                    normalized_text = f"{year}-{mm}-{int(day):02d}{rest}"
-                    dt = pd.to_datetime(
-                        normalized_text,
-                        errors="coerce",
-                        format="%Y-%m-%d %H:%M:%S",
-                    )
-                    if pd.isna(dt):
-                        dt = pd.to_datetime(normalized_text, errors="coerce")
-                    break
-    if pd.isna(dt):
-        dt = pd.to_datetime(s, errors="coerce", dayfirst=True)
-    if pd.isna(dt):
-        dt = pd.to_datetime(s, errors="coerce")
-    return dt
 
 
 def _month_key(date_val):
