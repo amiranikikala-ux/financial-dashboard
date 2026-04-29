@@ -12,6 +12,19 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/check_regression.sh",
+            "shell": "bash",
+            "timeout": 10,
+            "statusMessage": "Checking for language regression"
+          }
+        ]
+      }
     ]
   }
 }
