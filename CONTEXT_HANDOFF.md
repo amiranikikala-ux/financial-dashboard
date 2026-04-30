@@ -1,10 +1,16 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-04-30 late evening (Sprint C alias UI smoke-test still pending; 0d server.py timeout fix landed `089e953`; user added 3 monthly imported_products CSVs and pipeline ran cleanly; **regression hook fired count #2 in this session — user requested restart**). გრძელი წაკითხვა საჭირო **არ არის**. ეს ფაილი ცოცხალი state-ია. Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`. Evidence → `HANDOFF.md` + `HANDOFF_ARCHIVE/`.
+> **განახლდა**: 2026-05-01 (close-out — 3 commits landed: matching overhaul `560dab9`, cost imputation `d1ff190`, governance lazy-load `6ab04b7`; service restarted; 30-min timeout active). გრძელი წაკითხვა საჭირო **არ არის**. ეს ფაილი ცოცხალი state-ია. Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`. Evidence → `HANDOFF.md` + `HANDOFF_ARCHIVE/`.
 >
-> 🚨 **THIS SESSION CLOSED VIA RESTART** (2026-04-30 ~18:30) — language regression iteration #2 in this session despite the new feedback loop landing in `a5ff7d0` earlier. Per AGENTS.md Correction Escalation: 2-strikes → restart. **The new UserPromptSubmit hook DID work** (count went 0 → 1 → 2; Claude saw the alerts and self-corrected mid-session) — the loop closure is structurally sound. The remaining problem is the AI's output drift itself, not the detection. Fresh chat needed.
+> ✅ **THIS SESSION — 3 commits landed (2026-05-01)**: prior-session working-tree changes finally committed and split into 2 logical pipeline commits + 1 governance commit. Tests 57/57 green at every step. Pipeline change is what flips portfolio from −611,380 ₾ / −249.4% margin to +17,454 ₾ / +7.1% margin (verified in last pipeline run, data.json 58.99 MB, 2026-04-30 22:10). User restarted FinancialDashboardBackend service → new 30-min timeout active (`server.py:122` confirmed in live mirror).
 >
-> ✅ **0d server.py:122 timeout fix LANDED** (2026-04-30 evening, commit `089e953`) — bumped subprocess.run timeout from `10*60` → `30*60` (10 min → 30 min). C:\ pipeline runs are 7-8 min, OneDrive runs were 28-30 min. The hourly /api/refresh cron was failing 30+ consecutive runs since 2026-04-23. Same edit applied to C:\financial-dashboard\server.py directly to keep service mirror in sync. .gitignore also added `Financial_Analysis/შემოტანილი პროდუქცია/` (sensitive RS.ge waybill data). **AWAITING `Restart-Service FinancialDashboardBackend` (admin/UAC)** for new timeout to take effect — until then, hourly cron continues to fail.
+> ✅ **`560dab9` fix(pipeline): supplier matching — name-exclusivity + barcode dedup + short-code guard** — `_build_supplier_exclusive_names` (97.1% of 12,905 names supplier-exclusive; 371 shared names dominated by Coca-Cola distributors filtered out, preserves Borjomi-glass-vs-plastic rule), `_clean_code` strips trailing `.0` from numeric Excel codes (4380→3225 by_product rows), short-code collision guard (codes <5 chars trusted only when retail name agrees, prevents bread-1002 → MAX-barcode-1002 mis-match). 5 tests reframed for shared-name scenarios.
+>
+> ✅ **`d1ff190` fix(pipeline): impute cost_sold from supplier invoice with qty cap** — replaces MAX POS-recorded `cost_ge` with `min(qty_sold, qty_bought) × (cost_paid / qty_bought)`. Source of truth = supplier RS waybill (contractually signed) instead of MAX operator entry (frequently empty/placeholder for cost-at-sale). Cap prevents over-attribution when name-match catches a multi-supplier brand. `cost_sold_recorded_ge` preserved for UI transparency. Per-store breakdown scaled by same cap factor.
+>
+> ✅ **`6ab04b7` docs(governance): lazy-load policy** — only `CONTEXT_HANDOFF.md` is mandatory at session start; `MASTER_PLAN.md` and `AGENTS.md` read on-demand. Reading all 3 governance files up front filled too much context and contributed to language regression pattern; lazy-load reduces baseline load. CLAUDE.md GitNexus block also slimmed (full per-task knowledge in `.claude/skills/gitnexus/*`).
+>
+> ✅ **0d server.py:122 timeout fix ACTIVE in service** (2026-05-01 confirmed) — `Restart-Service FinancialDashboardBackend` done. `/api/status` returns 200, `server.py:122` shows `timeout=30 * 60`. Hourly `/api/refresh` cron will now have 30 min before kill (was 10 min). C:\\ pipeline runs are 7-8 min, OneDrive runs are 28-30 min. Pipeline ran 30+ consecutive failed timeouts between 2026-04-23 and 2026-04-30 — that crash loop is now closed.
 >
 > ✅ **imported_products data refresh — same numbers as before, format change only** (2026-04-30 ~18:27): user added 3 monthly CSVs (`01,2026.csv` 1.97 MB / `02,2026.csv` 1.79 MB / `03,2026.csv` 2.10 MB = 5.86 MB total) into OneDrive's `Financial_Analysis/შემოტანილი პროდუქცია/` folder (originally created as Latin `shemotanili produqcia`, then user renamed to `შემოტანილი საქონელი`, then I renamed to pipeline-expected `შემოტანილი პროდუქცია`). 3 monthly files copied to C:\, old aggregate `report 01,2026-03,2026.csv` → `.csv.bak` to prevent double-counting. Pipeline ran cleanly on C:\ (6 min 49 sec, 0 errors, 0 warnings). data.json: 65.5 MB → **62.33 MB** at 18:27. **Result: same supplier counts as before — 28 verified / 21 partial / 17 unverified / 4 protected = 70 total**. The 3 new monthly files contain identical data to the previous single aggregate, just split per-month. Coverage progress toward 90% goal still requires the MAX vendor-tag export discussed earlier in this session (see §4 item 0f).
 >
@@ -24,7 +30,44 @@
 
 ## 1. ახლა სად ვართ
 
-- **ეს session (2026-04-30 evening — Sprint C alias UI implementation + cross-source gap discovery + handoff)**:
+- **ეს session (2026-05-01 — close-out, 3 commits landed)**:
+  - **Action**: split prior-session working-tree changes into 2 logical pipeline commits + 1 governance commit, deleted residue `CLAUDE.md.backup`, tests 57/57 green at each intermediate state.
+  - **Verification**: service restart confirmed (`/api/status = 200`, `server.py:122 timeout=30*60` active), portfolio numbers from prior pipeline run (data.json 58.99 MB, 2026-04-30 22:10) still apply — ვასაძე ჯამი 10.50% margin, portfolio +17,454 ₾ profit / +7.1% margin (was −611,380 ₾ / −249.4% with MAX-recorded cost).
+  - **Commits landed**:
+
+    | SHA | type | რას აკეთებს |
+    |---|---|---|
+    | `560dab9` | fix(pipeline) | name-exclusivity + barcode dedup + short-code guard (matching overhaul) |
+    | `d1ff190` | fix(pipeline) | impute cost_sold from supplier invoice with qty cap (cost truth) |
+    | `6ab04b7` | docs(governance) | lazy-load policy — only `CONTEXT_HANDOFF.md` mandatory at session-start |
+
+  - **Live margin table (still applicable from 2026-04-30 22:10 pipeline run)**:
+
+    | მომწოდებელი | წინ | ახლა | MAX ground-truth |
+    |---|---|---|---|
+    | ვასაძე ჯამი | 33.22% | **10.50%** | ~10.9% ✓ |
+    | ვასაძე@ოზურგეთი | 11.81% | 10.38% | — |
+    | **ვასაძე@დვაბზუ** | **77.86%** ✗ | **10.76%** ✓ | ~10.9% ✓ |
+    | Portfolio margin | −249.4% | **+7.1%** | — |
+    | Portfolio profit | −611,380 ₾ | **+17,454 ₾** | — |
+    | ELIZI (protected) | −836% | −25.75% | +5.3% (still off — see §4 0c) |
+    | შრომა-2023 | −2,149% | +7.30% | — |
+
+  - **Known limitation — ELIZI not fully fixed**: pipeline shows −25.75%, ground-truth +5.3%. Cap solves over-attribution, NOT mis-attribution. Cigarette name-match still attributes sales to ELIZI that other distributors (გეოდისტრიბუცია, ინტერნეიშნლ მარკეტინგ) actually shipped. Two future paths: (A) MAX vendor-tag export, (B) ground-truth Excel cross-check via `Financial_Analysis/ოზურგეთი კომპანიების გაყიდვები/2022,2026-02.xls`. Both deferred — separate sprint.
+  - **Open work for next session**: 0a Sprint C alias UI browser smoke-test (~30 min), CAL Step 3 spot-check, 0c ELIZI separate sprint (HIGH priority). Push to `origin/main` is **11 commits ahead** — pending user decision when to push.
+
+- **წინა session-ის ნაწილი (2026-04-30 ღამე — pipeline matching + cost imputation development)**:
+  - **ნაწილი 1 (vasadze 688.80 ₾ gap reconciliation)** — User dropped `Financial_Analysis/მეგა პლუს/ზედანდებები.xlsx` (367 waybills, 20,452.80 ₾, vasadze→ჯეო ფუდთაიმი Q1 2026). Cross-checked with `Financial_Analysis/რს ზედნადები/report 01,2026-03,2026.xls` (386 waybills for vasadze, 19,881 ₾ gross / 19,764 net). Finding: 367 common waybills match cent-for-cent both sides; 19 RS-only = 17 returns (−688.80 ₾) + 2 cancellations (+117 ₾). Reconciliation: 20,452.80 − 688.80 + 117 = 19,881 ✓. User concern (cancelled-on-RS-but-accepted-in-MegaPlus → ghost AP) — cleared for vasadze Q1; cancelled and return waybill IDs absent from MegaPlus.
+  - **ნაწილი 2 (root-cause find — "ანალიზდა" 2,484 ₾ vs ground-truth ~19,320)** — User asked why dashboard shows only 2,484 ₾ "გავიდა (ანალიზდა)" for ვასაძე when ground-truth name-match across both stores' Q1 2026 sales files yields 19,320 ₾. Diagnosis: pipeline JOIN was code/barcode-only; ვასაძე's internal codes (1002, 9003, etc) don't match MAX's product codes; PROTECTED-name fallback covers cigarettes/alcohol only.
+  - **ნაწილი 3 (3 pipeline fixes — code on disk, NOT COMMITTED)**:
+    1. **`_build_supplier_exclusive_names()`** in `dashboard_pipeline/supplier_profitability.py` — new helper builds Set[str] of normalized product names that appear under exactly ONE supplier across all imports (97.1% of all 12,905 names qualify; the 371 shared names are dominated by Coca-Cola distributors). New `match_kind="name_supplier_exclusive"` step in `_match_product`: when imported name is supplier-exclusive AND retail has exactly 1 row with that name, JOIN safely (Borjomi-glass-vs-plastic risk eliminated by upstream supplier-exclusivity filter).
+    2. **`_clean_code()` helper** in `dashboard_pipeline/retail_sales.py` — strips trailing `.0` that pandas adds when Excel stores barcodes/product_codes as numeric. Fixes the duplicate-row bug where same SKU produced two by_product entries (e.g., `4860103230027` + `4860103230027.0`). by_product row count: 4380 → 3225 after dedup.
+    3. **Short-code collision guard** in `_match_product` — imported codes ≤4 chars are typically supplier-internal numbering; trust short-code matches only when retail row's name agrees (exact normalized OR substring/prefix). Threshold tunable (`SHORT_CODE_THRESHOLD = 5`). Fixes the bread-1002 → bogus retail barcode 1002 collision. Ambiguous-code path also falls through to name-supplier-exclusive before returning ambiguous.
+  - **ნაწილი 4 (tests — 5 updated, 0 added, 57/57 green)** — Updated tests preserved their original intent (testing what happens for SHARED names) by introducing a 2nd supplier with the same name in test data, so name is no longer supplier-exclusive: `test_name_candidate_attached_when_unique_name_match_non_protected`, `test_name_candidate_normalizes_whitespace_and_punctuation`, `test_name_candidate_attached_to_ambiguous_rows_too`, `test_name_in_protected_category_does_not_fire_for_beverages`, `test_portfolio_summary_aggregates_candidate_counts`. `test_x_suffix_does_not_override_direct_pcode_hit` started failing on substring-strict `_name_agrees`; relaxed to allow prefix/substring/contained name to pass.
+  - **ნაწილი 5 (verification)** — Pipeline ran clean 4 times during dev iteration. Final data.json (`rs-dashboard/public/data.json`, 58.98 MB, 2026-04-30 20:54:07): ვასაძე verified, შემოვიდა 19,764 / გავ 12,602 / მოგ 4,186 / მარჟა 33.22% / matched 56/92 / cost coverage 95.03%. დვაბზუ: 11,696 / 4,084 / 3,180 / 77.9% margin (margin suspiciously high — see §4 0g). ოზურგეთი: 8,067 / 8,517 / 1,005 / 11.8%. Portfolio: 34 verified / 17 partial / 14 unverified / 5 protected (was 28/21/17/4).
+  - **ნაწილი 6 (NOT COMMITTED — pending decision)**: 3 files modified working-tree only — `dashboard_pipeline/supplier_profitability.py`, `dashboard_pipeline/retail_sales.py`, `tests/test_supplier_profitability.py`. No commit made. User asked for handoff before commit step. Next session decision: review diff, verify smoke-test in browser, then commit + push.
+
+- **წინა session-ი (2026-04-30 evening — Sprint C alias UI implementation + cross-source gap discovery + handoff)**:
   - **ნაწილი A (Sprint C preview)** — `/preview` skill executed, evidence inventory complete. File: `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_C_ALIAS_UI_PREVIEW.md`. Findings: name_candidate emission already shipped at `supplier_profitability.py:321`, SupplierModal.jsx:172-231 already renders 💡 hint card, ONLY the confirm bridge missing. User approved DO-in-single-session.
   - **ნაწილი B (Sprint C implement)** — 4 files modified + 2 new test files: `_validate_aliases.append_alias_atomic` (90 lines, atomic .tmp + os.replace, AliasValidationError + AliasDuplicateError exception classes), `server.POST /api/aliases/confirm` (85 lines, mirrors cash-outflow pattern, `_aliases_file_path()` extracted for monkeypatching, retail_known_keys built from cached data.json), `SupplierModal.UnmatchedProductRow` (50+ lines, accepts onConfirm/confirmed/pending props, renders ✓ button + ⏳ + ✅ states), 60 lines new CSS for button gradient + confirmed-row variant + error sub-note. 8 tests green (`tests/test_validate_aliases.py` +4, `tests/test_server_alias_endpoint.py` NEW +4). Full pytest: 2,252 passed / 7 pre-existing AGENTS.md-doc-pin failures (unrelated).
   - **ნაწილი C (commit + sync)** — Two commits on OneDrive: `9ae5e2c docs(preview): Sprint C alias-confirmation scoping` + `57fa81d feat(supplier): Sprint C alias confirmation — endpoint + UI + 8 tests`. C:\\ pulled via `git fetch <onedrive-path> main && git merge --ff-only`. Both heads now at 57fa81d.
@@ -40,27 +83,27 @@
 - **CAL Step 2 (Data inventory)**: ✅ pipeline-ში per-day aggregation **არ არსებობს** (only `by_month` / `by_category_by_month`). Source per-row datetime ცხადია (`დრო` სვეტი), ifqli matched products უკვე გამოთვლილია `supplier_profitability`-ში. **საჭიროა ახალი aggregation**: `supplier.profitability.daily_breakdown[]` sparse (per-day × per-store)
 - **CAL Step 3-6**: spot-check + implement + verify + user review — ⏳ ვიდრე user-ის ცხადი „გადავიდეთ"
 
-**ბოლო commit-ები** (`origin/main`-ზე 9 ahead, push არ გაკეთებულა; ამ session-ში **2 commit + 1 pending CONTEXT_HANDOFF.md**):
+**ბოლო commit-ები** (`origin/main`-ზე 11 ahead, push არ გაკეთებულა):
 ```
+6ab04b7  docs(governance): lazy-load policy — only CONTEXT_HANDOFF.md mandatory at session start
+d1ff190  fix(pipeline): impute cost_sold from supplier invoice with qty cap
+560dab9  fix(pipeline): supplier matching — name-exclusivity + barcode dedup + short-code guard
+8adfb70  docs(handoff): close session — 0d timeout fix landed, imported_products refresh same numbers, regression #2 → restart
+089e953  fix(pipeline): bump /api/refresh subprocess timeout 10→30 min + ignore imported_products CSVs
+9868d38  docs(handoff): close regression-hook item 0e — feedback loop landed in a5ff7d0
+a5ff7d0  feat(.claude): close regression-detection feedback loop via UserPromptSubmit hook
+6c1e24e  docs(handoff): close Sprint C session — code complete, smoke-test pending, regression hook needs investigation
 57fa81d  feat(supplier): Sprint C alias confirmation — endpoint + UI + 8 tests
 9ae5e2c  docs(preview): Sprint C alias-confirmation scoping + evidence inventory
-b3e2b41  docs(handoff): close imported_products bug + capture 90% coverage Sprint C input
-f95e85f  docs(handoff): capture migration Phase 1 + imported_products bug
-57cf383  docs(handoff): close _parse_rs_datetime task — pin SHA 2ab4a05
-2ab4a05  chore(pipeline): drop dead _parse_rs_datetime first def + unused Georgian-month constant
-45c6bb6  docs(handoff): correct ahead-of-main count (48 → 5)
-3c54aab  docs(handoff): close NSSM-migration session — 5 commits landed, file rotated
-8dd1637  docs(governance): correct AGENTS.md proof-gate path + flesh out Session Pacing
-f11439b  feat(.claude): regression-detection Stop hook + handoff template fix
 ```
 
-**ამ session-ში გაკეთებული**:
-1. **Sprint C preview** committed (`9ae5e2c`) — `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_C_ALIAS_UI_PREVIEW.md`, 179 lines.
-2. **Sprint C implementation** committed (`57fa81d`) — 6 files, 651 insertions / 10 deletions: `_validate_aliases.py` (+90 lines, atomic helper + 2 exception classes), `server.py` (+105 lines, new endpoint + `_aliases_file_path` + `_build_retail_known_keys`), `SupplierModal.jsx` (+124 lines, button + state + handleConfirmAlias), `components.css` (+65 lines, button + badge + error styles), `tests/test_validate_aliases.py` (+90 lines, 4 new tests), `tests/test_server_alias_endpoint.py` (NEW, 4 tests, 164 lines).
-3. **C:\\ git pull** (fast-forward from local OneDrive remote) — both commits now on C:\\ working tree.
-4. **`Restart-Service FinancialDashboardBackend`** by user (admin) — verified via `/api/status` 200 + `POST /api/aliases/confirm` empty body returns 400 + Georgian message.
-5. **Cross-source revenue gap diagnostic** — uncommitted analysis (Python in shell), no file written. Findings captured in §5.
-6. **Language regression triggered handoff** — no commits.
+**ამ session-ში გაკეთებული (2026-05-01)**:
+1. **Service restart verified** — `/api/status` returns 200, `server.py:122 timeout=30*60` active. Hourly refresh cron crash loop is now closed.
+2. **Pipeline matching commit** `560dab9` — `dashboard_pipeline/retail_sales.py` (+`_clean_code` helper) + `dashboard_pipeline/supplier_profitability.py` (matching half) + `tests/test_supplier_profitability.py` (5 reframed tests). 151 insertions / 32 deletions across 3 files.
+3. **Cost imputation commit** `d1ff190` — `dashboard_pipeline/supplier_profitability.py` (cost block + per-store scale + `cost_sold_recorded_ge` field) + `tests/test_supplier_profitability.py` (1 reframed test). 47 insertions / 7 deletions across 2 files.
+4. **Governance commit** `6ab04b7` — `CLAUDE.md` lazy-load policy (12 insertions / 95 deletions; only `CONTEXT_HANDOFF.md` mandatory at session start).
+5. **Residue cleanup** — deleted untracked `CLAUDE.md.backup`.
+6. **Tests verified at every step** — 57/57 supplier_profitability + retail_sales_revenue_formula tests green at intermediate matching-only state AND post-imputation state.
 
 ---
 
@@ -133,15 +176,18 @@ _to_delete_2026-04-29\                         ← grace folder (1 week → perm
 
 | მეტრიკა | მნიშვნელობა |
 |---|---|
-| pytest | **2,252/2,259 green** (Sprint C +8 new tests; 7 fail = pre-existing AGENTS.md doc-pin drift after `8dd1637`) |
+| pytest (supplier_profitability + retail_sales_revenue_formula) | **57/57 green** (post 5-test update + substring-tolerant `_name_agrees`) |
 | `SYSTEM_PROMPT_KA` | 1,163 ხაზი |
 | Tool surface | 29 (incl. `data_quality_guard`) |
 | Dashboard tabs | 15 |
-| `data.json` | 65.5 MB (C:\\), 26 sections, **4 store buckets** supplier-side / **2 active store buckets** retail-side (ოზურგეთი 222K / დვაბზუ 97K Q1 2026) |
-| Pipeline coverage | **42.0%** (2,182,576 / 5,200,734 ₾). ⚠️ წინა docs-ი 69.7%-ს წერდა — wrong, baseline regen verified 42% |
+| `data.json` | **58.99 MB** (post-imputed-cost fix, 2026-04-30 22:10:54), 26 sections, **4 store buckets** supplier-side / **2 active store buckets** retail-side |
+| `retail_sales.by_product` rows | **3,225** (was 4,380 before barcode dtype dedup) |
 | `retail_sales` window | **3 თვე** (2026-01..03) — 96,464 line / 319K ₾ revenue / 50K ₾ profit / 15.84% margin |
-| `imported_products` window | **1 file** (Q1 2026), 70 suppliers, profitability ON. NB: `distinct_month_count: 0` + `date_range: {min: None, max: None}` — pipeline doesn't extract month metadata for imports (separate bug) |
-| Sprint C scope | **66 candidates total** (20 unmatched_preview + 46 ambiguous_preview); only 21 of 49 below-90% suppliers have ANY visible candidate; ვასაძე leads with 9 candidates |
+| `imported_products` window | **1 file** (Q1 2026), 70 suppliers, profitability ON |
+| **Supplier portfolio status (post-fix)** | 34 verified / 17 partial / 14 unverified / 5 protected = 70 total |
+| **Portfolio profit/margin (post-imputed-cost)** | revenue 245,172 ₾ / profit **+17,454 ₾** / margin **+7.1%** — was −611,380 ₾ / −249.4% with MAX-recorded cost |
+| **ვასაძის პური Q1 2026 (post-imputed-cost)** | შემოვიდა 19,764 ₾ / გაიყიდა 12,602 ₾ / **თვითღ. (imputed) 11,308 ₾** / მოგება **1,294 ₾** / **მარჟა 10.50%** (matches MAX ground-truth ~10.9%); per-store: ოზურგეთი 10.38% / დვაბზუ 10.76% (was 11.81% / 77.86% with MAX-recorded) |
+| ვასაძე RS↔MegaPlus reconciliation | 367 common waybills cent-match / 19 RS-only = 17 returns (−688.80) + 2 cancellations (+117); MegaPlus 20,452.80 = RS-net 19,764 + 688.80 returns − 117 cancelled |
 | `/api/aliases/confirm` | **LIVE** post-restart 2026-04-30 evening — empty body → 400 + Georgian message; happy-path verified by 4 endpoint tests |
 | MCP servers | gitnexus · playwright · filesystem · github · sqlite · sequential-thinking · memory · brave-search · time · fetch · context7 |
 | VAT cumulative gap | **+90K ₾ net / +107K ₾ gross** (pipeline). Audit ground-truth: **742K ₾**. Delta = ~652K within pipeline coverage gaps |
@@ -153,8 +199,9 @@ _to_delete_2026-04-29\                         ← grace folder (1 week → perm
 | # | task | size | risk | რატომ |
 |---|---|---|---|---|
 | **✅ DONE 2026-04-30** | ~~imported_products bug — supplier modal ცარიელია~~ — File moved (single 3-month CSV), pipeline manual run, 70 supplier-ი profitability-ით. User-ის incremental philosophy captured. | — | — | მთავარი user pain — supplier modal cross-check ცხრილი ცოცხალი |
+| **✅ DONE 2026-05-01** | ~~0g — 4 uncommitted pipeline changes~~ — Split into 2 commits: `560dab9` matching overhaul (name-exclusivity + barcode dedup + short-code guard) + `d1ff190` cost imputation (supplier-invoice-imputed cost with qty cap + `cost_sold_recorded_ge` transparency field). All 57 tests green at every step. Push to `origin/main` is **11 ahead** — pending user decision when to push. | — | — | RESOLVED |
 | **🟡 0a CODE COMPLETE — smoke-test pending** | **Sprint C alias UI** — code landed (commits `9ae5e2c` preview + `57fa81d` impl). Backend endpoint `POST /api/aliases/confirm` LIVE post-restart, returns 400/409/200 with Georgian messages, 8 tests green. Frontend UnmatchedProductRow gains ✓ button + ⏳/✅ states + error sub-note. **REMAINING — browser smoke-test**: (1) start `_vite-dev.bat` in `C:\financial-dashboard\rs-dashboard\`, (2) browser → `http://127.0.0.1:5173`, (3) მომწოდებლები ტაბი → ვასაძის პური → modal → ალიასის კანდიდატები section, (4) click „✓ დადასტურდი ალიასი" on first candidate (imp_code 2006 „შეფუთული აგურა რუხი" → MAX 2247377), (5) verify toast + product_aliases.json write, (6) trigger pipeline rerun + verify coverage delta. Sprint C addressable scope = 66 candidates total but only 20 unmatched + 46 ambiguous visible; pipeline only renders unmatched_preview in UI right now (ambiguous_preview unrendered — Sprint D extension candidate). | ~30-45 წთ | LOW | code on disk, endpoint live, just need user-side click |
-| **🟡 0d CODE LANDED — awaiting Restart-Service** | ~~server.py:122 timeout 10→30 min~~ — Edit committed in `089e953` (`timeout=10*60` → `30*60`, comment updated). Same edit applied to C:\financial-dashboard\server.py directly. **Remaining: `Restart-Service FinancialDashboardBackend` (admin/UAC)** — until done, the running service still uses the old 10-min timeout. After restart, hourly `/api/refresh` cron should stop crashing. | 1 min user action | LOW | code on disk both locations, awaiting UAC |
+| **✅ DONE 2026-05-01** | ~~0d server.py:122 timeout 10→30 min~~ — `Restart-Service FinancialDashboardBackend` done by user. Service mirror `C:\financial-dashboard\server.py:122` shows `timeout=30 * 60` active, `/api/status` returns 200. Hourly `/api/refresh` cron 30+ failed run streak (2026-04-23 → 04-30) is now closed. | — | — | RESOLVED |
 | **✅ DONE 2026-04-30** | ~~NSSM service redirect to `C:\financial-dashboard\`~~ — Migration COMPLETE. data.json fresh, 28 API artifacts, 0 errors. OneDrive copy untouched (1-week retire pending). | — | — | RESOLVED |
 | **✅ DONE 2026-04-30 evening** | ~~Regression hook feedback loop broken~~ — **Root cause identified + closed in commit `a5ff7d0`**. Investigation: Stop hook (`check_regression.sh`) IS firing correctly (counter was at 11, fresh flag from prior responses with „ცადო"-stem morphology errors). Bug = Stop hook's `systemMessage` JSON output is not visibly surfaced in Claude Code CLI, so neither user nor Claude saw the alerts. Fix = added new UserPromptSubmit hook (`inject_regression_alert.sh`) that reads `.claude/regression_detected.flag` if fresh (<10min old) and emits `hookSpecificOutput.additionalContext` into Claude's next-turn context, then consumes the flag (moves to `regression_history/`). Verified live: synthetic flag → JSON output → flag moved to history. Real-world demo same session — count incremented to 1 after a ცადობდი slip in prior assistant response, the warning surfaced into next turn's context, Claude self-corrected. Counter reset 11 → 0. `.gitignore` updated for `regression_history/`. |
 | **🧹 1-week-pending** | **OneDrive `financial-dashboard\` copy retire — NOT a 5-minute mv** (2026-04-30 verification, session #2). Migration ნაწილობრივია: C:\\ = service mirror only (data.json fresh Apr 30 01:14, მაგრამ კოდი + `.git` Apr 29 22:16 stale — copy migration-ზე გაკეთდა). OneDrive = **ცოცხალი working tree** (governance edits Apr 30 00:36-01:16: CONTEXT_HANDOFF/AGENTS; .git working tree 48 commits ahead არ-push-ებული; .claude config; **Claude Code სესიის cwd**). უბრალო `mv` → working tree-ი დაიკარგება. **სწორი retire sequence**: (1) OneDrive uncommitted ცვლილებები git-ში commit (✅ ამ session-ში გაკეთდა); (2) C:\\-ზე `git pull` ან ხელით governance ფაილების sync; (3) Claude Code-ი C:\\-დან გავუშვა (cwd ცვლილება, შესაძლოა .claude config-იც კოპირდეს); (4) **მხოლოდ ამის შემდეგ** OneDrive → `_to_delete_2026-04-30_onedrive\` staging. | ~30-45 წთ mini-sprint | MEDIUM | divergence-ი ყოველ დღე იზრდება (governance edit-ები მხოლოდ OneDrive-ზე, data.json მხოლოდ C:\\-ზე) — საჭიროა migration plan |
