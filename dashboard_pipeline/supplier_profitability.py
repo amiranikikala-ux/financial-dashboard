@@ -500,7 +500,36 @@ def _aggregate_supplier(
         cost_matched_ge += cost_paid
 
         rev_ge = float(retail_row.get("revenue_ge") or 0)
-        cost_sold_ge = float(retail_row.get("cost_ge") or 0)
+        sold_qty_total = float(retail_row.get("total_quantity") or 0)
+        cost_sold_recorded_ge = float(retail_row.get("cost_ge") or 0)
+
+        # Cost of sold goods imputed from supplier invoice (RS waybill) —
+        # the contractually-signed unit price × quantity sold. This replaces
+        # the MAX POS-recorded `cost_ge` because operators frequently leave
+        # cost-at-sale fields empty or set to a placeholder, producing
+        # spurious 70-95% per-store margins (e.g. ვასაძის პური@დვაბზუ
+        # showed 96.95% on 2,713 loaves because MAX recorded 91 ₾ instead
+        # of ~2,713 ₾). The recorded value is preserved as
+        # `cost_sold_recorded_ge` for UI transparency.
+        #
+        # Cap: imputed quantity is bounded by qty_bought from THIS supplier.
+        # Without the cap, a name-only match against a multi-supplier brand
+        # (e.g. cigarette distributors who all ship the same SKU) would
+        # attribute the entire retail sold volume to each supplier — for a
+        # supplier that imported 5 units, cost_sold could balloon to 1000×
+        # the imported amount. Capping at qty_bought guarantees per-supplier
+        # cost_sold ≤ cost_imported (you can't sell more from a supplier
+        # than you bought from them).
+        imp_unit_cost_ge = (cost_paid / qty_bought) if qty_bought > 0 else 0.0
+        if imp_unit_cost_ge > 0:
+            effective_qty = min(sold_qty_total, qty_bought)
+            cost_sold_ge = effective_qty * imp_unit_cost_ge
+            # Per-store splits scale by the same cap factor so summed
+            # per-store cost_sold equals the matched-row cost_sold.
+            cost_sold_scale = (effective_qty / sold_qty_total) if sold_qty_total > 0 else 1.0
+        else:
+            cost_sold_ge = cost_sold_recorded_ge
+            cost_sold_scale = None  # signal: use recorded cost per-store
         profit_ge = rev_ge - cost_sold_ge
         margin_pct = _safe_div(profit_ge, rev_ge) * 100.0 if rev_ge > 0 else 0.0
         category = retail_row.get("category", "") or ""
@@ -516,11 +545,19 @@ def _aggregate_supplier(
         )
 
         # accumulate per-store revenue/cost from this matched product's
-        # retail object_breakdown (every retail row carries it)
+        # retail object_breakdown (every retail row carries it). Cost uses
+        # the same imputed unit cost (with the same cap factor applied) so
+        # the per-store sums equal the matched-row cost_sold.
         for ob in retail_row.get("object_breakdown") or []:
             obj_name = ob.get("object") or "უცნობი"
-            revenue_by_object[obj_name] = revenue_by_object.get(obj_name, 0.0) + float(ob.get("revenue_ge") or 0)
-            cost_sold_by_object[obj_name] = cost_sold_by_object.get(obj_name, 0.0) + float(ob.get("cost_ge") or 0)
+            obj_qty = float(ob.get("total_quantity") or 0)
+            obj_rev = float(ob.get("revenue_ge") or 0)
+            if cost_sold_scale is not None:
+                obj_cost = obj_qty * imp_unit_cost_ge * cost_sold_scale
+            else:
+                obj_cost = float(ob.get("cost_ge") or 0)
+            revenue_by_object[obj_name] = revenue_by_object.get(obj_name, 0.0) + obj_rev
+            cost_sold_by_object[obj_name] = cost_sold_by_object.get(obj_name, 0.0) + obj_cost
 
         matched_rows.append(
             {
@@ -535,9 +572,10 @@ def _aggregate_supplier(
                 "quantity_imported": qty_bought,
                 "revenue_sold_ge": round(rev_ge, 2),
                 "cost_sold_ge": round(cost_sold_ge, 2),
+                "cost_sold_recorded_ge": round(cost_sold_recorded_ge, 2),
                 "profit_ge": round(profit_ge, 2),
                 "margin_pct": round(margin_pct, 2),
-                "quantity_sold": float(retail_row.get("total_quantity") or 0),
+                "quantity_sold": sold_qty_total,
                 "last_sale_date": last_sale.isoformat() if last_sale else None,
                 "days_since_last_sale": days_since_sale,
                 "is_protected": is_protected,

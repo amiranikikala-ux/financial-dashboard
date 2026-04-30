@@ -428,11 +428,13 @@ def test_full_display_for_normal_supplier():
 # ---------------------------------------------------------------------------
 
 def test_portfolio_summary_aggregates_per_supplier_correctly():
+    # qty matches imported qty → imputed cost = recorded cost = supplier
+    # invoice cost (100 for A, 50 for B), so portfolio profit = 60 cleanly.
     sup_a = _supplier("100", "A", [_imp_product("11111111", "x", 10, 100)])
     sup_b = _supplier("200", "B", [_imp_product("22222222", "y", 5, 50)])
     retail = [
-        _retail_product("a", "11111111", "x", "სხვა", 130, 100),
-        _retail_product("b", "22222222", "y", "სხვა", 80, 50),
+        _retail_product("a", "11111111", "x", "სხვა", 130, 100, qty=10),
+        _retail_product("b", "22222222", "y", "სხვა", 80, 50, qty=5),
     ]
     out = build_supplier_profitability(_data([sup_a, sup_b], retail), today=TODAY)
     sm = out["summary"]["portfolio"]
