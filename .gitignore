@@ -91,3 +91,4 @@ rs-dashboard/playwright-report/
 # Regression-detection hook runtime state (machine-local, ephemeral)
 .claude/regression_count.txt
 .claude/regression_detected.flag
+.claude/regression_history/

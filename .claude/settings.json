@@ -25,6 +25,19 @@
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/inject_regression_alert.sh",
+            "shell": "bash",
+            "timeout": 10,
+            "statusMessage": "Surfacing pending regression alerts"
+          }
+        ]
+      }
     ]
   }
 }
