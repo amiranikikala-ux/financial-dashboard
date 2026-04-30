@@ -20,8 +20,27 @@ Hard requirements per entry:
 from __future__ import annotations
 
 import json
+import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
+
+
+class AliasValidationError(ValueError):
+    """Raised when a single alias entry fails validation.
+
+    ``kind`` lets callers (e.g. the HTTP endpoint) map to the correct
+    response code without parsing the message.
+    """
+
+    kind: str = "validation"
+
+
+class AliasDuplicateError(AliasValidationError):
+    """Raised when a confirm request targets an already-confirmed
+    ``imported_code``. Callers map this to HTTP 409, not 400."""
+
+    kind = "duplicate"
 
 
 def _norm(value: Any) -> str:
@@ -131,8 +150,102 @@ def load_and_validate(
     return safe, parse_errors + validate_errors
 
 
+def append_alias_atomic(
+    path: Path,
+    entry: Dict[str, Any],
+    retail_known_keys: Set[str],
+) -> Dict[str, Any]:
+    """Validate ``entry`` and atomically append it to ``path``.
+
+    Used by the ``/api/aliases/confirm`` endpoint when a user confirms
+    a pipeline-suggested ``name_candidate``. The function:
+
+    1. Validates the new entry against the same rules the pipeline applies
+       at load time (``confirmed_by`` is forced to ``"user"`` server-side).
+    2. Reads any existing ``product_aliases.json`` to check for a
+       duplicate ``imported_code``.
+    3. Stamps ``confirmed_at`` with the current UTC ISO timestamp.
+    4. Writes the new file to a sibling ``.tmp`` path, then ``os.replace``-s
+       it onto the target — atomic on POSIX and Windows alike, so a
+       concurrent pipeline reader never sees a partially written JSON.
+
+    Returns the canonical alias dict that landed on disk.
+
+    Raises:
+        AliasValidationError — bad input (empty code, unknown retail key)
+        AliasDuplicateError  — ``imported_code`` already confirmed
+    """
+    imported = _norm(entry.get("imported_code"))
+    target = _norm(entry.get("retail_code_or_barcode"))
+
+    if not imported:
+        raise AliasValidationError(
+            "imported_code სავალდებულოა — ცარიელი მნიშვნელობა მიუღებელია"
+        )
+    if not target:
+        raise AliasValidationError(
+            "retail_code_or_barcode სავალდებულოა — ცარიელი მნიშვნელობა მიუღებელია"
+        )
+    if target not in retail_known_keys:
+        raise AliasValidationError(
+            f"retail_code_or_barcode {target!r} ცოცხალ retail_sales-ში ვერ მოიძებნა"
+        )
+
+    # Read existing file (or seed an empty document with the canonical
+    # version/comment/schema header so the file stays self-describing).
+    if path.exists():
+        try:
+            doc = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise AliasValidationError(
+                f"product_aliases.json-ი გატეხილ JSON-ს შეიცავს — {exc}"
+            ) from exc
+        if not isinstance(doc, dict):
+            raise AliasValidationError(
+                "product_aliases.json-ის ზედა დონე უნდა იყოს object"
+            )
+    else:
+        doc = {"version": 1, "aliases": []}
+
+    aliases = doc.get("aliases")
+    if not isinstance(aliases, list):
+        aliases = []
+        doc["aliases"] = aliases
+
+    for existing in aliases:
+        if not isinstance(existing, dict):
+            continue
+        if _norm(existing.get("imported_code")) == imported:
+            raise AliasDuplicateError(
+                f"imported_code {imported!r} უკვე დადასტურებულია — "
+                f"იძებნება არსებულ alias-ად"
+            )
+
+    canonical = {
+        "imported_code": imported,
+        "retail_code_or_barcode": target,
+        "imported_supplier_taxid": _norm(entry.get("imported_supplier_taxid")),
+        "imported_name_sample": _norm(entry.get("imported_name_sample")),
+        "confirmed_by": "user",
+        "confirmed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "note": _norm(entry.get("note")),
+    }
+    aliases.append(canonical)
+
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(
+        json.dumps(doc, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    os.replace(tmp, path)
+    return canonical
+
+
 __all__ = [
+    "AliasValidationError",
+    "AliasDuplicateError",
     "load_aliases_file",
     "validate_aliases",
     "load_and_validate",
+    "append_alias_atomic",
 ]

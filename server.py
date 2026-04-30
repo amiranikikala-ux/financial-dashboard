@@ -7,6 +7,7 @@ import subprocess
 import sys
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from threading import Lock, Thread
 from typing import Any
 
@@ -26,6 +27,11 @@ from dashboard_pipeline.api_contracts import (
     DYNAMIC_SOURCE_ARTIFACTS,
     STATIC_RESPONSE_TABS,
     build_response_for_tab,
+)
+from dashboard_pipeline._validate_aliases import (
+    AliasDuplicateError,
+    AliasValidationError,
+    append_alias_atomic,
 )
 from dashboard_pipeline.logging_config import get_logger
 
@@ -713,6 +719,105 @@ async def post_vat_cash_outflow(request: Request, payload: dict = Body(...)):
     if result.get("error"):
         raise HTTPException(status_code=400, detail=result["error"])
     return result
+
+
+# ---------------------------------------------------------------------------
+# Sprint C — Supplier alias confirmation
+# ---------------------------------------------------------------------------
+def _build_retail_known_keys(data: dict) -> set:
+    """Mirror generate_dashboard_data.py:1657-1664 — collect every barcode
+    and product_code present in retail_sales.by_product so the endpoint
+    rejects aliases pointing at rows that don't exist."""
+    keys: set = set()
+    for row in (data.get("retail_sales") or {}).get("by_product") or []:
+        bc = (row.get("barcode") or "").strip()
+        pc = (row.get("product_code") or "").strip()
+        if bc:
+            keys.add(bc)
+        if pc:
+            keys.add(pc)
+    return keys
+
+
+def _aliases_file_path() -> Path:
+    """Resolve ``product_aliases.json`` relative to this module.
+
+    Extracted so tests can ``monkeypatch.setattr(server, "_aliases_file_path",
+    lambda: tmp_path / "product_aliases.json")`` without touching the
+    repo-tracked file."""
+    return (
+        Path(os.path.dirname(os.path.abspath(__file__)))
+        / "Financial_Analysis"
+        / "product_aliases.json"
+    )
+
+
+@app.post("/api/aliases/confirm")
+@limiter.limit("30/minute")
+async def post_alias_confirm(request: Request, payload: dict = Body(...)):
+    """Append a user-confirmed alias to ``Financial_Analysis/product_aliases.json``.
+
+    Triggered by the "დადასტურდი ალიასი" button next to each pipeline-suggested
+    ``name_candidate`` in SupplierModal. Does NOT regenerate ``data.json`` —
+    coverage updates on the next pipeline run (manual /api/refresh or hourly).
+
+    Body:
+        {
+            "imported_code":            "2006",         (required)
+            "retail_code_or_barcode":   "2247377",      (required)
+            "imported_supplier_taxid":  "400123456",    (optional, audit trail)
+            "imported_name_sample":     "...",          (optional, audit trail)
+            "note":                     "..."           (optional)
+        }
+
+    Status codes:
+        200 — alias appended, returns canonical entry + total count + UI hint
+        400 — empty/missing required field, or retail_code_or_barcode unknown
+        409 — imported_code already confirmed (idempotent guard)
+        503 — data.json missing on disk
+    """
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Body must be a JSON object.")
+
+    try:
+        data = load_full_data()
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    retail_known_keys = _build_retail_known_keys(data)
+    aliases_path = _aliases_file_path()
+
+    try:
+        canonical = append_alias_atomic(aliases_path, payload, retail_known_keys)
+    except AliasDuplicateError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except AliasValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except OSError as exc:
+        logger.error("alias confirm failed to write %s: %s", aliases_path, exc)
+        raise HTTPException(status_code=500, detail=f"ფაილის ჩაწერა ვერ მოხერხდა: {exc}")
+
+    try:
+        existing = json.loads(aliases_path.read_text(encoding="utf-8"))
+        alias_count = len(existing.get("aliases") or [])
+    except Exception:
+        alias_count = 1
+
+    logger.info(
+        "alias confirmed: imported=%s -> retail=%s (total=%d)",
+        canonical.get("imported_code"),
+        canonical.get("retail_code_or_barcode"),
+        alias_count,
+    )
+    return {
+        "success": True,
+        "alias": canonical,
+        "alias_count": alias_count,
+        "hint_ka": (
+            'დადასტურდა — მომდევნო pipeline run-ი ანალიზში დაამატებს. '
+            'ხელით განახლება: „განაახლე მონაცემები" ღილაკი.'
+        ),
+    }
 
 
 # ---------------------------------------------------------------------------

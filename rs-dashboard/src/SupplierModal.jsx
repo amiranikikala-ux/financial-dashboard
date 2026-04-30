@@ -171,15 +171,25 @@ function ProfitProductRow({ product, accent }) {
 
 // Unmatched/ambiguous პროდუქცია — ჯერ ვერ დაუკავშირდა MAX-ს, ალიასის კანდიდატია.
 // მარჟა/მოგება უცნობია — ვაჩვენებთ კოდს/ერთეულს/ხარჯს. თუ pipeline-მა იპოვა
-// ცოცხალი name-candidate (1 retail row ემთხვევა სახელით), ვაჩვენებთ inline-ად
-// რომ user-მა „დადასტურება" ხელით გააკეთოს Financial_Analysis/product_aliases.json-ში.
-function UnmatchedProductRow({ product, ambiguous = false }) {
+// ცოცხალი name-candidate (1 retail row ემთხვევა სახელით), inline „დადასტურდი
+// ალიასი" ღილაკი ერთი click-ით აფიქსირებს product_aliases.json-ში.
+function UnmatchedProductRow({
+  product,
+  ambiguous = false,
+  onConfirm = null,
+  confirmed = false,
+  pending = false,
+}) {
   const candidate = product?.name_candidate || null;
-  const variantCls = candidate
+  const variantCls = confirmed
+    ? 'confirmed'
+    : candidate
     ? 'has-candidate'
     : ambiguous
     ? 'ambiguous'
     : 'unmatched';
+  const canConfirm = !!candidate && !!onConfirm && !confirmed && !pending;
+
   return (
     <div
       className={`supplier-modal-product supplier-modal-profit-product supplier-modal-profit-product--${variantCls}`}
@@ -187,11 +197,14 @@ function UnmatchedProductRow({ product, ambiguous = false }) {
       <div className="supplier-modal-product-top">
         <span className="supplier-modal-product-name">
           {product?.imported_name || product?.imported_code || 'უცნობი'}
-          {ambiguous && (
+          {ambiguous && !confirmed && (
             <span className="supplier-modal-profit-ambiguous-tag" title="რამდენიმე შესაძლო დამთხვევა">⚖️</span>
           )}
-          {candidate && (
+          {candidate && !confirmed && (
             <span className="supplier-modal-profit-candidate-tag" title="MAX-ში სახელით ემთხვევა — დადასტურება ერთი ნაბიჯია">💡</span>
+          )}
+          {confirmed && (
+            <span className="supplier-modal-profit-confirmed-tag" title="ალიასი დადასტურდა — მომდევნო pipeline run-ი ანალიზში დაამატებს">✅</span>
           )}
         </span>
         <span className="supplier-modal-product-amount amount-neutral">{fmt(product?.cost_imported_ge)}</span>
@@ -223,6 +236,24 @@ function UnmatchedProductRow({ product, ambiguous = false }) {
               )}
               {candidate.retail_category && <span>{candidate.retail_category}</span>}
             </div>
+            {onConfirm && (
+              <div className="supplier-modal-profit-candidate-action">
+                {confirmed ? (
+                  <span className="supplier-modal-profit-confirm-status supplier-modal-profit-confirm-status--ok">
+                    ✅ დადასტურდა — შემდეგ pipeline run-ი დაითვლის
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="supplier-modal-profit-confirm-btn"
+                    disabled={!canConfirm}
+                    onClick={() => onConfirm(product)}
+                  >
+                    {pending ? '⏳ ვამოწმებ…' : '✓ დადასტურდი ალიასი'}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -245,6 +276,63 @@ export default function SupplierModal({
   const [recordedFlash, setRecordedFlash] = useState(false);
   // per-store toggle: 'total' = ყველა მაღაზია; სხვა მნიშვნელობა = კონკრეტული object (ოზურგეთი / დვაბზუ / ...)
   const [profitStoreFilter, setProfitStoreFilter] = useState('total');
+  // Sprint C — alias confirmation state. confirmedAliases: Set<imported_code> that
+  // succeeded this session (faded + ✅ in UI). pendingAliases: in-flight POSTs
+  // (button shows ⏳). aliasError: last failure {code, message} surfaced once below
+  // the candidate list.
+  const [confirmedAliases, setConfirmedAliases] = useState(() => new Set());
+  const [pendingAliases, setPendingAliases] = useState(() => new Set());
+  const [aliasError, setAliasError] = useState(null);
+
+  const handleConfirmAlias = async (product) => {
+    const cand = product?.name_candidate;
+    const importedCode = product?.imported_code;
+    if (!cand || !importedCode) return;
+    if (confirmedAliases.has(importedCode) || pendingAliases.has(importedCode)) return;
+
+    const target = (cand.retail_barcode || cand.retail_product_code || '').trim();
+    if (!target) {
+      setAliasError({ code: importedCode, message: 'candidate-ს არც ბარკოდი აქვს, არც product_code' });
+      return;
+    }
+
+    setPendingAliases((prev) => {
+      const next = new Set(prev);
+      next.add(importedCode);
+      return next;
+    });
+    setAliasError(null);
+
+    try {
+      const resp = await fetch('/api/aliases/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imported_code: importedCode,
+          retail_code_or_barcode: target,
+          imported_supplier_taxid: taxId || '',
+          imported_name_sample: product.imported_name || '',
+        }),
+      });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        throw new Error(body.detail || `HTTP ${resp.status}`);
+      }
+      setConfirmedAliases((prev) => {
+        const next = new Set(prev);
+        next.add(importedCode);
+        return next;
+      });
+    } catch (err) {
+      setAliasError({ code: importedCode, message: String(err?.message || err) });
+    } finally {
+      setPendingAliases((prev) => {
+        const next = new Set(prev);
+        next.delete(importedCode);
+        return next;
+      });
+    }
+  };
 
   useEffect(() => {
     if (initialAgingData && initialAgingData.length > 0) {
@@ -654,18 +742,34 @@ export default function SupplierModal({
                     <div className="supplier-modal-section-title" style={{ marginTop: 8 }}>
                       ალიასის კანდიდატები
                       <span className="supplier-modal-section-hint">
-                        {' '}· ყველაზე ფასიანი {profitability.unmatched_preview.length} პროდუქცია · 💡 = MAX-ში სახელით ემთხვევა
+                        {' '}· ყველაზე ფასიანი {profitability.unmatched_preview.length} პროდუქცია · 💡 = MAX-ში სახელით ემთხვევა · ✓ ღილაკი = ერთი click დადასტურება
                       </span>
                     </div>
                     <div className="supplier-modal-products">
                       {profitability.unmatched_preview.map((p, idx) => (
-                        <UnmatchedProductRow key={`u-${idx}`} product={p} />
+                        <UnmatchedProductRow
+                          key={`u-${idx}`}
+                          product={p}
+                          onConfirm={handleConfirmAlias}
+                          confirmed={confirmedAliases.has(p.imported_code)}
+                          pending={pendingAliases.has(p.imported_code)}
+                        />
                       ))}
                     </div>
                     <div className="supplier-modal-note">
-                      ალიასების დადასტურება — დაამატე ხელით <code>Financial_Analysis/product_aliases.json</code>-ში
-                      და გაუშვი pipeline-ი ხელახლა (ბრაუზერის ალიასის ფლოუ მომდევნო ეტაპზე ჩაშენდება).
+                      💡 = pipeline იპოვა MAX-ში სახელით ემთხვევა. „✓ დადასტურდი ალიასი"
+                      აფიქსირებს mapping-ს — შემდეგი pipeline run-ი ანალიზში დაამატებს.
+                      {confirmedAliases.size > 0 && (
+                        <span className="supplier-modal-note-confirmed">
+                          {' '}· ✅ ამ session-ში დადასტურდა: {confirmedAliases.size}
+                        </span>
+                      )}
                     </div>
+                    {aliasError && (
+                      <div className="supplier-modal-note supplier-modal-note--error">
+                        ⚠️ ვერ დადასტურდა ({aliasError.code}): {aliasError.message}
+                      </div>
+                    )}
                   </>
                 )}
               </>
