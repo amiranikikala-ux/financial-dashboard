@@ -119,7 +119,7 @@ def _run_pipeline():
                 [sys.executable, script],
                 stdout=log_handle,
                 stderr=subprocess.STDOUT,
-                timeout=10 * 60,  # 10 min hard limit; healthy runs are 2-5 min
+                timeout=30 * 60,  # 30 min hard limit; healthy runs are 7-8 min on C:\
                 cwd=script_dir,
             )
         elapsed = (datetime.now(timezone.utc) - start).total_seconds()

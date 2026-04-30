@@ -59,6 +59,8 @@ Financial_Analysis/ბოგ ბანკი ამონაწერი/
 Financial_Analysis/თბს ბანკი ამონაწერი/
 Financial_Analysis/გაყიდული პროდუქტები სოფ ოზურგეთი/
 Financial_Analysis/გაყიდული პროდუქტები სოფ დვაბზუ/
+# Imported products CSVs (RS.ge waybill data, sensitive supplier/price info)
+Financial_Analysis/შემოტანილი პროდუქცია/
 
 # Debug / scratch / temp ფაილები (სამუშაო, არა საბოლოო)
 debug_*.py
