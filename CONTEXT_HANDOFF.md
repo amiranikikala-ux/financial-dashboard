@@ -1,8 +1,24 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-01 (close-out — 3 commits landed: matching overhaul `560dab9`, cost imputation `d1ff190`, governance lazy-load `6ab04b7`; service restarted; 30-min timeout active). გრძელი წაკითხვა საჭირო **არ არის**. ეს ფაილი ცოცხალი state-ია. Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`. Evidence → `HANDOFF.md` + `HANDOFF_ARCHIVE/`.
+> **განახლდა**: 2026-05-01 ღამე (close-out — 4 commits landed + pushed to `origin/main`; **NEW: MAX MEgaplus per-supplier file landed at `Financial_Analysis/მეგა პლუს/კომპანიების გაყიდვა მოგება.xls`**; handoff triggered by language regression iteration). გრძელი წაკითხვა საჭირო **არ არის**. ეს ფაილი ცოცხალი state-ია. Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`. Evidence → `HANDOFF.md` + `HANDOFF_ARCHIVE/`.
 >
-> ✅ **THIS SESSION — 3 commits landed (2026-05-01)**: prior-session working-tree changes finally committed and split into 2 logical pipeline commits + 1 governance commit. Tests 57/57 green at every step. Pipeline change is what flips portfolio from −611,380 ₾ / −249.4% margin to +17,454 ₾ / +7.1% margin (verified in last pipeline run, data.json 58.99 MB, 2026-04-30 22:10). User restarted FinancialDashboardBackend service → new 30-min timeout active (`server.py:122` confirmed in live mirror).
+> 🚨 **THIS SESSION CLOSED VIA HANDOFF (2026-05-01 ~late)** — language regression: partial Georgian filler tokens („ცადო"-stem morphology errors, plus „ცდის/ცადო-ცდის" filler) accumulated 11+ in single response while explaining MAX file findings. Per AGENTS.md Correction Escalation: this is **iteration #N cross-session** (the original SessionStart hook flagged this exact pattern at session start as well). User explicitly requested handoff via /context. Detection hook (`a5ff7d0`) IS working — it surfaced the warning into context — but output drift on complex multi-table responses still bypasses self-correction. **Mitigation for next session**: avoid mixing Georgian + English + tax_id strings + table data in one paragraph; smaller responses; defer narration when synthesizing comparison findings.
+>
+> 🧹 **MEMORY HYGIENE — followup (2026-05-01 late)**: cleaned self-priming sources in user memory files (`MEMORY.md` + `feedback_no_garbage_georgian_tokens.md`) — typo fixes (2 in MEMORY.md, 1 in rule file) + removed broken-token example list from rule file's "Why" block (rule's own line 15 said "no examples in file" but contained them — circular loop) + Latin glue `magram` → `მაგრამ`. Backups exist (`*.backup` siblings). **Open decision**: `user gadatvirtuli` Latin transliteration in `MEMORY.md` line 23 — user has not chosen between keep / English (`overwhelmed`) / Georgian script. **Caveat**: memory cleanup is necessary but insufficient — tokenizer-level artifact at generation time still possible. Stop hook flagged regression 2× post-cleanup in this same session, which triggered Rule 25 restart. **Next**: monitor regression frequency over next 1–2 fresh sessions before deciding further mitigation.
+>
+> 🆕 **NEW FINDING — MAX MEgaplus per-supplier file landed (2026-05-01)**: user dropped `Financial_Analysis/მეგა პლუს/კომპანიების გაყიდვა მოგება.xls` (45 KB, **დვაბზუ store only**, 116 suppliers, 81 with revenue>0). File has 14 columns per supplier: მომწოდებელი / საიდენტ. (tax_id) / cost (with+without VAT) / revenue (with+without VAT) / profit (with+without VAT) / margin %. **Total დვაბზუ revenue (with VAT): 260,330 ₾ / cost 232,985 ₾ / profit 27,344 ₾**. This is the MAX vendor-tag ground-truth — the file we'd been asking for to solve §4 0c (ELIZI false KPI). **First analysis revealed systematic gap**:
+> - Pipeline catches **only ~42% of MAX-recorded revenue** at დვაბზუ on average across top suppliers (range −20% to −99.3%).
+> - **20 suppliers in MAX file are entirely missing from pipeline's per-store breakdown** (61 in pipeline vs 81 in MAX with revenue).
+> - Margins wildly off: ELIZI MAX +5.31% vs pipeline −31.02% (36-point gap), შრომა-2023 MAX +28.64% vs pipeline +0.89% (28-point gap), ზახარ MAX +19.79% vs pipeline −56.04% (76-point gap), კანტი MAX +5.73% vs pipeline +34.57% (29-point gap), ენგადი MAX +6.15% vs pipeline +39.14% (33-point gap). VASADZE and იფქლი are the closest matches (margins within 0.1pp, but revenue still 58% under).
+>
+> **3 ცხადი integration paths surfaced for user — DECISION PENDING (next session)**:
+> - **A — Read-only side-by-side**: UI per-supplier ცხრილი adds a „MAX ground-truth" column next to pipeline numbers + delta badge. No pipeline numbers change. ~1 session.
+> - **B — Soft replacement**: pipeline per-store totals overridden by MAX file when tax_id matches; pipeline numbers move to a „raw" sub-field. ~2 sessions.
+> - **C — File loader only**: read file into data.json under new section, no UI yet. ~30 min, low value alone.
+>
+> **Important caveat**: file is **per-supplier rollup (not per-product)** — solves the supplier-level KPI gap, but cannot fix individual product mappings. Alias UI (Sprint C) still needed for per-product alias confirmation. Also: user said "დვაბზუს კომპანიების შესახებ" → assume single-store; ოზურგეთი's analogous file would need separate drop. The previously-used ground-truth Excel `Financial_Analysis/ოზურგეთი კომპანიების გაყიდვები/2022,2026-02.xls` covers ოზურგეთი (per `reference_oz_ground_truth_excel.md` memory).
+>
+> ✅ **THIS SESSION — 4 commits landed + push (2026-05-01)**: prior-session working-tree changes finally committed and split into 2 logical pipeline commits + 1 governance commit + 1 handoff commit. Tests 57/57 green at every step. Pipeline change is what flips portfolio from −611,380 ₾ / −249.4% margin to +17,454 ₾ / +7.1% margin (verified in last pipeline run, data.json 58.99 MB, 2026-04-30 22:10). User restarted FinancialDashboardBackend service → new 30-min timeout active (`server.py:122` confirmed in live mirror). **Branch is now 0 ahead of `origin/main` — push verified clean**.
 >
 > ✅ **`560dab9` fix(pipeline): supplier matching — name-exclusivity + barcode dedup + short-code guard** — `_build_supplier_exclusive_names` (97.1% of 12,905 names supplier-exclusive; 371 shared names dominated by Coca-Cola distributors filtered out, preserves Borjomi-glass-vs-plastic rule), `_clean_code` strips trailing `.0` from numeric Excel codes (4380→3225 by_product rows), short-code collision guard (codes <5 chars trusted only when retail name agrees, prevents bread-1002 → MAX-barcode-1002 mis-match). 5 tests reframed for shared-name scenarios.
 >
@@ -22,7 +38,7 @@
 >
 > ✅ **imported_products bug RESOLVED** (2026-04-30 14:06, prior session phase): user-მა „შემოტანილი პროდუქცია" CSV ფაილი წინა session-ში 4-წლიანი 4-ფაილოვანი catalog-დან 3 თვის (2026-Q1) ერთფაილოვან mode-ში გააფიცა. Pipeline-ი silently skipped რადგან folder ცარიელი იყო (1 ფაილი `_to_delete`-ში დარჩენილი). User confirmed wants — „რა ფოლდერში არის — იმის ანალიზი, არც-future გადატვირთვა, incremental add". Fix: `report 01,2026-03,2026.csv` (5.59 MB) გადავიტანე `_to_delete_2026-04-29\02_financial_analysis_orphan\შემოტანილი პროდუქცია\` → `C:\financial-dashboard\Financial_Analysis\შემოტანილი პროდუქცია\`. Pipeline manual run (server timeout 10min hit, then bypassed via direct subprocess) → data.json updated 14:06:05 → **`imported_products.suppliers = 70` populated, profitability per-supplier ON** (28 verified / 21 partial / 4 protected / 17 unverified). User goal — **90% coverage floor for ALL suppliers** (currently 21/70 ≥90%).
 >
-> 💬 **MAX vendor-tag export — explained to user, not yet provided** (2026-04-30 evening): in this session I documented in plain Georgian what specifically MAX MEgaplus export is needed to close the 7,589 ₾ vasadze@დვაბზუ gap and the analogous gaps for other 49 below-90% suppliers. Required columns: თარიღი, მაღაზია, **მომწოდებელი (MAX vendor tag — the new column we don't have)**, პროდუქტის კოდი, სახელი, რაოდენობა, თვითღირებულება, გაყიდვის ფასი, რევენიუ. Per-month is acceptable if per-day too heavy. User's MAX admin panel likely has a "გაყიდვები per მომწოდებელი" / "მომწოდებლის ცხრილი" / "Suppliers report" entry. **User has not yet exported this** — pending action item. This single file solves §4 items 0c (ELIZI false KPI) + 0f (cross-source gap) + the 90% coverage goal simultaneously.
+> ✅ **MAX vendor-tag export — PARTIALLY LANDED 2026-05-01**: user provided the file at supplier-rollup level (per-supplier totals for დვაბზუ store, 116 rows). This is enough to solve §4 0c (ELIZI false KPI) at supplier level via integration paths A/B/C above. **Still pending for full solution**: (a) ოზურგეთი analog of the same file, (b) per-product breakdown (current file is per-supplier rollup only — needed if we want to also fix individual product matching gaps, e.g. ვასაძე's 7,589 ₾ gap was at the per-product level).
 >
 > ✅ **NSSM migration სრული** (2026-04-30 01:14) — pipeline 7.2 წთ-ში სრულდება C:\\-ზე, data.json fresh. **მთავარი პრობლემა გადაჭრილია — ფაილს რომ ამატებ, dashboard ახლა ნამდვილად ხედავს**.
 
@@ -30,16 +46,44 @@
 
 ## 1. ახლა სად ვართ
 
-- **ეს session (2026-05-01 — close-out, 3 commits landed)**:
-  - **Action**: split prior-session working-tree changes into 2 logical pipeline commits + 1 governance commit, deleted residue `CLAUDE.md.backup`, tests 57/57 green at each intermediate state.
-  - **Verification**: service restart confirmed (`/api/status = 200`, `server.py:122 timeout=30*60` active), portfolio numbers from prior pipeline run (data.json 58.99 MB, 2026-04-30 22:10) still apply — ვასაძე ჯამი 10.50% margin, portfolio +17,454 ₾ profit / +7.1% margin (was −611,380 ₾ / −249.4% with MAX-recorded cost).
-  - **Commits landed**:
+- **ეს session (2026-05-01 — 4 commits landed + push + MAX file analysis)**:
+  - **Phase 1 — committed prior-session working-tree** (split into 2 logical pipeline commits + 1 governance commit + 1 handoff commit), deleted residue `CLAUDE.md.backup`, tests 57/57 green at each intermediate state. Service restart confirmed by user (`/api/status = 200`, `server.py:122 timeout=30*60` active). **Pushed to `origin/main`** — branch now 0 ahead, working tree had only this CONTEXT_HANDOFF update at handoff time.
+  - **Commits landed this session**:
 
     | SHA | type | რას აკეთებს |
     |---|---|---|
     | `560dab9` | fix(pipeline) | name-exclusivity + barcode dedup + short-code guard (matching overhaul) |
     | `d1ff190` | fix(pipeline) | impute cost_sold from supplier invoice with qty cap (cost truth) |
     | `6ab04b7` | docs(governance) | lazy-load policy — only `CONTEXT_HANDOFF.md` mandatory at session-start |
+    | `0967c5f` | docs(handoff) | close session — 3 commits landed, service restart verified |
+
+  - **Phase 2 — MAX MEgaplus per-supplier file analysis** (NEW finding, no code change yet):
+    - **File path**: `Financial_Analysis/მეგა პლუს/კომპანიების გაყიდვა მოგება.xls` (45 KB, dropped by user 2026-05-01 ~01:07).
+    - **Scope**: დვაბზუ store ONLY, 116 suppliers (81 with revenue>0 + 35 zero rows), 14 columns per supplier (with-VAT and without-VAT versions of cost/revenue/profit/margin).
+    - **Headline gap**: pipeline catches ~42% of MAX-recorded revenue at დვაბზუ on average. 20 suppliers in MAX file are entirely missing from pipeline's per-store breakdown (61 in pipeline vs 81 in MAX).
+    - **Top 15 side-by-side comparison** (revenue without-VAT, MAX vs pipeline; tax_id linked):
+
+      | მომწოდებელი | tax_id | MAX rev | pipeline rev | gap | MAX მ% | pipeline მ% |
+      |---|---|---|---|---|---|---|
+      | ჯიდიაი | 406181616 | 35,037 | 14,882 | −57.5% | +6.81 | +5.83 |
+      | ELIZI ჯგუფი | 204920381 | 33,608 | 9,220 | −72.6% | **+5.31** | **−31.02** |
+      | კოკა-კოლა გურია | 405152953 | 19,826 | 8,255 | −58.4% | +12.61 | +13.89 |
+      | შრომა-2023 | 437078485 | 15,588 | 5,364 | −65.6% | **+28.64** | **+0.89** |
+      | ვასაძის პური | 237077961 | 9,726 | 4,084 | −58.0% | +10.87 | +10.76 |
+      | ინტერნეიშნლ | 420424393 | 8,038 | 1,036 | −87.1% | +5.36 | −1.15 |
+      | ზედაზენი აჭარა | 445404232 | 7,210 | 2,400 | −66.7% | −1.29 | +1.39 |
+      | გეოდისტრიბუცია | 401958271 | 6,102 | 44 | **−99.3%** | +7.28 | +10.22 |
+      | იბერია რეფრეშმენტსი | 204968730 | 5,719 | 1,722 | −69.9% | +13.36 | +12.70 |
+      | იფქლი | 200179118 | 5,164 | 2,104 | −59.3% | +7.74 | +7.76 |
+      | კანტი | 200140267 | 4,393 | 2,441 | −44.4% | **+5.73** | **+34.57** |
+      | ენგადი | 242005888 | 3,983 | 3,167 | −20.5% | **+6.15** | **+39.14** |
+      | ზახარ | 202061053 | 3,908 | 502 | −87.1% | **+19.79** | **−56.04** |
+      | ჯიბე | 206335223 | 3,848 | 698 | −81.9% | +17.85 | +29.27 |
+      | ლავაზა | 412726448 | 3,774 | 983 | −74.0% | +13.84 | +14.32 |
+
+    - **MAX-file totals (with VAT)**: revenue 260,330 / cost 232,985 / profit 27,344 / portfolio margin ~10.5%.
+    - **3 integration paths surfaced — DECISION PENDING from user**: (A) read-only side-by-side display, (B) soft replacement of pipeline numbers when MAX matches by tax_id, (C) file loader only into data.json with no UI. Details in top-of-file finding block.
+    - **Caveat**: file is per-supplier rollup (not per-product). It solves supplier-level KPI verification but does not by itself fix per-product matching gaps. Alias UI (Sprint C) still relevant for per-product mapping. Also: დვაბზუ store ONLY in this file; ოზურგეთი needs analogous drop or use of `Financial_Analysis/ოზურგეთი კომპანიების გაყიდვები/2022,2026-02.xls`.
 
   - **Live margin table (still applicable from 2026-04-30 22:10 pipeline run)**:
 
@@ -47,14 +91,19 @@
     |---|---|---|---|
     | ვასაძე ჯამი | 33.22% | **10.50%** | ~10.9% ✓ |
     | ვასაძე@ოზურგეთი | 11.81% | 10.38% | — |
-    | **ვასაძე@დვაბზუ** | **77.86%** ✗ | **10.76%** ✓ | ~10.9% ✓ |
+    | **ვასაძე@დვაბზუ** | **77.86%** ✗ | **10.76%** ✓ | **10.87%** ✓ (now MAX-confirmed) |
     | Portfolio margin | −249.4% | **+7.1%** | — |
     | Portfolio profit | −611,380 ₾ | **+17,454 ₾** | — |
-    | ELIZI (protected) | −836% | −25.75% | +5.3% (still off — see §4 0c) |
-    | შრომა-2023 | −2,149% | +7.30% | — |
+    | ELIZI@დვაბზუ | −836% | −31.02% | **+5.31%** (still off — see §4 0c, MAX-confirmed) |
+    | შრომა-2023 | −2,149% | +7.30% | +28.64% (still off) |
 
-  - **Known limitation — ELIZI not fully fixed**: pipeline shows −25.75%, ground-truth +5.3%. Cap solves over-attribution, NOT mis-attribution. Cigarette name-match still attributes sales to ELIZI that other distributors (გეოდისტრიბუცია, ინტერნეიშნლ მარკეტინგ) actually shipped. Two future paths: (A) MAX vendor-tag export, (B) ground-truth Excel cross-check via `Financial_Analysis/ოზურგეთი კომპანიების გაყიდვები/2022,2026-02.xls`. Both deferred — separate sprint.
-  - **Open work for next session**: 0a Sprint C alias UI browser smoke-test (~30 min), CAL Step 3 spot-check, 0c ELIZI separate sprint (HIGH priority). Push to `origin/main` is **11 commits ahead** — pending user decision when to push.
+  - **Phase 3 — language regression handoff trigger**: while explaining MAX-vs-pipeline findings to user, partial Georgian filler tokens („ცადო"-stem morphology errors, plus „ცდის/ცადო-ცდის" filler) accumulated 11+ in single response. User invoked /context (showing 17% usage = NOT a context-size issue) and explicitly requested handoff. This is the same regression pattern the SessionStart hook flagged at the very start of this session. Detection working, output drift on synthesizing complex multi-table responses still bypasses self-correction. Handoff started before further damage.
+
+  - **Open work for next session** (priority order):
+    1. **🔴 0c ELIZI false KPI — DECISION**: user picks A/B/C from the 3 integration paths above for the new MAX file, then I implement.
+    2. **🟡 0a Sprint C alias UI browser smoke-test** (~30 min): start `_vite-dev.bat`, click „დადასტურდი ალიასი" on ვასაძის პური unmatched product, verify product_aliases.json append + pipeline rerun.
+    3. **🟢 CAL Step 3 spot-check** for calendar heatmap supplier modal.
+    4. **🟢 ოზურგეთი analog of MAX file** (user action): same export from MAX admin panel for ოზურგეთი store closes the cross-store gap.
 
 - **წინა session-ის ნაწილი (2026-04-30 ღამე — pipeline matching + cost imputation development)**:
   - **ნაწილი 1 (vasadze 688.80 ₾ gap reconciliation)** — User dropped `Financial_Analysis/მეგა პლუს/ზედანდებები.xlsx` (367 waybills, 20,452.80 ₾, vasadze→ჯეო ფუდთაიმი Q1 2026). Cross-checked with `Financial_Analysis/რს ზედნადები/report 01,2026-03,2026.xls` (386 waybills for vasadze, 19,881 ₾ gross / 19,764 net). Finding: 367 common waybills match cent-for-cent both sides; 19 RS-only = 17 returns (−688.80 ₾) + 2 cancellations (+117 ₾). Reconciliation: 20,452.80 − 688.80 + 117 = 19,881 ✓. User concern (cancelled-on-RS-but-accepted-in-MegaPlus → ghost AP) — cleared for vasadze Q1; cancelled and return waybill IDs absent from MegaPlus.
@@ -83,8 +132,9 @@
 - **CAL Step 2 (Data inventory)**: ✅ pipeline-ში per-day aggregation **არ არსებობს** (only `by_month` / `by_category_by_month`). Source per-row datetime ცხადია (`დრო` სვეტი), ifqli matched products უკვე გამოთვლილია `supplier_profitability`-ში. **საჭიროა ახალი aggregation**: `supplier.profitability.daily_breakdown[]` sparse (per-day × per-store)
 - **CAL Step 3-6**: spot-check + implement + verify + user review — ⏳ ვიდრე user-ის ცხადი „გადავიდეთ"
 
-**ბოლო commit-ები** (`origin/main`-ზე 11 ahead, push არ გაკეთებულა):
+**ბოლო commit-ები** (pushed to `origin/main` 2026-05-01; branch is 0 ahead at handoff):
 ```
+0967c5f  docs(handoff): close session — 3 commits landed, service restart verified
 6ab04b7  docs(governance): lazy-load policy — only CONTEXT_HANDOFF.md mandatory at session start
 d1ff190  fix(pipeline): impute cost_sold from supplier invoice with qty cap
 560dab9  fix(pipeline): supplier matching — name-exclusivity + barcode dedup + short-code guard
@@ -94,7 +144,6 @@ d1ff190  fix(pipeline): impute cost_sold from supplier invoice with qty cap
 a5ff7d0  feat(.claude): close regression-detection feedback loop via UserPromptSubmit hook
 6c1e24e  docs(handoff): close Sprint C session — code complete, smoke-test pending, regression hook needs investigation
 57fa81d  feat(supplier): Sprint C alias confirmation — endpoint + UI + 8 tests
-9ae5e2c  docs(preview): Sprint C alias-confirmation scoping + evidence inventory
 ```
 
 **ამ session-ში გაკეთებული (2026-05-01)**:
@@ -102,8 +151,12 @@ a5ff7d0  feat(.claude): close regression-detection feedback loop via UserPromptS
 2. **Pipeline matching commit** `560dab9` — `dashboard_pipeline/retail_sales.py` (+`_clean_code` helper) + `dashboard_pipeline/supplier_profitability.py` (matching half) + `tests/test_supplier_profitability.py` (5 reframed tests). 151 insertions / 32 deletions across 3 files.
 3. **Cost imputation commit** `d1ff190` — `dashboard_pipeline/supplier_profitability.py` (cost block + per-store scale + `cost_sold_recorded_ge` field) + `tests/test_supplier_profitability.py` (1 reframed test). 47 insertions / 7 deletions across 2 files.
 4. **Governance commit** `6ab04b7` — `CLAUDE.md` lazy-load policy (12 insertions / 95 deletions; only `CONTEXT_HANDOFF.md` mandatory at session start).
-5. **Residue cleanup** — deleted untracked `CLAUDE.md.backup`.
-6. **Tests verified at every step** — 57/57 supplier_profitability + retail_sales_revenue_formula tests green at intermediate matching-only state AND post-imputation state.
+5. **Handoff commit** `0967c5f` — CONTEXT_HANDOFF.md updated to reflect close-out.
+6. **Residue cleanup** — deleted untracked `CLAUDE.md.backup`.
+7. **Tests verified at every step** — 57/57 supplier_profitability + retail_sales_revenue_formula tests green at intermediate matching-only state AND post-imputation state.
+8. **Push to origin/main** — 11 commits → live on GitHub.
+9. **MAX MEgaplus per-supplier file analysis** (no commit) — file landed at `Financial_Analysis/მეგა პლუს/კომპანიების გაყიდვა მოგება.xls`, 116 suppliers for დვაბზუ store, top-15 side-by-side comparison with pipeline computed and captured in §1 above. **3 integration paths surfaced; user decision pending in next session**.
+10. **Language regression triggered handoff** — partial Georgian filler tokens 11+ in single response while synthesizing comparison findings; user invoked /context + requested handoff. No commits between this finding and handoff.
 
 ---
 
@@ -199,7 +252,7 @@ _to_delete_2026-04-29\                         ← grace folder (1 week → perm
 | # | task | size | risk | რატომ |
 |---|---|---|---|---|
 | **✅ DONE 2026-04-30** | ~~imported_products bug — supplier modal ცარიელია~~ — File moved (single 3-month CSV), pipeline manual run, 70 supplier-ი profitability-ით. User-ის incremental philosophy captured. | — | — | მთავარი user pain — supplier modal cross-check ცხრილი ცოცხალი |
-| **✅ DONE 2026-05-01** | ~~0g — 4 uncommitted pipeline changes~~ — Split into 2 commits: `560dab9` matching overhaul (name-exclusivity + barcode dedup + short-code guard) + `d1ff190` cost imputation (supplier-invoice-imputed cost with qty cap + `cost_sold_recorded_ge` transparency field). All 57 tests green at every step. Push to `origin/main` is **11 ahead** — pending user decision when to push. | — | — | RESOLVED |
+| **✅ DONE 2026-05-01** | ~~0g — 4 uncommitted pipeline changes~~ — Split into 2 commits: `560dab9` matching overhaul (name-exclusivity + barcode dedup + short-code guard) + `d1ff190` cost imputation (supplier-invoice-imputed cost with qty cap + `cost_sold_recorded_ge` transparency field). All 57 tests green at every step. **Pushed to `origin/main`** — branch is 0 ahead. | — | — | RESOLVED |
 | **🟡 0a CODE COMPLETE — smoke-test pending** | **Sprint C alias UI** — code landed (commits `9ae5e2c` preview + `57fa81d` impl). Backend endpoint `POST /api/aliases/confirm` LIVE post-restart, returns 400/409/200 with Georgian messages, 8 tests green. Frontend UnmatchedProductRow gains ✓ button + ⏳/✅ states + error sub-note. **REMAINING — browser smoke-test**: (1) start `_vite-dev.bat` in `C:\financial-dashboard\rs-dashboard\`, (2) browser → `http://127.0.0.1:5173`, (3) მომწოდებლები ტაბი → ვასაძის პური → modal → ალიასის კანდიდატები section, (4) click „✓ დადასტურდი ალიასი" on first candidate (imp_code 2006 „შეფუთული აგურა რუხი" → MAX 2247377), (5) verify toast + product_aliases.json write, (6) trigger pipeline rerun + verify coverage delta. Sprint C addressable scope = 66 candidates total but only 20 unmatched + 46 ambiguous visible; pipeline only renders unmatched_preview in UI right now (ambiguous_preview unrendered — Sprint D extension candidate). | ~30-45 წთ | LOW | code on disk, endpoint live, just need user-side click |
 | **✅ DONE 2026-05-01** | ~~0d server.py:122 timeout 10→30 min~~ — `Restart-Service FinancialDashboardBackend` done by user. Service mirror `C:\financial-dashboard\server.py:122` shows `timeout=30 * 60` active, `/api/status` returns 200. Hourly `/api/refresh` cron 30+ failed run streak (2026-04-23 → 04-30) is now closed. | — | — | RESOLVED |
 | **✅ DONE 2026-04-30** | ~~NSSM service redirect to `C:\financial-dashboard\`~~ — Migration COMPLETE. data.json fresh, 28 API artifacts, 0 errors. OneDrive copy untouched (1-week retire pending). | — | — | RESOLVED |
@@ -207,7 +260,7 @@ _to_delete_2026-04-29\                         ← grace folder (1 week → perm
 | **🧹 1-week-pending** | **OneDrive `financial-dashboard\` copy retire — NOT a 5-minute mv** (2026-04-30 verification, session #2). Migration ნაწილობრივია: C:\\ = service mirror only (data.json fresh Apr 30 01:14, მაგრამ კოდი + `.git` Apr 29 22:16 stale — copy migration-ზე გაკეთდა). OneDrive = **ცოცხალი working tree** (governance edits Apr 30 00:36-01:16: CONTEXT_HANDOFF/AGENTS; .git working tree 48 commits ahead არ-push-ებული; .claude config; **Claude Code სესიის cwd**). უბრალო `mv` → working tree-ი დაიკარგება. **სწორი retire sequence**: (1) OneDrive uncommitted ცვლილებები git-ში commit (✅ ამ session-ში გაკეთდა); (2) C:\\-ზე `git pull` ან ხელით governance ფაილების sync; (3) Claude Code-ი C:\\-დან გავუშვა (cwd ცვლილება, შესაძლოა .claude config-იც კოპირდეს); (4) **მხოლოდ ამის შემდეგ** OneDrive → `_to_delete_2026-04-30_onedrive\` staging. | ~30-45 წთ mini-sprint | MEDIUM | divergence-ი ყოველ დღე იზრდება (governance edit-ები მხოლოდ OneDrive-ზე, data.json მხოლოდ C:\\-ზე) — საჭიროა migration plan |
 | **🧹 1-week-pending** | `_to_delete_2026-04-29\` permanent delete (863 MB) — 5-7 დღე dashboard ცოცხალი → permanent rm. თუ user-მა რამე surprise აღმოაჩინა → უკან გადატანა (§2) | 1 წთ | LOW | grace period აქტიური; cleanup უკვე გაკეთდა, მხოლოდ permanent rm-ი დარჩა |
 | **✅ DONE 2026-04-30** | ~~`AGENTS.md:35` proof gate path~~ — workspace canonical → project canonical, symlink note added pointing to §7 for full structure. | — | — | proof-ფრაზა ახლა შეესაბამება რეალურ symlink სტრუქტურას |
-| **🚨 0c** | dashboard „ანალიზდა" KPI ცრუობს partial-coverage სცენარში | 1 sprint | **HIGH** | ELIZI ground-truth: cost 297,685 / sales 313,456 / margin **+5.3%**. Dashboard: −2.13%. 4 ვარიანტი: (A) alias 35→80%; (B) UI banner; (C) ცალკე KPI „matched-only margin"; (D) ground-truth Excel pipeline-ში. user-ი არჩევს |
+| **🚨 0c — DECISION READY** | dashboard „ანალიზდა" KPI ცრუობს partial-coverage სცენარში — **MAX file landed 2026-05-01**, ground-truth quantified. ELIZI@დვაბზუ: MAX +5.31% vs pipeline −31.02% (36-pp gap); MAX file shows total დვაბზუ revenue 260,330 ₾ vs pipeline ~108,500 ₾ (~42% catch rate). 3 paths: **(A) read-only side-by-side display** (~1 session, low risk); **(B) soft replacement of pipeline numbers when MAX matches by tax_id** (~2 sessions, medium risk); **(C) file loader only into data.json, no UI** (~30 min, low value alone). User picks A/B/C. File: `Financial_Analysis/მეგა პლუს/კომპანიების გაყიდვა მოგება.xls` (45 KB, დვაბზუ only — ოზურგეთი needs analog drop). Per-product breakdown not in this file → still need alias UI for individual product matching. | A=1 session / B=2 sessions / C=30 წთ | **HIGH** | top-of-file finding block + §1 Phase 2 has top-15 supplier comparison table |
 | **🚧 CAL** | calendar heatmap supplier modal-ში — Step 3 (spot-check) ღიაა | ~1 session | LOW | scope locked, data inventory done; საჭიროა new daily aggregation `supplier_profitability`-ში |
 | **✅ DONE 2026-04-30** | ~~`dashboard_pipeline/constants.py` duplicate functions~~ — **REAL SCOPE WAS 10 FUNCTIONS, NOT 1**. Verified: 9 character-identical (`_object_order_for_pos`, `_object_order_for_monthly_pnl`, `_month_sort_key`, `_match_text_to_object`, `detect_object`, `_extract_tax_id_from_org`, `_pick_aging_bucket`, `_empty_aging_summary`, `_to_waybills_df`) → first copies deleted (lines 434-541, 109 lines removed, file 797→688). 50 targeted tests green, syntax OK, all 10 names still callable. | — | — | dead code removed |
 | **✅ DONE 2026-04-30** | ~~`_parse_rs_datetime` — TWO DIVERGENT versions~~ — Spot-check across 5 RS waybill files (2022-2026) + 3 retail sales files (01-03.2026) confirmed ALL datetime values use ISO `%Y-%m-%d %H:%M[:%S]` format. No Georgian month tokens anywhere. Dead first def (L434-463) + dead `IMPORTED_PRODUCTS_MONTH_TOKEN_TO_MM` constant + unused import in `generate_dashboard_data.py` removed (commit `2ab4a05`, 48 lines deleted). 21 targeted tests green. Live behavior unchanged (L657 was already overriding L434). | — | — | divergent dead code resolved; only one canonical `_parse_rs_datetime` remains |
