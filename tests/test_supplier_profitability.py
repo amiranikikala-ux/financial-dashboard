@@ -743,13 +743,16 @@ def test_x_suffix_skipped_when_ambiguous():
 # ---------------------------------------------------------------------------
 
 def test_name_candidate_attached_when_unique_name_match_non_protected():
-    """Unmatched code → if name uniquely matches a retail row in a
-    NON-PROTECTED category, surface as candidate (alias workflow). For
-    protected categories the auto-match rule kicks in instead and is
-    covered by `test_name_in_protected_category_auto_matches`."""
-    sup = _supplier("100", "Ц", [_imp_product("9999", "ჩერო მულტიხილი 1ლ", 10, 60.0)])
+    """Shared-name beverage (Borjomi rule): when MORE than one supplier
+    imports the same product_name, the name is NOT supplier-exclusive, so
+    auto-merge does not fire — the unmatched row carries the candidate
+    hint for user-driven alias confirmation instead.
+    (When a name IS supplier-exclusive, `name_supplier_exclusive` does
+    auto-merge — that's covered by tests below.)"""
+    sup_a = _supplier("100", "Ц", [_imp_product("9999", "ჩერო მულტიხილი 1ლ", 10, 60.0)])
+    sup_b = _supplier("200", "Other", [_imp_product("8888", "ჩერო მულტიხილი 1ლ", 5, 30.0)])
     retail = [_retail_product("777", "barcA", "ჩერო მულტიხილი 1ლ", "წვენი პეტი", 70.0, 60.0)]
-    out = build_supplier_profitability(_data([sup], retail), today=TODAY)
+    out = build_supplier_profitability(_data([sup_a, sup_b], retail), today=TODAY)
     p = out["per_supplier"][0]["profitability"]
 
     assert p["totals"]["products_matched"] == 0
@@ -783,11 +786,13 @@ def test_name_candidate_none_when_multiple_retail_rows_share_name():
 
 def test_name_candidate_normalizes_whitespace_and_punctuation():
     """„X (Y)*" should match „X (Y) *" (different whitespace/punct).
-    Use a non-protected category so the auto-merge rule doesn't fire and
-    the candidate hint stays in unmatched_preview."""
-    sup = _supplier("100", "Ц", [_imp_product("9999", "ფანტა მსხალი  0.5ლ*", 10, 60.0)])
+    Use a non-protected category and a shared name (2 suppliers) so the
+    auto-merge rule does not fire and the candidate hint stays in
+    unmatched_preview."""
+    sup_a = _supplier("100", "Ц", [_imp_product("9999", "ფანტა მსხალი  0.5ლ*", 10, 60.0)])
+    sup_b = _supplier("200", "Other", [_imp_product("8888", "ფანტა მსხალი 0.5ლ *", 5, 30.0)])
     retail = [_retail_product("777", "barcA", "ფანტა მსხალი 0.5ლ *", "გაზ.სასმელი", 70.0, 60.0)]
-    out = build_supplier_profitability(_data([sup], retail), today=TODAY)
+    out = build_supplier_profitability(_data([sup_a, sup_b], retail), today=TODAY)
     p = out["per_supplier"][0]["profitability"]
 
     cand = p["unmatched_preview"][0]["name_candidate"]
@@ -796,15 +801,18 @@ def test_name_candidate_normalizes_whitespace_and_punctuation():
 
 
 def test_name_candidate_attached_to_ambiguous_rows_too():
-    """Code with 2+ retail rows → ambiguous → still show name candidate if
-    name uniquely identifies one row (gives user a path to disambiguate)."""
-    sup = _supplier("100", "Ц", [_imp_product("CODE", "Borjomi 1L Plastic", 1, 10)])
+    """Code with 2+ retail rows → ambiguous. When the name IS shared
+    across multiple suppliers (Borjomi-style), name_supplier_exclusive
+    does NOT fire — the row stays ambiguous but carries the candidate
+    hint so the user can manually pick the right SKU."""
+    sup_a = _supplier("100", "Ц", [_imp_product("CODE", "Borjomi 1L Plastic", 1, 10)])
+    sup_b = _supplier("200", "Other", [_imp_product("OTHER", "Borjomi 1L Plastic", 1, 10)])
     retail = [
         # 2 rows with same code → ambiguous
         _retail_product("CODE", "BC1", "Borjomi 1L Glass", "მინა", 12, 10),
         _retail_product("CODE", "BC2", "Borjomi 1L Plastic", "პლასტიკი", 11, 9),
     ]
-    out = build_supplier_profitability(_data([sup], retail), today=TODAY)
+    out = build_supplier_profitability(_data([sup_a, sup_b], retail), today=TODAY)
     p = out["per_supplier"][0]["profitability"]
 
     assert p["totals"]["products_ambiguous"] == 1
@@ -832,13 +840,16 @@ def test_name_in_protected_category_auto_matches_cigarette():
 
 
 def test_name_in_protected_category_does_not_fire_for_beverages():
-    """Borjomi rule — beverages are NOT protected; even if a unique
-    retail row has the same name, do NOT auto-merge (glass vs plastic
-    have same name but different SKUs)."""
-    sup = _supplier("100", "X", [_imp_product("9999", "ბორჯომი 1ლ", 10, 9.0)])
+    """Borjomi rule — beverages are NOT in the PROTECTED category set, so
+    the protected-category name path stays off. When the name is ALSO
+    shared across multiple suppliers (Coca-Cola distributors, multiple
+    importers of Borjomi), the supplier-exclusive name path does not
+    fire either, so the row stays unmatched with a candidate hint."""
+    sup_a = _supplier("100", "X", [_imp_product("9999", "ბორჯომი 1ლ", 10, 9.0)])
+    sup_b = _supplier("200", "Y", [_imp_product("8888", "ბორჯომი 1ლ", 5, 4.5)])
     # category lacks any protected substring
     retail = [_retail_product("AA", "11", "ბორჯომი 1ლ", "მინერალური წყალი", 12.0, 9.0)]
-    out = build_supplier_profitability(_data([sup], retail), today=TODAY)
+    out = build_supplier_profitability(_data([sup_a, sup_b], retail), today=TODAY)
     p = out["per_supplier"][0]["profitability"]
 
     # Should stay unmatched but carry candidate hint
@@ -880,15 +891,24 @@ def test_name_in_protected_category_does_not_override_code_match():
 
 
 def test_portfolio_summary_aggregates_candidate_counts():
-    """Summary's portfolio block exposes total alias-confirmable opportunities."""
+    """Summary's portfolio block exposes total alias-confirmable
+    opportunities. Use SHARED names across suppliers so the auto-merge
+    rule does not fire — the candidate hint is the actionable signal."""
     sup_a = _supplier("100", "A", [_imp_product("9991", "Product A", 1, 50)])
     sup_b = _supplier("200", "B", [_imp_product("9992", "Product B", 1, 70)])
+    sup_c = _supplier("300", "C", [
+        _imp_product("9993", "Product A", 1, 50),  # shares name with sup_a
+        _imp_product("9994", "Product B", 1, 70),  # shares name with sup_b
+    ])
     retail = [
         _retail_product("777", "BC1", "Product A", "cat1", 60, 50),  # name match for sup_a
         _retail_product("888", "BC2", "Product B", "cat2", 80, 70),  # name match for sup_b
     ]
-    out = build_supplier_profitability(_data([sup_a, sup_b], retail), today=TODAY)
+    out = build_supplier_profitability(_data([sup_a, sup_b, sup_c], retail), today=TODAY)
 
     summary = out["summary"]["portfolio"]
-    assert summary["unmatched_with_candidate_count"] == 2
-    assert summary["unmatched_with_candidate_cost_ge"] == 120.0
+    # Each unmatched row in sup_a + sup_b carries a candidate hint (the
+    # third supplier's matching products do too, but the candidate is
+    # still surfaced — total = 4)
+    assert summary["unmatched_with_candidate_count"] == 4
+    assert summary["unmatched_with_candidate_cost_ge"] == 240.0

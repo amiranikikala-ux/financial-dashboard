@@ -86,6 +86,19 @@ def _clean_text(value, fallback=""):
     return text if text else fallback
 
 
+def _clean_code(value, fallback=""):
+    """Like _clean_text but strips the trailing ".0" pandas adds when Excel
+    stored a numeric code (barcode / product_code) as a number rather than
+    text. Without this, the same physical SKU produces TWO by_product rows
+    — one keyed on "4860103230027", another on "4860103230027.0" — which
+    splits revenue and breaks downstream name-match deduplication.
+    """
+    text = _safe_text(value).strip()
+    if text.endswith(".0") and text[:-2].isdigit():
+        text = text[:-2]
+    return text if text else fallback
+
+
 def _margin_pct(revenue, profit):
     revenue_val = float(revenue or 0)
     if revenue_val == 0:
@@ -526,8 +539,8 @@ def _process_retail_sales_file(
         object_label = _pick_object(row.get("ობიექტი"), fallback_object)
         category = _clean_text(row.get("ქვეჯგუფი"), "უცნობი კატეგორია")
         category_key = normalize_name(category) or category.lower()
-        product_code = _clean_text(row.get("კოდი"))
-        barcode = _clean_text(row.get("შტრიხკოდი"))
+        product_code = _clean_code(row.get("კოდი"))
+        barcode = _clean_code(row.get("შტრიხკოდი"))
         product_name = _clean_text(
             row.get("დასახელება"),
             product_code or barcode or "უცნობი პროდუქტი",

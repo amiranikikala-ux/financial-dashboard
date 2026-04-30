@@ -44,7 +44,7 @@ from __future__ import annotations
 
 import re
 from datetime import date, datetime
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 # ---------------------------------------------------------------------------
 # Tunables
@@ -205,6 +205,30 @@ def _build_alias_lookup(
     return lookup
 
 
+def _build_supplier_exclusive_names(
+    suppliers: List[Dict[str, Any]],
+) -> Set[str]:
+    """Return the set of normalized product_names that appear under EXACTLY ONE
+    supplier across all imports.
+
+    Used to enable a safe name-match fallback in `_match_product` for products
+    that no supplier-cross-collision can distort. The Borjomi-glass-vs-plastic
+    rule is preserved: names shared across multiple suppliers (e.g. Coca-Cola
+    products distributed by several distributors) are excluded from this set,
+    so the name-match fallback cannot pick the wrong supplier's pricing.
+    """
+    name_to_suppliers: Dict[str, Set[str]] = {}
+    for s in suppliers:
+        sid = _norm_code(s.get("tax_id"))
+        if not sid:
+            continue
+        for p in s.get("top_products") or []:
+            nm = _normalize_name(p.get("product_name"))
+            if nm:
+                name_to_suppliers.setdefault(nm, set()).add(sid)
+    return {nm for nm, sids in name_to_suppliers.items() if len(sids) == 1}
+
+
 def _build_retail_name_index(
     by_product: List[Dict[str, Any]],
 ) -> Dict[str, List[Dict[str, Any]]]:
@@ -235,6 +259,7 @@ def _match_product(
     by_product_code: Dict[str, List[Dict[str, Any]]],
     name_index: Dict[str, List[Dict[str, Any]]],
     alias_lookup: Dict[str, str],
+    supplier_exclusive_names: Optional[Set[str]] = None,
 ) -> Tuple[Optional[Dict[str, Any]], str]:
     """Return ``(retail_row, match_kind)``.
 
@@ -279,17 +304,58 @@ def _match_product(
         # Alias points at an ambiguous-or-missing target; treat as no match
         return None, "none"
 
+    nm = _normalize_name(imported_name)
+
+    # Very short imported codes (≤4 chars) are typically supplier-internal
+    # numbering ("1002", "9003") that collide with MAX's barcode/code
+    # space by accident — supplier code 1002 (vasadze bread) is not the
+    # same product as a MAX barcode 1002. Trust short-code matches only
+    # when the matched retail row's name agrees with the imported name.
+    # 5+ char codes are usually MAX/RS-style internal codes; legitimate
+    # name variation is allowed there. EAN-13 codes (13 chars) are
+    # globally unique; collision risk is zero.
+    SHORT_CODE_THRESHOLD = 5
+
+    def _name_agrees(retail_row: Dict[str, Any]) -> bool:
+        rn = _normalize_name(retail_row.get("product_name", ""))
+        if not rn or not nm:
+            return True
+        # Exact normalized equality is the strongest signal. Tolerate
+        # MAX-side annotations like "ქემელი — current" / "ბორჯომი 1ლ პეტი
+        # (PP)" by accepting one name as a prefix/substring of the other —
+        # those are the same physical SKU with cosmetic suffix drift.
+        if rn == nm:
+            return True
+        if rn.startswith(nm) or nm.startswith(rn):
+            return True
+        if nm in rn or rn in nm:
+            return True
+        return False
+
+    short_code = len(imported_code) < SHORT_CODE_THRESHOLD
+
+    # Track ambiguous-code seen so the final return preserves the
+    # ambiguous status when no name fallback succeeds — this preserves
+    # downstream "alias workflow" prompts for the user.
+    saw_ambiguous = False
+
     if imported_code in by_barcode:
         rows = by_barcode[imported_code]
         if len(rows) == 1:
-            return rows[0], "barcode"
-        return None, "ambiguous"
+            if not short_code or _name_agrees(rows[0]):
+                return rows[0], "barcode"
+            # Fall through — code coincidence with mismatched name; try name path
+        else:
+            saw_ambiguous = True
 
     if imported_code in by_product_code:
         rows = by_product_code[imported_code]
         if len(rows) == 1:
-            return rows[0], "product_code"
-        return None, "ambiguous"
+            if not short_code or _name_agrees(rows[0]):
+                return rows[0], "product_code"
+            # Fall through to name-based paths
+        else:
+            saw_ambiguous = True
 
     # Last deterministic code-based shot — MAX "x" suffix convention.
     # Only triggers when neither barcode nor product_code has any hit
@@ -309,12 +375,25 @@ def _match_product(
     # so a single retail row sharing the normalized name is reliable.
     # Only protected categories qualify so beverages (where Borjomi-glass
     # vs Borjomi-plastic share names) cannot trigger this path.
-    nm = _normalize_name(imported_name)
     if nm and nm in name_index:
         rows = name_index[nm]
         if len(rows) == 1 and _is_protected_category(rows[0].get("category", "")):
             return rows[0], "name_in_protected_category"
 
+    # Supplier-exclusive name match — when this normalized name is owned
+    # by exactly ONE supplier across all imports AND a single retail row
+    # carries the same name, the JOIN is safe regardless of category.
+    # Borjomi-glass-vs-plastic risk does not apply: names shared across
+    # multiple suppliers (Coca-Cola distributors etc.) are excluded from
+    # `supplier_exclusive_names` upstream, so they never reach this path.
+    if supplier_exclusive_names and nm and nm in supplier_exclusive_names:
+        if nm in name_index:
+            rows = name_index[nm]
+            if len(rows) == 1:
+                return rows[0], "name_supplier_exclusive"
+
+    if saw_ambiguous:
+        return None, "ambiguous"
     return None, "none"
 
 
@@ -355,6 +434,7 @@ def _aggregate_supplier(
     alias_lookup: Dict[str, str],
     today: date,
     name_index: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+    supplier_exclusive_names: Optional[Set[str]] = None,
 ) -> Dict[str, Any]:
     """Compute the profitability payload for one supplier."""
 
@@ -393,6 +473,7 @@ def _aggregate_supplier(
             by_product_code,
             name_index,
             alias_lookup,
+            supplier_exclusive_names,
         )
 
         if retail_row is None:
@@ -666,6 +747,7 @@ def build_supplier_profitability(
     by_bc, by_pc = _build_retail_indices(by_product)
     name_index = _build_retail_name_index(by_product)
     alias_lookup = _build_alias_lookup(aliases)
+    supplier_exclusive_names = _build_supplier_exclusive_names(suppliers)
 
     per_supplier: List[Dict[str, Any]] = []
     counts = {
@@ -686,7 +768,11 @@ def build_supplier_profitability(
     portfolio_ambiguous_with_candidate_cost = 0.0
 
     for s in suppliers:
-        prof = _aggregate_supplier(s, by_bc, by_pc, alias_lookup, today, name_index=name_index)
+        prof = _aggregate_supplier(
+            s, by_bc, by_pc, alias_lookup, today,
+            name_index=name_index,
+            supplier_exclusive_names=supplier_exclusive_names,
+        )
         per_supplier.append(
             {
                 "tax_id": s.get("tax_id") or "",
