@@ -1,21 +1,24 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-04-30 late evening (OneDrive→C:\\ migration Phase 1 + imported_products bug discovered) — გრძელი წაკითხვა საჭირო **არ არის**. ეს ფაილი ცოცხალი state-ია. Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`. Evidence → `HANDOFF.md` + `HANDOFF_ARCHIVE/`.
+> **განახლდა**: 2026-04-30 afternoon (imported_products bug FIXED — supplier modal-ის profitability ცოცხალი) — გრძელი წაკითხვა საჭირო **არ არის**. ეს ფაილი ცოცხალი state-ია. Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`. Evidence → `HANDOFF.md` + `HANDOFF_ARCHIVE/`.
 >
-> 🚨 **ღია bug** (user reported, tab unconfirmed): C:\\-ზე dashboard-ი „გაყიდულ პროდუქტებს არ აჩვენებს". Cause likely: `imported_products` სექცია data.json-ში **0 MB ცარიელია** C:\\-ზე (vs 44.70 MB OneDrive-ზე). წყარო: `Financial_Analysis/შემოტანილი პროდუქცია/` ფოლდერი გადატანილია `_to_delete_2026-04-29/02_financial_analysis_orphan/`-ში (81 MB). მოგვარების გზა: folder-ი უკან გადავიტანოთ, ან წყარო სხვა მისამართიდან გავარკვიოთ. **ხვალ პირველი ნაბიჯი** — user-ისგან tab-ის სახელი მოვიკითხოთ (რომელი ჩანს ცარიელი).
+> ✅ **imported_products bug RESOLVED** (2026-04-30 14:06): user-მა „შემოტანილი პროდუქცია" CSV ფაილი წინა session-ში 4-წლიანი 4-ფაილოვანი catalog-დან 3 თვის (2026-Q1) ერთფაილოვან mode-ში გააფიცა. Pipeline-ი silently skipped რადგან folder ცარიელი იყო (1 ფაილი `_to_delete`-ში დარჩენილი). User confirmed wants — „რა ფოლდერში არის — იმის ანალიზი, არც-future გადატვირთვა, incremental add". Fix: `report 01,2026-03,2026.csv` (5.59 MB) გადავიტანე `_to_delete_2026-04-29\02_financial_analysis_orphan\შემოტანილი პროდუქცია\` → `C:\financial-dashboard\Financial_Analysis\შემოტანილი პროდუქცია\`. Pipeline manual run (server timeout 10min hit, then bypassed via direct subprocess) → data.json updated 14:06:05 → **`imported_products.suppliers = 70` populated, profitability per-supplier ON** (28 verified / 21 partial / 4 protected / 17 unverified). User goal — **90% coverage floor for ALL suppliers** (currently 21/70 ≥90%).
+>
+> 🚨 **CRITICAL — server pipeline timeout = 10min hardcoded** (`server.py:116`) → New task §4 entry. Original `/api/refresh` failed at exact 10min before supplier_profitability step. Direct subprocess bypass took ~8min total. Fix: bump to 30min (`30 * 60`) — small `git diff`, requires service restart.
 >
 > **ახალი ჩატის read order**: ეს ფაილი → `docs/MASTER_PLAN.md` → `AGENTS.md`.
 >
-> ✅ **NSSM migration სრული** (2026-04-30 01:14) — pipeline 7.2 წთ-ში სრულდება C:\\-ზე, data.json fresh 54.2 MB. **მთავარი პრობლემა გადაჭრილია — ფაილს რომ ამატებ, dashboard ახლა ნამდვილად ხედავს**. დარჩა cleanup tasks (§4) — OneDrive copy retire (1-კვირიანი grace) + `_to_delete_2026-04-29\` permanent delete (1-კვირიანი grace).
+> ✅ **NSSM migration სრული** (2026-04-30 01:14) — pipeline 7.2 წთ-ში სრულდება C:\\-ზე, data.json fresh. **მთავარი პრობლემა გადაჭრილია — ფაილს რომ ამატებ, dashboard ახლა ნამდვილად ხედავს**.
 
 ---
 
 ## 1. ახლა სად ვართ
 
-- **ეს session (2026-04-30 late evening — 3 ნაწილი)**:
-  - **ნაწილი A (cleanup)** — `_parse_rs_datetime` divergent ვერსიის spot-check (5 წლის RS data + 3 თვის retail = ყველგან ISO format) → dead first def + dead constant + dead import წაიშალა (commit `2ab4a05`, 48 ხაზი). Live behavior უცვლელია, 21 targeted ტესტი green. user თავდაპირველად ყოყმანობდა, შემდეგ confirm-ი „თუ მსგავსია წაიშალოს".
-  - **ნაწილი B (OneDrive→C:\\ migration Phase 1 — DONE)** — push origin (8 commit GitHub durable backup) + C:\\ stash + git pull (fast-forward `bf7b091..57cf383`) + .claude/hooks/check_regression.sh + settings.json Stop hook synced via pull. Verify: ✅ HEAD match, ✅ service running, ✅ API 200, ✅ pipeline ცოცხალი. **Phase 2 (user-side restart Claude Code C:\\-დან) NOT done — user ძილში წავიდა**.
-  - **ნაწილი C (BUG, ცოცხალი)** — user-მა შენიშნა, რომ dashboard-ი „გაყიდულ პროდუქტებს არ აჩვენებს". per-section size diff: `imported_products` 0 MB C:\\-ზე vs 44.70 MB OneDrive-ზე. tab name unconfirmed (user ძილში წავიდა). შემდეგ session-ის პირველი ნაბიჯი — user-ისგან tab-ის სახელი მოვიკითხოთ, შემდეგ folder-ის უკან გადატანის გადაწყვეტილება.
+- **ეს session (2026-04-30 afternoon — imported_products bug FIX + 90% coverage diagnostic)**:
+  - **ნაწილი A (BUG diagnostic)** — user reported „მომწოდებლის ტაბში cross-check ცხრილი ცარიელია" (with 2 screenshots). Diagnostic chain: SupplierModal-ი render-ს `importedEntry?.profitability.{top_margin,bottom_margin,dead_stock}`-ს → `imported_products.suppliers = []` (0 length) → pipeline `files_found_count = 0` → `Financial_Analysis/შემოტანილი პროდუქცია/` folder MISSING → `_to_delete_2026-04-29\02_financial_analysis_orphan\შემოტანილი პროდუქცია\` 80MB / 11 CSV. Source canonical: 4-year aggregate per-half-year files (2023, 2024, 2025, 2026).
+  - **ნაწილი B (user philosophy — captured)** — user explicitly chose **incremental "what's in folder gets analyzed"** approach. NOT moving all 11 files back. Only 1 file = `report 01,2026-03,2026.csv` (5.59 MB, 2026-Q1) — matching their ალრედი 3-month retail_sales window. Dropped 10 historical files (2023-2025). Future month adds = drop file in folder, pipeline auto-picks up next hour OR manual trigger.
+  - **ნაწილი C (FIX execution)** — single file moved with PowerShell `Move-Item`, target dir created. `/api/refresh` → server timeout 600s hit at supplier_profitability step (last log `IBAN audit @ 13:49:25`, killed 13:49:28 = exact 10min). Bypassed via direct `subprocess` (no timeout) → completed 14:06:05 → **70 suppliers + 2291 products with profitability**.
+  - **ნაწილი D (90% coverage diagnostic — user ambition)** — user-ი მოითხოვს **ALL suppliers ≥ 90% coverage floor**. Currently 21/70 (30%). Path forward = 3-option choice: (A) **alias UI workflow** [Sprint C, NEW chat — 5-7 day build], (B) eANGARISH "გამყიდველი" cross-ref [needs new RS.ge download], (C) ground-truth Excel per-supplier [needs catalog]. User chose A + show top-10 [now done]. Top 10 by ცარიელი value computed (table in §5). 3 patterns: tobacco renumbering dominant (3 of top 10), 1 quick-win (vasadze bread already has alias_candidate auto-suggested), long-tail (შრომა-2023 has 247 unmatched).
 - **წინა session (2026-04-30 evening — handoff close-out)**: წინა NSSM-migration session-ის working-copy state ფორმალურად დახურდა — 5 commit landed (constants.py duplicates, retired imported-products CSVs + regression-runtime gitignore, regression-detection Stop hook + handoff template v1.1, AGENTS.md proof-gate path + Session Pacing rewrite, CONTEXT-ის განახლება). ენობრივი regression — „ცადო" filler-ი user-მა გამოაცადა მე-7 cross-session occurrence-ად; გასწორდა inline (filler → „გავაკეთო/მოკლე/შემოწმება").
 - **წინა session (2026-04-30 morning — NSSM migration COMPLETE)**: `C:\financial-dashboard\` უკვე დასახლებული იყო (user-ის ხელით 04-29 evening + venv 04-30 00:00:06). NSSM 4 paths გადარედირექტდა (Application + AppDirectory + AppStdout + AppStderr) → service restart → data.json copy from OneDrive → manual pipeline trigger → **pipeline 7.2 წთ-ში სრულდა**, data.json fresh 54.2 MB, 28 API artifacts, 0 errors. OneDrive copy untouched (fallback). Auto-handoff hook + AGENTS.md path fix + handoff skill template v1.1 ამავე session-ში მომზადდა working-copy-ში; დახურდა ამ session-ში 5 commit-ით.
 - **წინა-წინა session (2026-04-29 evening, არც ერთი commit არ მომხდარა)**: workspace structural cleanup — parent folder-დან ~863 MB orphan/duplicate ფაილი გადატანილი `_to_delete_2026-04-29\` staging-ში. დეტალები §2-ში.
@@ -24,8 +27,10 @@
 - **CAL Step 2 (Data inventory)**: ✅ pipeline-ში per-day aggregation **არ არსებობს** (only `by_month` / `by_category_by_month`). Source per-row datetime ცხადია (`დრო` სვეტი), ifqli matched products უკვე გამოთვლილია `supplier_profitability`-ში. **საჭიროა ახალი aggregation**: `supplier.profitability.daily_breakdown[]` sparse (per-day × per-store)
 - **CAL Step 3-6**: spot-check + implement + verify + user review — ⏳ ვიდრე user-ის ცხადი „გადავიდეთ"
 
-**ბოლო commit-ები** (`origin/main`-ზე 7 ahead, push არ გაკეთებულა):
+**ბოლო commit-ები** (`origin/main`-ზე 7 ahead, push არ გაკეთებულა; ამ session-ში **ZERO commit** — only data file move + pipeline run, both untracked):
 ```
+f95e85f  docs(handoff): capture migration Phase 1 + imported_products bug
+57cf383  docs(handoff): close _parse_rs_datetime task — pin SHA 2ab4a05
 2ab4a05  chore(pipeline): drop dead _parse_rs_datetime first def + unused Georgian-month constant
 45c6bb6  docs(handoff): correct ahead-of-main count (48 → 5)
 3c54aab  docs(handoff): close NSSM-migration session — 5 commits landed, file rotated
@@ -34,9 +39,12 @@ f11439b  feat(.claude): regression-detection Stop hook + handoff template fix
 e21e9e0  chore: drop retired imported-products CSVs + gitignore regression runtime
 7edd937  chore(pipeline): drop 10 duplicate function defs in constants.py
 bf7b091  docs(handoff): commit working-copy state — Financial_Analysis duplicate finding + restart trigger
-b1ccb93  docs(governance): SessionStart hook + flesh out CLAUDE.md Agent Brief
-4deed3a  docs(governance): consolidate to 4-file structure — MASTER_PLAN as single roadmap
 ```
+
+**ამ session-ში გაკეთებული** (no commits, only operational):
+1. File move: `_to_delete_2026-04-29\02_financial_analysis_orphan\შემოტანილი პროდუქცია\report 01,2026-03,2026.csv` → `C:\financial-dashboard\Financial_Analysis\შემოტანილი პროდუქცია\` (5.59 MB, 9578 ხაზი, 431,456 ₾)
+2. Manual pipeline run (direct subprocess, no timeout) → data.json regenerated 14:06:05 → 70 suppliers + 2291 products with `profitability` field
+3. Coverage diagnostic: 21 ≥90% / 8 80-90% / 15 50-80% / 9 5-50% / 17 <5% (top 10 ცხრილი §5)
 
 ---
 
@@ -125,7 +133,10 @@ _to_delete_2026-04-29\                         ← grace folder (1 week → perm
 
 | # | task | size | risk | რატომ |
 |---|---|---|---|---|
-| **✅ DONE 2026-04-30** | ~~NSSM service redirect to `C:\financial-dashboard\`~~ — Migration COMPLETE. NSSM 4 paths C:\ (Application, AppDirectory, AppStdout, AppStderr). data.json copied OneDrive→C:\, manual pipeline triggered, **completed in 7.2 წთ** (vs 10+ წთ timeout on OneDrive). Fresh data.json 54.2 MB, mtime 2026-04-30 01:14:18, 28 API artifacts, 0 errors. OneDrive copy untouched (1-week retire pending). | — | — | core user pain (data.json never updates) — RESOLVED |
+| **✅ DONE 2026-04-30** | ~~imported_products bug — supplier modal ცარიელია~~ — File moved (single 3-month CSV), pipeline manual run, 70 supplier-ი profitability-ით. User-ის incremental philosophy captured. | — | — | მთავარი user pain — supplier modal cross-check ცხრილი ცოცხალი |
+| **🚨 0a NEW** | **90% coverage floor — alias UI workflow (Sprint C)** — user wants ALL 70 suppliers ≥ 90% coverage; currently 21/70. Top 10 below-90% computed (§5). Path = build alias confirmation UI in browser → user clicks „დადასტურდი" on each pipeline-suggested name_candidate → `product_aliases.json` write → next pipeline run boosts coverage. **Quick win first**: #4 ვასაძის პური (already has auto-suggested name_candidate, single click → 82% → 90%+). Then tobacco cluster (#1 ELIZI, #3 ინტერნეიშნლ, #7 გეოდისტრიბუცია — all renumbering issue). Then long-tail (#2 შრომა-2023 — 247 unmatched). User confirmed PRIORITY 1; chose to handoff to fresh chat. | 5-7 day full sprint | MEDIUM | **მთავარი მომდევნო work — open in fresh chat** |
+| **🚨 0d NEW** | **server.py:116 timeout 10→30 min** — `subprocess.run(timeout=10*60)` killed pipeline at exact 10min. Direct subprocess bypass took ~8min total but Pipeline architecture timing means scheduled hourly run will keep failing. Edit: `timeout=30 * 60`, restart service. Tiny `git diff`, requires UAC for `Restart-Service`. | 5 min | LOW | მომავალი hourly auto-runs ცადობდა keep crashing |
+| **✅ DONE 2026-04-30** | ~~NSSM service redirect to `C:\financial-dashboard\`~~ — Migration COMPLETE. data.json fresh, 28 API artifacts, 0 errors. OneDrive copy untouched (1-week retire pending). | — | — | RESOLVED |
 | **✅ DONE 2026-04-30** | ~~Auto-handoff hook on language regression~~ — Stop hook landed in `.claude/settings.json` (v2: SessionStart preserved + Stop added). Detection script: `.claude/hooks/check_regression.sh` (bash + Python 3.14, jq unavailable on Windows Git Bash). 2 patterns: (1) ცადო/ცადობს 3+ in one response, (2) Latin glue tokens `magram`/`magari`/`magrad` word-bound. On detection: persistent counter `.claude/regression_count.txt` increments + flag `.claude/regression_detected.flag` (timestamp + reason + session) + stderr „🚨 RESTART REQUIRED" + JSON `systemMessage` to UI. Pipe-tested 3/3: 5x ცადო trigger ✅, clean Georgian silent ✅, „magram" trigger ✅. **Hook fires AFTER assistant stops** — informs user, doesn't auto-restart. | — | — | regression cycle ხელით აღარ ბრუნავს, automatic flagging triggered |
 | **🧹 1-week-pending** | **OneDrive `financial-dashboard\` copy retire — NOT a 5-minute mv** (2026-04-30 verification, session #2). Migration ნაწილობრივია: C:\\ = service mirror only (data.json fresh Apr 30 01:14, მაგრამ კოდი + `.git` Apr 29 22:16 stale — copy migration-ზე გაკეთდა). OneDrive = **ცოცხალი working tree** (governance edits Apr 30 00:36-01:16: CONTEXT_HANDOFF/AGENTS; .git working tree 48 commits ahead არ-push-ებული; .claude config; **Claude Code სესიის cwd**). უბრალო `mv` → working tree-ი დაიკარგება. **სწორი retire sequence**: (1) OneDrive uncommitted ცვლილებები git-ში commit (✅ ამ session-ში გაკეთდა); (2) C:\\-ზე `git pull` ან ხელით governance ფაილების sync; (3) Claude Code-ი C:\\-დან გავუშვა (cwd ცვლილება, შესაძლოა .claude config-იც კოპირდეს); (4) **მხოლოდ ამის შემდეგ** OneDrive → `_to_delete_2026-04-30_onedrive\` staging. | ~30-45 წთ mini-sprint | MEDIUM | divergence-ი ყოველ დღე იზრდება (governance edit-ები მხოლოდ OneDrive-ზე, data.json მხოლოდ C:\\-ზე) — საჭიროა migration plan |
 | **🧹 1-week-pending** | `_to_delete_2026-04-29\` permanent delete (863 MB) — 5-7 დღე dashboard ცოცხალი → permanent rm. თუ user-მა რამე surprise აღმოაჩინა → უკან გადატანა (§2) | 1 წთ | LOW | grace period აქტიური; cleanup უკვე გაკეთდა, მხოლოდ permanent rm-ი დარჩა |
@@ -142,7 +153,31 @@ _to_delete_2026-04-29\                         ← grace folder (1 week → perm
 
 ## 5. წინა session-ის carry-forward findings
 
-**ELIZI ground-truth** (2026-04-28): user-მა გააზიარა Excel `Financial_Analysis/ოზურგეთი კომპანიების გაყიდვები/2022,2026-02.xls`. რეალური cost 297,685 / sales 313,456 / **profit +15,771 / margin +5.3%**. Dashboard აჩვენებს: cost 322K / sold 61.7K / **profit −1,314 / margin −2.13%**. — Item §0c-ში.
+### Top 10 below-90% suppliers (2026-04-30 14:06 baseline) — Sprint C input
+
+| # | მომწოდებელი | Coverage | Imported ₾ | Unmatched ₾ | Status |
+|---|---|---|---|---|---|
+| 1 | შპს ელიზი ჯგუფი | 0.8% | 79,634 | 78,967 | unverified, tobacco renumbering |
+| 2 | შპს შრომა-2023 | 57.6% | 25,318 | 10,741 | partial, long-tail (247 unmatched) |
+| 3 | შპს ინტერნეიშნლ მარკეტინგ | 44.2% | 19,848 | 11,069 | protected, tobacco |
+| 4 | შპს ვასაძის პური | 82.4% | 19,764 | 3,470 | verified, **HAS name_candidate auto-suggested → quick win** |
+| 5 | შპს ზედაზენი აჭარა | 73.7% | 17,977 | 4,732 | partial |
+| 6 | სს იბერია რეფრეშმენტსი | 82.0% | 11,680 | 2,096 | verified |
+| 7 | შპს გეოდისტრიბუცია | 5.0% | 11,511 | 10,939 | unverified, tobacco |
+| 8 | შპს კანტი | 85.7% | 10,724 | 1,529 | verified |
+| 9 | შპს ფუდსერვისი | 70.7% | 7,040 | 2,066 | partial |
+| 10 | შპს პარტნიორი | 72.9% | 6,733 | 1,826 | partial |
+
+**3 patterns**:
+1. **Tobacco renumbering dominant** (3 of top 10 = ELIZI, ინტერნეიშნლ, გეოდისტრიბუცია). სალარო MAX renumbered, name same, code different. Best alias-fix candidates.
+2. **Quick win** (#4 ვასაძის პური): pipeline already produced `name_candidate = "შეფუთული აგურა რუხი" → "პური შავი აგური" (retail_category)`. Single user click in alias UI = 82% → 90%+.
+3. **Long-tail** (#2 შრომა-2023): 247 unmatched products, each <300 ₾. Manual review heavy work — last priority.
+
+**Status distribution**: verified 28 / partial 21 / protected 4 / unverified 17 = 70 total.
+
+### ELIZI ground-truth carry-over
+
+**ELIZI ground-truth** (2026-04-28): user-მა გააზიარა Excel `Financial_Analysis/ოზურგეთი კომპანიების გაყიდვები/2022,2026-02.xls`. რეალური cost 297,685 / sales 313,456 / **profit +15,771 / margin +5.3%**. Dashboard აჩვენებს: cost 322K / sold 61.7K / **profit −1,314 / margin −2.13%**. — Item §0c-ში. **Note**: 2026-04-30 ELIZI ax 0.8% coverage on 3-month window (vs 35% on full window) — reaffirms tobacco renumbering issue dominant cause.
 
 **🚨 ენობრივი regression — pattern history (7 cross-session occurrences)**: filler-words / partial Georgian tokens (2026-04-27 + 04-28 + 04-29 morning + 04-29 evening ×2 + 04-30 morning + 04-30 evening). Trigger: complex tool output → cognitive load → degraded Georgian generation. **NEW 2026-04-30**: auto-detection Stop hook landed (commit `f11439b`) — filler („ცადო"/„ცადობს" 3+) და Latin-glue (`magram`/`magari`/`magrad`) patterns ფიქსირდება ავტომატურად, flag + counter + UI message-ი ფიქსირდება. ახალ ჩატში პირველი ნაბიჯი: წაიკითხე ეს ფაილი + `docs/MASTER_PLAN.md` + `AGENTS.md` (SessionStart hook ავტომატურად აიძულებს).
 
