@@ -180,8 +180,77 @@ def _restore(bak_path: Path, db_name: str) -> None:
 # ─────────────────────────────────────────── analytics ────────────────────────
 
 
+def _build_cost_lookup_temp_table(cur) -> None:
+    """Materialize per-product effective_unit_cost into a temp table (#pec).
+
+    d1ff190 logic ported to SQL: MAX POS operators frequently leave
+    ORD_GETPRICE empty or set to a placeholder (e.g. ვასაძის პური bread
+    products), producing spurious 70-95% per-store margins. We replace the
+    recorded cost with an imputed unit cost computed from the supplier-
+    purchase table (GET) — cost_paid / qty_bought. Cap the attribution at
+    qty_bought so name-fuzzy multi-supplier matches don't credit one
+    supplier with cost on volumes they didn't ship.
+
+    Mathematically: effective_unit_cost = cost_paid / MAX(qty_bought, qty_sold).
+    - qty_sold ≤ qty_bought (no cap): cost_paid / qty_bought = imp_unit_cost
+    - qty_sold > qty_bought (cap): cost_paid / qty_sold → total imputed cost
+      equals the full purchase value (you can't sell more than you bought)
+    - No GET data: fall back to recorded ORD_GETPRICE per-unit average
+
+    Materialization avoids re-scanning ORDERS+GET on every aggregation query
+    (8 reuses below) — single sequential scan + indexed lookups thereafter.
+    """
+    cur.execute(
+        """
+        SELECT
+            pst.p_id,
+            pst.qty_sold_total,
+            COALESCE(pp.qty_bought, 0) AS qty_bought,
+            COALESCE(pp.cost_paid, 0)  AS cost_paid,
+            CASE
+                WHEN pp.qty_bought > 0 AND pp.cost_paid > 0 THEN
+                    pp.cost_paid / (CASE
+                        WHEN pst.qty_sold_total > pp.qty_bought THEN pst.qty_sold_total
+                        ELSE pp.qty_bought
+                    END)
+                WHEN pst.qty_sold_total > 0 THEN
+                    pst.cost_recorded / pst.qty_sold_total
+                ELSE 0
+            END AS effective_unit_cost
+        INTO #pec
+        FROM (
+            SELECT
+                ORD_P_ID AS p_id,
+                SUM(ORD_quant) AS qty_sold_total,
+                SUM(ORD_GETPRICE * ORD_quant) AS cost_recorded
+            FROM ORDERS
+            WHERE ORD_ACT = 1
+            GROUP BY ORD_P_ID
+            HAVING SUM(ORD_quant) > 0
+        ) pst
+        LEFT JOIN (
+            SELECT
+                G_P_ID AS p_id,
+                SUM(G_QUANT) AS qty_bought,
+                SUM(G_PRICE * G_QUANT) AS cost_paid
+            FROM GET
+            WHERE G_ACT = 1
+            GROUP BY G_P_ID
+            HAVING SUM(G_QUANT) > 0
+        ) pp ON pst.p_id = pp.p_id
+        """
+    )
+    cur.execute("CREATE CLUSTERED INDEX ix_pec_pid ON #pec(p_id)")
+
+
 def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
-    """Per-supplier revenue/cost/profit/margin across multiple time windows."""
+    """Per-supplier + per-product + per-month + per-category rollups.
+
+    Cost is imputed from supplier-invoice (GET table) when available — see
+    `_build_cost_lookup_temp_table` for the d1ff190 logic. Recorded MAX-POS
+    cost is preserved as `cogs_recorded` alongside `cogs` (imputed) for UI
+    transparency.
+    """
     conn = _connect(db_name, autocommit=False)
     try:
         cur = conn.cursor()
@@ -192,7 +261,12 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
         )
         min_ts, max_ts, total_rows = cur.fetchone()
 
-        # Lifetime per-supplier
+        # Materialize per-product effective_unit_cost lookup (#pec). All
+        # aggregation queries below join against this temp table for fast
+        # cost imputation without re-scanning ORDERS+GET.
+        _build_cost_lookup_temp_table(cur)
+
+        # ─── Supplier rollup (lifetime) ──────────────────────────────────────
         cur.execute(
             """
             SELECT
@@ -201,31 +275,36 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 d.dasaxeleba                                 AS supplier_name,
                 COUNT(DISTINCT o.ORD_ID)                     AS sale_lines,
                 SUM(o.ORD_jamjam)                            AS revenue,
-                SUM(o.ORD_GETPRICE * o.ORD_quant)            AS cogs,
-                SUM(o.ORD_jamjam) - SUM(o.ORD_GETPRICE * o.ORD_quant) AS profit
+                SUM(o.ORD_quant * pec.effective_unit_cost)   AS cogs_imputed,
+                SUM(o.ORD_GETPRICE * o.ORD_quant)            AS cogs_recorded
             FROM ORDERS o
             JOIN PRODUCTS p ON o.ORD_P_ID = p.P_ID
             JOIN DISTRIBUTORS d ON p.P_DAFAULTSUPPLIER = d.DIST_UUID
+            LEFT JOIN #pec pec ON p.P_ID = pec.p_id
             WHERE o.ORD_ACT = 1
             GROUP BY d.DIST_UUID, d.saidentifikacio, d.dasaxeleba
             """
         )
         suppliers: dict[str, dict] = {}
-        for uuid, tax_id, name, lines, rev, cogs, profit in cur.fetchall():
+        for uuid, tax_id, name, lines, rev, cogs_imp, cogs_rec in cur.fetchall():
+            rev_f = float(rev or 0)
+            cogs_imp_f = float(cogs_imp or 0)
+            profit = rev_f - cogs_imp_f
             suppliers[uuid] = {
                 "supplier_uuid": uuid,
                 "tax_id": tax_id,
                 "name": name,
                 "lifetime": {
                     "sale_lines": int(lines or 0),
-                    "revenue": float(rev or 0),
-                    "cogs": float(cogs or 0),
-                    "profit": float(profit or 0),
-                    "margin_pct": (float(profit or 0) / float(rev) * 100) if rev else None,
+                    "revenue": rev_f,
+                    "cogs": cogs_imp_f,
+                    "cogs_recorded": float(cogs_rec or 0),
+                    "profit": profit,
+                    "margin_pct": (profit / rev_f * 100) if rev_f else None,
                 },
             }
 
-        # Windowed: last 30 + 90 days, anchored to MAX(ORD_TIMESTAMP) so missing-day backups still work
+        # ─── Supplier rollup (windowed: last 30/90 days) ────────────────────
         anchor = max_ts or datetime.now()
         for window_days, key in ((30, "last_30_days"), (90, "last_90_days")):
             since = anchor - timedelta(days=window_days)
@@ -234,40 +313,221 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 SELECT
                     d.DIST_UUID,
                     SUM(o.ORD_jamjam)                            AS revenue,
-                    SUM(o.ORD_GETPRICE * o.ORD_quant)            AS cogs,
-                    SUM(o.ORD_jamjam) - SUM(o.ORD_GETPRICE * o.ORD_quant) AS profit,
+                    SUM(o.ORD_quant * pec.effective_unit_cost)   AS cogs_imputed,
+                    SUM(o.ORD_GETPRICE * o.ORD_quant)            AS cogs_recorded,
                     COUNT(DISTINCT o.ORD_ID)                     AS sale_lines
                 FROM ORDERS o
                 JOIN PRODUCTS p ON o.ORD_P_ID = p.P_ID
                 JOIN DISTRIBUTORS d ON p.P_DAFAULTSUPPLIER = d.DIST_UUID
+                LEFT JOIN #pec pec ON p.P_ID = pec.p_id
                 WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP >= ?
                 GROUP BY d.DIST_UUID
                 """,
                 since,
             )
-            for uuid, rev, cogs, profit, lines in cur.fetchall():
-                if uuid in suppliers:
-                    suppliers[uuid][key] = {
-                        "sale_lines": int(lines or 0),
-                        "revenue": float(rev or 0),
-                        "cogs": float(cogs or 0),
-                        "profit": float(profit or 0),
-                        "margin_pct": (float(profit or 0) / float(rev) * 100) if rev else None,
-                    }
+            for uuid, rev, cogs_imp, cogs_rec, lines in cur.fetchall():
+                if uuid not in suppliers:
+                    continue
+                rev_f = float(rev or 0)
+                cogs_imp_f = float(cogs_imp or 0)
+                profit = rev_f - cogs_imp_f
+                suppliers[uuid][key] = {
+                    "sale_lines": int(lines or 0),
+                    "revenue": rev_f,
+                    "cogs": cogs_imp_f,
+                    "cogs_recorded": float(cogs_rec or 0),
+                    "profit": profit,
+                    "margin_pct": (profit / rev_f * 100) if rev_f else None,
+                }
 
-        # Portfolio totals
+        # ─── Portfolio totals ───────────────────────────────────────────────
         cur.execute(
-            "SELECT SUM(ORD_jamjam), SUM(ORD_GETPRICE * ORD_quant), COUNT(*) "
-            "FROM ORDERS WHERE ORD_ACT = 1"
+            """
+            SELECT
+                SUM(o.ORD_jamjam)                            AS revenue,
+                SUM(o.ORD_quant * pec.effective_unit_cost)   AS cogs_imputed,
+                SUM(o.ORD_GETPRICE * o.ORD_quant)            AS cogs_recorded,
+                COUNT(*)                                     AS sale_lines
+            FROM ORDERS o
+            LEFT JOIN #pec pec ON o.ORD_P_ID = pec.p_id
+            WHERE o.ORD_ACT = 1
+            """
         )
-        rev_t, cogs_t, lines_t = cur.fetchone()
+        rev_t, cogs_imp_t, cogs_rec_t, lines_t = cur.fetchone()
+        rev_t_f = float(rev_t or 0)
+        cogs_imp_t_f = float(cogs_imp_t or 0)
+        profit_t = rev_t_f - cogs_imp_t_f
         totals = {
             "sale_lines": int(lines_t or 0),
-            "revenue": float(rev_t or 0),
-            "cogs": float(cogs_t or 0),
-            "profit": float((rev_t or 0) - (cogs_t or 0)),
-            "margin_pct": (float((rev_t or 0) - (cogs_t or 0)) / float(rev_t) * 100) if rev_t else None,
+            "revenue": rev_t_f,
+            "cogs": cogs_imp_t_f,
+            "cogs_recorded": float(cogs_rec_t or 0),
+            "profit": profit_t,
+            "margin_pct": (profit_t / rev_t_f * 100) if rev_t_f else None,
         }
+
+        # ─── By-product (top 500 by revenue) ────────────────────────────────
+        cur.execute(
+            """
+            SELECT TOP 500
+                p.P_ID                                       AS product_id,
+                p.P_CODE                                     AS product_code,
+                p.P_BARCODE                                  AS barcode,
+                p.P_NAME                                     AS product_name,
+                p.P_UNIT                                     AS unit,
+                p.P_GROUP                                    AS category,
+                d.DIST_UUID                                  AS supplier_uuid,
+                d.dasaxeleba                                 AS supplier_name,
+                SUM(o.ORD_quant)                             AS qty_sold,
+                SUM(o.ORD_jamjam)                            AS revenue,
+                SUM(o.ORD_quant * pec.effective_unit_cost)   AS cogs_imputed,
+                SUM(o.ORD_GETPRICE * o.ORD_quant)            AS cogs_recorded,
+                COUNT(*)                                     AS row_count,
+                MIN(o.ORD_TIMESTAMP)                         AS min_date,
+                MAX(o.ORD_TIMESTAMP)                         AS max_date
+            FROM ORDERS o
+            JOIN PRODUCTS p ON o.ORD_P_ID = p.P_ID
+            LEFT JOIN DISTRIBUTORS d ON p.P_DAFAULTSUPPLIER = d.DIST_UUID
+            LEFT JOIN #pec pec ON p.P_ID = pec.p_id
+            WHERE o.ORD_ACT = 1
+            GROUP BY p.P_ID, p.P_CODE, p.P_BARCODE, p.P_NAME, p.P_UNIT, p.P_GROUP,
+                     d.DIST_UUID, d.dasaxeleba
+            ORDER BY SUM(o.ORD_jamjam) DESC
+            """
+        )
+        by_product = []
+        for row in cur.fetchall():
+            (pid, code, barcode, name, unit, category, sup_uuid, sup_name,
+             qty, rev, cogs_imp, cogs_rec, row_count, min_d, max_d) = row
+            rev_f = float(rev or 0)
+            cogs_imp_f = float(cogs_imp or 0)
+            profit = rev_f - cogs_imp_f
+            by_product.append({
+                "product_id": int(pid),
+                "product_code": code or "",
+                "barcode": barcode or "",
+                "product_name": name or "",
+                "unit": unit or "",
+                "category": category or "",
+                "supplier_uuid": sup_uuid or "",
+                "supplier_name": sup_name or "",
+                "row_count": int(row_count or 0),
+                "qty_sold": float(qty or 0),
+                "revenue": rev_f,
+                "cogs": cogs_imp_f,
+                "cogs_recorded": float(cogs_rec or 0),
+                "profit": profit,
+                "margin_pct": (profit / rev_f * 100) if rev_f else None,
+                "min_date": min_d.isoformat() if min_d else None,
+                "max_date": max_d.isoformat() if max_d else None,
+            })
+
+        # ─── By-month ───────────────────────────────────────────────────────
+        cur.execute(
+            """
+            SELECT
+                CAST(YEAR(o.ORD_TIMESTAMP) AS varchar(4)) + '-'
+                    + RIGHT('0' + CAST(MONTH(o.ORD_TIMESTAMP) AS varchar(2)), 2) AS month,
+                COUNT(*)                                     AS row_count,
+                SUM(o.ORD_quant)                             AS qty_sold,
+                SUM(o.ORD_jamjam)                            AS revenue,
+                SUM(o.ORD_quant * pec.effective_unit_cost)   AS cogs_imputed,
+                SUM(o.ORD_GETPRICE * o.ORD_quant)            AS cogs_recorded
+            FROM ORDERS o
+            LEFT JOIN #pec pec ON o.ORD_P_ID = pec.p_id
+            WHERE o.ORD_ACT = 1
+            GROUP BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP)
+            ORDER BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP)
+            """
+        )
+        by_month = []
+        for month, row_count, qty, rev, cogs_imp, cogs_rec in cur.fetchall():
+            rev_f = float(rev or 0)
+            cogs_imp_f = float(cogs_imp or 0)
+            profit = rev_f - cogs_imp_f
+            by_month.append({
+                "month": month,
+                "row_count": int(row_count or 0),
+                "qty_sold": float(qty or 0),
+                "revenue": rev_f,
+                "cogs": cogs_imp_f,
+                "cogs_recorded": float(cogs_rec or 0),
+                "profit": profit,
+                "margin_pct": (profit / rev_f * 100) if rev_f else None,
+            })
+
+        # ─── By-category ────────────────────────────────────────────────────
+        cur.execute(
+            """
+            SELECT
+                ISNULL(p.P_GROUP, '(უცნობი)')               AS category,
+                COUNT(*)                                     AS row_count,
+                COUNT(DISTINCT p.P_ID)                       AS distinct_product_count,
+                SUM(o.ORD_quant)                             AS qty_sold,
+                SUM(o.ORD_jamjam)                            AS revenue,
+                SUM(o.ORD_quant * pec.effective_unit_cost)   AS cogs_imputed,
+                SUM(o.ORD_GETPRICE * o.ORD_quant)            AS cogs_recorded
+            FROM ORDERS o
+            JOIN PRODUCTS p ON o.ORD_P_ID = p.P_ID
+            LEFT JOIN #pec pec ON p.P_ID = pec.p_id
+            WHERE o.ORD_ACT = 1
+            GROUP BY p.P_GROUP
+            ORDER BY SUM(o.ORD_jamjam) DESC
+            """
+        )
+        by_category = []
+        for cat, row_count, prod_count, qty, rev, cogs_imp, cogs_rec in cur.fetchall():
+            rev_f = float(rev or 0)
+            cogs_imp_f = float(cogs_imp or 0)
+            profit = rev_f - cogs_imp_f
+            by_category.append({
+                "category": cat or "(უცნობი)",
+                "row_count": int(row_count or 0),
+                "distinct_product_count": int(prod_count or 0),
+                "qty_sold": float(qty or 0),
+                "revenue": rev_f,
+                "cogs": cogs_imp_f,
+                "cogs_recorded": float(cogs_rec or 0),
+                "profit": profit,
+                "margin_pct": (profit / rev_f * 100) if rev_f else None,
+            })
+
+        # ─── By-category-by-month ───────────────────────────────────────────
+        cur.execute(
+            """
+            SELECT
+                CAST(YEAR(o.ORD_TIMESTAMP) AS varchar(4)) + '-'
+                    + RIGHT('0' + CAST(MONTH(o.ORD_TIMESTAMP) AS varchar(2)), 2) AS month,
+                ISNULL(p.P_GROUP, '(უცნობი)')               AS category,
+                COUNT(*)                                     AS row_count,
+                SUM(o.ORD_quant)                             AS qty_sold,
+                SUM(o.ORD_jamjam)                            AS revenue,
+                SUM(o.ORD_quant * pec.effective_unit_cost)   AS cogs_imputed,
+                SUM(o.ORD_GETPRICE * o.ORD_quant)            AS cogs_recorded
+            FROM ORDERS o
+            JOIN PRODUCTS p ON o.ORD_P_ID = p.P_ID
+            LEFT JOIN #pec pec ON p.P_ID = pec.p_id
+            WHERE o.ORD_ACT = 1
+            GROUP BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP), p.P_GROUP
+            ORDER BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP), SUM(o.ORD_jamjam) DESC
+            """
+        )
+        by_category_by_month = []
+        for month, cat, row_count, qty, rev, cogs_imp, cogs_rec in cur.fetchall():
+            rev_f = float(rev or 0)
+            cogs_imp_f = float(cogs_imp or 0)
+            profit = rev_f - cogs_imp_f
+            by_category_by_month.append({
+                "month": month,
+                "category": cat or "(უცნობი)",
+                "row_count": int(row_count or 0),
+                "qty_sold": float(qty or 0),
+                "revenue": rev_f,
+                "cogs": cogs_imp_f,
+                "cogs_recorded": float(cogs_rec or 0),
+                "profit": profit,
+                "margin_pct": (profit / rev_f * 100) if rev_f else None,
+            })
     finally:
         conn.close()
 
@@ -282,6 +542,10 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
         },
         "totals": totals,
         "suppliers": sorted(suppliers.values(), key=lambda s: s["lifetime"]["revenue"], reverse=True),
+        "by_product": by_product,
+        "by_month": by_month,
+        "by_category": by_category,
+        "by_category_by_month": by_category_by_month,
     }
 
 
