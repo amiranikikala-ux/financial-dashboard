@@ -34,7 +34,7 @@
 | **B. Operations (transactional layer)** ||||||
 | 5 | **გაყიდვები** | 🚧 active (CAL mini-sprint open) | Megaplus per-sale export | per-day calendar, POS↔ბანკი, დღგ-ის ნახელეცი, cost↔ფაქტურა | 3,7 |
 | 6 | **პროდუქცია** | 🟢 barcode JOIN closed | barcode/SKU master + იმპორტი + გაყიდვა | barcode-by-barcode JOIN (არა name-fuzzy) | 1,5 |
-| 7 | **მაღაზიები** | 🟡 4-store mapping; ქირა/ფართი data missing | მაღაზიის სია + ხელშეკრულება + ფართი | per-store breakdown ცრუ-ცარიელი ცადო | — |
+| 7 | **მაღაზიები** | 🟡 4-store mapping; ქირა/ფართი data missing | მაღაზიის სია + ხელშეკრულება + ფართი | per-store breakdown ცრუ-ცარიელი — შემოწმება საჭიროა | — |
 | 8 | **Dead stock** | 🔴 ახალი | inventory snapshot + ბოლო გაყიდვის თარიღი | >90/180/365 დღე ცხრილი | 6 |
 | **C. Aggregation (analytics layer)** ||||||
 | 4 | **ანალიტიკა** | 🟢 | derived (1+2+3+5+6) | ცრუ ცარიელი breakdown იძებნება | 1,2,3,5,6 |
