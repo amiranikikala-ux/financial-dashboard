@@ -369,7 +369,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
         # ─── By-product (top 500 by revenue) ────────────────────────────────
         cur.execute(
             """
-            SELECT TOP 500
+            SELECT TOP 10000
                 p.P_ID                                       AS product_id,
                 p.P_CODE                                     AS product_code,
                 p.P_BARCODE                                  AS barcode,

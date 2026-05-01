@@ -1649,54 +1649,6 @@ def run():
     except Exception as exc:
         logger.warning("მომწოდებლების კონცენტრაცია — ვერ აშენდა: %s", exc)
 
-    # ----- per-supplier პროდუქციული მოგება (strict barcode JOIN) -----
-    # imported_products (ვინ-რა-მომიტანა) ↔ retail_sales.by_product
-    # (რა-რა-ფასად-გავყიდე) — barcode/code-ით 1:1, name-fuzzy-ი
-    # აკრძალულია (memory: project_product_match_barcode_only).
-    # შედეგი წერს per-supplier "profitability" ობიექტს მათ entry-ში
-    # data["imported_products"]["suppliers"][i]-ზე, რომ SupplierModal-მ
-    # extra fetch-ის გარეშე წაიკითხოს.
-    try:
-        retail_by_product = ((data.get("retail_sales") or {}).get("by_product") or [])
-        retail_known_keys = set()
-        for row in retail_by_product:
-            bc = (row.get("barcode") or "").strip()
-            pc = (row.get("product_code") or "").strip()
-            if bc:
-                retail_known_keys.add(bc)
-            if pc:
-                retail_known_keys.add(pc)
-        aliases_path = Path(script_dir) / "Financial_Analysis" / "product_aliases.json"
-        safe_aliases, alias_errors = _load_aliases(aliases_path, retail_known_keys)
-        for err in alias_errors:
-            logger.warning("product_aliases.json: %s", err)
-
-        prof = build_supplier_profitability(data, aliases=safe_aliases)
-        # ჩაწერე profitability უკან თითოეულ supplier-ზე (tax_id-ით lookup)
-        per_sup_by_taxid = {row["tax_id"]: row["profitability"] for row in prof["per_supplier"]}
-        for sup_entry in (data.get("imported_products") or {}).get("suppliers") or []:
-            tx = sup_entry.get("tax_id") or ""
-            if tx in per_sup_by_taxid:
-                sup_entry["profitability"] = per_sup_by_taxid[tx]
-        # summary ცალკე გასცეს — DataQualityPage-ი წაიკითხავს
-        data.setdefault("imported_products", {})["profitability_summary"] = prof["summary"]
-
-        sc = prof["summary"]["supplier_counts"]
-        port = prof["summary"]["portfolio"]
-        logger.info(
-            "პროდუქციული მოგება: %d verified, %d partial, %d unverified, "
-            "%d protected, %d empty · ფინანსური დაფარვა %.1f%% (%.0f / %.0f ₾) · "
-            "მომგება %.1f%% (%.0f / %.0f ₾)",
-            sc.get("verified", 0), sc.get("partial", 0), sc.get("unverified", 0),
-            sc.get("protected", 0), sc.get("empty", 0),
-            port.get("coverage_cost_pct", 0),
-            port.get("cost_matched_ge", 0), port.get("cost_imported_ge", 0),
-            port.get("margin_pct", 0),
-            port.get("profit_ge", 0), port.get("revenue_sold_ge", 0),
-        )
-    except Exception as exc:
-        logger.warning("პროდუქციული მოგება — ვერ აშენდა: %s", exc)
-
     # MegaPlus daily SQL Server backup (PLUS_*.zip in per-store watch folders).
     # Auto-discovers every `მეგა პლუს backup*` sibling under Financial_Analysis
     # so adding a new store = drop ZIPs into a new sibling folder, no code change.
@@ -1707,8 +1659,11 @@ def run():
     #   2. read_combined_rollup — always reads the cached JSONs so data.json
     #      keeps the supplier rollup populated on EVERY pipeline run, not just
     #      runs that happen to pick up a new ZIP.
-    # Non-fatal: if SQL Server isn't reachable or no folders match, we log and
-    # continue — the rest of the dashboard still builds.
+    #
+    # Runs BEFORE supplier_profitability so the matcher can prefer
+    # MegaPlus-derived per-product data over the (now retired) Excel POS
+    # `retail_sales.by_product`. Non-fatal on failure — the rest of the
+    # dashboard still builds.
     try:
         fa_dir = Path(script_dir) / "Financial_Analysis"
         megaplus_folders = sorted([p for p in fa_dir.glob("მეგა პლუს backup*") if p.is_dir()])
@@ -1744,6 +1699,69 @@ def run():
             logger.info("MegaPlus DB backup-ი — watch folder-ი არ არის, ნაბიჯი გამოტოვდა")
     except Exception as exc:
         logger.warning("MegaPlus DB backup-ი — ვერ ჩაიტვირთა: %s", exc)
+
+    # ----- per-supplier პროდუქციული მოგება (strict barcode JOIN) -----
+    # imported_products (ვინ-რა-მომიტანა) ↔ retail by_product (რა-რა-
+    # ფასად-გავყიდე) — barcode/code-ით 1:1, name-fuzzy-ი აკრძალულია
+    # (memory: project_product_match_barcode_only).
+    #
+    # Retail source preference (set inside build_supplier_profitability):
+    #   1. data["megaplus_live"] (MegaPlus DB direct) — primary going forward.
+    #   2. data["retail_sales"]["by_product"] (Excel POS) — legacy fallback.
+    #
+    # შედეგი წერს per-supplier "profitability" ობიექტს მათ entry-ში
+    # data["imported_products"]["suppliers"][i]-ზე, რომ SupplierModal-მ
+    # extra fetch-ის გარეშე წაიკითხოს.
+    try:
+        # retail_known_keys feeds the alias validator's "does this code
+        # exist in retail?" check. Same preference order — MegaPlus first.
+        retail_known_keys: set[str] = set()
+        for store_rollup in ((data.get("megaplus_live") or {}).get("stores") or {}).values():
+            for row in store_rollup.get("by_product") or []:
+                bc = (row.get("barcode") or "").strip()
+                pc = (row.get("product_code") or "").strip()
+                if bc:
+                    retail_known_keys.add(bc)
+                if pc:
+                    retail_known_keys.add(pc)
+        if not retail_known_keys:
+            for row in (data.get("retail_sales") or {}).get("by_product") or []:
+                bc = (row.get("barcode") or "").strip()
+                pc = (row.get("product_code") or "").strip()
+                if bc:
+                    retail_known_keys.add(bc)
+                if pc:
+                    retail_known_keys.add(pc)
+        aliases_path = Path(script_dir) / "Financial_Analysis" / "product_aliases.json"
+        safe_aliases, alias_errors = _load_aliases(aliases_path, retail_known_keys)
+        for err in alias_errors:
+            logger.warning("product_aliases.json: %s", err)
+
+        prof = build_supplier_profitability(data, aliases=safe_aliases)
+        # ჩაწერე profitability უკან თითოეულ supplier-ზე (tax_id-ით lookup)
+        per_sup_by_taxid = {row["tax_id"]: row["profitability"] for row in prof["per_supplier"]}
+        for sup_entry in (data.get("imported_products") or {}).get("suppliers") or []:
+            tx = sup_entry.get("tax_id") or ""
+            if tx in per_sup_by_taxid:
+                sup_entry["profitability"] = per_sup_by_taxid[tx]
+        # summary ცალკე გასცეს — DataQualityPage-ი წაიკითხავს
+        data.setdefault("imported_products", {})["profitability_summary"] = prof["summary"]
+
+        sc = prof["summary"]["supplier_counts"]
+        port = prof["summary"]["portfolio"]
+        logger.info(
+            "პროდუქციული მოგება: %d verified, %d partial, %d unverified, "
+            "%d protected, %d empty · ფინანსური დაფარვა %.1f%% (%.0f / %.0f ₾) · "
+            "მომგება %.1f%% (%.0f / %.0f ₾)",
+            sc.get("verified", 0), sc.get("partial", 0), sc.get("unverified", 0),
+            sc.get("protected", 0), sc.get("empty", 0),
+            port.get("coverage_cost_pct", 0),
+            port.get("cost_matched_ge", 0), port.get("cost_imported_ge", 0),
+            port.get("margin_pct", 0),
+            port.get("profit_ge", 0), port.get("revenue_sold_ge", 0),
+        )
+    except Exception as exc:
+        logger.warning("პროდუქციული მოგება — ვერ აშენდა: %s", exc)
 
     _write_outputs(data, script_dir, inc)
 

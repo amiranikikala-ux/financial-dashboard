@@ -521,12 +521,21 @@ def _aggregate_supplier(
         # cost_sold ≤ cost_imported (you can't sell more from a supplier
         # than you bought from them).
         imp_unit_cost_ge = (cost_paid / qty_bought) if qty_bought > 0 else 0.0
+        rev_full_ge = rev_ge  # preserve full retail revenue for transparency
         if imp_unit_cost_ge > 0:
             effective_qty = min(sold_qty_total, qty_bought)
             cost_sold_ge = effective_qty * imp_unit_cost_ge
             # Per-store splits scale by the same cap factor so summed
             # per-store cost_sold equals the matched-row cost_sold.
             cost_sold_scale = (effective_qty / sold_qty_total) if sold_qty_total > 0 else 1.0
+            # Revenue is scaled by the SAME cap factor — without this, when
+            # the retail row covers more sold units than this supplier
+            # shipped (e.g. lifetime MegaPlus retail vs Q1 2026 imports, or
+            # a multi-supplier brand where this supplier sold a slice), we
+            # credit the supplier with revenue from inventory shipped by
+            # someone else. Scaling revenue alongside cost makes the per-
+            # supplier KPI represent THIS supplier's economic contribution.
+            rev_ge = rev_ge * cost_sold_scale
         else:
             cost_sold_ge = cost_sold_recorded_ge
             cost_sold_scale = None  # signal: use recorded cost per-store
@@ -554,6 +563,11 @@ def _aggregate_supplier(
             obj_rev = float(ob.get("revenue_ge") or 0)
             if cost_sold_scale is not None:
                 obj_cost = obj_qty * imp_unit_cost_ge * cost_sold_scale
+                # Scale per-store revenue by the same cap factor so the
+                # per-store sum equals the (already-scaled) matched-row
+                # rev_ge. See the comment on `rev_ge = rev_ge * cost_sold_scale`
+                # above for why revenue must be capped alongside cost.
+                obj_rev = obj_rev * cost_sold_scale
             else:
                 obj_cost = float(ob.get("cost_ge") or 0)
             revenue_by_object[obj_name] = revenue_by_object.get(obj_name, 0.0) + obj_rev
@@ -571,6 +585,7 @@ def _aggregate_supplier(
                 "cost_imported_ge": round(cost_paid, 2),
                 "quantity_imported": qty_bought,
                 "revenue_sold_ge": round(rev_ge, 2),
+                "revenue_sold_full_ge": round(rev_full_ge, 2),
                 "cost_sold_ge": round(cost_sold_ge, 2),
                 "cost_sold_recorded_ge": round(cost_sold_recorded_ge, 2),
                 "profit_ge": round(profit_ge, 2),
@@ -758,6 +773,84 @@ def _aggregate_supplier(
 # Public entry
 # ---------------------------------------------------------------------------
 
+def _megaplus_to_retail_by_product(megaplus_live: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Synthesize a `retail_sales.by_product`-shaped list from `megaplus_live`.
+
+    Per-store MegaPlus rollups become unified rows aggregated by barcode
+    (with product_code fallback). Each unified row carries an
+    ``object_totals`` array with the store-by-store contribution so the
+    downstream supplier matcher can split per-store revenue/cost the same
+    way it always did with Excel-derived retail_sales.
+
+    Field-name mapping (MegaPlus → retail_sales):
+      qty_sold → total_quantity, revenue → revenue_ge, cogs → cost_ge,
+      profit → profit_ge. Other fields pass through with renaming.
+    """
+    stores = (megaplus_live or {}).get("stores") or {}
+    if not stores:
+        return []
+
+    store_label_for = {"1329": "დვაბზუ", "1301": "ოზურგეთი"}
+    aggregated: Dict[str, Dict[str, Any]] = {}
+
+    for store_id, rollup in stores.items():
+        obj_label = store_label_for.get(str(store_id)) or f"store_{store_id}"
+        for p in rollup.get("by_product") or []:
+            barcode = (p.get("barcode") or "").strip()
+            code = (p.get("product_code") or "").strip()
+            key = barcode or code or f"pid_{p.get('product_id')}"
+            if not key:
+                continue
+            if key not in aggregated:
+                aggregated[key] = {
+                    "product_key": key,
+                    "product_code": code,
+                    "barcode": barcode,
+                    "product_name": p.get("product_name") or "",
+                    "unit": p.get("unit") or "",
+                    "category": p.get("category") or "",
+                    "category_key": _normalize_name(p.get("category") or ""),
+                    "row_count": 0,
+                    "total_quantity": 0.0,
+                    "revenue_ge": 0.0,
+                    "cost_ge": 0.0,
+                    "profit_ge": 0.0,
+                    "month_keys": [],
+                    "min_date": None,
+                    "max_date": None,
+                    "object_totals": [],
+                }
+            agg = aggregated[key]
+            qty = float(p.get("qty_sold") or 0)
+            rev = float(p.get("revenue") or 0)
+            cogs = float(p.get("cogs") or 0)
+            profit = float(p.get("profit") or 0)
+            row_count = int(p.get("row_count") or 0)
+
+            agg["row_count"] += row_count
+            agg["total_quantity"] += qty
+            agg["revenue_ge"] += rev
+            agg["cost_ge"] += cogs
+            agg["profit_ge"] += profit
+            agg["object_totals"].append({
+                "object": obj_label,
+                "row_count": row_count,
+                "total_quantity": qty,
+                "revenue_ge": rev,
+                "cost_ge": cogs,
+                "profit_ge": profit,
+            })
+
+            min_d = p.get("min_date")
+            max_d = p.get("max_date")
+            if min_d and (agg["min_date"] is None or str(min_d) < str(agg["min_date"])):
+                agg["min_date"] = str(min_d)[:10]
+            if max_d and (agg["max_date"] is None or str(max_d) > str(agg["max_date"])):
+                agg["max_date"] = str(max_d)[:10]
+
+    return list(aggregated.values())
+
+
 def build_supplier_profitability(
     data: Dict[str, Any],
     today: Optional[date] = None,
@@ -776,11 +869,21 @@ def build_supplier_profitability(
     ``aliases`` is a pre-validated list (validator runs separately so a
     bad alias file doesn't crash the pipeline; the caller passes ``[]``
     if validation failed and logs the reason).
+
+    Retail data source — preference:
+      1. ``data["megaplus_live"]`` if present (MegaPlus DB direct, full
+         per-store coverage including products without RS waybill).
+      2. ``data["retail_sales"]["by_product"]`` (Excel POS export) as
+         legacy fallback.
     """
     today = today or date.today()
     imported = (data or {}).get("imported_products") or {}
     suppliers = imported.get("suppliers") or []
-    by_product = ((data or {}).get("retail_sales") or {}).get("by_product") or []
+
+    megaplus_live = (data or {}).get("megaplus_live") or {}
+    by_product = _megaplus_to_retail_by_product(megaplus_live)
+    if not by_product:
+        by_product = ((data or {}).get("retail_sales") or {}).get("by_product") or []
 
     by_bc, by_pc = _build_retail_indices(by_product)
     name_index = _build_retail_name_index(by_product)
