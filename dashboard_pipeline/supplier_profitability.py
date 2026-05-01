@@ -520,9 +520,22 @@ def _aggregate_supplier(
         # the imported amount. Capping at qty_bought guarantees per-supplier
         # cost_sold ≤ cost_imported (you can't sell more from a supplier
         # than you bought from them).
+        category = retail_row.get("category", "") or ""
+        is_protected = _is_protected_category(category)
         imp_unit_cost_ge = (cost_paid / qty_bought) if qty_bought > 0 else 0.0
         rev_full_ge = rev_ge  # preserve full retail revenue for transparency
-        if imp_unit_cost_ge > 0:
+        if is_protected and cost_sold_recorded_ge > 0:
+            # PROTECTED categories (cigarettes / alcohol): supplier invoice
+            # is priced per carton/box (e.g. ELIZI ships 95 ბლოკი at 80.94 ₾
+            # each) but retail sells per pack/bottle (195 კოლოფი). Imputing
+            # cost via (cost_paid / qty_bought × qty_sold) treats cartons
+            # as packs and inflates per-pack cost ~10×, producing absurd
+            # negative margins (ELIZI portfolio: −442%). MAX POS records
+            # cost-per-sale accurately for regulated categories, so trust
+            # the recorded value here and keep retail revenue at face.
+            cost_sold_ge = cost_sold_recorded_ge
+            cost_sold_scale = None  # signal: use recorded cost per-store
+        elif imp_unit_cost_ge > 0:
             effective_qty = min(sold_qty_total, qty_bought)
             cost_sold_ge = effective_qty * imp_unit_cost_ge
             # Per-store splits scale by the same cap factor so summed
@@ -541,8 +554,6 @@ def _aggregate_supplier(
             cost_sold_scale = None  # signal: use recorded cost per-store
         profit_ge = rev_ge - cost_sold_ge
         margin_pct = _safe_div(profit_ge, rev_ge) * 100.0 if rev_ge > 0 else 0.0
-        category = retail_row.get("category", "") or ""
-        is_protected = _is_protected_category(category)
         if is_protected:
             cost_protected_ge += cost_paid
 
@@ -554,10 +565,13 @@ def _aggregate_supplier(
         )
 
         # accumulate per-store revenue/cost from this matched product's
-        # retail object_breakdown (every retail row carries it). Cost uses
+        # retail per-object totals (every retail row carries it). Cost uses
         # the same imputed unit cost (with the same cap factor applied) so
-        # the per-store sums equal the matched-row cost_sold.
-        for ob in retail_row.get("object_breakdown") or []:
+        # the per-store sums equal the matched-row cost_sold. Field name
+        # is `object_totals` since retail_sales.py centralised on that
+        # spelling (215deaa MegaPlus synthesis); fall back to legacy
+        # `object_breakdown` for backwards compatibility.
+        for ob in retail_row.get("object_totals") or retail_row.get("object_breakdown") or []:
             obj_name = ob.get("object") or "უცნობი"
             obj_qty = float(ob.get("total_quantity") or 0)
             obj_rev = float(ob.get("revenue_ge") or 0)
