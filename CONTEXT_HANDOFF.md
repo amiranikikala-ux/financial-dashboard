@@ -1,8 +1,26 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-01 evening (ELIZI false KPI fixed + შრომა-2023 unit-mismatch fixed; portfolio profit −611K ₾ → +94K ₾). 2 commits landed and pushed: `88c0d0c` PROTECTED cost-source switch + retail field rename, `f394729` cost-share attribution for non-PROTECTED unit mismatch. გრძელი წაკითხვა საჭირო **არ არის**. Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`. Evidence → `HANDOFF.md` + `HANDOFF_ARCHIVE/`.
+> **განახლდა**: 2026-05-02 ღამე (PROTECTED rule moved from MegaPlus retail-category text to canonical RS.ge tax-id list; ჯიდიაი IQOS leak closed +17K ₾). 1 commit landed: `43ba181` fix(supplier-profitability): drive PROTECTED rule from tax id, not retail category. Phase 2 — whole-dashboard category anomaly detection table — agreed with user but deferred to next session (separate sprint, big scope). Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 >
-> ✅ **TODAY (2026-05-01 evening) — supplier_profitability margin overhaul, two false-KPI fixes landed**:
+> ✅ **TODAY (2026-05-02 ღამე) — PROTECTED rule reframed: tax-id-driven, not category-driven**:
+> - **`43ba181` fix(supplier-profitability): drive PROTECTED rule from tax id, not retail category** — user pushed back on category-substring approach: MegaPlus retail-category text is operator-entered (cells empty / mistyped / split — e.g. "სიგარეტი" vs "გასახურებელი თამბაქო") and unfit as the basis of a financial decision. Constant moves from `SUPPLIER_PROFITABILITY_PROTECTED_SUBSTRINGS` (10 category patterns including alcohol) to `SUPPLIER_PROFITABILITY_PROTECTED_TAX_IDS` (3 canonical RS.ge tax ids — ELIZI 204920381, ჯიდიაი 406181616, ინტერნეიშნლ 420424393). Helper renames `_is_protected_category(category)` → `_is_protected_supplier(tax_id)`. `_match_product` gains a `supplier_tax_id` keyword arg so the name-merge inside-protected path fires from supplier identity instead of retail-side text.
+> - **Concrete leak closed**: ჯიდიაი's TEREA / IQOS products live in MegaPlus category "გასახურებელი თამბაქო", which the substring rule did not catch. Those products fell to cost-share path and silently under-credited ჯიდიაი by ~17K ₾ (supplier revenue 366,821 → **384,113 ₾**; portfolio profit +92,825 → **+93,988 ₾**). ELIZI / ინტერნეიშნლ figures unchanged — their retail rows already lived in "სიგარეტი" category, so substring rule had been catching them.
+> - **Alcohol substrings (ლუდი/ღვინ/არაყ/etc.) dropped entirely** — alcohol is multi-distributor at brand level (არაყი TOP3 = 65% across პარტნიორი 30% / ზგგ ალკო 29% / კანტი 26%) so the full-attribution branch over-credited the dominant supplier. Alcohol now falls to the cost-share path. Verified: კანტი was +34.57% (false-protected over-credit) → +6.38% (within 0.65pp of MAX ground-truth +5.73%). ზედაზენი +2.11% → +4.03% (small move; products had pos_realistic=False due to placeholder POS cost, so qty-based imputation took over).
+> - **Tests**: 50/50 supplier_profitability + retail_sales_revenue_formula green (was 57/57 — 6 alcohol-parametrize cases dropped, 1 sanity test renamed `protected_substrings_constant_includes_alcohol` → `protected_tax_ids_constant_lists_known_cigarette_importers`).
+> - **Pipeline**: ran clean on C:\ — 0 errors / 0 warnings, data.json 52.33 MB. Status counts unchanged: 3 protected (now strictly the 3 cigarette tax_ids; previously 5 because ზგგ ალკო and რთველისი were caught by alcohol substrings).
+> - **AGENTS.md**: project-rule line updated — "PROTECTED retail category" replaced with "PROTECTED cigarette importer tax ids; MegaPlus retail-category text is NOT consulted — it is operator-entered and unreliable".
+>
+> 📌 **OPEN — for next session** (priority order):
+> 1. **🔴 Phase 2 — whole-dashboard category anomaly detection table (big sprint, agreed scope)** — user's philosophy crystallised: dashboard's role = surface MegaPlus categorization errors; user manually fixes MegaPlus, our pipeline rerun then clears the flag. Three error types to detect across all suppliers' products: (a) empty category (cashier didn't enter one — 19 such items in current data sample), (b) duplicate variants of the same category ("ენერგეტიკული სასმელი" vs "0903 \| მატონიზ. ენერგეტიკული სასმელები"), (c) supplier-detached category (ELIZI's products in non-cigarette categories — though ELIZI itself is OK now post-43ba181, the detection table would have caught the ჯიდიაი IQOS situation pre-emptively). New module `dashboard_pipeline/category_anomalies.py`, new `data.json` section, new dashboard tab. **Estimated 2-3 sessions** (data layer + UI).
+> 2. **🟢 RS_CODES-based product matching** — 189,015 rs.ge↔Megaplus product mappings already exist in MegaPlus DB. Currently supplier_profitability hacks around mismatch with name-fuzzy / supplier-exclusive name / barcode-x-suffix logic. RS_CODES table is the canonical mapping — could rewrite `_match_product` as exact JOIN and retire most heuristics. Big simplification + accuracy win. Probably 1 sprint.
+> 3. **🟢 GET table cross-check vs rs.ge waybills** — 49,790 Megaplus-internal purchase records. Compare against rs.ge ფაქტურა (already loaded). Surfaces: cancelled-on-rs-but-accepted-in-Megaplus (ghost AP), accepted-on-rs-but-not-in-Megaplus (missing inventory). Light task.
+> 4. **🟡 Browser smoke-test on RetailSales / SupplierModal** — both yesterday's f394729/88c0d0c fixes AND today's 43ba181 hot in live; user has not yet visually confirmed margins on dashboard. Quick `_vite-dev.bat` + click-through.
+> 5. **🟢 rs.ge automation deferred** — Playwright-based partial automation discussed; user opted for status-quo manual download. Revisit only if signal of pain.
+> 6. **Carryover**: `retail_sales_top_products` SQLite export bug (single-line fix in `dashboard_pipeline/export_sqlite.py:111`), Auto-sync OneDrive↔C:\ (drift recurs), ოზურგეთი DB 234 orders dated 2009 (date-anomaly filter).
+>
+> ⚠️ **One language regression caught and self-fixed inline this session** — used "ცხრება" repeatedly in non-existent meaning ("category"); user pinged it directly, I apologised + re-explained with correct words ("კატეგორია" / "ჯგუფი") + finished the conversation cleanly. No restart needed (single instance, immediate correction). Memory rule `feedback_no_garbage_georgian_tokens.md` still holds.
+>
+> 📜 **History — yesterday (2026-05-01 evening) — supplier_profitability margin overhaul, two false-KPI fixes landed**:
 > - **`88c0d0c` fix(supplier-profitability): use POS cost for protected categories + retail field rename** — flipped ELIZI from −442% margin (false KPI) to +7.78%, dragging portfolio from −611K to +62K. Two surgical fixes: (1) PROTECTED categories (cigarettes/alcohol) now use `cost_sold_recorded_ge` (MAX POS-recorded cost in retail units) instead of imputing from supplier invoice — supplier invoice is per-carton (e.g. ELIZI ვინსტონი XS ბლუ at 80.94 ₾/ბლოკი) but retail sells per-pack (~8.9 ₾/კოლოფი); imputing inflated per-pack cost ~10× and produced spurious −442% margin. POS records cost-per-sale accurately for excise-regulated goods; (2) retail per-store field rename — 215deaa centralised on `object_totals` for the MegaPlus-synthesised bundle but supplier_profitability still read legacy `object_breakdown`, leaving every supplier's per-store breakdown at 0 ₾. Read `object_totals` first, fall back to `object_breakdown`.
 > - **`f394729` fix(supplier-profitability): cost-share attribution for non-PROTECTED unit mismatch** — flipped შრომა-2023 from −26.28% to +31.00%, lifted portfolio from +62K to +94K. Generalises the cigarette/alcohol fix to any product where supplier ships in bulk and retail sells in singles (e.g. ბიგი საპარსი 100 packs of 5 → 500 retail pieces; the d1ff190 imputed-cost cap silently breaks when units differ — cost_sold gets full 350 ₾ but rev gets scaled by 100/1901 = 5%, producing −246% margin). Detection: `pos_realistic = cost_recorded ≥ 30% of revenue` (filters out vasadze placeholder POS cost). For realistic POS: `supplier_share = min(1, cost_paid / cost_recorded)`, then `revenue_attributed = revenue_full × share`, `cost_attributed = cost_recorded × share`. Works in ₾, so unit mismatches cancel. Test fixture for `test_ambiguous_resolved_by_user_alias` updated — old fixture (5 units / 50 ₾ supplier vs retail qty=1 / cost=150 ₾) was internally inconsistent; bumped supplier qty=1 / cost=150 ₾ so cost-share lands at 100% and the test still asserts on alias-resolution mechanics.
 > - **PROTECTED preserved as full-attribution branch** — for PROTECTED categories with cost_paid < cost_recorded, cost-share would under-attribute the sole distributor (ELIZI Sobranie: 4,502 ₾ paid for 48 cartons / ~1,920 packs vs POS recorded 16,786 ₾ for 1,942 packs sold → cost-share gives 27% instead of correct ~99%; the gap is the time-window mismatch — Q1 2026 imports vs lifetime sales — not a multi-supplier issue). Cigarettes verified single-distributor at brand level (ELIZI 100% Camel/Sobranie/Winston, ჯიდიაი 97.6% Parliament). Alcohol is multi-distributor (არაყი TOP3 = 65% across პარტნიორი 30% / ზგგ ალკო 29% / კანტი 26%) — see Open §6 below.
@@ -20,17 +38,7 @@
 > - **Service status**: live `FinancialDashboardBackend` was already running from morning's restart; both fixes hot in via successive C:\ syncs and pipeline reruns. Browser smoke-test on RetailSales tab pending (user not yet checked).
 > - **MegaPlus DB inventory documented** (memory note `project_megaplus_db_tables_inventory.md`) — 53 tables in MEGAPLUS_LATEST, ~25 with data. Beyond ORDERS the next-phase candidates are: `GET` (49,790 purchases — cross-check rs.ge waybills), `RS_CODES` (189,015 rs.ge↔Megaplus mapping — could replace name-fuzzy matching with exact JOIN), `AGREEMENTS` (10,176 supplier payment terms), `PRICE_CHANGE` (8,298 price-change history), `EVENTS` (33,596 anomalies like "Unregistered Product"), `GACERA` (3,078 returns to supplier).
 >
-> 📌 **OPEN — for next session** (priority order):
-> 1. **🟡 PROTECTED rule scope decision** — data shows cigarettes ARE single-distributor at brand level (full-attribution path correct), but ALCOHOL is multi-distributor (full-attribution would over-credit ზედაზენი 86% beer share, etc.). Proposal: narrow `SUPPLIER_PROFITABILITY_PROTECTED_SUBSTRINGS` to only `("სიგარეტ",)`, drop `ლუდი`/`ღვინ`/`არაყ`/etc. so alcohol falls through to the cost-share path. Estimated impact: ზედაზენი +2.11% → +13-15%, paired drops on smaller alcohol distributors. User flagged the over-reach this evening; decision pending implementation.
-> 2. **🟢 RS_CODES-based product matching** — 189,015 rs.ge↔Megaplus product mappings already exist in MegaPlus DB. Currently supplier_profitability hacks around mismatch with name-fuzzy / supplier-exclusive name / barcode-x-suffix logic. RS_CODES table is the canonical mapping — could rewrite `_match_product` as exact JOIN and retire most heuristics. Big simplification + accuracy win. Probably 1 sprint.
-> 3. **🟢 GET table cross-check vs rs.ge waybills** — 49,790 Megaplus-internal purchase records. Compare against rs.ge ფაქტურა (already loaded). Surfaces: cancelled-on-rs-but-accepted-in-Megaplus (ghost AP), accepted-on-rs-but-not-in-Megaplus (missing inventory). Light task.
-> 4. **🟡 Browser smoke-test on RetailSales / SupplierModal** — both today's fixes hot in live; user has not yet visually confirmed margins on dashboard. Quick `_vite-dev.bat` + click-through.
-> 5. **🟢 rs.ge automation deferred** — discussed Playwright-based partial automation (user logs in + 2FA, script downloads files), user opted for status-quo manual download workflow. Revisit only if user signals it's getting painful.
-> 6. **Carryover from morning session**: `retail_sales_top_products` SQLite export bug (single-line fix in `dashboard_pipeline/export_sqlite.py:111`), Auto-sync OneDrive↔C:\ (avoid drift), ოზურგეთი DB date-anomaly filter (234 orders dated 2009).
->
-> ⚠️ **No regressions observed in this session** — handoff is clean: tests green, pipeline clean, two commits pushed to origin/main, working tree empty except for the new `Financial_Analysis/მეგაპლიუსის არქიტექტურა/` folder which is untracked and not part of any sprint.
->
-> 📜 **History — earlier today (2026-05-01 morning, 4 commits already landed before this session)**:
+> 📜 **History — 2026-05-01 morning, 4 commits already landed before yesterday evening's session**:
 > - **`db21a7d` feat(megaplus): cost imputation + per-product/per-month/per-category rollups** — d1ff190 Excel-pipeline cost-imputation logic ported to SQL via a `#pec` temp table (`effective_unit_cost = cost_paid / MAX(qty_bought, qty_sold)`); rollup output gains `by_product` (top 10000), `by_month`, `by_category`, `by_category_by_month`. **ვასაძე margin 83.58% → 12.03% დვაბზუ / 9.44% ოზურგეთი** ✓ — recorded MAX-POS cost preserved as `cogs_recorded` for transparency.
 > - **`a6c6891` feat(supplier-profitability): switch to MegaPlus retail source + revenue cap** — new helper `_megaplus_to_retail_by_product` converts `data["megaplus_live"]` into `retail_sales.by_product` shape (per-store `object_totals` synthesized from store_id 1329/1301). `build_supplier_profitability` prefers MegaPlus first, falls back to `retail_sales`. **d1ff190 qty cap now applied to REVENUE alongside cost** — without revenue scaling, lifetime MegaPlus retail credited the supplier with revenue from inventory shipped by someone else. New `revenue_sold_full_ge` field preserves raw retail revenue. `generate_dashboard_data.py` reordered: MegaPlus block runs BEFORE supplier_profitability so the matcher sees `megaplus_live`.
 > - **`c35560f` feat(megaplus): windowed by_product (last 365 days)** — `by_product_recent` field added per store (filtered to last 365 days from anchor); `_megaplus_to_retail_by_product` prefers it over lifetime so cost↔revenue stay in the same pricing era. Cache size 7 MB → 10 MB per store. Margins on the matched portfolio land closer to reality (vasadze 6.34% — within 0.7pp of Excel-era 7.1%).
@@ -118,7 +126,13 @@
 
 ## 1. ახლა სად ვართ
 
-- **ეს session (2026-05-01 — 4 commits landed + push + MAX file analysis)**:
+- **ეს session (2026-05-02 ღამე — PROTECTED rule reframed: tax-id-driven; 1 commit landed)**:
+  - **`43ba181` fix(supplier-profitability): drive PROTECTED rule from tax id, not retail category** — see TOP block. ჯიდიაი-ის IQOS leak +17K ₾ closed; alcohol substrings dropped entirely; helper renamed `_is_protected_category` → `_is_protected_supplier`. 50/50 tests green. Pipeline 0 errors / 0 warnings.
+  - **Phase 2 (whole-dashboard category anomaly detection table) AGREED in scope** — three error types: empty / duplicate variants / supplier-detached. Big sprint, 2-3 sessions estimated. Deferred to next session — see TOP §1 OPEN.
+  - **Working tree at handoff**: only the in-progress CONTEXT_HANDOFF.md update (+ untracked `Financial_Analysis/მეგაპლიუსის არქიტექტურა/` folder, unrelated). Branch 1 ahead of origin/main with `43ba181`; this handoff commit will be the 2nd, both pushed together.
+  - **Language regression note**: one inline regression caught (used "ცხრება" repeatedly in non-existent meaning); user pinged + I corrected and finished cleanly. No restart triggered.
+
+- **წინა session (2026-05-01 — 4 commits landed + push + MAX file analysis)**:
   - **Phase 1 — committed prior-session working-tree** (split into 2 logical pipeline commits + 1 governance commit + 1 handoff commit), deleted residue `CLAUDE.md.backup`, tests 57/57 green at each intermediate state. Service restart confirmed by user (`/api/status = 200`, `server.py:122 timeout=30*60` active). **Pushed to `origin/main`** — branch now 0 ahead, working tree had only this CONTEXT_HANDOFF update at handoff time.
   - **Commits landed this session**:
 
@@ -204,18 +218,18 @@
 - **CAL Step 2 (Data inventory)**: ✅ pipeline-ში per-day aggregation **არ არსებობს** (only `by_month` / `by_category_by_month`). Source per-row datetime ცხადია (`დრო` სვეტი), ifqli matched products უკვე გამოთვლილია `supplier_profitability`-ში. **საჭიროა ახალი aggregation**: `supplier.profitability.daily_breakdown[]` sparse (per-day × per-store)
 - **CAL Step 3-6**: spot-check + implement + verify + user review — ⏳ ვიდრე user-ის ცხადი „გადავიდეთ"
 
-**ბოლო commit-ები** (pushed to `origin/main` 2026-05-01; branch is 0 ahead at handoff):
+**ბოლო commit-ები** (latest first; branch will be 1 ahead of `origin/main` until this handoff commit + push):
 ```
+43ba181  fix(supplier-profitability): drive PROTECTED rule from tax id, not retail category   ← THIS SESSION
+283dcf6  docs(handoff): close session — supplier_profitability margin overhaul
+f394729  fix(supplier-profitability): cost-share attribution for non-PROTECTED unit mismatch
+88c0d0c  fix(supplier-profitability): use POS cost for protected categories + retail field rename
+edb84aa  docs(handoff): close session — Excel retirement + MegaPlus retail end-to-end
+215deaa  feat(retail): synthesize retail_sales bundle from MegaPlus DB
+c35560f  feat(megaplus): windowed by_product (last 365 days) for margin accuracy
+a6c6891  feat(supplier-profitability): switch to MegaPlus retail source + revenue cap
+db21a7d  feat(megaplus): cost imputation + per-product/per-month/per-category rollups
 0967c5f  docs(handoff): close session — 3 commits landed, service restart verified
-6ab04b7  docs(governance): lazy-load policy — only CONTEXT_HANDOFF.md mandatory at session start
-d1ff190  fix(pipeline): impute cost_sold from supplier invoice with qty cap
-560dab9  fix(pipeline): supplier matching — name-exclusivity + barcode dedup + short-code guard
-8adfb70  docs(handoff): close session — 0d timeout fix landed, imported_products refresh same numbers, regression #2 → restart
-089e953  fix(pipeline): bump /api/refresh subprocess timeout 10→30 min + ignore imported_products CSVs
-9868d38  docs(handoff): close regression-hook item 0e — feedback loop landed in a5ff7d0
-a5ff7d0  feat(.claude): close regression-detection feedback loop via UserPromptSubmit hook
-6c1e24e  docs(handoff): close Sprint C session — code complete, smoke-test pending, regression hook needs investigation
-57fa81d  feat(supplier): Sprint C alias confirmation — endpoint + UI + 8 tests
 ```
 
 **ამ session-ში გაკეთებული (2026-05-01)**:
