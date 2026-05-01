@@ -20,9 +20,15 @@ from dashboard_pipeline.supplier_profitability import (
     MIN_PRODUCTS_FOR_FULL_DISPLAY,
     MIN_REVENUE_FOR_MARGIN_LIST_GE,
     PROTECTED_DOMINANT_PCT,
-    SUPPLIER_PROFITABILITY_PROTECTED_SUBSTRINGS,
+    SUPPLIER_PROFITABILITY_PROTECTED_TAX_IDS,
     build_supplier_profitability,
 )
+
+
+# Tax IDs of the three known cigarette importers — kept here so tests can
+# easily flip a fixture supplier between "protected" and "ordinary".
+PROTECTED_TAX_ID = "204920381"  # ELIZI ჯგუფი
+NON_PROTECTED_TAX_ID = "100"
 
 
 # ---------------------------------------------------------------------------
@@ -205,62 +211,53 @@ def test_ambiguous_resolved_by_user_alias():
 
 
 # ---------------------------------------------------------------------------
-# PROTECTED detection (cigarettes + alcohol)
+# PROTECTED detection (cigarette importers — tax-id-driven, not category)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize(
-    "category",
-    [
-        "0804 | სიგარეტი",
-        "სიგარეტი",
-        "ლუდი ქართული",
-        "ღვინო წითელი",
-        "არაყი ფრემიუმ",
-        "კონიაკი",
-        "ვისკი ბურბონი",
-        "შამპანური",
-    ],
-)
-def test_protected_categories_excluded_from_bottom_margin(category):
-    """A low-margin product in a PROTECTED category must not appear in
-    bottom_margin — we never recommend cutting cigarettes or alcohol."""
-    sup = _supplier("100", "Distrib", [_imp_product("11111111", "Item", 100, 100)])
-    retail = [_retail_product("99", "11111111", "Item", category, 110, 100)]  # 9% margin
+def test_protected_supplier_excluded_from_bottom_margin():
+    """A low-margin product from a PROTECTED supplier (cigarette importer)
+    must not appear in bottom_margin — we never recommend cutting
+    cigarettes (regulated excise; pulling from the shelf is not a real
+    lever). The retail-side category is irrelevant; supplier identity
+    drives the decision."""
+    sup = _supplier(PROTECTED_TAX_ID, "ELIZI ჯგუფი", [_imp_product("11111111", "Item", 100, 100)])
+    # Category deliberately set to something non-cigarette to prove
+    # protection is supplier-driven, not category-driven.
+    retail = [_retail_product("99", "11111111", "Item", "გასახურებელი თამბაქო", 110, 100)]
     out = build_supplier_profitability(_data([sup], retail), today=TODAY)
     p = out["per_supplier"][0]["profitability"]
 
     bottom_categories = [b["category"] for b in p["bottom_margin"]]
-    assert category not in bottom_categories
-    # Top can still include protected (informational, not a recommendation)
+    assert "გასახურებელი თამბაქო" not in bottom_categories
     matched_categories = [m["category"] for m in p["top_margin"]]
     if matched_categories:
-        assert category in matched_categories
+        assert "გასახურებელი თამბაქო" in matched_categories
 
 
-def test_protected_substrings_constant_includes_alcohol():
-    """Sanity: alcohol substrings live alongside cigarette substring."""
-    subs = SUPPLIER_PROFITABILITY_PROTECTED_SUBSTRINGS
-    assert "სიგარეტ" in subs
-    assert "ლუდი" in subs
-    assert "ღვინ" in subs
-    assert "არაყ" in subs
+def test_protected_tax_ids_constant_lists_known_cigarette_importers():
+    """PROTECTED list must contain the three known cigarette importers and
+    only them. Adding a new tax id requires explicit code-review."""
+    ids = SUPPLIER_PROFITABILITY_PROTECTED_TAX_IDS
+    assert "204920381" in ids   # ELIZI ჯგუფი
+    assert "406181616" in ids   # ჯიდიაი
+    assert "420424393" in ids   # ინტერნეიშნლ მარკეტინგ
+    assert len(ids) == 3, "extra tax ids in PROTECTED list — confirm intent"
 
 
-def test_supplier_marked_protected_when_majority_cost_in_protected_category():
-    """If ≥80% of matched cost falls in PROTECTED categories, the
-    supplier itself gets status=protected — UI must suppress the bottom
-    list (cigarette distributor's "low margin" is structural)."""
+def test_supplier_marked_protected_when_tax_id_in_list():
+    """A supplier whose tax id is in the PROTECTED list gets
+    status=protected regardless of retail-side category."""
     sup = _supplier(
-        "100",
-        "სიგარეტ Distrib",
+        PROTECTED_TAX_ID,
+        "ELIZI ჯგუფი",
         [
-            _imp_product("11111111", "Marlboro", 1000, 9000),  # 90% of cost
-            _imp_product("22222222", "Lighter", 100, 1000),     # 10% of cost
+            _imp_product("11111111", "Marlboro", 1000, 9000),
+            _imp_product("22222222", "Lighter", 100, 1000),
         ],
     )
     retail = [
-        _retail_product("90", "11111111", "Marlboro", "0804 | სიგარეტი", 9500, 9000),  # protected
-        _retail_product("91", "22222222", "Lighter", "სხვადასხვა", 1300, 1000),         # not protected
+        _retail_product("90", "11111111", "Marlboro", "0804 | სიგარეტი", 9500, 9000),
+        _retail_product("91", "22222222", "Lighter", "სხვადასხვა", 1300, 1000),
     ]
     out = build_supplier_profitability(_data([sup], retail), today=TODAY)
     p = out["per_supplier"][0]["profitability"]
@@ -269,15 +266,17 @@ def test_supplier_marked_protected_when_majority_cost_in_protected_category():
     assert p["coverage"]["protected_cost_share_pct"] >= PROTECTED_DOMINANT_PCT
 
 
-def test_supplier_not_protected_when_minority_cost_in_protected():
-    """A general distributor whose ONLY cigarette SKU is a small fraction
-    must not be labeled protected. Threshold is ≥80% of MATCHED cost."""
+def test_supplier_not_protected_when_tax_id_not_in_list():
+    """A supplier outside the PROTECTED list never gets status=protected,
+    even if every product happens to land in a "სიგარეტი" retail category.
+    This is intentional: category text is operator-entered in MegaPlus and
+    cannot be the basis of a financial decision."""
     sup = _supplier(
-        "100",
-        "Mixed",
+        NON_PROTECTED_TAX_ID,
+        "Random Distrib",
         [
-            _imp_product("11111111", "Marlboro", 10, 100),   # 10% protected
-            _imp_product("22222222", "Bread", 1000, 900),    # 90% non-protected
+            _imp_product("11111111", "Marlboro", 10, 100),
+            _imp_product("22222222", "Bread", 1000, 900),
         ],
     )
     retail = [
@@ -829,10 +828,10 @@ def test_name_candidate_attached_to_ambiguous_rows_too():
 
 
 def test_name_in_protected_category_auto_matches_cigarette():
-    """Cigarette names encode brand+variant+size — unique name in a
-    PROTECTED retail category auto-merges (covers ELIZI-style suppliers
-    that ship under MAX's legacy 4-digit codes)."""
-    sup = _supplier("100", "Elizi", [_imp_product("2158", "ქემელი 1913 ორიგინალ ბლუ  (PP)*", 100, 5800.0)])
+    """Cigarette names encode brand+variant+size — unique name from a
+    PROTECTED supplier (cigarette importer) auto-merges (covers ELIZI-
+    style suppliers that ship under MAX's legacy 4-digit codes)."""
+    sup = _supplier(PROTECTED_TAX_ID, "Elizi", [_imp_product("2158", "ქემელი 1913 ორიგინალ ბლუ  (PP)*", 100, 5800.0)])
     retail = [_retail_product("2267277", "4860126910180", "ქემელი 1913 ორიგინალ ბლუ (PP)", "სიგარეტი", 7000.0, 5800.0)]
     out = build_supplier_profitability(_data([sup], retail), today=TODAY)
     p = out["per_supplier"][0]["profitability"]
@@ -865,12 +864,12 @@ def test_name_in_protected_category_does_not_fire_for_beverages():
 
 
 def test_name_in_protected_category_skipped_when_multiple_retail_rows():
-    """Even within a protected category, if 2+ retail rows share the
+    """Even from a protected supplier, if 2+ retail rows share the
     name, do NOT auto-merge (could be different SKUs with reused name)."""
-    sup = _supplier("100", "X", [_imp_product("9999", "ლუდი ბავარია", 100, 5000.0)])
+    sup = _supplier(PROTECTED_TAX_ID, "X", [_imp_product("9999", "ქემელი 1913 ბლუ", 100, 5000.0)])
     retail = [
-        _retail_product("A", "11", "ლუდი ბავარია", "ლუდი ქართული ფეტი", 6000.0, 5000.0),
-        _retail_product("B", "22", "ლუდი ბავარია", "ლუდი იმპ. შუშა", 6500.0, 5500.0),
+        _retail_product("A", "11", "ქემელი 1913 ბლუ", "სიგარეტი", 6000.0, 5000.0),
+        _retail_product("B", "22", "ქემელი 1913 ბლუ", "სიგარეტი იმპ.", 6500.0, 5500.0),
     ]
     out = build_supplier_profitability(_data([sup], retail), today=TODAY)
     p = out["per_supplier"][0]["profitability"]
@@ -882,7 +881,7 @@ def test_name_in_protected_category_skipped_when_multiple_retail_rows():
 def test_name_in_protected_category_does_not_override_code_match():
     """If imported code already hits a retail row directly, do NOT search
     by name. Code wins."""
-    sup = _supplier("100", "X", [_imp_product("12345", "ქემელი 1913 ორიგინალ ბლუ", 100, 5000.0)])
+    sup = _supplier(PROTECTED_TAX_ID, "X", [_imp_product("12345", "ქემელი 1913 ორიგინალ ბლუ", 100, 5000.0)])
     retail = [
         _retail_product("12345", "AA", "ვინსტონი XS ბლუ", "სიგარეტი", 6000.0, 5000.0),
         _retail_product("99", "BB", "ქემელი 1913 ორიგინალ ბლუ", "სიგარეტი", 7000.0, 5500.0),

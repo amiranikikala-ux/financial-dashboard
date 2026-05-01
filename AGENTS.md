@@ -85,7 +85,7 @@
 ## Project Rules (current values)
 
 - **Excel Georgian path**: `tools.py::_resolve_safe_path` uses `Path.absolute()`, NOT `Path.resolve()`
-- **Supplier-product JOIN**: barcode/code only (1:1, exactly-one-row); name-fuzzy auto-match FORBIDDEN (Borjomi glass ≠ plastic). Exception: unique normalized name in PROTECTED retail category (cigarettes/alcohol per `SUPPLIER_PROFITABILITY_PROTECTED_SUBSTRINGS`)
+- **Supplier-product JOIN**: barcode/code only (1:1, exactly-one-row); name-fuzzy auto-match FORBIDDEN (Borjomi glass ≠ plastic). Exception: unique normalized name from a PROTECTED cigarette importer (3 known tax ids per `SUPPLIER_PROFITABILITY_PROTECTED_TAX_IDS` — ELIZI / ჯიდიაი / ინტერნეიშნლ). MegaPlus retail-category text is NOT consulted — it is operator-entered and unreliable.
 - **retail_sales revenue**: `unit_price × quantity` per row. Pinned `tests/test_retail_sales_revenue_formula.py`
 - **Destination resolver**: `rs_location_priority_order` keyword scan. New variants → `object_mapping.json:rs_location_to_object` + `tests/test_supplier_data_invariants.py`
 - **ChromaDB 1.5.x `$lt`/`$gt`** don't work on string metadata — Python post-fetch filter mandatory

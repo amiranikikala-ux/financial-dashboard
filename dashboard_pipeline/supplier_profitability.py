@@ -75,23 +75,21 @@ COVERAGE_UNVERIFIED_PCT = 5.0
 #: low and not actionable via "stop ordering this".
 PROTECTED_DOMINANT_PCT = 80.0
 
-#: Category-name substrings whose products are PROTECTED — bottom-margin
-#: lists exclude them, supplier-level rollup detects "mostly protected"
-#: distributors. Broader than mix_analyzer's cigarette-only set because
-#: alcohol distributors (lower-margin by structure) appear at supplier
-#: level too. Kept local — mix_analyzer's PROTECTED_CATEGORY_SUBSTRINGS
-#: is intentionally narrower (category-mix recommendations).
-SUPPLIER_PROFITABILITY_PROTECTED_SUBSTRINGS: Tuple[str, ...] = (
-    "სიგარეტ",      # cigarettes (any variant)
-    "ლუდი",         # beer
-    "ღვინ",         # wine (ღვინო, ღვინის)
-    "არაყ",         # vodka (არაყი, არაყის)
-    "კონიაკ",       # cognac
-    "ვისკ",         # whisky
-    "შამპან",       # champagne
-    "ჭაჭ",          # chacha
-    "აპერიტ",       # aperitif
-    "ლიქიორ",       # liqueur
+#: Tax IDs of suppliers whose products use the full-attribution branch
+#: (sole-distributor assumption) — bottom-margin lists exclude their
+#: products and the supplier-level rollup labels them "protected".
+#: Cigarettes are single-distributor at brand level (ELIZI 100%
+#: Camel/Sobranie/Winston, ჯიდიაი 97.6% Parliament, ინტერნეიშნლ Marlboro),
+#: so attributing the full retail row matches reality. The previous
+#: implementation keyed off the retail row's category name ("სიგარეტი"
+#: substring), but MegaPlus categories are operator-entered and can be
+#: empty, mistyped, or split across variants ("გასახურებელი თამბაქო"
+#: vs "სიგარეტი"). Tax IDs come from RS.ge waybills (canonical), so the
+#: rule no longer depends on MegaPlus categorization quality.
+SUPPLIER_PROFITABILITY_PROTECTED_TAX_IDS: Tuple[str, ...] = (
+    "204920381",    # შპს ELIZI ჯგუფი (Camel / Sobranie / Winston)
+    "406181616",    # შპს ჯიდიაი (Parliament)
+    "420424393",    # შპს ინტერნეიშნლ მარკეტინგ ენდ თრეიდინგ (Marlboro)
 )
 
 
@@ -134,13 +132,10 @@ def _safe_div(numer: float, denom: float) -> float:
     return (numer / denom) if denom else 0.0
 
 
-def _is_protected_category(category: str) -> bool:
-    if not category:
+def _is_protected_supplier(tax_id: str) -> bool:
+    if not tax_id:
         return False
-    for sub in SUPPLIER_PROFITABILITY_PROTECTED_SUBSTRINGS:
-        if sub in category:
-            return True
-    return False
+    return _norm_code(tax_id) in SUPPLIER_PROFITABILITY_PROTECTED_TAX_IDS
 
 
 def _parse_iso_date(value: Any) -> Optional[date]:
@@ -260,6 +255,7 @@ def _match_product(
     name_index: Dict[str, List[Dict[str, Any]]],
     alias_lookup: Dict[str, str],
     supplier_exclusive_names: Optional[Set[str]] = None,
+    supplier_tax_id: str = "",
 ) -> Tuple[Optional[Dict[str, Any]], str]:
     """Return ``(retail_row, match_kind)``.
 
@@ -370,14 +366,16 @@ def _match_product(
         if len(rows) == 1:
             return rows[0], "barcode_x_suffix"
 
-    # Final deterministic shot — unique name in a PROTECTED category.
-    # Cigarette / alcohol SKUs encode brand + variant + size in the name,
-    # so a single retail row sharing the normalized name is reliable.
-    # Only protected categories qualify so beverages (where Borjomi-glass
-    # vs Borjomi-plastic share names) cannot trigger this path.
-    if nm and nm in name_index:
+    # Final deterministic shot — unique name from a PROTECTED supplier.
+    # Cigarette SKUs encode brand + variant + size in the name, so a
+    # single retail row sharing the normalized name is reliable when the
+    # importing supplier is a known cigarette distributor (ELIZI / ჯიდიაი
+    # / ინტერნეიშნლ). Beverages (where Borjomi-glass vs Borjomi-plastic
+    # share names) come from non-protected suppliers and never reach
+    # this path.
+    if nm and nm in name_index and _is_protected_supplier(supplier_tax_id):
         rows = name_index[nm]
-        if len(rows) == 1 and _is_protected_category(rows[0].get("category", "")):
+        if len(rows) == 1:
             return rows[0], "name_in_protected_category"
 
     # Supplier-exclusive name match — when this normalized name is owned
@@ -441,6 +439,8 @@ def _aggregate_supplier(
     name_index = name_index or {}
     products = supplier_entry.get("top_products") or []
     total_products = len(products)
+    supplier_tax_id = _norm_code(supplier_entry.get("tax_id"))
+    supplier_is_protected = _is_protected_supplier(supplier_tax_id)
 
     matched_rows: List[Dict[str, Any]] = []
     unmatched_rows: List[Dict[str, Any]] = []
@@ -474,6 +474,7 @@ def _aggregate_supplier(
             name_index,
             alias_lookup,
             supplier_exclusive_names,
+            supplier_tax_id,
         )
 
         if retail_row is None:
@@ -521,7 +522,7 @@ def _aggregate_supplier(
         # cost_sold ≤ cost_imported (you can't sell more from a supplier
         # than you bought from them).
         category = retail_row.get("category", "") or ""
-        is_protected = _is_protected_category(category)
+        is_protected = supplier_is_protected
         imp_unit_cost_ge = (cost_paid / qty_bought) if qty_bought > 0 else 0.0
         rev_full_ge = rev_ge  # preserve full retail revenue for transparency
         # POS-recorded cost is reliable when it sits in a plausible markup
@@ -816,7 +817,7 @@ def _aggregate_supplier(
             "coverage_verified_pct": COVERAGE_VERIFIED_PCT,
             "coverage_unverified_pct": COVERAGE_UNVERIFIED_PCT,
             "protected_dominant_pct": PROTECTED_DOMINANT_PCT,
-            "protected_substrings": list(SUPPLIER_PROFITABILITY_PROTECTED_SUBSTRINGS),
+            "protected_tax_ids": list(SUPPLIER_PROFITABILITY_PROTECTED_TAX_IDS),
         },
     }
 
@@ -1043,5 +1044,5 @@ __all__ = [
     "COVERAGE_VERIFIED_PCT",
     "COVERAGE_UNVERIFIED_PCT",
     "PROTECTED_DOMINANT_PCT",
-    "SUPPLIER_PROFITABILITY_PROTECTED_SUBSTRINGS",
+    "SUPPLIER_PROFITABILITY_PROTECTED_TAX_IDS",
 ]
