@@ -16,6 +16,7 @@ export const TAB_GROUPS = [
       { id: 'retail_sales', label: '🛒 გაყიდვები' },
       { id: 'imported_products', label: '📦 პროდუქცია' },
       { id: 'store_compare', label: '🏬 მაღაზიები' },
+      { id: 'category_anomalies', label: '🚨 კატეგორიები' },
       { id: 'dead_stock', label: '💀 Dead Stock' },
     ],
   },

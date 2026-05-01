@@ -37,6 +37,7 @@ const Waybills = lazy(() => import('./Waybills.jsx'));
 const Insights = lazy(() => import('./Insights.jsx'));
 const VATAudit = lazy(() => import('./VATAudit.jsx'));
 const StoreCompare = lazy(() => import('./StoreCompare.jsx'));
+const CategoryAnomalies = lazy(() => import('./CategoryAnomalies.jsx'));
 
 const SAFE_PERIOD_REQUEST_TABS = new Set([
   'suppliers',
@@ -478,6 +479,10 @@ function App() {
         ) : activeTab === 'store_compare' ? (
           <Suspense fallback={tabSuspenseFallback}>
             <StoreCompare retailSales={data.retail_sales} />
+          </Suspense>
+        ) : activeTab === 'category_anomalies' ? (
+          <Suspense fallback={tabSuspenseFallback}>
+            <CategoryAnomalies data={data} />
           </Suspense>
         ) : null}
       </div>

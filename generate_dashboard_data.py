@@ -1695,6 +1695,39 @@ def run():
                     ", ".join(sorted(megaplus_combined.get("stores", {}).keys())),
                 )
 
+                # Pull each store's `category_anomalies` bundle (computed inside
+                # _read_supplier_rollups → cached in _megaplus_live.json) up to
+                # a single top-level `data["category_anomalies"]` so the
+                # frontend tab renders one combined view across stores.
+                stores_bundles = []
+                totals = {
+                    "empty_category_count": 0,
+                    "duplicate_cluster_count": 0,
+                    "duplicate_minority_product_count": 0,
+                    "protected_supplier_distinct_categories": 0,
+                }
+                for sid, rollup in (megaplus_combined.get("stores") or {}).items():
+                    bundle = (rollup or {}).get("category_anomalies")
+                    if not bundle:
+                        continue
+                    stores_bundles.append(bundle)
+                    s = bundle.get("summary") or {}
+                    for k in totals:
+                        totals[k] += int(s.get(k) or 0)
+                if stores_bundles:
+                    data["category_anomalies"] = {
+                        "totals": totals,
+                        "stores": stores_bundles,
+                    }
+                    logger.info(
+                        "category_anomalies → data.json: ცარიელი=%d, დუბლიკატი ჯგუფები=%d "
+                        "(პროდუქტები=%d), PROTECTED კატეგორიები=%d",
+                        totals["empty_category_count"],
+                        totals["duplicate_cluster_count"],
+                        totals["duplicate_minority_product_count"],
+                        totals["protected_supplier_distinct_categories"],
+                    )
+
                 # Synthesize a `retail_sales`-shaped bundle from MegaPlus so
                 # `RetailSales.jsx` and other downstream consumers (the AI
                 # tools, sqlite export, etc.) keep their existing schema

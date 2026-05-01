@@ -553,6 +553,12 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 "profit": profit,
                 "margin_pct": (profit / rev_f * 100) if rev_f else None,
             })
+
+        # Operator-error detection on PRODUCTS table — empty / duplicate-variant
+        # / PROTECTED-supplier review. Built on the same connection so it
+        # joins the per-store snapshot the rest of this rollup is reading.
+        from dashboard_pipeline.category_anomalies import build_anomaly_bundle
+        anomaly_bundle = build_anomaly_bundle(cur, backup_meta.store_id)
     finally:
         conn.close()
 
@@ -572,6 +578,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
         "by_month": by_month,
         "by_category": by_category,
         "by_category_by_month": by_category_by_month,
+        "category_anomalies": anomaly_bundle,
     }
 
 
