@@ -56,6 +56,7 @@ FIELD_DEFAULTS = {
     "executive_summary": {},
     "dead_stock_summary": {},
     "supplier_concentration": {},
+    "category_anomalies": {},
 }
 
 # ერთი ჭერი: სრული rollup/API პასუხები დიდი მოცულობისას (OOM-ისგან დასაცავად ზედა საზღვარი).
@@ -91,6 +92,7 @@ TAB_ALLOWLIST = {
     "retail_sales": ["retail_sales"],
     "dead_stock": ["dead_stock_summary"],
     "supplier_concentration": ["supplier_concentration"],
+    "category_anomalies": ["category_anomalies"],
     "executive_export": [
         "monthly_pnl",
         "budget",
@@ -261,6 +263,18 @@ TAB_RESPONSE_META = {
             "estimated_annual_savings_ge იყენებს price_benchmark-ს — აქ წყაროს კომპლექტურობა ვარიაციულია.",
         ],
     },
+    "category_anomalies": {
+        "trust_label": "audited",
+        "trust_badge_ka": "MegaPlus Operator Errors",
+        "scope_ka": (
+            "Per-store MegaPlus PRODUCTS table audit: empty P_GROUP, duplicate "
+            "category-name variants, PROTECTED-supplier overview."
+        ),
+        "notes_ka": [
+            "Operator-driven errors — fix in MegaPlus, rerun pipeline, flag clears.",
+            "Duplicate clusters group raw P_GROUP by stripped numeric code prefix + lowercase.",
+        ],
+    },
 }
 
 STATIC_RESPONSE_TABS = {
@@ -282,6 +296,7 @@ STATIC_RESPONSE_TABS = {
     "imported_products_full",
     "dead_stock",
     "supplier_concentration",
+    "category_anomalies",
 }
 
 DYNAMIC_SOURCE_ARTIFACTS = {
