@@ -1,6 +1,47 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-01 ღამე (close-out — 4 commits landed + pushed to `origin/main`; **NEW: MAX MEgaplus per-supplier file landed at `Financial_Analysis/მეგა პლუს/კომპანიების გაყიდვა მოგება.xls`**; handoff triggered by language regression iteration). გრძელი წაკითხვა საჭირო **არ არის**. ეს ფაილი ცოცხალი state-ია. Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`. Evidence → `HANDOFF.md` + `HANDOFF_ARCHIVE/`.
+> **განახლდა**: 2026-05-02 (per-store MegaPlus DB ingestion landed end-to-end — 2 commits + sync + pipeline verified, both stores ცოცხლები data.json-ში). გრძელი წაკითხვა საჭირო **არ არის**. ეს ფაილი ცოცხალი state-ია. Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`. Evidence → `HANDOFF.md` + `HANDOFF_ARCHIVE/`.
+>
+> ✅ **TODAY (2026-05-02) — per-store MegaPlus + persistence fix landed**:
+> - **`c338c93` feat(megaplus): per-store SQL Server backup ingestion (multi-folder)** — yesterday's foundation + today's per-store extension shipped together. Auto-discovers every `მეგა პლუს backup*` sibling under `Financial_Analysis/`; ZIP filename pattern `PLUS_<storeID>_MEGA_<date>.zip` derives DB name `MEGAPLUS_<storeID>` so each store restores into its own SQL DB (no overwrite risk). New `process_all_stores(folders)` helper + per-store state file. CLI auto-discovers folders by default.
+> - **`a0468aa` fix(megaplus): cache rollup so data.json stays populated between ZIP refreshes** — without this, `megaplus_live` would only appear in data.json on runs that picked up a new ZIP (most runs return None when state says already-processed). Now `process_newest_backup` writes `_megaplus_live.json` next to its watch folder on every successful restore; new `read_combined_rollup(folders)` reads cached JSONs every pipeline run; integration block calls both — refresh first, then always read cache for data.json.
+> - **Smoke test** (manual `python -m dashboard_pipeline.megaplus_backup --force`):
+>   - **დვაბზუ (1329)**: 282 suppliers / **2,222,756 ₾** revenue / **+16.86%** margin (penny-match with yesterday's run — no regression)
+>   - **ოზურგეთი (1301) NEW**: 308 suppliers / **2,625,127 ₾** revenue / **+13.71%** margin / 895,424 active orders post-2023 (234 legacy 2009-stamped rows = 0.025% of revenue, ignorable artifact)
+> - **C:\ ↔ origin sync RESOLVED**: C:\ branch had drifted ~10 commits behind origin (last position `6c1e24e`) and had a manual hotfix to `server.py` timeout (10→30 min, identical to landed `089e953`). Discarded duplicate working-tree change via `git checkout server.py`, then `git pull --ff-only origin main` brought C:\ to `a0468aa`. Both copies aligned.
+> - **Pipeline run verified** (12:16, exit 0, 0 errors / 0 warnings, 28 API artifacts, data.json 59.33 MB on C:\\). Log shows `MegaPlus cache → data.json: 2 store ჩაიტვირთა (1301, 1329)` — refresh skipped (state up-to-date), cache populated correctly. **Service restart NOT needed** since pipeline runs as fresh subprocess via `subprocess.run([sys.executable, script])` and picks up disk code on next invocation.
+> - **data.json verified**: `data.megaplus_live.stores.1329` + `data.megaplus_live.stores.1301` ცოცხლები. Top-level keys include `megaplus_live` next to 24 other sections.
+>
+> 📌 **OPEN — for next session**:
+> 1. **UI consumer for `data.megaplus_live`** — data layer is solid; no React component yet renders the per-store rollups. Side-by-side card showing 1329 vs 1301 totals + per-supplier comparison (~45 min). User goal: actually SEE the new numbers in the dashboard, not just JSON.
+> 2. **ვასაძე 83.58% margin in DB module** — same cost-imputation logic as `d1ff190` (Excel pipeline) needs porting to `_read_supplier_rollups` query. `ORD_GETPRICE` is near-zero in MAX POS for vasadze products; use GET-table cost as truth.
+> 3. **Auto-sync OneDrive ↔ C:\** — today's "C:\ drifted 10 commits behind" pattern will recur unless we add a post-commit/post-merge hook or scheduled task. Light-touch fix.
+> 4. **`_megaplus_setup/` scratch scripts** — `dashboard_pipeline/_megaplus_setup/*.py` (3 dev-time verification scripts: test_connection, restore_bak, inspect_v2) still untracked. Yesterday's note said "წაშლა შესაძლებელია"; user decision pending.
+> 5. **Date anomaly follow-up** — ოზურგეთი DB has 234 active orders dated 2009 (0.026% of orders, 661 ₾ revenue). Likely legacy seed/test rows. Optional: filter `WHERE ORD_TIMESTAMP >= '2023-01-01'` in rollup query.
+>
+> 🚀 **HUGE WIN — MegaPlus DB direct integration LANDED (2026-05-01 → 02 ღამე)** — user-მა აღმოაჩინა `Financial_Analysis/მეგაპლიუსის არქიტექტურა/2/MEGA-BACKUP/` ფოლდერი 3 ZIP-ით (ყოველდღე 14:30-ზე rolling backup, თითო `PLUS_1329_MEGA_YYYYMMDD.zip` ~70 MB compressed / ~600 MB uncompressed `.bak`-ის სახით). file-header `TAPE` magic = MS SQL Server full backup. ერთი ფაილი = სრული DB-ის snapshot (ისტორიული, არა incremental).
+>
+> **Setup ნაბიჯები ყველა გავიდა:**
+> - ✅ SQL Server 2022 Express install (winget, instance `localhost\SQLEXPRESS`)
+> - ✅ ODBC Driver 18 for SQL Server (winget)
+> - ✅ pyodbc 5.3.0 add to project venv
+> - ✅ April 30 backup restore წარმატებული — DB `MEGAPLUS_LATEST`, **53 ცხრილი**, key tables: PRODUCTS (100,737 rows) / DISTRIBUTORS (9,426) / GET (49,790 purchases) / ORDERS (722,342 sales lines, 719,594 active) / OPER (719,594) / PROD_AGR (185,994 product↔supplier links) / AGREEMENTS (10,176)
+> - ✅ ახალი module `dashboard_pipeline/megaplus_backup.py` — finds newest `PLUS_*.zip`, extracts, restores, reads supplier rollups (lifetime + 30day + 90day), writes `_megaplus_state.json` for idempotent re-runs (~1s no-op when nothing new, ~3 min when new ZIP)
+> - ✅ Wired into `generate_dashboard_data.py` `run()` just before `_write_outputs` — non-fatal try/except
+> - ✅ Watch folder: `C:\financial-dashboard\Financial_Analysis\მეგა პლუს backup\`
+> - ✅ Memory note saved at `project_megaplus_db_integration.md`
+>
+> **რეალური ცოცხალი ფაქტები გამოვიდა:**
+> - **Portfolio (lifetime)**: revenue 2,222,755 ₾ / cogs 1,848,013 ₾ / profit 374,742 ₾ / **margin +16.86%** (Excel pipeline ცხადობდა −249.4% — ცრუ)
+> - **ELIZI lifetime**: revenue 221,677 ₾ / margin **+19.57%** (Excel pipeline ცხადობდა −31.02%; MAX rollup ცხადობდა +5.31%)
+> - **282 მომწოდებელი** სრული რუკით (Excel pipeline-ი 70-ს კი მხოლოდ; PROD_AGR 185,994 product↔supplier vendor-tag-ი მთლიანად ცხადია name-matching-ის გარეშე)
+> - Date range: **2024-03-31 → 2026-04-30** (2+ წელი, 720K active orders)
+>
+> ✅ **CLOSED 2026-05-02**: yesterday's "UNCOMMITTED CHANGES" + "ხვალ დავამატებ ოზურგეთს" both addressed in this session — 2 commits landed (`c338c93` + `a0468aa`), pushed, C:\ synced, pipeline verified.
+>
+> 🐛 **Known issue (არ-blocker, listed under OPEN above)**: ვასაძე margin **83.58% lifetime** ცხადდება DB rollup-ში — `ORD_GETPRICE` ცხადია near-zero MAX POS-ში ვასაძის პროდუქტებზე. იგივე bug, რასაც Excel pipeline-ისთვის `d1ff190` (cost imputation from GET table) მოაგვარა. იგივე fix DB module-ში ცალკე session-ში.
+>
+> 🚨 **THIS SESSION CLOSED VIA HANDOFF (2026-05-01 ~late)** — language regression: partial Georgian filler tokens („ცადო"-stem morphology errors, plus „ცდის/ცადო-ცდის" filler) accumulated 11+ in single response while explaining MAX file findings. Per AGENTS.md Correction Escalation: this is **iteration #N cross-session** (the original SessionStart hook flagged this exact pattern at session start as well). User explicitly requested handoff via /context. Detection hook (`a5ff7d0`) IS working — it surfaced the warning into context — but output drift on complex multi-table responses still bypasses self-correction. **Mitigation for next session**: avoid mixing Georgian + English + tax_id strings + table data in one paragraph; smaller responses; defer narration when synthesizing comparison findings.
 >
 > 🚨 **THIS SESSION CLOSED VIA HANDOFF (2026-05-01 ~late)** — language regression: partial Georgian filler tokens („ცადო"-stem morphology errors, plus „ცდის/ცადო-ცდის" filler) accumulated 11+ in single response while explaining MAX file findings. Per AGENTS.md Correction Escalation: this is **iteration #N cross-session** (the original SessionStart hook flagged this exact pattern at session start as well). User explicitly requested handoff via /context. Detection hook (`a5ff7d0`) IS working — it surfaced the warning into context — but output drift on complex multi-table responses still bypasses self-correction. **Mitigation for next session**: avoid mixing Georgian + English + tax_id strings + table data in one paragraph; smaller responses; defer narration when synthesizing comparison findings.
 >
