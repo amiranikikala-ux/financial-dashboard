@@ -366,61 +366,86 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
             "margin_pct": (profit_t / rev_t_f * 100) if rev_t_f else None,
         }
 
-        # ─── By-product (top 500 by revenue) ────────────────────────────────
-        cur.execute(
-            """
-            SELECT TOP 10000
-                p.P_ID                                       AS product_id,
-                p.P_CODE                                     AS product_code,
-                p.P_BARCODE                                  AS barcode,
-                p.P_NAME                                     AS product_name,
-                p.P_UNIT                                     AS unit,
-                p.P_GROUP                                    AS category,
-                d.DIST_UUID                                  AS supplier_uuid,
-                d.dasaxeleba                                 AS supplier_name,
-                SUM(o.ORD_quant)                             AS qty_sold,
-                SUM(o.ORD_jamjam)                            AS revenue,
-                SUM(o.ORD_quant * pec.effective_unit_cost)   AS cogs_imputed,
-                SUM(o.ORD_GETPRICE * o.ORD_quant)            AS cogs_recorded,
-                COUNT(*)                                     AS row_count,
-                MIN(o.ORD_TIMESTAMP)                         AS min_date,
-                MAX(o.ORD_TIMESTAMP)                         AS max_date
-            FROM ORDERS o
-            JOIN PRODUCTS p ON o.ORD_P_ID = p.P_ID
-            LEFT JOIN DISTRIBUTORS d ON p.P_DAFAULTSUPPLIER = d.DIST_UUID
-            LEFT JOIN #pec pec ON p.P_ID = pec.p_id
-            WHERE o.ORD_ACT = 1
-            GROUP BY p.P_ID, p.P_CODE, p.P_BARCODE, p.P_NAME, p.P_UNIT, p.P_GROUP,
-                     d.DIST_UUID, d.dasaxeleba
-            ORDER BY SUM(o.ORD_jamjam) DESC
-            """
+        # ─── By-product, two windows: lifetime + last 365 days ──────────────
+        #
+        # The 365-day window is what supplier_profitability prefers when
+        # matching against RS waybills. Reason: imported_products typically
+        # spans Q1 of the current year (3 months), but MegaPlus lifetime
+        # spans 24-37 months. Pricing changes (inflation, promotions) over
+        # that long window would dilute the per-product margin computation
+        # — a supplier shipping at recent (higher) cost would be matched
+        # against lifetime-average (lower) retail revenue, yielding a
+        # falsely-negative margin. The 365-day window keeps cost↔revenue
+        # in the same pricing era.
+        windows = (
+            ("lifetime", None),
+            ("recent", anchor - timedelta(days=365)),
         )
-        by_product = []
-        for row in cur.fetchall():
-            (pid, code, barcode, name, unit, category, sup_uuid, sup_name,
-             qty, rev, cogs_imp, cogs_rec, row_count, min_d, max_d) = row
-            rev_f = float(rev or 0)
-            cogs_imp_f = float(cogs_imp or 0)
-            profit = rev_f - cogs_imp_f
-            by_product.append({
-                "product_id": int(pid),
-                "product_code": code or "",
-                "barcode": barcode or "",
-                "product_name": name or "",
-                "unit": unit or "",
-                "category": category or "",
-                "supplier_uuid": sup_uuid or "",
-                "supplier_name": sup_name or "",
-                "row_count": int(row_count or 0),
-                "qty_sold": float(qty or 0),
-                "revenue": rev_f,
-                "cogs": cogs_imp_f,
-                "cogs_recorded": float(cogs_rec or 0),
-                "profit": profit,
-                "margin_pct": (profit / rev_f * 100) if rev_f else None,
-                "min_date": min_d.isoformat() if min_d else None,
-                "max_date": max_d.isoformat() if max_d else None,
-            })
+        by_product_buckets: dict[str, list[dict]] = {"lifetime": [], "recent": []}
+        for window_name, since in windows:
+            if since is None:
+                where_clause = "WHERE o.ORD_ACT = 1"
+                params: tuple = ()
+            else:
+                where_clause = "WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP >= ?"
+                params = (since,)
+            cur.execute(
+                f"""
+                SELECT TOP 10000
+                    p.P_ID                                       AS product_id,
+                    p.P_CODE                                     AS product_code,
+                    p.P_BARCODE                                  AS barcode,
+                    p.P_NAME                                     AS product_name,
+                    p.P_UNIT                                     AS unit,
+                    p.P_GROUP                                    AS category,
+                    d.DIST_UUID                                  AS supplier_uuid,
+                    d.dasaxeleba                                 AS supplier_name,
+                    SUM(o.ORD_quant)                             AS qty_sold,
+                    SUM(o.ORD_jamjam)                            AS revenue,
+                    SUM(o.ORD_quant * pec.effective_unit_cost)   AS cogs_imputed,
+                    SUM(o.ORD_GETPRICE * o.ORD_quant)            AS cogs_recorded,
+                    COUNT(*)                                     AS row_count,
+                    MIN(o.ORD_TIMESTAMP)                         AS min_date,
+                    MAX(o.ORD_TIMESTAMP)                         AS max_date
+                FROM ORDERS o
+                JOIN PRODUCTS p ON o.ORD_P_ID = p.P_ID
+                LEFT JOIN DISTRIBUTORS d ON p.P_DAFAULTSUPPLIER = d.DIST_UUID
+                LEFT JOIN #pec pec ON p.P_ID = pec.p_id
+                {where_clause}
+                GROUP BY p.P_ID, p.P_CODE, p.P_BARCODE, p.P_NAME, p.P_UNIT, p.P_GROUP,
+                         d.DIST_UUID, d.dasaxeleba
+                ORDER BY SUM(o.ORD_jamjam) DESC
+                """,
+                *params,
+            )
+            for row in cur.fetchall():
+                (pid, code, barcode, name, unit, category, sup_uuid, sup_name,
+                 qty, rev, cogs_imp, cogs_rec, row_count, min_d, max_d) = row
+                rev_f = float(rev or 0)
+                cogs_imp_f = float(cogs_imp or 0)
+                profit = rev_f - cogs_imp_f
+                by_product_buckets[window_name].append({
+                    "product_id": int(pid),
+                    "product_code": code or "",
+                    "barcode": barcode or "",
+                    "product_name": name or "",
+                    "unit": unit or "",
+                    "category": category or "",
+                    "supplier_uuid": sup_uuid or "",
+                    "supplier_name": sup_name or "",
+                    "row_count": int(row_count or 0),
+                    "qty_sold": float(qty or 0),
+                    "revenue": rev_f,
+                    "cogs": cogs_imp_f,
+                    "cogs_recorded": float(cogs_rec or 0),
+                    "profit": profit,
+                    "margin_pct": (profit / rev_f * 100) if rev_f else None,
+                    "min_date": min_d.isoformat() if min_d else None,
+                    "max_date": max_d.isoformat() if max_d else None,
+                })
+
+        by_product = by_product_buckets["lifetime"]
+        by_product_recent = by_product_buckets["recent"]
 
         # ─── By-month ───────────────────────────────────────────────────────
         cur.execute(
@@ -543,6 +568,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
         "totals": totals,
         "suppliers": sorted(suppliers.values(), key=lambda s: s["lifetime"]["revenue"], reverse=True),
         "by_product": by_product,
+        "by_product_recent": by_product_recent,
         "by_month": by_month,
         "by_category": by_category,
         "by_category_by_month": by_category_by_month,

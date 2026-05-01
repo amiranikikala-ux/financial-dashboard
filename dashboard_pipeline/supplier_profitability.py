@@ -795,7 +795,14 @@ def _megaplus_to_retail_by_product(megaplus_live: Dict[str, Any]) -> List[Dict[s
 
     for store_id, rollup in stores.items():
         obj_label = store_label_for.get(str(store_id)) or f"store_{store_id}"
-        for p in rollup.get("by_product") or []:
+        # Prefer the windowed (last 365 days) by_product if present so that
+        # supplier_profitability matches RS waybill imports against retail
+        # rows from the same pricing era — lifetime aggregation dilutes
+        # margin when prices have shifted (inflation, promotions). Fall
+        # back to lifetime by_product on older caches that pre-date the
+        # windowed query.
+        rows = rollup.get("by_product_recent") or rollup.get("by_product") or []
+        for p in rows:
             barcode = (p.get("barcode") or "").strip()
             code = (p.get("product_code") or "").strip()
             key = barcode or code or f"pid_{p.get('product_id')}"
