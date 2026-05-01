@@ -257,6 +257,7 @@ from dashboard_pipeline.supplier_profitability import (
 from dashboard_pipeline._validate_aliases import load_and_validate as _load_aliases
 from dashboard_pipeline.megaplus_backup import (
     process_all_stores as _process_megaplus_stores,
+    read_combined_rollup as _read_megaplus_combined,
 )
 
 # ---------------------------------------------------------------------------
@@ -1699,25 +1700,46 @@ def run():
     # MegaPlus daily SQL Server backup (PLUS_*.zip in per-store watch folders).
     # Auto-discovers every `მეგა პლუს backup*` sibling under Financial_Analysis
     # so adding a new store = drop ZIPs into a new sibling folder, no code change.
+    #
+    # Two-phase design:
+    #   1. process_all_stores — restores any new ZIP into its per-store SQL DB
+    #      and refreshes the cached `_megaplus_live.json` next to each folder.
+    #   2. read_combined_rollup — always reads the cached JSONs so data.json
+    #      keeps the supplier rollup populated on EVERY pipeline run, not just
+    #      runs that happen to pick up a new ZIP.
     # Non-fatal: if SQL Server isn't reachable or no folders match, we log and
     # continue — the rest of the dashboard still builds.
     try:
         fa_dir = Path(script_dir) / "Financial_Analysis"
         megaplus_folders = sorted([p for p in fa_dir.glob("მეგა პლუს backup*") if p.is_dir()])
         if megaplus_folders:
-            megaplus_combined = _process_megaplus_stores(megaplus_folders)
-            if megaplus_combined is not None:
-                data["megaplus_live"] = megaplus_combined
-                for store_id, rollup in megaplus_combined.get("stores", {}).items():
+            try:
+                refreshed = _process_megaplus_stores(megaplus_folders)
+            except Exception as exc:
+                logger.warning("MegaPlus DB backup-ი refresh ვერ მოხერხდა (cache-ი მაინც გამოვიყენო): %s", exc)
+                refreshed = None
+            if refreshed is not None:
+                for store_id, rollup in refreshed.get("stores", {}).items():
                     logger.info(
-                        "MegaPlus DB backup-ი ჩაიტვირთა — store %s: %s მომწოდებელი, %s ₾ გაყიდვა, %.2f%% მარჟა",
+                        "MegaPlus DB backup-ი refresh — store %s: %s მომწოდებელი, %s ₾ გაყიდვა, %.2f%% მარჟა",
                         store_id,
                         len(rollup.get("suppliers", [])),
                         f"{float(rollup['totals']['revenue']):,.0f}",
                         float(rollup['totals']['margin_pct'] or 0),
                     )
             else:
-                logger.info("MegaPlus DB backup-ი — ახალი ZIP არ არის არც ერთ store-ში, ნაბიჯი გამოტოვდა")
+                logger.info("MegaPlus DB backup-ი — ახალი ZIP არ არის, cache-დან წაიკითხება")
+
+            megaplus_combined = _read_megaplus_combined(megaplus_folders)
+            if megaplus_combined is not None:
+                data["megaplus_live"] = megaplus_combined
+                logger.info(
+                    "MegaPlus cache → data.json: %s store ჩაიტვირთა (%s)",
+                    len(megaplus_combined.get("stores", {})),
+                    ", ".join(sorted(megaplus_combined.get("stores", {}).keys())),
+                )
+            else:
+                logger.info("MegaPlus cache ცარიელია — data.json-ში megaplus_live არ ჩაიდება")
         else:
             logger.info("MegaPlus DB backup-ი — watch folder-ი არ არის, ნაბიჯი გამოტოვდა")
     except Exception as exc:

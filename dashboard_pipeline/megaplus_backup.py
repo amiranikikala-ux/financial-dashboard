@@ -36,6 +36,7 @@ except ImportError:
 
 ZIP_PATTERN = re.compile(r"^PLUS_(\d+)_MEGA_(\d{8})\.zip$", re.IGNORECASE)
 STATE_FILENAME = "_megaplus_state.json"
+LIVE_FILENAME = "_megaplus_live.json"
 
 DEFAULT_INSTANCE = r"localhost\SQLEXPRESS"
 DEFAULT_BAK_STAGING = Path(r"C:\Users\tengiz\megaplus_bak_staging")
@@ -318,7 +319,39 @@ def process_newest_backup(folder: Path, force: bool = False) -> dict | None:
     state["last_backup_date"] = pick.backup_date
     state["database"] = db_name
     _write_state(state_path, state)
+
+    # Persist the per-store rollup so downstream consumers (dashboard pipeline,
+    # debug tools) keep seeing this store's data even when no new ZIP triggers
+    # a re-restore on subsequent pipeline runs.
+    live_path = folder / LIVE_FILENAME
+    live_path.write_text(json.dumps(rollup, ensure_ascii=False, indent=2), encoding="utf-8")
+
     return rollup
+
+
+def read_combined_rollup(folders: list[Path]) -> dict | None:
+    """Build a combined `{"stores": {store_id: rollup}}` dict from each folder's
+    cached `_megaplus_live.json`. Returns None if no cached rollups exist.
+
+    This is the persistent path the pipeline uses on every run — the SQL restore
+    only fires when a new ZIP arrives, but the cached rollup keeps data.json
+    populated in-between.
+    """
+    stores: dict[str, dict] = {}
+    for folder in folders:
+        live = Path(folder) / LIVE_FILENAME
+        if not live.exists():
+            continue
+        try:
+            rollup = json.loads(live.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        store_id = str(rollup.get("store_id") or "")
+        if store_id:
+            stores[store_id] = rollup
+    if not stores:
+        return None
+    return {"stores": stores}
 
 
 def process_all_stores(folders: list[Path], force: bool = False) -> dict | None:
@@ -375,13 +408,9 @@ def main(argv: list[str]) -> int:
 
     summary = {"stores": {}}
     for store_id, rollup in combined["stores"].items():
-        # Persist per-store rollup next to its own watch folder for debugging.
-        watch = next((f for f in folders if (f / STATE_FILENAME).exists()
-                      and _read_state(f / STATE_FILENAME).get("last_processed_zip", "").startswith(f"PLUS_{store_id}_")), None)
-        if watch is not None:
-            out_file = watch / "_megaplus_live.json"
-            out_file.write_text(json.dumps(rollup, ensure_ascii=False, indent=2), encoding="utf-8")
-            print(f"wrote store {store_id} rollup → {out_file}")
+        # process_newest_backup already wrote `_megaplus_live.json` next to each
+        # watch folder; CLI just prints a confirmation summary.
+        print(f"store {store_id} rollup persisted (suppliers={len(rollup['suppliers'])})")
 
         summary["stores"][store_id] = {
             "store_id": rollup["store_id"],
