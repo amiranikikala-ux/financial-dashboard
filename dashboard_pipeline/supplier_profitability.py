@@ -524,17 +524,47 @@ def _aggregate_supplier(
         is_protected = _is_protected_category(category)
         imp_unit_cost_ge = (cost_paid / qty_bought) if qty_bought > 0 else 0.0
         rev_full_ge = rev_ge  # preserve full retail revenue for transparency
+        # POS-recorded cost is reliable when it sits in a plausible markup
+        # range (cost ≥ 30% of revenue). Below 30% the POS row almost
+        # certainly carries a placeholder — operators leave the cost-at-
+        # sale field blank or set 1₾ on groceries (vasadze loaves: POS
+        # 91 ₾ vs supplier-invoice 2,713 ₾, the d1ff190 motivating case).
+        # When POS is realistic we use cost-share attribution: supplier's
+        # share of the retail row's cost is computed in ₾, so supplier-
+        # unit (cartons / cases) vs retail-unit (packs / pieces) mismatches
+        # cancel out. This generalises the cigarette/alcohol fix to every
+        # product where the supplier ships in bulk and retail sells in
+        # singles (e.g. ბიგი საპარსი 100 packs of 5 → 500 pieces, but the
+        # qty-cap path treated 100 as pieces and produced −246% margin).
+        pos_realistic = (
+            cost_sold_recorded_ge > 0
+            and rev_full_ge > 0
+            and (cost_sold_recorded_ge / rev_full_ge) >= 0.30
+        )
         if is_protected and cost_sold_recorded_ge > 0:
-            # PROTECTED categories (cigarettes / alcohol): supplier invoice
-            # is priced per carton/box (e.g. ELIZI ships 95 ბლოკი at 80.94 ₾
-            # each) but retail sells per pack/bottle (195 კოლოფი). Imputing
-            # cost via (cost_paid / qty_bought × qty_sold) treats cartons
-            # as packs and inflates per-pack cost ~10×, producing absurd
-            # negative margins (ELIZI portfolio: −442%). MAX POS records
-            # cost-per-sale accurately for regulated categories, so trust
-            # the recorded value here and keep retail revenue at face.
+            # PROTECTED categories (cigarettes / alcohol): one distributor
+            # typically owns each brand (ELIZI → Camel/Sobranie/Marlboro,
+            # ჯიდიაი → Parliament). Cost-share attribution would divide by
+            # POS recorded cost across all sold units and under-attribute
+            # the sole distributor (e.g. ELIZI Sobranie: 4,502 ₾ paid for
+            # 48 cartons / ~1,920 packs vs POS recorded 16,786 ₾ for 1,942
+            # packs sold → cost-share gives 27% attribution instead of the
+            # correct ~99%). Assume sole/dominant distributor and credit
+            # the full retail row.
             cost_sold_ge = cost_sold_recorded_ge
             cost_sold_scale = None  # signal: use recorded cost per-store
+        elif pos_realistic and cost_paid > 0:
+            # Non-PROTECTED cost-share attribution. supplier_share caps at
+            # 100% so a supplier can never be credited with more than was
+            # actually sold; share < 1 means supplier shipped less than
+            # retail recorded as sold (other suppliers contributed the
+            # rest). This handles unit mismatches (e.g. ბიგი საპარსი
+            # 100 packs of 5 → 500 retail pieces) by working in ₾ instead
+            # of qty, so supplier-unit vs retail-unit cancels.
+            supplier_share = min(1.0, cost_paid / cost_sold_recorded_ge)
+            cost_sold_ge = cost_sold_recorded_ge * supplier_share
+            rev_ge = rev_full_ge * supplier_share
+            cost_sold_scale = supplier_share  # signal for per-store loop
         elif imp_unit_cost_ge > 0:
             effective_qty = min(sold_qty_total, qty_bought)
             cost_sold_ge = effective_qty * imp_unit_cost_ge
@@ -575,7 +605,15 @@ def _aggregate_supplier(
             obj_name = ob.get("object") or "უცნობი"
             obj_qty = float(ob.get("total_quantity") or 0)
             obj_rev = float(ob.get("revenue_ge") or 0)
-            if cost_sold_scale is not None:
+            obj_cost_recorded = float(ob.get("cost_ge") or 0)
+            if pos_realistic and cost_sold_scale is not None:
+                # Cost-share path: per-store recorded cost × supplier share.
+                # Same ₾-basis attribution as the matched row.
+                obj_cost = obj_cost_recorded * cost_sold_scale
+                obj_rev = obj_rev * cost_sold_scale
+            elif cost_sold_scale is not None:
+                # Imputed path: per-store qty × imputed unit cost × cap factor.
+                # Used when POS cost is a placeholder (vasadze case).
                 obj_cost = obj_qty * imp_unit_cost_ge * cost_sold_scale
                 # Scale per-store revenue by the same cap factor so the
                 # per-store sum equals the (already-scaled) matched-row
@@ -583,7 +621,7 @@ def _aggregate_supplier(
                 # above for why revenue must be capped alongside cost.
                 obj_rev = obj_rev * cost_sold_scale
             else:
-                obj_cost = float(ob.get("cost_ge") or 0)
+                obj_cost = obj_cost_recorded
             revenue_by_object[obj_name] = revenue_by_object.get(obj_name, 0.0) + obj_rev
             cost_sold_by_object[obj_name] = cost_sold_by_object.get(obj_name, 0.0) + obj_cost
 

@@ -181,7 +181,10 @@ def test_ambiguous_when_two_retail_rows_share_barcode():
 def test_ambiguous_resolved_by_user_alias():
     """Alias points at a specific retail key → ambiguity resolved
     intentionally, that row counts as verified."""
-    sup = _supplier("100", "ABC", [_imp_product("1002", "ძეხვი ლიდერი", 5, 50)])
+    # Supplier cost matches retail recorded cost (1 unit, 150 ₾) so the
+    # cost-share branch attributes 100% of the retail row's revenue to
+    # this supplier — the test asserts on the full 200 ₾.
+    sup = _supplier("100", "ABC", [_imp_product("1002", "ძეხვი ლიდერი", 1, 150)])
     retail = [
         _retail_product("10101001", "1002", "ნალექიანი ყავა იტალი", "ყავა", 100, 60),
         _retail_product("2216301", "9999999", "ძეხვი მოხარშული ლიდერი", "ძეხვეული", 200, 150),
