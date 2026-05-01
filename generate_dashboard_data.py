@@ -255,6 +255,9 @@ from dashboard_pipeline.supplier_profitability import (
     build_supplier_profitability,
 )
 from dashboard_pipeline._validate_aliases import load_and_validate as _load_aliases
+from dashboard_pipeline.megaplus_backup import (
+    process_all_stores as _process_megaplus_stores,
+)
 
 # ---------------------------------------------------------------------------
 # Module imports — API contracts, config validation, export, sources, truth
@@ -1692,6 +1695,33 @@ def run():
         )
     except Exception as exc:
         logger.warning("პროდუქციული მოგება — ვერ აშენდა: %s", exc)
+
+    # MegaPlus daily SQL Server backup (PLUS_*.zip in per-store watch folders).
+    # Auto-discovers every `მეგა პლუს backup*` sibling under Financial_Analysis
+    # so adding a new store = drop ZIPs into a new sibling folder, no code change.
+    # Non-fatal: if SQL Server isn't reachable or no folders match, we log and
+    # continue — the rest of the dashboard still builds.
+    try:
+        fa_dir = Path(script_dir) / "Financial_Analysis"
+        megaplus_folders = sorted([p for p in fa_dir.glob("მეგა პლუს backup*") if p.is_dir()])
+        if megaplus_folders:
+            megaplus_combined = _process_megaplus_stores(megaplus_folders)
+            if megaplus_combined is not None:
+                data["megaplus_live"] = megaplus_combined
+                for store_id, rollup in megaplus_combined.get("stores", {}).items():
+                    logger.info(
+                        "MegaPlus DB backup-ი ჩაიტვირთა — store %s: %s მომწოდებელი, %s ₾ გაყიდვა, %.2f%% მარჟა",
+                        store_id,
+                        len(rollup.get("suppliers", [])),
+                        f"{float(rollup['totals']['revenue']):,.0f}",
+                        float(rollup['totals']['margin_pct'] or 0),
+                    )
+            else:
+                logger.info("MegaPlus DB backup-ი — ახალი ZIP არ არის არც ერთ store-ში, ნაბიჯი გამოტოვდა")
+        else:
+            logger.info("MegaPlus DB backup-ი — watch folder-ი არ არის, ნაბიჯი გამოტოვდა")
+    except Exception as exc:
+        logger.warning("MegaPlus DB backup-ი — ვერ ჩაიტვირთა: %s", exc)
 
     _write_outputs(data, script_dir, inc)
 
