@@ -250,6 +250,7 @@ from dashboard_pipeline.imported_products import (
 from dashboard_pipeline.retail_sales import (
     collect_retail_sales_bundle,
     empty_retail_sales_bundle,
+    synthesize_from_megaplus as _synthesize_retail_from_megaplus,
 )
 from dashboard_pipeline.supplier_profitability import (
     build_supplier_profitability,
@@ -1693,6 +1694,30 @@ def run():
                     len(megaplus_combined.get("stores", {})),
                     ", ".join(sorted(megaplus_combined.get("stores", {}).keys())),
                 )
+
+                # Synthesize a `retail_sales`-shaped bundle from MegaPlus so
+                # `RetailSales.jsx` and other downstream consumers (the AI
+                # tools, sqlite export, etc.) keep their existing schema
+                # after the Excel POS folders were retired. Only injects
+                # when the existing retail_sales is empty (no Excel files
+                # present) — never overwrites Excel-derived data.
+                existing_retail = data.get("retail_sales") or {}
+                excel_files_count = int((existing_retail.get("files_read_count") or 0))
+                if excel_files_count == 0:
+                    synthetic = _synthesize_retail_from_megaplus(megaplus_combined)
+                    if synthetic is not None:
+                        data["retail_sales"] = synthetic
+                        ov = synthetic.get("overall") or {}
+                        logger.info(
+                            "retail_sales synthesized from MegaPlus: revenue %.0f ₾ / cost %.0f ₾ / "
+                            "profit %.0f ₾ / margin %.2f%% / %d products / %d months",
+                            float(ov.get("revenue_ge") or 0),
+                            float(ov.get("cost_ge") or 0),
+                            float(ov.get("profit_ge") or 0),
+                            float(ov.get("gross_margin_pct") or 0),
+                            int(synthetic.get("products_total_count") or 0),
+                            len(synthetic.get("by_month") or []),
+                        )
             else:
                 logger.info("MegaPlus cache ცარიელია — data.json-ში megaplus_live არ ჩაიდება")
         else:

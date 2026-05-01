@@ -275,6 +275,314 @@ def _content_fingerprint(object_mapping) -> str:
 # empty_retail_sales_bundle
 # ---------------------------------------------------------------------------
 
+def synthesize_from_megaplus(megaplus_live):
+    """Build a `retail_sales`-shaped bundle from `data["megaplus_live"]`.
+
+    Lets `RetailSales.jsx` (and downstream consumers like the AI tools)
+    keep their existing schema after the Excel POS folders were retired.
+    Per-store rows from each MegaPlus DB rollup are aggregated to the
+    portfolio level for `overall` / `by_*` tables; per-store
+    contributions stay visible via `by_object` and `by_object_by_month`.
+
+    Field-name mapping (MegaPlus → retail_sales):
+      qty_sold → total_quantity, revenue → revenue_ge, cogs → cost_ge,
+      profit → profit_ge, margin_pct → gross_margin_pct.
+    """
+    stores = (megaplus_live or {}).get("stores") or {}
+    if not stores:
+        return None
+
+    store_label_for = {"1329": "დვაბზუ", "1301": "ოზურგეთი"}
+
+    # ─── overall (portfolio sum) ────────────────────────────────────────────
+    overall_revenue = 0.0
+    overall_cost = 0.0
+    overall_profit = 0.0
+    overall_qty = 0.0
+    overall_rows = 0
+    min_date = None
+    max_date = None
+    distinct_products: set = set()
+    distinct_categories: set = set()
+    distinct_objects: set = set()
+
+    for store_id, rollup in stores.items():
+        totals = rollup.get("totals") or {}
+        overall_revenue += float(totals.get("revenue") or 0)
+        overall_cost += float(totals.get("cogs") or 0)
+        overall_profit += float(totals.get("profit") or 0)
+        overall_qty += sum(float(p.get("qty_sold") or 0) for p in rollup.get("by_product") or [])
+        overall_rows += int(totals.get("sale_lines") or 0)
+        for p in rollup.get("by_product") or []:
+            key = (p.get("barcode") or "").strip() or (p.get("product_code") or "").strip() or str(p.get("product_id"))
+            if key:
+                distinct_products.add(key)
+            cat = p.get("category") or ""
+            if cat:
+                distinct_categories.add(cat)
+        distinct_objects.add(store_label_for.get(str(store_id)) or f"store_{store_id}")
+
+        rng = rollup.get("data_range") or {}
+        rmin = (rng.get("min_timestamp") or "")[:10] or None
+        rmax = (rng.get("max_timestamp") or "")[:10] or None
+        if rmin and (min_date is None or rmin < min_date):
+            min_date = rmin
+        if rmax and (max_date is None or rmax > max_date):
+            max_date = rmax
+
+    overall_margin = (overall_profit / overall_revenue * 100) if overall_revenue > 0 else 0.0
+
+    # ─── by_object ──────────────────────────────────────────────────────────
+    by_object = []
+    for store_id, rollup in stores.items():
+        obj_label = store_label_for.get(str(store_id)) or f"store_{store_id}"
+        totals = rollup.get("totals") or {}
+        rev = float(totals.get("revenue") or 0)
+        cost = float(totals.get("cogs") or 0)
+        profit = float(totals.get("profit") or 0)
+        qty = sum(float(p.get("qty_sold") or 0) for p in rollup.get("by_product") or [])
+        rows = int(totals.get("sale_lines") or 0)
+        margin = (profit / rev * 100) if rev > 0 else 0.0
+        by_object.append({
+            "object": obj_label,
+            "row_count": rows,
+            "total_quantity": qty,
+            "revenue_ge": round(rev, 2),
+            "cost_ge": round(cost, 2),
+            "profit_ge": round(profit, 2),
+            "gross_margin_pct": round(margin, 2),
+        })
+
+    # ─── by_month (aggregate across stores) ────────────────────────────────
+    month_acc: dict = {}
+    for store_id, rollup in stores.items():
+        for m in rollup.get("by_month") or []:
+            key = m.get("month")
+            if not key:
+                continue
+            cur = month_acc.setdefault(key, {
+                "month": key, "row_count": 0, "total_quantity": 0.0,
+                "revenue_ge": 0.0, "cost_ge": 0.0, "profit_ge": 0.0,
+            })
+            cur["row_count"] += int(m.get("row_count") or 0)
+            cur["total_quantity"] += float(m.get("qty_sold") or 0)
+            cur["revenue_ge"] += float(m.get("revenue") or 0)
+            cur["cost_ge"] += float(m.get("cogs") or 0)
+            cur["profit_ge"] += float(m.get("profit") or 0)
+    by_month = []
+    for k in sorted(month_acc.keys()):
+        row = month_acc[k]
+        rev = row["revenue_ge"]
+        margin = (row["profit_ge"] / rev * 100) if rev > 0 else 0.0
+        row["gross_margin_pct"] = round(margin, 2)
+        by_month.append({k2: round(v, 2) if isinstance(v, float) else v for k2, v in row.items()})
+
+    # ─── by_object_by_month (per-store × per-month) ─────────────────────────
+    by_object_by_month = []
+    for store_id, rollup in stores.items():
+        obj_label = store_label_for.get(str(store_id)) or f"store_{store_id}"
+        for m in rollup.get("by_month") or []:
+            rev = float(m.get("revenue") or 0)
+            cost = float(m.get("cogs") or 0)
+            profit = float(m.get("profit") or 0)
+            margin = (profit / rev * 100) if rev > 0 else 0.0
+            by_object_by_month.append({
+                "object": obj_label,
+                "month": m.get("month"),
+                "row_count": int(m.get("row_count") or 0),
+                "total_quantity": float(m.get("qty_sold") or 0),
+                "revenue_ge": round(rev, 2),
+                "cost_ge": round(cost, 2),
+                "profit_ge": round(profit, 2),
+                "gross_margin_pct": round(margin, 2),
+            })
+
+    # ─── by_category (aggregate across stores by category name) ─────────────
+    cat_acc: dict = {}
+    for store_id, rollup in stores.items():
+        for c in rollup.get("by_category") or []:
+            key = c.get("category") or "(უცნობი)"
+            cur = cat_acc.setdefault(key, {
+                "category": key, "row_count": 0,
+                "total_quantity": 0.0, "revenue_ge": 0.0,
+                "cost_ge": 0.0, "profit_ge": 0.0,
+                "distinct_product_count": 0,
+            })
+            cur["row_count"] += int(c.get("row_count") or 0)
+            cur["total_quantity"] += float(c.get("qty_sold") or 0)
+            cur["revenue_ge"] += float(c.get("revenue") or 0)
+            cur["cost_ge"] += float(c.get("cogs") or 0)
+            cur["profit_ge"] += float(c.get("profit") or 0)
+            cur["distinct_product_count"] += int(c.get("distinct_product_count") or 0)
+    by_category = []
+    for key, row in sorted(cat_acc.items(), key=lambda kv: kv[1]["revenue_ge"], reverse=True):
+        rev = row["revenue_ge"]
+        row["gross_margin_pct"] = round((row["profit_ge"] / rev * 100) if rev > 0 else 0.0, 2)
+        for f in ("revenue_ge", "cost_ge", "profit_ge", "total_quantity"):
+            row[f] = round(row[f], 2)
+        by_category.append(row)
+
+    # ─── by_category_by_month (cross-tab) ──────────────────────────────────
+    cb_acc: dict = {}
+    for store_id, rollup in stores.items():
+        for cm in rollup.get("by_category_by_month") or []:
+            key = (cm.get("month"), cm.get("category") or "(უცნობი)")
+            if not key[0]:
+                continue
+            cur = cb_acc.setdefault(key, {
+                "month": key[0], "category": key[1],
+                "row_count": 0, "total_quantity": 0.0,
+                "revenue_ge": 0.0, "cost_ge": 0.0, "profit_ge": 0.0,
+            })
+            cur["row_count"] += int(cm.get("row_count") or 0)
+            cur["total_quantity"] += float(cm.get("qty_sold") or 0)
+            cur["revenue_ge"] += float(cm.get("revenue") or 0)
+            cur["cost_ge"] += float(cm.get("cogs") or 0)
+            cur["profit_ge"] += float(cm.get("profit") or 0)
+    by_category_by_month = []
+    for key in sorted(cb_acc.keys()):
+        row = cb_acc[key]
+        rev = row["revenue_ge"]
+        row["gross_margin_pct"] = round((row["profit_ge"] / rev * 100) if rev > 0 else 0.0, 2)
+        for f in ("revenue_ge", "cost_ge", "profit_ge", "total_quantity"):
+            row[f] = round(row[f], 2)
+        by_category_by_month.append(row)
+
+    # ─── by_product (aggregate across stores by barcode/code) ──────────────
+    prod_acc: dict = {}
+    for store_id, rollup in stores.items():
+        obj_label = store_label_for.get(str(store_id)) or f"store_{store_id}"
+        for p in rollup.get("by_product") or []:
+            barcode = (p.get("barcode") or "").strip()
+            code = (p.get("product_code") or "").strip()
+            key = barcode or code or f"pid_{p.get('product_id')}"
+            if not key:
+                continue
+            cur = prod_acc.setdefault(key, {
+                "product_key": key,
+                "product_code": code,
+                "barcode": barcode,
+                "product_name": p.get("product_name") or "",
+                "unit": p.get("unit") or "",
+                "category": p.get("category") or "",
+                "row_count": 0, "total_quantity": 0.0,
+                "revenue_ge": 0.0, "cost_ge": 0.0, "profit_ge": 0.0,
+                "object_totals": [],
+                "min_date": None, "max_date": None,
+            })
+            qty = float(p.get("qty_sold") or 0)
+            rev = float(p.get("revenue") or 0)
+            cost = float(p.get("cogs") or 0)
+            profit = float(p.get("profit") or 0)
+            rc = int(p.get("row_count") or 0)
+            cur["row_count"] += rc
+            cur["total_quantity"] += qty
+            cur["revenue_ge"] += rev
+            cur["cost_ge"] += cost
+            cur["profit_ge"] += profit
+            obj_margin = (profit / rev * 100) if rev > 0 else 0.0
+            cur["object_totals"].append({
+                "object": obj_label,
+                "row_count": rc,
+                "total_quantity": qty,
+                "revenue_ge": round(rev, 2),
+                "cost_ge": round(cost, 2),
+                "profit_ge": round(profit, 2),
+                "gross_margin_pct": round(obj_margin, 2),
+            })
+            for src_field, agg_field, less_is_more in (
+                ("min_date", "min_date", True),
+                ("max_date", "max_date", False),
+            ):
+                v = p.get(src_field)
+                if not v:
+                    continue
+                vs = str(v)[:10]
+                if cur[agg_field] is None or (less_is_more and vs < cur[agg_field]) or (not less_is_more and vs > cur[agg_field]):
+                    cur[agg_field] = vs
+
+    by_product_full = list(prod_acc.values())
+    # Compute per-product margin and round
+    for row in by_product_full:
+        rev = row["revenue_ge"]
+        row["gross_margin_pct"] = round((row["profit_ge"] / rev * 100) if rev > 0 else 0.0, 2)
+        for f in ("revenue_ge", "cost_ge", "profit_ge", "total_quantity"):
+            row[f] = round(row[f], 2)
+
+    # Truncate UI by_product to keep data.json tractable; full list is used
+    # only for downstream supplier matching (not serialized verbatim).
+    PRODUCT_LIMIT = 1000
+    by_product_full.sort(key=lambda r: r.get("revenue_ge", 0), reverse=True)
+    by_product = by_product_full[:PRODUCT_LIMIT]
+
+    # ─── Top lists ──────────────────────────────────────────────────────────
+    top_categories_by_profit = sorted(by_category, key=lambda r: r.get("profit_ge", 0), reverse=True)[:25]
+    top_objects_by_profit = sorted(by_object, key=lambda r: r.get("profit_ge", 0), reverse=True)
+    top_products_by_revenue = sorted(by_product_full, key=lambda r: r.get("revenue_ge", 0), reverse=True)[:25]
+    top_products_by_profit = sorted(by_product_full, key=lambda r: r.get("profit_ge", 0), reverse=True)[:25]
+
+    return {
+        "label_ka": "გაყიდული პროდუქცია (MegaPlus DB direct)",
+        "notes_ka": (
+            "MegaPlus per-store SQL backup-დან მიღებული რეტეილ გაყიდვები "
+            "(დვაბზუ + ოზურგეთი). Cost-ი GET ცხრილიდან imputed-ია — MAX POS-"
+            "ის ცარიელი ORD_GETPRICE ცვლის. წყარო: `Financial_Analysis/მეგა "
+            "პლუს backup*/PLUS_<store>_MEGA_<date>.zip`."
+        ),
+        "source_glob": [
+            "Financial_Analysis/მეგა პლუს backup/PLUS_*.zip",
+            "Financial_Analysis/მეგა პლუს backup ოზურგეთი/PLUS_*.zip",
+        ],
+        "amount_basis_ka": (
+            "`ORD_jamjam` = revenue, GET-table imputed cost-ი (cost_paid / "
+            "qty_bought × MIN(qty_bought, qty_sold) cap-ით) = cost_ge, profit "
+            "= revenue − imputed cost."
+        ),
+        "duplicate_policy": {
+            "mode": "megaplus_db_direct",
+            "notes_ka": "MegaPlus DB-ში duplicate-ი არ არის — ORDERS.ORD_ACT = 1 ფილტრი იცავს.",
+            "suspected_files": [],
+            "excluded_files": [],
+            "excluded_file_count": 0,
+        },
+        "files_found_count": len(stores),
+        "files_read_count": len(stores),
+        "files_error_count": 0,
+        "files_skipped_by_policy_count": 0,
+        "files_skipped_by_policy": [],
+        "files": [],
+        "read_errors": [],
+        "overall": {
+            "row_count": overall_rows,
+            "total_quantity": round(overall_qty, 2),
+            "revenue_ge": round(overall_revenue, 2),
+            "cost_ge": round(overall_cost, 2),
+            "profit_ge": round(overall_profit, 2),
+            "gross_margin_pct": round(overall_margin, 2),
+            "distinct_object_count": len(distinct_objects),
+            "distinct_category_count": len(distinct_categories),
+            "distinct_product_count": len(distinct_products),
+            "date_range": {"min": min_date, "max": max_date},
+        },
+        "by_object": by_object,
+        "category_total_count": len(by_category),
+        "categories_truncated": False,
+        "by_category": by_category,
+        "products_total_count": len(by_product_full),
+        "products_truncated": len(by_product_full) > PRODUCT_LIMIT,
+        "by_product": by_product,
+        "by_month": by_month,
+        "by_category_by_month": by_category_by_month,
+        "by_object_by_month": by_object_by_month,
+        "top_objects_by_profit": top_objects_by_profit,
+        "top_categories_by_profit": top_categories_by_profit,
+        "top_products_by_revenue": top_products_by_revenue,
+        "top_products_by_profit": top_products_by_profit,
+        "rows_preview": [],
+        "period_meta": {"applied": False, "label_ka": "MegaPlus DB lifetime"},
+    }
+
+
 def empty_retail_sales_bundle(period_filter=None):
     return {
         "label_ka": "გაყიდული პროდუქცია (retail sales source)",
