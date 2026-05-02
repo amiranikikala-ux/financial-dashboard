@@ -16,7 +16,12 @@ from dashboard_pipeline.waybill_reconciliation import (
 
 @pytest.mark.parametrize("addr,expected", [
     ("ლანჩხუთი დვაბზუ", "1329"),
+    ("ოზურგეთი, სოფ. დვაბზა", "1329"),  # typo variant — village is დვაბზუ
+    ("ოზურგეთი, სოფ.დვაბზა", "1329"),   # without space
+    ("ქ. ოზურგეთი სოფ. დვაბზეე", "1329"),  # another typo variant
+    ("ოზურგეთი ს. ზედა დვაბზუ", "1329"),  # mixed — Lactalis pattern
     ("სოფ.ოზურგეთი (ოზურგეთი - ნინოშვილი - ლესა)", "1301"),
+    ("ქ.ოზურგეთი ნინოშვილი-ლესა", "1301"),
     ("თბილისი, ა. ბარამიძის ქ. 7", "closed"),
     ("თბილისი, ალექსანდრე ბარამიძის ქ. 007", "closed"),
     ("ისაკიანის N:1", "closed"),
@@ -289,3 +294,133 @@ def test_by_supplier_rollup_aggregates_categories():
     assert sup["missing_amount"] == 300.0
     assert sup["returns_not_recorded_count"] == 1
     assert sup["total_count"] == 3
+
+
+# ─────────────────────────────────────── category — wrong_store ────────────────
+
+
+def test_wrong_store_only_other_dvabzu_dest_received_in_ozurgeti():
+    """rs.ge waybill written for დვაბზუ but MegaPlus has it only in ოზურგეთი —
+    operator picked the wrong store dropdown."""
+    rs = _make_rs_df([
+        _rs_row("0848882809", "სს ტრეიდ პარტნერი", 230.09,
+                destination="ლანჩხუთი დვაბზუ"),
+    ])
+    stores = {
+        "1329": _store_data(get_rows=[], store_id="1329"),
+        "1301": _store_data(get_rows=[
+            {"zed": "0848882809", "tax_id": "111111111", "total": 230.09, "date": "2024-09-25"},
+        ], store_id="1301"),
+    }
+    bundle = reconcile(rs, stores)
+    assert bundle["totals"]["wrong_store"] == 1
+    assert bundle["totals"]["wrong_store_only_other"] == 1
+    assert bundle["totals"]["wrong_store_duplicate"] == 0
+    assert bundle["totals"]["missing"] == 0
+    row = bundle["wrong_store"][0]
+    assert row["zed"] == "0848882809"
+    assert row["kind"] == "only_other"
+    assert row["received_stores"] == ["1301"]
+    assert row["received_store_names"] == ["ოზურგეთი"]
+
+
+def test_wrong_store_only_other_ozurgeti_dest_received_in_dvabzu():
+    """Reverse direction — rs.ge for ოზურგეთი, MegaPlus has it in დვაბზუ only."""
+    rs = _make_rs_df([
+        _rs_row("0823667508", "სს ტრეიდ პარტნერი", 734.61,
+                destination="სოფ.ოზურგეთი (ოზურგეთი - ნინოშვილი - ლესა)"),
+    ])
+    stores = {
+        "1329": _store_data(get_rows=[
+            {"zed": "0823667508", "tax_id": "111111111", "total": 734.61, "date": "2024-06-07"},
+        ], store_id="1329"),
+        "1301": _store_data(get_rows=[], store_id="1301"),
+    }
+    bundle = reconcile(rs, stores)
+    assert bundle["totals"]["wrong_store"] == 1
+    assert bundle["totals"]["wrong_store_only_other"] == 1
+    row = bundle["wrong_store"][0]
+    assert row["kind"] == "only_other"
+    assert row["received_store_names"] == ["დვაბზუ"]
+
+
+def test_wrong_store_duplicate_received_in_both():
+    """Lactalis pattern — rs.ge dest=დვაბზუ, MegaPlus has it in BOTH stores
+    (operator entered the same waybill twice — wrong-store duplicate)."""
+    rs = _make_rs_df([
+        _rs_row("0917949641", "შპს ლაქტალის ჯორჯია", 170.92,
+                destination="ოზურგეთი ს. ზედა დვაბზუ"),
+    ])
+    stores = {
+        "1329": _store_data(get_rows=[
+            {"zed": "0917949641", "tax_id": "404898973", "total": 170.92, "date": "2025-08-08"},
+        ], store_id="1329"),
+        "1301": _store_data(get_rows=[
+            {"zed": "0917949641", "tax_id": "404898973", "total": 170.92, "date": "2025-08-08"},
+        ], store_id="1301"),
+    }
+    bundle = reconcile(rs, stores)
+    assert bundle["totals"]["wrong_store"] == 1
+    assert bundle["totals"]["wrong_store_duplicate"] == 1
+    assert bundle["totals"]["amount_mismatch"] == 0
+    row = bundle["wrong_store"][0]
+    assert row["kind"] == "duplicate"
+    assert sorted(row["received_stores"]) == ["1301", "1329"]
+    assert row["get_total_all"] == pytest.approx(341.84)
+    assert row["get_total_dest"] == pytest.approx(170.92)
+    assert row["get_total_other"] == pytest.approx(170.92)
+
+
+def test_correct_store_match_not_flagged_as_wrong_store():
+    """Sanity: when MegaPlus reception matches dest, no wrong_store flag."""
+    rs = _make_rs_df([
+        _rs_row("0123456789", "შპს ტესტი", 100.0, destination="ლანჩხუთი დვაბზუ"),
+    ])
+    stores = {
+        "1329": _store_data(get_rows=[
+            {"zed": "0123456789", "tax_id": "111111111", "total": 100.0, "date": "2024-01-15"},
+        ], store_id="1329"),
+        "1301": _store_data(store_id="1301"),
+    }
+    bundle = reconcile(rs, stores)
+    assert bundle["totals"]["wrong_store"] == 0
+    assert bundle["totals"]["missing"] == 0
+    assert bundle["totals"]["amount_mismatch"] == 0
+
+
+def test_wrong_store_per_supplier_count():
+    """Per-supplier rollup includes wrong_store_count."""
+    rs = _make_rs_df([
+        _rs_row("0111111111", "შპს ტესტი", 100.0, tax_id="222",
+                destination="ლანჩხუთი დვაბზუ"),
+    ])
+    stores = {
+        "1329": _store_data(store_id="1329"),
+        "1301": _store_data(get_rows=[
+            {"zed": "0111111111", "tax_id": "222", "total": 100.0, "date": "2024-01-01"},
+        ], store_id="1301"),
+    }
+    bundle = reconcile(rs, stores)
+    sup = bundle["by_supplier"][0]
+    assert sup["wrong_store_count"] == 1
+    assert sup["missing_count"] == 0
+    assert sup["total_count"] == 1
+
+
+def test_wrong_store_closed_destination_excluded():
+    """Closed Tbilisi destinations don't trigger wrong_store flag — they're
+    filtered out before categorization just like missing rows are."""
+    rs = _make_rs_df([
+        _rs_row("0700000000", "შპს ძველი", 50.0,
+                destination="თბილისი, ბარამიძის 7"),
+    ])
+    stores = {
+        "1329": _store_data(get_rows=[
+            {"zed": "0700000000", "tax_id": "111", "total": 50.0, "date": "2023-01-01"},
+        ], store_id="1329"),
+        "1301": _store_data(store_id="1301"),
+    }
+    bundle = reconcile(rs, stores)
+    # dest_class = "closed" → not active store → wrong_store should NOT fire
+    assert bundle["totals"]["wrong_store"] == 0
+    assert bundle["totals"]["filtered_closed_stores"] == 1

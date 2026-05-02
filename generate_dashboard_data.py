@@ -1752,11 +1752,15 @@ def run():
                             t = recon_bundle.get("totals", {})
                             logger.info(
                                 "waybill_reconciliation → data.json: "
-                                "🔴 missing=%d (%.0f ₾) · 🟠 amount_mismatch=%d · "
+                                "🔴 missing=%d (%.0f ₾) · 🔄 wrong_store=%d "
+                                "(only_other=%d, duplicate=%d) · 🟠 amount_mismatch=%d · "
                                 "👻 ghost_ap=%d · 🟡 returns=%d / sub=%d · "
                                 "⚠️ possible_replacement=%d · 🆕 stale=%d "
                                 "(filtered closed-store=%d)",
                                 t.get("missing", 0), t.get("missing_amount_sum", 0),
+                                t.get("wrong_store", 0),
+                                t.get("wrong_store_only_other", 0),
+                                t.get("wrong_store_duplicate", 0),
                                 t.get("amount_mismatch", 0),
                                 t.get("ghost_ap", 0),
                                 t.get("returns_not_recorded", 0),

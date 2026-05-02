@@ -6,6 +6,10 @@ Surfaces the waybills the operator must act on. The dashboard's rule is
 
   🔴 missing                 — rs.ge active waybill, no MegaPlus GET row
                                   for the same number
+  🔄 wrong_store             — rs.ge dest=A, MegaPlus received only in B
+                                  (kind=only_other) OR received in both
+                                  A and B (kind=duplicate). Operator
+                                  picked the wrong store dropdown.
   🟠 amount_mismatch         — both sides have it but totals diverge by
                                   more than ₾0.5 / 0.5%
   👻 ghost_ap                — MegaPlus GET has it, but rs.ge marked it
@@ -37,6 +41,14 @@ Spot-check log (2026-05-02 — 5/5 rows verified against source):
   - 0789696472/6 იფქლი 9.30₾   ✅ rs.ge active, base+full=0 in GET
   - 0820382602 იფქლი -6.39₾    ✅ rs.ge active return, GACERA=0
   - 0831673651 ჯი დი სი 72.55₾ ✅ rs.ge=72.55, GET=63.09 (Δ9.46)
+
+Wrong-store spot-check (2026-05-02 — 14/14 verified):
+  - 7 random `only_other` rows (rs.ge dest=ოზურგეთი, MegaPlus only in დვაბზუ)
+  - 7 `duplicate` rows including Lactalis 0917949641 (received in both stores)
+  - First pass found 26 false-positives where rs.ge address spelled the
+    village as `დვაბზა` / `დვაბზეე` (not `დვაბზუ`); fixed by switching
+    `1329` keyword to prefix `"დვაბზ"` per user verification — all
+    variants resolve to the same physical store.
 """
 from __future__ import annotations
 
@@ -55,8 +67,13 @@ STORE_ID_TO_NAME: dict[str, str] = {
 # Active-store classification by delivery address keywords. Anything
 # matching Tbilisi address keywords is a closed-store leftover and is
 # excluded from the dashboard.
+#
+# `1329` uses a prefix `"დვაბზ"` (not full `"დვაბზუ"`) because rs.ge data
+# entries vary spelling — observed in production: `დვაბზუ`, `დვაბზა`,
+# `დვაბზეე`. All resolve to the same physical village; the store there
+# is named `დვაბზუ` in MegaPlus.
 ACTIVE_STORE_KEYWORDS = {
-    "1329": ("დვაბზუ", "ლანჩხუთი"),
+    "1329": ("დვაბზ", "ლანჩხუთი"),
     "1301": ("ოზურგეთი",),
 }
 CLOSED_STORE_KEYWORDS = ("თბილის", "ბარამიძ", "ისაკიან")
@@ -244,22 +261,48 @@ def _categorize_row(
     row: pd.Series,
     get_index: dict,
     gacera_index: dict,
+    dest_class: str,
 ) -> tuple[str, dict | None]:
     """Return (category, match_metadata).
 
     Categories: "missing" | "amount_mismatch" | "returns_not_recorded"
               | "sub_waybills_not_recorded" | "received_get" | "received_gacera"
+              | "wrong_store"
+
+    `dest_class` is the rs.ge destination's active-store classification
+    ("1329" / "1301" / "closed" / "unknown"). Used to detect wrong-store
+    cases: rs.ge dest=A but MegaPlus received it only in B, OR received
+    in both A and B (operator picked wrong dropdown / duplicated entry).
     """
     zed = row["zed"]
     amt = row["amount"] if pd.notna(row["amount"]) else 0.0
     typ = row["type"]
 
     if zed in get_index:
-        get_total = sum(t for _, t, _ in get_index[zed])
+        entries = get_index[zed]
+        receiving_stores = sorted({s for s, _, _ in entries})
+        get_total_all = sum(t for _, t, _ in entries)
+
+        if dest_class in ("1329", "1301"):
+            other_stores = [s for s in receiving_stores if s != dest_class]
+            if other_stores:
+                in_dest = dest_class in receiving_stores
+                get_total_dest = sum(t for s, t, _ in entries if s == dest_class)
+                get_total_other = get_total_all - get_total_dest
+                kind = "duplicate" if in_dest else "only_other"
+                return "wrong_store", {
+                    "kind": kind,
+                    "received_stores": receiving_stores,
+                    "received_store_names": [STORE_ID_TO_NAME.get(s, s) for s in receiving_stores],
+                    "get_total_all": get_total_all,
+                    "get_total_dest": get_total_dest,
+                    "get_total_other": get_total_other,
+                }
+
         tol = max(GET_AMOUNT_TOLERANCE_ABS, abs(amt) * GET_AMOUNT_TOLERANCE_REL)
-        if abs(amt - get_total) <= tol:
-            return "received_get", {"get_total": get_total}
-        return "amount_mismatch", {"get_total": get_total}
+        if abs(amt - get_total_all) <= tol:
+            return "received_get", {"get_total": get_total_all}
+        return "amount_mismatch", {"get_total": get_total_all}
 
     if zed in gacera_index:
         gac_total = sum(t for _, t in gacera_index[zed])
@@ -389,13 +432,14 @@ def reconcile(rs_df: pd.DataFrame, megaplus_stores: dict) -> dict:
     if rs_df.empty:
         return {
             "totals": {
-                "missing": 0, "amount_mismatch": 0, "ghost_ap": 0,
+                "missing": 0, "wrong_store": 0, "wrong_store_only_other": 0,
+                "wrong_store_duplicate": 0, "amount_mismatch": 0, "ghost_ap": 0,
                 "returns_not_recorded": 0, "sub_waybills_not_recorded": 0,
                 "possible_replacements": 0, "rs_data_stale": 0,
-                "missing_amount_sum": 0.0, "amount_mismatch_amount_sum": 0.0,
-                "ghost_ap_amount_sum": 0.0,
+                "missing_amount_sum": 0.0, "wrong_store_amount_sum": 0.0,
+                "amount_mismatch_amount_sum": 0.0, "ghost_ap_amount_sum": 0.0,
             },
-            "missing": [], "amount_mismatch": [], "ghost_ap": [],
+            "missing": [], "wrong_store": [], "amount_mismatch": [], "ghost_ap": [],
             "returns_not_recorded": [], "sub_waybills_not_recorded": [],
             "possible_replacements": [], "rs_data_stale": [],
             "by_supplier": [],
@@ -410,7 +454,7 @@ def reconcile(rs_df: pd.DataFrame, megaplus_stores: dict) -> dict:
 
     # Categorize active rs.ge rows
     active = rs_df[rs_df["status"] == "აქტიური"].copy()
-    cats = active.apply(lambda r: _categorize_row(r, get_index, gacera_index), axis=1)
+    cats = active.apply(lambda r: _categorize_row(r, get_index, gacera_index, r["dest_class"]), axis=1)
     active["category"] = [c[0] for c in cats]
     active["match_meta"] = [c[1] for c in cats]
 
@@ -419,6 +463,7 @@ def reconcile(rs_df: pd.DataFrame, megaplus_stores: dict) -> dict:
 
     missing_rows = active[(active["category"] == "missing") & is_active_store]
     mismatch_rows = active[(active["category"].isin(("amount_mismatch", "amount_mismatch_gacera"))) & is_active_store]
+    wrong_store_rows = active[(active["category"] == "wrong_store") & is_active_store]
     returns_rows = active[(active["category"] == "returns_not_recorded") & is_active_store]
     sub_rows = active[(active["category"] == "sub_waybills_not_recorded") & is_active_store]
 
@@ -445,6 +490,7 @@ def reconcile(rs_df: pd.DataFrame, megaplus_stores: dict) -> dict:
 
     missing_list = to_dicts(missing_rows)
     mismatch_list = to_dicts(mismatch_rows)
+    wrong_store_list = to_dicts(wrong_store_rows)
     returns_list = to_dicts(returns_rows)
     sub_list = to_dicts(sub_rows)
 
@@ -452,6 +498,7 @@ def reconcile(rs_df: pd.DataFrame, megaplus_stores: dict) -> dict:
     by_supplier: dict[str, dict] = {}
     for category_name, rows in (
         ("missing", missing_list),
+        ("wrong_store", wrong_store_list),
         ("amount_mismatch", mismatch_list),
         ("returns_not_recorded", returns_list),
         ("sub_waybills_not_recorded", sub_list),
@@ -463,6 +510,7 @@ def reconcile(rs_df: pd.DataFrame, megaplus_stores: dict) -> dict:
                 "tax_id": r["tax_id"],
                 "missing_count": 0,
                 "missing_amount": 0.0,
+                "wrong_store_count": 0,
                 "amount_mismatch_count": 0,
                 "amount_mismatch_amount": 0.0,
                 "returns_not_recorded_count": 0,
@@ -473,6 +521,8 @@ def reconcile(rs_df: pd.DataFrame, megaplus_stores: dict) -> dict:
             if category_name == "missing":
                 entry["missing_count"] += 1
                 entry["missing_amount"] += r["amount"]
+            elif category_name == "wrong_store":
+                entry["wrong_store_count"] += 1
             elif category_name == "amount_mismatch":
                 entry["amount_mismatch_count"] += 1
                 entry["amount_mismatch_amount"] += r["amount"]
@@ -488,6 +538,9 @@ def reconcile(rs_df: pd.DataFrame, megaplus_stores: dict) -> dict:
 
     totals = {
         "missing": len(missing_list),
+        "wrong_store": len(wrong_store_list),
+        "wrong_store_only_other": sum(1 for r in wrong_store_list if r.get("kind") == "only_other"),
+        "wrong_store_duplicate": sum(1 for r in wrong_store_list if r.get("kind") == "duplicate"),
         "amount_mismatch": len(mismatch_list),
         "ghost_ap": len(ghost),
         "returns_not_recorded": len(returns_list),
@@ -495,6 +548,7 @@ def reconcile(rs_df: pd.DataFrame, megaplus_stores: dict) -> dict:
         "possible_replacements": len(possible),
         "rs_data_stale": len(stale),
         "missing_amount_sum": round(sum(r["amount"] for r in missing_list), 2),
+        "wrong_store_amount_sum": round(sum(r["amount"] for r in wrong_store_list), 2),
         "amount_mismatch_amount_sum": round(sum(r["amount"] for r in mismatch_list), 2),
         "ghost_ap_amount_sum": round(sum(r["get_total"] for r in ghost), 2),
         "rs_active_total": int((rs_df["status"] == "აქტიური").sum()),
@@ -505,6 +559,7 @@ def reconcile(rs_df: pd.DataFrame, megaplus_stores: dict) -> dict:
     return {
         "totals": totals,
         "missing": missing_list,
+        "wrong_store": wrong_store_list,
         "amount_mismatch": mismatch_list,
         "ghost_ap": ghost,
         "returns_not_recorded": returns_list,

@@ -17,6 +17,11 @@ const CATEGORY_META = {
     color: '#ef4444',
     desc: 'რს.გე-ზე აქტიურია, MegaPlus-ში არ მიგიღია — საქონელი ან მიიღო, ან გააუქმვინე მომწოდებელს',
   },
+  wrong_store: {
+    label: '🔄 არასწორი მაღაზია',
+    color: '#ec4899',
+    desc: 'რს.გე-ზე ერთ მაღაზიას არის გამოწერილი, MegaPlus-ში სხვა მაღაზიამ მიიღო (ან ორივემ მიიღო) — ოპერატორმა drop-down-ში არასწორი მაღაზია აირჩია',
+  },
   amount_mismatch: {
     label: '🟠 ფასების სხვაობა',
     color: '#f59e0b',
@@ -100,7 +105,7 @@ function ProblemSection({ rows, category, supplierFilter, storeFilter, hideIfkli
   }
 
   return (
-    <details open={category === 'missing' || category === 'amount_mismatch' || category === 'ghost_ap'}
+    <details open={category === 'missing' || category === 'wrong_store' || category === 'amount_mismatch' || category === 'ghost_ap'}
              style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, marginBottom: 12 }}>
       <summary style={{
         padding: 14, cursor: 'pointer', listStyle: 'none', userSelect: 'none',
@@ -118,7 +123,10 @@ function ProblemSection({ rows, category, supplierFilter, storeFilter, hideIfkli
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead style={{ background: '#0f172a' }}>
             <tr>
-              <th style={thStyle}>მაღაზია</th>
+              <th style={thStyle}>{category === 'wrong_store' ? 'რს.გე მაღაზია' : 'მაღაზია'}</th>
+              {category === 'wrong_store' && (
+                <th style={thStyle}>MegaPlus მიიღო</th>
+              )}
               <th style={thStyle}>ზედნადები</th>
               <th style={thStyle}>მომწოდებელი</th>
               <th style={{ ...thStyle, textAlign: 'right' }}>თანხა</th>
@@ -127,6 +135,9 @@ function ProblemSection({ rows, category, supplierFilter, storeFilter, hideIfkli
               )}
               {category === 'amount_mismatch' && (
                 <th style={{ ...thStyle, textAlign: 'right' }}>სხვაობა</th>
+              )}
+              {category === 'wrong_store' && (
+                <th style={thStyle}>შემთხვევა</th>
               )}
               {category === 'possible_replacements' && (
                 <>
@@ -148,10 +159,16 @@ function ProblemSection({ rows, category, supplierFilter, storeFilter, hideIfkli
               const amount = r.amount ?? r.rs_amount ?? 0;
               const mpAmount = r.get_total ?? r.gacera_total;
               const diff = mpAmount != null ? amount - mpAmount : null;
+              const receivedNames = Array.isArray(r.received_store_names) ? r.received_store_names.join(' + ') : '—';
+              const wrongKindLabel = r.kind === 'duplicate' ? 'ორივე მაღაზიამ მიიღო' : 'მხოლოდ სხვა მაღაზიამ';
+              const wrongKindColor = r.kind === 'duplicate' ? '#f59e0b' : '#ec4899';
 
               return (
                 <tr key={`${zed}-${idx}`} style={{ borderTop: '1px solid #1e293b' }}>
                   <td style={{ ...tdStyle, color: storeColor, fontWeight: 600 }}>{storeName}</td>
+                  {category === 'wrong_store' && (
+                    <td style={{ ...tdStyle, color: '#22d3ee', fontWeight: 600 }}>{receivedNames}</td>
+                  )}
                   <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 11, color: '#94a3b8' }}>{zed}</td>
                   <td style={tdStyle}>{supplier}</td>
                   <td style={{ ...tdStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: amount < 0 ? '#f87171' : '#e2e8f0' }}>
@@ -166,6 +183,9 @@ function ProblemSection({ rows, category, supplierFilter, storeFilter, hideIfkli
                     <td style={{ ...tdStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#f87171', fontWeight: 600 }}>
                       {diff != null ? fmtMoney(Math.abs(diff)) : '—'}
                     </td>
+                  )}
+                  {category === 'wrong_store' && (
+                    <td style={{ ...tdStyle, color: wrongKindColor, fontWeight: 600 }}>{wrongKindLabel}</td>
                   )}
                   {category === 'possible_replacements' && (
                     <>
@@ -205,7 +225,7 @@ export default function WaybillReconciliation({ data }) {
   }
 
   const t = wr.totals;
-  const totalProblems = (t.missing || 0) + (t.amount_mismatch || 0) + (t.ghost_ap || 0) + (t.returns_not_recorded || 0) + (t.sub_waybills_not_recorded || 0);
+  const totalProblems = (t.missing || 0) + (t.wrong_store || 0) + (t.amount_mismatch || 0) + (t.ghost_ap || 0) + (t.returns_not_recorded || 0) + (t.sub_waybills_not_recorded || 0);
 
   const supplierOptions = useMemo(() => {
     return (wr.by_supplier || []).map((s) => ({
@@ -226,6 +246,12 @@ export default function WaybillReconciliation({ data }) {
       {/* Summary cards */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
         <SummaryCard label="🔴 არ მიღებული" value={t.missing} sub={fmtMoney(t.missing_amount_sum)} accent="#ef4444" />
+        <SummaryCard
+          label="🔄 არასწორი მაღაზია"
+          value={t.wrong_store}
+          sub={`${fmtNum(t.wrong_store_only_other || 0)} სხვა მაღაზიაში · ${fmtNum(t.wrong_store_duplicate || 0)} ორმაგი`}
+          accent="#ec4899"
+        />
         <SummaryCard label="🟠 ფასი ≠" value={t.amount_mismatch} sub={fmtMoney(t.amount_mismatch_amount_sum)} accent="#f59e0b" />
         <SummaryCard label="👻 GHOST AP" value={t.ghost_ap} sub={fmtMoney(t.ghost_ap_amount_sum)} accent="#8b5cf6" />
         <SummaryCard label="🟡 დაბრუნება" value={t.returns_not_recorded} accent="#eab308" />
@@ -286,6 +312,7 @@ export default function WaybillReconciliation({ data }) {
 
       {/* Problem sections */}
       <ProblemSection rows={wr.missing} category="missing" supplierFilter={supplierFilter} storeFilter={storeFilter} hideIfkli={hideIfkli} />
+      <ProblemSection rows={wr.wrong_store} category="wrong_store" supplierFilter={supplierFilter} storeFilter={storeFilter} hideIfkli={hideIfkli} />
       <ProblemSection rows={wr.amount_mismatch} category="amount_mismatch" supplierFilter={supplierFilter} storeFilter={storeFilter} hideIfkli={hideIfkli} />
       <ProblemSection rows={wr.ghost_ap} category="ghost_ap" supplierFilter={supplierFilter} storeFilter={storeFilter} hideIfkli={hideIfkli} />
       <ProblemSection rows={wr.returns_not_recorded} category="returns_not_recorded" supplierFilter={supplierFilter} storeFilter={storeFilter} hideIfkli={hideIfkli} />
@@ -307,6 +334,7 @@ export default function WaybillReconciliation({ data }) {
                   <th style={{ ...thStyle, textAlign: 'right' }}>ჯამი</th>
                   <th style={{ ...thStyle, textAlign: 'right' }}>🔴 არ მიღებული</th>
                   <th style={{ ...thStyle, textAlign: 'right' }}>თანხა</th>
+                  <th style={{ ...thStyle, textAlign: 'right' }}>🔄 არასწორი მაღაზია</th>
                   <th style={{ ...thStyle, textAlign: 'right' }}>🟠 ფასი ≠</th>
                   <th style={{ ...thStyle, textAlign: 'right' }}>🟡 დაბრუნება</th>
                   <th style={{ ...thStyle, textAlign: 'right' }}>🟡 ქვე-ზედნადები</th>
@@ -322,6 +350,7 @@ export default function WaybillReconciliation({ data }) {
                     <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtNum(s.total_count)}</td>
                     <td style={{ ...tdStyle, textAlign: 'right', color: '#ef4444', fontVariantNumeric: 'tabular-nums' }}>{fmtNum(s.missing_count)}</td>
                     <td style={{ ...tdStyle, textAlign: 'right', color: '#ef4444', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(s.missing_amount)}</td>
+                    <td style={{ ...tdStyle, textAlign: 'right', color: '#ec4899', fontVariantNumeric: 'tabular-nums' }}>{fmtNum(s.wrong_store_count || 0)}</td>
                     <td style={{ ...tdStyle, textAlign: 'right', color: '#f59e0b', fontVariantNumeric: 'tabular-nums' }}>{fmtNum(s.amount_mismatch_count)}</td>
                     <td style={{ ...tdStyle, textAlign: 'right', color: '#eab308', fontVariantNumeric: 'tabular-nums' }}>{fmtNum(s.returns_not_recorded_count)}</td>
                     <td style={{ ...tdStyle, textAlign: 'right', color: '#ca8a04', fontVariantNumeric: 'tabular-nums' }}>{fmtNum(s.sub_waybills_not_recorded_count)}</td>
