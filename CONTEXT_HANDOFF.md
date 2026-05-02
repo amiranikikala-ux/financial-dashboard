@@ -1,6 +1,46 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-02 (late afternoon, user heading to break) — **`waybill_reconciliation` REBUILT and SHIPPED end-to-end** (commit `ba5d40e` on origin/main). Replaces the morning's reverted attempt with strict random-sample-10 verification protocol per `feedback_no_detector_without_breakdown_proof.md`. **Live-validated by user on 3 real operator-error cases** during this same session — D&L Service ₾120 / Partnyori ₾99.63 / Lactalis ₾170.92. Each case drilled down to specific operator mistake (qty entry error, missing line, duplicate entry across stores). User's reaction: "ნელ ნელა ვუგებ ჩვენს ნაშრომს გამოგვადგება" — they're now using the dashboard as their MegaPlus cleanup tool. Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
+> **განახლდა**: 2026-05-02 (evening, user requested handoff before moving to fresh chat) — **2 commits landed on origin/main during this session: `e5ee7ea` (wrong_store category) + `6d45dd7` (PWA soft update banner)**. Both end-to-end verified. User reaction to wrong_store: "ძაან მაგარია ძალიან კმაყოფილი ვარ". Session ended cleanly. Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
+>
+> ✅ **`e5ee7ea` feat(waybill-reconciliation): wrong-store category — flag duplicate + only-other-store cases**:
+>   - **New category in `_categorize_row`**: when rs.ge dest=A AND zed has GET in OTHER store(s), classify as `wrong_store` with `kind=only_other` (received only in wrong store) or `kind=duplicate` (received in dest AND wrong store — Lactalis pattern).
+>   - **Live numbers (4yr / 3,978 active rs.ge)**: 28 wrong_store (21 only_other + 7 duplicate / ₾13,237). Pulled out of received_get (47 → 21 after false-positive fix) and amount_mismatch (45 → 37 — Lactalis-style duplicates moved into wrong_store kind=duplicate). 106 missing unchanged.
+>   - **Critical false-positive caught mid-spot-check**: first dogfood pass surfaced 47 only_other cases. spot-check sample showed 26 of them had rs.ge address spelled "**დვაბზა**" or "**დვაბზეე**" instead of "დვაბზუ". User confirmed via "ცადე ყველა გზით — დვაბზუ" — all variants are the same physical store. Fixed by changing `ACTIVE_STORE_KEYWORDS["1329"]` from full `"დვაბზუ"` to prefix **`"დვაბზ"`** which catches all spellings. Dropped 26 false positives, leaving 21 real operator errors.
+>   - **Bundle additions**: totals.{wrong_store, wrong_store_only_other, wrong_store_duplicate, wrong_store_amount_sum}; per-row metadata {kind, received_stores, received_store_names, get_total_all, get_total_dest, get_total_other}; by_supplier rollup gains wrong_store_count.
+>   - **Frontend (WaybillReconciliation.jsx)**: new collapsible section "🔄 არასწორი მაღაზია" (default open). Row table gains 2 extra columns — "MegaPlus მიიღო" (actual receiving stores) + "შემთხვევა" (kind label "ორივე მაღაზიამ მიიღო" / "მხოლოდ სხვა მაღაზიამ"). Summary card shows only_other / duplicate sub-counts. Per-supplier rollup table gains the wrong_store column.
+>   - **Tests**: 39/39 green (28 prior + 6 new wrong_store + 5 expanded classify_destination including all 3 typo variants).
+>   - **Verification per `feedback_no_detector_without_breakdown_proof.md`**: 14 random rows (7 only_other + all 7 duplicates) spot-checked against rs.ge xls + per-store GET — 14/14 verified.
+>   - **Lactalis `0917949641`** (yesterday's session test case) now correctly lands in wrong_store kind=duplicate with full per-store breakdown (₾170.92 in each of 1329 and 1301 → get_total_all=₾341.84). User saw it during the live-test phase.
+>   - **Pipeline log line in generate_dashboard_data.py extended** to print wrong_store / only_other / duplicate counts. data.json size ~100 MB.
+>
+> ✅ **`6d45dd7` feat(pwa): soft update banner — replace forced auto-reload with user-initiated refresh**:
+>   - **Problem user flagged**: "ჩვეულებრი გვერდი რომ მაქვს გახსნი და მაგალითად ზედნადებებს რომელირაცა გახსნილი მაქვს ჩამოწეული და ვასწორებ უცებ დარეფრეშდება და ისევ იმ ადგილას დაბრუნება მიწევს" — mid-task auto-refreshes destroyed expanded rows / scroll position / filter state.
+>   - **Root cause**: main.jsx had a `controllerchange` listener that called `window.location.reload()` immediately whenever the SW detected a new version (60 s poll → updatefound → installing.postMessage(SKIP_WAITING) → controllerchange → reload). Plus `sw.js install` had `self.skipWaiting()` which made even the SW-side install go straight to active.
+>   - **Fix**: removed `self.skipWaiting()` from sw.js install (so updates correctly stay in `waiting` state); main.jsx now dispatches `rs-update-available` CustomEvent when a new SW is `installed` with an existing controller, instead of auto-applying SKIP_WAITING. New `<UpdateBanner />` component (53 lines, in `rs-dashboard/src/components/UpdateBanner.jsx`) renders a fixed-position toast (bottom-left, gradient green) with a "განახლება" button. Button click dispatches `rs-apply-update` → main.jsx posts SKIP_WAITING to the waiting worker → controllerchange fires once → page reloads.
+>   - **Edge case handled**: if user comes back to a tab where a worker is already in `waiting` state at registration time, banner surfaces immediately via `registration.waiting` check.
+>   - **One-time activation cost**: existing tabs running the OLD sw.js (with auto-skipWaiting in install) will go through one final auto-reload to pick up the new code. After that all subsequent updates surface via the banner. User informed of this in the close-of-session message.
+>   - Same UX pattern as Gmail / GitHub — user keeps full control of when to refresh.
+>
+> 📌 **OPEN — for next session** (priority order):
+>
+> 1. **🟢 Continue MegaPlus cleanup using the dashboard, now with the new `🔄 არასწორი მაღაზია` group**. User is actively using the tab as their primary cleanup workflow per yesterday's adopted pattern (paraphrased: "fix one batch in MegaPlus, drop tomorrow's PLUS_*.zip, pipeline picks up the fix, that row disappears"). Wrong_store rows clear the same way: when user fixes the address (delete from wrong store + add to correct store) in MegaPlus, next backup ZIP → fresh GET data → reconcile() reclassifies → row drops out. **Don't proactively bring up specific rows; let user surface them as they hit them.** When they do, drill in like the D&L / Partnyori / Lactalis sessions — line-by-line GET vs rs.ge xls diff, plain-Georgian explanation, let user fix in MegaPlus.
+>
+> 2. **🟢 Browser smoke-check pending** — user noted commit `6d45dd7` is on GitHub but they have NOT yet visited the dashboard with the new bundle. Their first F5 will trigger the one-time auto-reload (because old sw.js with auto-skipWaiting is still in their browser cache); after that the banner pattern is live. If user reports the banner doesn't appear or reload still happens automatically: check that they did the one-time F5, and verify dist bundle hash matches `index-hfmLnxUb.js` (current build).
+>
+> 3. **🟢 Carryover (still valid, not blocking)**:
+>    - RS_CODES-based product matching (189,015 rs.ge↔Megaplus product mappings in MegaPlus DB — could replace name-fuzzy heuristics with exact JOIN; ~1 sprint).
+>    - Auto-sync OneDrive↔C:\ — drift recurs (had to manually `cp` 4 times this session); post-commit/post-merge hook or scheduled task.
+>    - `retail_sales_top_products` SQLite export bug (`dashboard_pipeline/export_sqlite.py:111` reads `top_products`, schema has `top_products_by_revenue`/`_by_profit`).
+>    - ოზურგეთი DB 234 orders dated 2009 (0.026% / 661 ₾, optional date filter).
+>    - rs.ge automation deferred — user opted for manual download.
+>
+> 4. **🟢 Category-anomalies UI follow-ups (deferred per yesterday)** — DO NOT ship deep-link / severity scoring / Excel export unless user asks.
+>
+> ⚠️ **Language watch**: this session ran clean (zero broken-Georgian-token regressions detected by user or self). The mid-session `feedback_no_detector_without_breakdown_proof.md` discipline held — first dogfood pass found 47 wrong_store cases, spot-check protocol caught the 26-case false-positive class BEFORE the user saw it, fix shipped before claiming "ready". Trust-incident pattern from morning of 2026-05-02 (same date) NOT repeated.
+>
+> ---
+>
+> 📜 **History — earlier same date (2026-05-02 late afternoon, user heading to break)** — **`waybill_reconciliation` REBUILT and SHIPPED end-to-end** (commit `ba5d40e` on origin/main). Replaces the morning's reverted attempt with strict random-sample-10 verification protocol per `feedback_no_detector_without_breakdown_proof.md`. **Live-validated by user on 3 real operator-error cases** during this same session — D&L Service ₾120 / Partnyori ₾99.63 / Lactalis ₾170.92. Each case drilled down to specific operator mistake (qty entry error, missing line, duplicate entry across stores). User's reaction: "ნელ ნელა ვუგებ ჩვენს ნაშრომს გამოგვადგება" — they're now using the dashboard as their MegaPlus cleanup tool.
 >
 > ✅ **`ba5d40e` feat(waybill-reconciliation): rs.ge ↔ MegaPlus cross-source check + dashboard tab** — new module + frontend tab + 28 unit tests. Surfaces 7 categories of operator-actionable problems:
 >   - 🔴 **missing** (106 active-store rows / ₾91,958) — rs.ge active waybill, no MegaPlus GET row
