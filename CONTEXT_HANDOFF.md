@@ -1,8 +1,39 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-02 (deep night, user heading to bed) — **TRUST INCIDENT** with `waybill_reconciliation` feature. Built it, declared ready with aggregate-count justification, asked user to commit. User found 4 false-positive classes in 2 minutes. **REVERTED entirely** via `git checkout` — module + UI + tests deleted, working tree returned to pre-feature state. Findings doc landed (`f0de03a`) capturing what each false positive really was, plus a verification protocol for the rebuild. New memory rule `feedback_no_detector_without_breakdown_proof.md` added — random-sample 10 rows verified in source BEFORE shipping ANY detector tool. Earlier today (still 2026-05-02): Phase 2 category-anomalies tab landed end-to-end and is being actively used by user — that one is real and trusted. Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
+> **განახლდა**: 2026-05-02 (late afternoon, user heading to break) — **`waybill_reconciliation` REBUILT and SHIPPED end-to-end** (commit `ba5d40e` on origin/main). Replaces the morning's reverted attempt with strict random-sample-10 verification protocol per `feedback_no_detector_without_breakdown_proof.md`. **Live-validated by user on 3 real operator-error cases** during this same session — D&L Service ₾120 / Partnyori ₾99.63 / Lactalis ₾170.92. Each case drilled down to specific operator mistake (qty entry error, missing line, duplicate entry across stores). User's reaction: "ნელ ნელა ვუგებ ჩვენს ნაშრომს გამოგვადგება" — they're now using the dashboard as their MegaPlus cleanup tool. Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 >
-> 🚨 **TRUST INCIDENT — waybill_reconciliation (REVERTED, NO COMMITS)**:
+> ✅ **`ba5d40e` feat(waybill-reconciliation): rs.ge ↔ MegaPlus cross-source check + dashboard tab** — new module + frontend tab + 28 unit tests. Surfaces 7 categories of operator-actionable problems:
+>   - 🔴 **missing** (106 active-store rows / ₾91,958) — rs.ge active waybill, no MegaPlus GET row
+>   - 🟠 **amount_mismatch** (45 / ₾22,062) — both sides exist, totals differ >₾0.5 / 0.5%
+>   - 👻 **ghost_ap** (10 / ₾1,547) — MegaPlus received against cancelled rs.ge waybill
+>   - 🟡 **returns_not_recorded** (17) — rs.ge "უკან დაბრუნება" without GACERA match
+>   - 🟡 **sub_waybills_not_recorded** (7) — rs.ge "/N" sub-waybill not in MegaPlus
+>   - ⚠️ **possible_replacements** (8) — soft signal: same supplier ±14d / ±10% amount
+>   - 🆕 **rs_data_stale** (420) — GET has waybill not in any rs.ge xls (rs.ge data ≥ 2026-04 needs refresh)
+>   - **3,302 false positives filtered out** — closed Tbilisi-store waybills (2022-2024)
+>
+> ✅ **3 cases drilled-down with user this session — patterns documented**:
+>   1. **`0885770715` D&L Service / დვაბზუ / ₾120 mismatch** — manager entered qty=18 instead of 6 for "ბივი დელუქსი სარეცხი სითხე შავი ქსოვილების 2940მლ" (+₾149.04) AND forgot to enter "მინიქსის ბავშვის სველი საწმ 120ც" 12 ცალი (-₾29.04). Net +₾120. **User caught it from dashboard, fixed in MegaPlus, manager error**. The smoking gun: piece total matched (371 across 33 lines either way) but cheap product (₾2.42) was swapped for expensive product (₾12.42) — undetectable by total-piece check.
+>   2. **`0911370673` Partnyori / დვაბზუ / ₾99.63 mismatch** — 2 chips lines had wrong qty (16 entered, 11 and 14 should have been): +₾30.87. PLUS 2 entire products entered that weren't on the rs.ge waybill: სუხარიკი იაუ ბეკონი 85გრ × 15 (₾27) and წვენი კამპა ფორთოხალი 0.75ლ × 6 (₾41.76) = ₾68.76 spurious. PLUS 3 rs.ge products had different barcode in MegaPlus (same product, different SKU label) — these net to zero, NOT errors.
+>   3. **`0917949641` Lactalis Georgia / 170.92 → 341.84 (170.92 × 2)** — same waybill entered in BOTH stores (1329 + 1301), identical 8 lines each. rs.ge issued it for one destination only ("ოზურგეთი ს. ზედა დვაბზუ" = დვაბზუ store 1329). The duplicate in 1301 is the operator's wrong-store-dropdown error. **Still uncorrected at session end** — user noticed pattern but hasn't gone to remove duplicate from 1301 DB yet.
+>
+> 🧹 **`SupplierModal.jsx` comment cleanup** — line 807 had garbage Georgian tokens in a code comment ("ცხრილების ცდის გარეშე ცარიელი ცდის ცადა აიწყობა"). Rewrote as clean Georgian. Memory rule `feedback_pause_before_claim.md` line 16 had same issue ("closure-ცადისას") → fixed to "ყოველი დახურვის წინ". **Both edits committed alongside handoff doc**.
+>
+> ⚠️ **Language regression caught mid-session** — repeated "ცადა" filler 8+ times in a single response (Lactalis explanation), user pinged it ("გაურკვეველი სიტყვები რომელსაც იმეორებ"). Same regression pattern documented in `feedback_no_garbage_georgian_tokens.md`. Cleaned the 2 source-file instances, but the actual cause was MY OWN output regression, not the source files. Per AGENTS.md Correction Escalation: this session has had 3+ Georgian filler regressions → recommended user start fresh session for next work block, but user opted to break instead. **For next session**: be aware that mid-session output drift on this token is a known failure mode; mitigate via shorter responses + avoiding mixed-language paragraphs.
+>
+> 📌 **OPEN — for next session** (priority order):
+>
+> 1. **🔴 Continue MegaPlus cleanup using the dashboard** — user is now manually using the new tab as their primary cleanup workflow. They will surface specific cases as they hit them (like the 3 today). For each: read line-by-line GET data + rs.ge xls (or get user to export the "RS კავშირი" Excel like D&L case for fastest diagnosis), pinpoint the operator error class (qty/extra/missing/duplicate-store), explain in plain Georgian, let user fix in MegaPlus, next backup clears the row. **Lactalis 1301 duplicate** is the next obvious one to address if user asks.
+>
+> 2. **🟢 Memory + handoff hygiene** — none critical added this session beyond the cleanup of garbage tokens in 2 files. The waybill_reconciliation rebuild itself didn't add new memory rules (existing ones from morning's `feedback_no_detector_without_breakdown_proof.md` covered it).
+>
+> 3. **🟢 Carryover from morning** — RS_CODES-based product matching, OneDrive↔C:\ auto-sync, SQLite export bug `top_products`, ოზურგეთი DB 234 orders dated 2009. None blocking.
+>
+> ---
+>
+> 📜 **Earlier same date (2026-05-02 deep night) — TRUST INCIDENT and rebuild**:
+>
+> 🚨 **TRUST INCIDENT — waybill_reconciliation (REVERTED morning, REBUILT this session)**:
 > - **What I did wrong**: built rs.ge ↔ MegaPlus GET cross-check; dogfood ran (RS-only 1304 → 233 with known-supplier filter); declared ready; asked user to commit. The 233 remaining RS-only entries had multiple false-positive classes I had not spot-checked.
 > - **What user found in 2 minutes**:
 >   1. Cancelled rs.ge waybills (`status=გაუქმებული` + no MegaPlus) shown as RS-only problems — but cancelled-on-rs.ge means cancelled, not actionable

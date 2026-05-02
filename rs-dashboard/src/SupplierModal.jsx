@@ -801,11 +801,10 @@ export default function SupplierModal({
 
                 {profitView && (
                   <>
-                    {/* Scope clarifier — KPI ცხრილში ერთად ფიგურირებენ ორი სცენაარი:
+                    {/* Scope clarifier — KPI ცხრილში ფიგურირებს ორი სცენარი:
                         „შემოვიდა" = სულ შემოდინება (matched + unmatched), მაგრამ
-                        „გავიდა / მოგება / მარჟა" = მხოლოდ matched პროდუქცია. ცალკე
-                        ცხრილების ცდის გარეშე ცარიელი ცდის ცადა აიწყობა — ცხადი
-                        scope-ბანერი აიძულებს მკითხველს გაიგოს რა ნაწილს ეხება ციფრი. */}
+                        „გავიდა / მოგება / მარჟა" = მხოლოდ matched პროდუქცია.
+                        scope-ბანერი ნათლად ადგენს რა ნაწილს ეხება თითო ციფრი. */}
                     {profitability.totals && profitability.totals.products_imported > 0 && (
                       <div className="supplier-modal-profit-scope">
                         <span className="supplier-modal-profit-scope-icon" aria-hidden="true">📐</span>
