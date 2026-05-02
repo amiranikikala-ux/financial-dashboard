@@ -14,6 +14,7 @@ from typing import Any
 from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -1092,10 +1093,35 @@ async def post_chat_stream(
     )
 
 
+# ---------------------------------------------------------------------------
+# Static frontend serving — single entry point at http://localhost:8000/
+#
+# Mount must come AFTER every @app.<verb>("/api/...") route is registered so
+# that explicit API routes win over the catch-all static handler. With this
+# in place the user has ONE URL to remember instead of juggling :5173 (Vite),
+# :8000 (API), and a half-dozen Run_Dashboard*.bat scripts. The PWA service
+# worker, /data.json, /tab-data/*, /assets/*, /download/* — all served from
+# the same origin, no CORS, no port confusion.
+#
+# `html=True` makes StaticFiles serve `index.html` at / and on any unmatched
+# path (SPA fallback). The app uses hash-based routing so the fallback isn't
+# strictly required for navigation, but it's cheap insurance.
+#
+# Skipped silently if `rs-dashboard/dist/` doesn't exist yet — happens on a
+# fresh checkout before the first `npm run build`. API still serves /api/*.
+# ---------------------------------------------------------------------------
+_DIST_PATH = Path(__file__).resolve().parent / "rs-dashboard" / "dist"
+if _DIST_PATH.is_dir():
+    app.mount("/", StaticFiles(directory=str(_DIST_PATH), html=True), name="static")
+    logger.info("Frontend mount: %s → / (single-port mode)", _DIST_PATH)
+else:
+    logger.info("Frontend mount: skipped (dist not built at %s)", _DIST_PATH)
+
+
 if __name__ == "__main__":
     import uvicorn
     import sys
-    
+
     # Allow port override via command line
     port = 8000
     if len(sys.argv) > 1:
@@ -1104,5 +1130,5 @@ if __name__ == "__main__":
                 port = int(arg.split("=")[1])
             elif arg == "--port" and len(sys.argv) > sys.argv.index(arg) + 1:
                 port = int(sys.argv[sys.argv.index(arg) + 1])
-    
+
     uvicorn.run("server:app", host="127.0.0.1", port=port, reload=False)
