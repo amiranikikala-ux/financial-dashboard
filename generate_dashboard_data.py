@@ -1651,8 +1651,10 @@ def run():
         logger.warning("მომწოდებლების კონცენტრაცია — ვერ აშენდა: %s", exc)
 
     # MegaPlus daily SQL Server backup (PLUS_*.zip in per-store watch folders).
-    # Auto-discovers every `მეგა პლუს backup*` sibling under Financial_Analysis
-    # so adding a new store = drop ZIPs into a new sibling folder, no code change.
+    # Auto-discovers two layouts under Financial_Analysis:
+    #   - legacy `მეგა პლუს backup*` siblings
+    #   - `მეგაპლიუსის არქიტექტურა/<store>/` subfolders with PLUS_*.zip
+    # Adding a new store = drop ZIPs into either layout, no code change.
     #
     # Two-phase design:
     #   1. process_all_stores — restores any new ZIP into its per-store SQL DB
@@ -1666,8 +1668,9 @@ def run():
     # `retail_sales.by_product`. Non-fatal on failure — the rest of the
     # dashboard still builds.
     try:
+        from dashboard_pipeline.megaplus_backup import _discover_watch_folders as _megaplus_discover
         fa_dir = Path(script_dir) / "Financial_Analysis"
-        megaplus_folders = sorted([p for p in fa_dir.glob("მეგა პლუს backup*") if p.is_dir()])
+        megaplus_folders = _megaplus_discover(fa_dir)
         if megaplus_folders:
             try:
                 refreshed = _process_megaplus_stores(megaplus_folders)

@@ -1,10 +1,12 @@
 """MegaPlus daily SQL Server backup ingestion (per-store).
 
 User drops PLUS_<storeID>_MEGA_<YYYYMMDD>.zip files into a per-store watch
-folder (e.g. `მეგა პლუს backup` for დვაბზუ 1329, `მეგა პლუს backup ოზურგეთი`
-for ოზურგეთი 1301). This module finds the newest ZIP inside each folder,
-extracts the .bak, restores it into its own SQL Server Express database
-(`MEGAPLUS_<storeID>`), and reads per-supplier rollups.
+folder. Two layouts are auto-discovered:
+  - legacy: `მეგა პლუს backup` (1329), `მეგა პლუს backup ოზურგეთი` (1301)
+  - current: `მეგაპლიუსის არქიტექტურა/<store>/` — any subfolder with PLUS_*.zip
+This module finds the newest ZIP inside each folder, extracts the .bak,
+restores it into its own SQL Server Express database (`MEGAPLUS_<storeID>`),
+and reads per-supplier rollups.
 
 State file `_megaplus_state.json` lives next to each watch folder's ZIPs and
 remembers which ZIP was last restored — re-runs are no-ops if nothing changed.
@@ -681,10 +683,23 @@ def process_all_stores(folders: list[Path], force: bool = False) -> dict | None:
 
 
 def _discover_watch_folders(parent: Path) -> list[Path]:
-    """Find every `მეგა პლუს backup*` sibling folder under the financial_analysis parent."""
+    """Find watch folders containing PLUS_*.zip under the financial_analysis parent.
+
+    Two layouts supported:
+      - legacy `მეგა პლუს backup*` siblings
+      - `მეგაპლიუსის არქიტექტურა/<store>/` subfolders that hold PLUS_*.zip
+    """
     if not parent.is_dir():
         return []
-    return sorted([p for p in parent.glob("მეგა პლუს backup*") if p.is_dir()])
+    folders: list[Path] = [p for p in parent.glob("მეგა პლუს backup*") if p.is_dir()]
+    arch = parent / "მეგაპლიუსის არქიტექტურა"
+    if arch.is_dir():
+        for sub in arch.iterdir():
+            if not sub.is_dir():
+                continue
+            if any(ZIP_PATTERN.match(f.name) for f in sub.iterdir() if f.is_file()):
+                folders.append(sub)
+    return sorted(folders)
 
 
 def main(argv: list[str]) -> int:
