@@ -72,21 +72,22 @@ if (import.meta.env.PROD) {
     .catch(() => mountApp())
 }
 
-/* Service worker registration + auto-update flow.
+/* Service worker registration + soft-update flow.
  *
- * In production we register /sw.js and then wire up the "a new version is
- * ready" lifecycle:
- *   1. Poll `registration.update()` every 60s while the tab is visible — picks
- *      up a freshly deployed SW without requiring a full tab close.
- *   2. When a new worker reaches `installed` state AND the page is already
- *      controlled by an old worker, post `SKIP_WAITING` so the new one
- *      activates immediately.
- *   3. Listen for `controllerchange` and reload exactly once — the tab then
- *      loads the new HTML + bundles under the new cache name.
+ * Lifecycle:
+ *   1. Poll `registration.update()` every 60s — picks up a new sw.js without
+ *      requiring a full tab close.
+ *   2. When a new worker reaches `installed` state AND an old SW is already
+ *      controlling the page, dispatch `rs-update-available` so `UpdateBanner`
+ *      can render the "ახალი ვერსია მზადაა — განახლება" toast. We do NOT
+ *      auto-call `SKIP_WAITING` here — the user keeps control of when to
+ *      reload (preserves scroll position, expanded rows, filter state).
+ *   3. The banner button dispatches `rs-apply-update` → we post `SKIP_WAITING`
+ *      to the waiting worker → `controllerchange` fires → reload happens
+ *      exactly once.
  *
- * This is what makes "ძველი ვერსია browser-ში" stop happening: as soon as we
- * deploy new code, the next time the user visits (or the page is open and
- * polls), they get auto-refreshed onto the latest bundle.
+ * Replaces the prior "auto-reload on every detected update" flow that lost
+ * the user's UI state mid-task.
  */
 const registerServiceWorker = () => {
   navigator.serviceWorker
@@ -98,6 +99,19 @@ const registerServiceWorker = () => {
       setInterval(tick, SIXTY_SECONDS)
       window.addEventListener('focus', tick)
 
+      let waitingWorker = null
+
+      const announceUpdateReady = (worker) => {
+        waitingWorker = worker
+        window.dispatchEvent(new CustomEvent('rs-update-available'))
+      }
+
+      /* If a worker is already waiting at registration time (user came back
+       * to a tab that polled while away), surface the banner immediately. */
+      if (registration.waiting && navigator.serviceWorker.controller) {
+        announceUpdateReady(registration.waiting)
+      }
+
       registration.addEventListener('updatefound', () => {
         const installing = registration.installing
         if (!installing) return
@@ -107,11 +121,16 @@ const registerServiceWorker = () => {
             navigator.serviceWorker.controller
           ) {
             /* New version ready AND an old SW is already controlling this
-             * page → ask the new one to activate immediately. The
-             * `controllerchange` handler below will then reload the tab. */
-            installing.postMessage({ type: 'SKIP_WAITING' })
+             * page — show the banner. User clicks → SKIP_WAITING → reload. */
+            announceUpdateReady(installing)
           }
         })
+      })
+
+      window.addEventListener('rs-apply-update', () => {
+        if (waitingWorker) {
+          waitingWorker.postMessage({ type: 'SKIP_WAITING' })
+        }
       })
 
       let refreshing = false

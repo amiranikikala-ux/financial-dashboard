@@ -8,6 +8,7 @@ import { fetchApiJson } from './lib/api.js';
 import LiveClock from './components/LiveClock.jsx';
 import RefreshButton from './components/RefreshButton.jsx';
 import MobileNav from './components/MobileNav.jsx';
+import UpdateBanner from './components/UpdateBanner.jsx';
 import useDataStatus from './hooks/useDataStatus.js';
 import DateTimeCalendarPicker from './components/DateTimeCalendarPicker.jsx';
 // ChatAssistant is eager-loaded on purpose: it is a global FAB that must be
@@ -313,6 +314,7 @@ function App() {
 
   return (
     <div className="dashboard-container">
+      <UpdateBanner />
       {showGlobalError && (
         <div className="local-pay-banner" style={{ background: '#ef4444', color: '#fff' }} role="alert">
           <strong>შეცდომა:</strong> {error}

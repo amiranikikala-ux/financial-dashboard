@@ -31,6 +31,10 @@ const CACHE_NAME =
 const PRECACHE_URLS = ['/favicon.svg', '/manifest.json'];
 
 /* ---------- install ---------- */
+/* No automatic `self.skipWaiting()` — we want updates to stay in the
+ * `waiting` state until the user clicks the "ახალი ვერსია — განახლება"
+ * banner, which posts SKIP_WAITING via the message handler below. First
+ * install (no existing controller) activates immediately on its own. */
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
@@ -38,7 +42,6 @@ self.addEventListener('install', (event) => {
       .then((cache) => cache.addAll(PRECACHE_URLS))
       .catch(() => {})
   );
-  self.skipWaiting();
 });
 
 /* ---------- activate: purge EVERY old rs-dashboard-* cache ---------- */
