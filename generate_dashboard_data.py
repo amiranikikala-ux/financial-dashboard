@@ -1728,6 +1728,50 @@ def run():
                         totals["protected_supplier_distinct_categories"],
                     )
 
+                # rs.ge ↔ MegaPlus waybill reconciliation. Pure cross-source
+                # categorization — surfaces missing receipts, amount mismatches,
+                # ghost AP (cancelled-rs-but-received-in-MegaPlus), unrecorded
+                # returns/sub-waybills, soft-signal "possible replacement"
+                # ±14-day matches, and stale-rs-data flags.
+                try:
+                    from dashboard_pipeline.waybill_reconciliation import (
+                        load_rs_waybills,
+                        reconcile,
+                    )
+                    rs_folder = fa_dir / "რს ზედნადები"
+                    if rs_folder.is_dir():
+                        rs_df = load_rs_waybills(rs_folder)
+                        per_store_data = {}
+                        for sid, rollup in (megaplus_combined.get("stores") or {}).items():
+                            wd = (rollup or {}).get("waybill_data")
+                            if wd:
+                                per_store_data[sid] = wd
+                        if not rs_df.empty and per_store_data:
+                            recon_bundle = reconcile(rs_df, per_store_data)
+                            data["waybill_reconciliation"] = recon_bundle
+                            t = recon_bundle.get("totals", {})
+                            logger.info(
+                                "waybill_reconciliation → data.json: "
+                                "🔴 missing=%d (%.0f ₾) · 🟠 amount_mismatch=%d · "
+                                "👻 ghost_ap=%d · 🟡 returns=%d / sub=%d · "
+                                "⚠️ possible_replacement=%d · 🆕 stale=%d "
+                                "(filtered closed-store=%d)",
+                                t.get("missing", 0), t.get("missing_amount_sum", 0),
+                                t.get("amount_mismatch", 0),
+                                t.get("ghost_ap", 0),
+                                t.get("returns_not_recorded", 0),
+                                t.get("sub_waybills_not_recorded", 0),
+                                t.get("possible_replacements", 0),
+                                t.get("rs_data_stale", 0),
+                                t.get("filtered_closed_stores", 0),
+                            )
+                        else:
+                            logger.info("waybill_reconciliation: rs.ge xls or MegaPlus waybill_data missing — skipped")
+                    else:
+                        logger.info("waybill_reconciliation: rs.ge folder not found — skipped")
+                except Exception as exc:
+                    logger.warning("waybill_reconciliation: ვერ ჩატარდა: %s", exc)
+
                 # Synthesize a `retail_sales`-shaped bundle from MegaPlus so
                 # `RetailSales.jsx` and other downstream consumers (the AI
                 # tools, sqlite export, etc.) keep their existing schema

@@ -559,6 +559,11 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
         # joins the per-store snapshot the rest of this rollup is reading.
         from dashboard_pipeline.category_anomalies import build_anomaly_bundle
         anomaly_bundle = build_anomaly_bundle(cur, backup_meta.store_id)
+
+        # Waybill data for rs.ge ↔ MegaPlus reconciliation. Cached here so the
+        # central pipeline can match without re-querying SQL on every run.
+        from dashboard_pipeline.waybill_reconciliation import fetch_megaplus_waybill_data
+        waybill_data = fetch_megaplus_waybill_data(cur, backup_meta.store_id)
     finally:
         conn.close()
 
@@ -579,6 +584,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
         "by_category": by_category,
         "by_category_by_month": by_category_by_month,
         "category_anomalies": anomaly_bundle,
+        "waybill_data": waybill_data,
     }
 
 

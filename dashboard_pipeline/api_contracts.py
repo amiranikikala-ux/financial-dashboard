@@ -57,6 +57,7 @@ FIELD_DEFAULTS = {
     "dead_stock_summary": {},
     "supplier_concentration": {},
     "category_anomalies": {},
+    "waybill_reconciliation": {},
 }
 
 # ერთი ჭერი: სრული rollup/API პასუხები დიდი მოცულობისას (OOM-ისგან დასაცავად ზედა საზღვარი).
@@ -93,6 +94,7 @@ TAB_ALLOWLIST = {
     "dead_stock": ["dead_stock_summary"],
     "supplier_concentration": ["supplier_concentration"],
     "category_anomalies": ["category_anomalies"],
+    "waybill_reconciliation": ["waybill_reconciliation"],
     "executive_export": [
         "monthly_pnl",
         "budget",
@@ -275,6 +277,25 @@ TAB_RESPONSE_META = {
             "Duplicate clusters group raw P_GROUP by stripped numeric code prefix + lowercase.",
         ],
     },
+    "waybill_reconciliation": {
+        "trust_label": "audited",
+        "trust_badge_ka": "rs.ge ↔ MegaPlus Reconciliation",
+        "scope_ka": (
+            "Cross-source check: every rs.ge active waybill must have a "
+            "matching MegaPlus GET row (or GACERA for returns). Surfaces "
+            "missing receipts, amount mismatches, ghost AP (received "
+            "against cancelled rs.ge document), unrecorded returns/"
+            "sub-waybills, ±14-day soft-signal possible replacements, "
+            "and stale-rs-data flags (GET has it, rs.ge xls doesn't)."
+        ),
+        "notes_ka": [
+            "Closed-store destinations (Tbilisi addresses 2022-2024) are "
+            "filtered out — only active stores 1329 დვაბზუ + 1301 ოზურგეთი.",
+            "Cancelled+replaced rs.ge waybills (same supplier+date+amount, "
+            "different number) are treated as normal noise, not flagged.",
+            "Spot-check: 5/5 random rows verified in source 2026-05-02.",
+        ],
+    },
 }
 
 STATIC_RESPONSE_TABS = {
@@ -297,6 +318,7 @@ STATIC_RESPONSE_TABS = {
     "dead_stock",
     "supplier_concentration",
     "category_anomalies",
+    "waybill_reconciliation",
 }
 
 DYNAMIC_SOURCE_ARTIFACTS = {

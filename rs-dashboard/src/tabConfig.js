@@ -5,6 +5,7 @@ export const TAB_GROUPS = [
     items: [
       { id: 'suppliers', label: '🏢 მომწოდებლები' },
       { id: 'waybills', label: '📄 ზედნადებები' },
+      { id: 'waybill_reconciliation', label: '🔍 ზედნადებების შემოწმება' },
       { id: 'cashflow', label: '💳 ბანკი' },
       { id: 'analytics', label: '📊 ანალიტიკა' },
     ],
