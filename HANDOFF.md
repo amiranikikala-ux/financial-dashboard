@@ -69,9 +69,7 @@
 
 - Full evidence log: `HANDOFF_ARCHIVE/HANDOFF_2026-04-22.md`
 - Packet H: `HANDOFF_ARCHIVE/2026-04-packet-h.md`
-- AI roadmap v1.0 (superseded): `HANDOFF_ARCHIVE/AI_ADVISOR_ROADMAP_v1.0_superseded_2026-04-18.md`
-- AI roadmap v2.1 (superseded by Master Plan): `HANDOFF_ARCHIVE/AI_GENIUS_PARTNER_PLAN_v2.1_superseded_2026-04-25.md`
-- Phase tracker (superseded by Master Plan): `HANDOFF_ARCHIVE/PHASE_STATUS_MATRIX_v2.1_superseded_2026-04-29.md`
+- Context history (აპრილი 18 → მაისი 2): `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-04_2026-05-02.md`
 - Phase 4B prompt tuning preview: `HANDOFF_ARCHIVE/PREVIEWS/PHASE_4B_PROMPT_TUNING_PREVIEW.md`
 
 ---
