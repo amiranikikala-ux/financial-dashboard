@@ -68,6 +68,7 @@ scratch_read*.py
 _scratch_*.py
 _scratch_*.ps1
 _scratch_*.json
+_scratch_*.xml
 temp.json
 headers_log.txt
 headers_output.json
