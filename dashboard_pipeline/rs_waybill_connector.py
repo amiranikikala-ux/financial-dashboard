@@ -20,6 +20,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Iterable
 
 import pandas as pd
@@ -28,6 +29,20 @@ import requests
 ENDPOINT = "https://services.rs.ge/WayBillService/WayBillService.asmx"
 NS = "http://tempuri.org/"
 DATE_FMT = "%Y-%m-%dT%H:%M:%S"
+
+
+def _load_dotenv_once() -> None:
+    """Best-effort `.env` loader (project root). Silent if dotenv missing."""
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path, override=False)
+
+
+_load_dotenv_once()
 
 # Verified mappings (480/531 cross-correlated against 04,2026.xls on 2026-05-04).
 STATUS_TEXT = {
