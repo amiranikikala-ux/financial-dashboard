@@ -1,59 +1,53 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-06 (Sprint B: rs.ge pipeline wire-in PROOFED — Sprint B სრულად დახურულია). წინა → `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-03_2026-05-04.md`. ადრე → `CONTEXT_HISTORY_2026-04_2026-05-02.md`.
+> **განახლდა**: 2026-05-07 (Sprint C: TBC pipeline wire-in PROOFED — Sprint C ცენტრალური ნაწილი დახურულია). წინა → `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-03_2026-05-04.md`. ადრე → `CONTEXT_HISTORY_2026-04_2026-05-02.md`.
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-06) — Sprint B PROOFED · Sprint B CLOSED
+## 0. ბოლო session-ის შედეგი (2026-05-07) — Sprint C PROOFED · Sprint C ცენტრი CLOSED (UI ღილაკი ცალკე)
 
-🎉 **რს.ge-ის pipeline ექსკლუზიურად parquet cache-დან კითხულობს. Excel ფაილები აღარაა pipeline-ის dependency.**
+🎉 **თბს-ის pipeline ექსკლუზიურად parquet cache-დან კითხულობს. Excel ფაილები აღარაა pipeline-ის dependency.** UI „განახლება" ღილაკი + DigiPass modal (Sprint C step 6) ცალკე ღია (იხ. §4).
 
 | საკითხი | სტატუსი |
 |---|---|
-| `rsge_cache.py::list_rsge_waybill_paths()` + `read_waybill_file()` (auto-dispatch parquet/xls) + `append_rsge_cache()` | ✅ NEW |
-| `_backfill_rsge.py` runner (calendar-month windows, append-only, error-stops) | ✅ NEW |
-| Backfill 2022-05-01 → 2026-05-05 (4yr+) | ✅ 22,408 rows (2022:1,060 / 2023:5,716 / 2024:6,848 / 2025:6,537 / 2026:2,247) |
-| Yearly cache vs XLSX 1:1 verification (2022/2023/2024/2025) | ✅ cent-perfect |
-| 2026 cache vs XLSX delta = 70 rows / +9,109.42 ₾ (May 1-5 only, bonus depth) | ✅ ახსნილი |
-| 7 surgical wire-in edits — production read sites | ✅ |
-| `generate_dashboard_data.py::_read_and_parse_rs` (main RS reader — initially missed, found via POST log) | ✅ |
-| `generate_dashboard_data.py` 3 path-list sites (manifest, line 1395, line 1746) → `list_rsge_waybill_paths()` | ✅ |
-| `waybill_reconciliation.py::load_rs_waybills` (folder→paths signature change, uses `read_waybill_file`) | ✅ |
-| `supplier_matching.py::build_supplier_master` | ✅ |
-| `supplier_matching.py::_build_waybill_reference_index` | ✅ |
-| `supplier_matching.py::collect_rs_tax_ids` | ✅ |
-| `manual_payments.py::collect_rs_suppliers_by_tax_id` | ✅ |
-| Pipeline run (~4 წუთი, 0 errors / 0 warnings, data.json 101.44 MB) | ✅ |
-| Pre/post-swap data.json diff: 31 sections — 16 IDENTICAL, 15 DIFF | ✅ |
+| 3-day live API parity (2026-03-01..03) — XLSX 104 = SOAP 104, debit/credit cent-perfect | ✅ |
+| 1-month live API parity (2026-03 full) — XLSX 1,490 = SOAP 1,490, signed sum +101.81 ₾ matches; 5/5 composite-key spot-checks 1:1 | ✅ |
+| `tbc_cache.py` (NEW): year-partitioned parquet, append-only, dedup by `ტრანზაქციის ID`. Schema = `tbc_bank_connector.XLS_COLUMNS` (23 Georgian columns) | ✅ NEW |
+| `_backfill_tbc.py` (NEW): single-OTP per --start/--end window (TBC pagination reuses nonce). Practical: 1 OTP per year-range | ✅ NEW |
+| Backfill 4 years (2023→2026 May 5), 4 OTPs, 50,924 rows total cache: 2023=17,362 / 2024=10,523 / 2025=17,016 / 2026=6,023 | ✅ |
+| Yearly cache vs XLSX 1:1 verification (rows + paid_out + paid_in) | ✅ ცენტამდე |
+| 2026 cache bonus depth — Mar/Apr/May 1-5 (3,310 rows) that Excel did not have (XLSX cut at 2026-02-28) | ✅ ახსნილი |
+| 8 surgical wire-in edits — production read sites | ✅ |
+| `bank_income.py`: 5 × (samurneo + tax_flow + foodmart_cashback + card_income + expenses) — read & path-list both swapped | ✅ |
+| `bank_reconciliation.py::get_bank_payments` TBC branch | ✅ |
+| `file_utils.py::_bank_positive_debit_total_ge` TBC branch | ✅ |
+| `generate_dashboard_data.py` source-manifest TBC entry | ✅ |
+| Pipeline run (~4 წუთი, 0 errors / 0 warnings, data.json 101.34 MB) | ✅ |
 
-**Numeric verification — `data.json` actual delta (15 DIFF sections all derive from one root cause):**
+**Headline TBC numbers in post-wire-in data.json:**
+- `pos_terminal_income.tbc`: 392,689.69 ₾ (38,628 lines)
+- `tbc_samurneo`: TBC expense 78,090 / return 175,060 (367 / 160 lines)
+- `tbc_foodmart_cashback`: 328,938.03 ₾ (33 lines)
+- `tbc_expenses`: 3,889,458.60 ₾ grand total (3,860,789.09 operating / 28,669.51 treasury)
+- `tax_flow`: out 128,874.24 / in 41,816.98 (TBC + BOG combined)
 
-| section | delta | მიზეზი |
-|---|---|---|
-| `waybills[]` (array) | +70 rows / +9,109.42 ₾ ↑ | bonus historical depth (May 1-5, 2026) |
-| `waybill_reconciliation`, `suppliers`, `supplier_aging`, `ap_monthly_trend`, `aging_summary`, `supplier_concentration`, `bank_reconciliation_audit`, `bank_unmatched_analysis`, `financial_ratios`, `executive_summary`, `company_valuation`, `imported_products`, `meta`, `source_manifest` | derived deltas | all propagate from the same +70 May 2026 waybills |
-| `bog_expenses`, `budget`, `category_anomalies`, `forecast`, `megaplus_live`, `monthly_pnl`, `pos_terminal_income`, `retail_sales`, `tax_flow`, `tbc_card_income`, `tbc_expenses`, `tbc_foodmart_cashback`, `tbc_samurneo`, `vat_reconciliation`, ... | **IDENTICAL** | swap არ შეცვალა |
+**Caveat on pre/post diff**: `data.json.PRE_TBC_PARQUET_BACKUP` (91.51 MB) was a stale `rs-dashboard/public/data.json` snapshot — several derived sections (`waybills`, `suppliers`, `supplier_aging`, `ap_monthly_trend`) were already empty `[]` before TBC wire-in. Diff shows 25 DIFF / 5 IDENTICAL but the IDENTICAL count is misleading; the structural population came from the fresh pipeline run, not the wire-in. **Ground-truth verification was the cache-vs-XLSX 1:1 parity (cent-perfect, 4 years), not the diff.**
 
-**Spot-checked 5 only-POST waybill numbers** — ყველა `2026-05-xx` რიცხვი, მომწოდებლები შესაბამისი (იფქლი / ვასაძის პური / კოსტ-კასტლ).
+**Commits**: `c8aea4b` (cache infra) + `0e8c816` (pipeline wire-in) on `main`. Local branch is N commits ahead of `origin/main` (push pending — user-side).
 
-**Source-level delta (cache - XLSX) = +70 rows / +9,109.42 ₾** = pipeline-level delta ✅ ცენტამდე.
-
-**Commits**: `eba02cf` (cache infra) + `de55942` (pipeline wire-in) on `main`. Local branch is 6 commits ahead of `origin/main` (push pending — user-side).
-
-**House-keeping**: `data.json.PRE_BOG_PARQUET_BACKUP` + `data.json.PRE_RSGE_PARQUET_BACKUP` (106 MB each) დაცულია repo-ფესვში — gitignored, წაშლის უფლება მომავალ session-ში. `_scratch_*.py` + `_scratch_*.log` — verification evidence, untracked.
+**House-keeping**: `data.json.PRE_TBC_PARQUET_BACKUP` (91.51 MB) added alongside earlier PRE_BOG / PRE_RSGE backups in repo root — gitignored, ok to delete next session. Scratch verification scripts: `_scratch_tbc_stage3_verify.py` (3-day, fixed 1/2→0/1 bug), `_scratch_tbc_march_verify.py` (1-month), `_scratch_tbc_postswap_diff.py` — all untracked, evidence only.
 
 ---
 
-## 1. წინა session-ის შედეგი (2026-05-05 ღამე) — Sprint A Step 4b PROOFED · Sprint A CLOSED
+## 1. წინა Sprints — დახურული (commit pointers only, full evidence in git log)
 
-🎉 **ბოგ-ის pipeline ექსკლუზიურად parquet cache-დან კითხულობდა.** ანალოგიური სტრუქტურა, რასაც Sprint B-მა მიჰყვა (§0).
-
-- 8 surgical edits — `bank_reconciliation.py::get_bank_payments`, 5 × `bank_income.py` (samurneo, POS, expense_categories, tax_flow, tax_flow path-list), `file_utils.py::_bank_positive_debit_total_ge`, `supplier_matching.py::infer_bog_receiver_id_to_rs_tax_id`, `generate_dashboard_data.py` source-manifest.
-- Numeric delta: `pos_terminal_income.bog` +11,312 lines / +109,086.96 ₾ (bonus historical depth — 2023 Jan-Mar + 2026 Apr-May); `tax_flow.out (BOG)` +6 lines / +10,338.83 ₾; `vat_reconciliation` +109,086.96 ₾ gross / +92,446.58 ₾ net (mirrors POS ÷ 1.18). 27/30 numeric sub-sections IDENTICAL.
-- **Commit**: `c4fd1c6` on `main`.
-- Earlier (TBC + BOG + rs.ge connectors PROOFED): commits `52de7ba`/`bf8d204`/`dc2f9de` (rs.ge), `4c14920`+`a7f4ea9` (BOG), `3c80236`+`ace7d9f` (TBC), `a5b88c8` (governance). Two bug fixes: TBC `debitCredit` 0/1 not 1/2; BOG ID-float trailing `.0` (`_g_str()` `float.is_integer()` check).
+| Sprint | რა | Commit(s) |
+|---|---|---|
+| **A — BOG pipeline wire-in** (2026-05-05 ღამე) | 8 surgical edits, BOG cache exclusive read; +11,312 POS lines / +109k ₾ bonus depth | `c4fd1c6` |
+| **B — rs.ge pipeline wire-in** (2026-05-06) | 7 surgical edits, RSGE cache exclusive read; +70 May 2026 waybills / +9,109.42 ₾ bonus depth | `eba02cf` (cache) + `de55942` (wire-in) |
+| **Earlier** — TBC/BOG/rs.ge connectors PROOFED + 2 bug fixes | TBC `debitCredit` 0/1 (not 1/2); BOG ID-float trailing `.0` `_g_str()` fix | `52de7ba` / `bf8d204` / `dc2f9de` (rs.ge), `4c14920`+`a7f4ea9` (BOG), `3c80236`+`ace7d9f` (TBC), `a5b88c8` (governance) |
 
 ---
 
@@ -78,9 +72,9 @@
 
 ---
 
-## 2. TBC DBI verified facts (Stage 3 prep)
+## 2. TBC DBI verified facts (Stage 3 PROOFED 2026-05-07)
 
-**Status**: ✅ Stage 0/1a/1b/2 PROOFED. Stage 3 (production connector) ღია.
+**Status**: ✅ Stage 0/1a/1b/2/3 PROOFED. Pipeline wire-in CLOSED — see §0.
 
 | ფაქტი | მნიშვნელობა |
 |---|---|
@@ -124,22 +118,21 @@
 
 ---
 
-## 4. ღია სამუშაო — შემდეგი session (Sprint C = TBC pipeline wire-in + UI ღილაკი)
+## 4. ღია სამუშაო — შემდეგი session (Sprint C step 6 = UI ღილაკი + DigiPass modal)
 
-**Sprint A status: ✅ CLOSED** (commit `c4fd1c6`) — BOG.
-**Sprint B status: ✅ CLOSED** (commits `eba02cf` + `de55942`) — rs.ge.
+**Sprint A status: ✅ CLOSED** (commit `c4fd1c6`) — BOG pipeline wire-in.
+**Sprint B status: ✅ CLOSED** (commits `eba02cf` + `de55942`) — rs.ge pipeline wire-in.
+**Sprint C ცენტრი: ✅ CLOSED** (commits `c8aea4b` + `0e8c816`) — TBC pipeline wire-in.
 
-**Sprint C (TBC + UI) — has not started.** ბოლო ფაზაა Variant 1-დან (§1b decision #9).
+**Sprint C step 6 (UI ღილაკი + DigiPass modal) — ღია, ცალკე session-ისთვის:**
 
-| Step | რა |
+| ნაწილი | რა |
 |---|---|
-| 1. Scope agree | TBC DBI connector უკვე PROOFED (§3). 6-step pattern კვლავ: cache infra → wire-in → verify. დამატებით: UI ღილაკი + DigiPass OTP modal. |
-| 2. Data inventory | TBC XLSX read sites — `bank_income.py` (5 TBC site: samurneo, POS, foodmart cashback, card income, expense categories) + `bank_reconciliation.py::get_bank_payments` TBC ნაწილი + `file_utils.py` find_header_row + `supplier_matching.py` (TBC IBAN/partner index). Enumerate before edits. |
-| 3. Spot-check | TBC connector output (`MovementService`) vs `03.2026.xlsx` — 1 თვე row-by-row, 5+ representative samples. ⚠️ Composite key required (docNum + amount + counterparty), არა docNum-ი მარტო — `1772438632` collision-i გამოვლინდა. |
-| 4. Cache infra | New `tbc_cache.py` — parquet store, append-only, per-year. Schema = TBC `accountMovement` 40+ fields → mapping to existing TBC XLSX columns. Backfill runner `_backfill_tbc.py`. **DigiPass OTP** required — runner asks user-ისგან nonce-ს ერთხელ window-ის დასაწყისში; ~5-15 min window for full backfill. Plan windows accordingly. |
-| 5. Wire-in | Surgical refactor — replace `pd.read_excel(tbc_xlsx)` sites with cache reads. ~6-8 sites expected. |
-| 6. UI ღილაკი + DigiPass modal | Bank tab top — single „განახლება" button. Click → modal asks DigiPass OTP → fetch BOG + rs.ge + TBC concurrently → cache append → dashboard reload. ~30-60s. (§1b decision #6, #7) |
-| 7. Verify | Pre-/post-swap data.json diff; bonus historical depth expected (similar to BOG + rs.ge). |
+| Frontend | `rs-dashboard/` Bank tab-ის თავში single „განახლება" ღილაკი. Vite + React component. |
+| Modal | DigiPass OTP შეყვანის ფანჯარა (PIN: 0777, 9-digit code). Validate offline before consuming. |
+| Refresh flow | Click → modal → fetch BOG + rs.ge + TBC concurrently (parallel async) → 3 cache append → dashboard reload. Estimated ~30-60s wall time. |
+| Backend endpoint | `/api/refresh` (POST) — accepts OTP, kicks off the 3 connectors, returns progress + final summary. Could reuse existing connector classes; reads from request body, no env-var reliance. |
+| Reference | §1b locked decisions #6, #7 (button location + flow). |
 
 **rs.ge Sprint A carryover (non-blocking, parallel side task — still open):**
 - SOAP run for 26 SOAP_PENDING orphan TINs → updates `Financial_Analysis/orphan_resolver_review_2026-05-04.xlsx`
@@ -169,9 +162,9 @@
 | pytest (key suites) | 39/39 waybill_reconciliation + 50/50 supplier_profitability + retail_sales_revenue_formula |
 | Tool surface | 29 (incl. `data_quality_guard`) |
 | Dashboard tabs | 16 |
-| `data.json` | 101.44 MB (post-rs.ge-parquet-wire-in, 2026-05-06) |
-| Local branch | `main` 6 commits ahead of `origin/main` (push pending — user-side) |
-| Cache state | BOG: 171,869 rows (2023-2026) · rs.ge: 22,408 rows (2022-2026) · TBC: not yet built |
+| `data.json` | 101.34 MB (post-TBC-parquet-wire-in, 2026-05-07) |
+| Local branch | `main` 8 commits ahead of `origin/main` (push pending — user-side) |
+| Cache state | BOG: 171,869 rows (2023-2026) · rs.ge: 22,408 rows (2022-2026) · TBC: 50,924 rows (2023-2026, dedup by `ტრანზაქციის ID`) |
 | MegaPlus DB integration | LIVE — 53 tables / 282+308 suppliers across 2 stores / 720K active orders / 2024-03 → 2026-04 |
 | MegaPlus watch folder layout | `Financial_Analysis/მეგაპლიუსის არქიტექტურა/{დვაბზუ,ოზურგეთი}/` (legacy `მეგა პლუს backup*` glob still supported) |
 | Phase B exploratory data | POS active rows 1,552,457 (4yr); negative-margin 4.13% / 95,682 ₾ loss; PRODUCTS orphans 4,918 / 685,804 ₾ (verified 2026-05-04, 2x larger than chat-history claim) |
