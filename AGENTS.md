@@ -55,8 +55,8 @@
 ## Session Pacing
 
 - **Context size — 1M tokens (Opus 4.7, verified 2026-04-30 via WebSearch + official docs)**. 60% ceiling (600K tokens) გრძელ workflow-ში იშვიათად reach-ვდება — context space არ არის ძირითადი regression trigger.
-- **Real regression trigger — output pattern detection** (size-independent): filler tokens (a partial Georgian morphology fragment repeating 3+ times in a single response), partial Latin transliterations of Georgian words, self-correction loops, post-complex-tool-output degradation. Pattern detected → handoff offer. (Concrete example tokens deliberately omitted from this file to avoid self-priming — see `feedback_no_garbage_georgian_tokens.md` for the rule.)
-- **Mitigation BEFORE restart** (per memory `feedback_session_discipline.md` row 19 — „ცალკე უნდა მოვაგვარო, არა სესიის შეჩერებით"): (a) smaller response, less parallel complexity; (b) avoid mixing Georgian + English + file-paths in one paragraph; (c) short cool-down — minimal-content reply, let pattern decay; (d) restart only if mitigation fails.
+- **Real regression trigger — output pattern detection** (size-independent): filler tokens (a partial Georgian morphology fragment repeating 3+ times in a single response), partial Latin transliterations of Georgian words, self-correction loops, post-complex-tool-output degradation. Pattern detected → handoff offer. (Concrete example tokens deliberately omitted from this file to avoid self-priming — also handled by `.claude/hooks/check_regression.sh` Stop hook.)
+- **Mitigation BEFORE restart** („ცალკე უნდა მოვაგვარო, არა სესიის შეჩერებით"): (a) smaller response, less parallel complexity; (b) avoid mixing Georgian + English + file-paths in one paragraph; (c) short cool-down — minimal-content reply, let pattern decay; (d) restart only if mitigation fails.
 - **Why regression happens** (4 verified causes, size-independent): (1) **output distribution drift** — ქართული პასუხი ინგლისურ/technical content-ს მიჰყვება → token distribution shifts; (2) **token salience** — recently-used token returns as filler; (3) **mixed-language tool output background** — large non-Georgian blob affects subsequent Georgian generation; (4) **self-attention pattern lock** — one partial-token error fixates, similar errors compound.
 - Scope creep = bug. „ოჰ, ესეც გავაკეთო" → ჯერ ვიკითხო user-ს.
 
@@ -64,7 +64,7 @@
 
 - User-მა **იგივე შეცდომა** 2-ჯერ გამისწორა ერთ session-ში → **restart** (`/restart-session` skill). Context დაბინძურდა, fix-ების კასკადი აღარ მუშაობს.
 - 3-ჯერ იგივე შეცდომა **არასოდეს** — restart 2-ზე.
-- **🚨 Cross-session pattern** (2026-04-29): partial Georgian tokens / filler-words / Latin-transliteration glue between Georgian text — ეს კონკრეტული pattern **3 session-ზე** გამოვლინდა. მე-4 cross-session occurrence = **სასწრაფო restart**, არ ველოდები იმავე-session 2-rule-ს. (Concrete example tokens deliberately omitted — see `feedback_no_garbage_georgian_tokens.md`.)
+- **🚨 Cross-session pattern** (2026-04-29): partial Georgian tokens / filler-words / Latin-transliteration glue between Georgian text — ეს კონკრეტული pattern **3 session-ზე** გამოვლინდა. მე-4 cross-session occurrence = **სასწრაფო restart**, არ ველოდები იმავე-session 2-rule-ს. (Stop hook detects + flags automatically: `.claude/hooks/check_regression.sh`.)
 - restart = ახალი ჩატი + `CONTEXT_HANDOFF.md`-ის ცოცხალი წაკითხვა + user-ის ბოლო ცხადი მოთხოვნის განმეორება
 
 ## GitNexus (scoped — function edits only)
