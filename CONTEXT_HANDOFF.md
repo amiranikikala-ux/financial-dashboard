@@ -6,6 +6,87 @@
 
 ---
 
+## 0. დღევანდელი session-ი (2026-05-04 დღე — Sprint A + Sprint A addon + BOG Stage 1-3 PROOFED)
+
+### 0e. BOG Business Online API — Stages 0/1/2/3 closed in single session
+
+**Status**: ✅ end-to-end PROOFED (auth + live statement fetch + 100% parity vs manual XLSX). NO production code change yet.
+
+**Stage 0 (registration — closed in earlier web Claude session 2026-05-04 day):**
+- App registered at bonline.bog.ge as **`GeoFoodTime bog`** (Client Credentials flow)
+- Account: **GE15BG0000000537419534GEL** (GEL current account, READ-ONLY)
+- Permissions: "View details" + "All operations" (no transfer/no edit — least-privilege)
+- Client ID + Client Secret stored in `.env` (gitignored)
+
+**Stage 1a — auth (token endpoint):**
+- `https://account.bog.ge/auth/realms/bog/protocol/openid-connect/token`
+- POST + Basic header (base64 of `client_id:client_secret`) + `grant_type=client_credentials`
+- Returns Bearer token (942 chars), `expires_in=1800` seconds, `scope=cib-scope`
+- Test file: `_scratch_bog_token.py` (gitignored)
+
+**Stage 1b — statement endpoint discovery:**
+- ⚠️ docs page says `GET /api/statement/{account}/{currency}/{startDate}/{endDate}` but doesn't state the host
+- ⚠️ `api.bog.ge` is the docs/marketing site, NOT the production API
+- ✅ **Production API host: `https://api.businessonline.ge`** (verified by probing 6 candidates)
+- Auth: `Authorization: Bearer <token>`
+- Date format: `YYYY-MM-DD`
+- Test file: `_scratch_bog_statement.py` (gitignored)
+
+**Stage 2 — spot-check vs manual XLSX (2026-05-04):**
+
+Source: `Financial_Analysis/ბოგ ბანკი ამონაწერი/03,2026.xlsx` (March 2026, 5,075 records, headers on row 12).
+
+Comparison window: 2026-03-01 → 2026-03-03 (3 days, fits under 1000-record API limit).
+
+| | API | XLSX | match |
+|---|---|---|---|
+| Record count | 453 | 453 | ✓ |
+| Common operation IDs | 453 | 453 | ✓ (0 missing on either side) |
+| Sum debits | 3,891.84 ₾ | 3,891.84 ₾ | ✓ to the cent |
+| Sum credits | 5,336.42 ₾ | 5,336.42 ₾ | ✓ to the cent |
+| Spot-check 5 random IDs (amount + beneficiary) | 5/5 | — | ✓ all |
+
+**🎉 Stage 3 PROOFED** — same equivalence-class as rs.ge Stage 3 (2026-05-03 ღამე).
+
+**Field mapping (API ↔ XLSX columns):**
+
+| API field | XLSX column | notes |
+|---|---|---|
+| `EntryDate` | `თარიღი` | datetime |
+| `EntryId` | `ოპერაციის იდ` | unique transaction ID — primary join key |
+| `EntryAmount` | `თანხა` | signed amount (debit negative, credit positive) |
+| `EntryAmountDebit` | `დებეტი` | unsigned debit |
+| `EntryAmountCredit` | `კრედიტი` | unsigned credit |
+| `EntryComment` | `ოპერაციის შინაარსი` | description |
+| `DocumentProductGroup` | `ოპერაციის ტიპი` | TRN/PMD/COM/etc. |
+| `SenderDetails.Name` | `გამგზავნის დასახელება` | nested object in API |
+| `BeneficiaryDetails.Name` | `მიმღების დასახელება` | nested object |
+| `BeneficiaryDetails.AccountNumber` | `მიმღების ანგარიშის ნომერი` | IBAN |
+
+**Open gaps for next session:**
+
+1. **1000-record per-call limit** — confirmed real (March 2026 has 5,075 records, single call returns first 1000). No pagination param documented. Strategy: date-window slicing per day or per-week, then concatenate. Smart slicer can use `Count` field to detect when to narrow.
+2. **Max historical range** — not yet tested. Try 2023 or earlier to confirm rs.ge-style 4-year retention.
+3. **Rate limits / daily quota** — not yet hit during testing (a few dozen calls). Production backfill (~5 years × ~365 days = ~1,825 daily slices) needs rate-limit testing.
+4. **Other currencies** (USD/EUR/POS accounts) — separate registration cycle in bonline.bog.ge needed; current scope is GEL-only.
+5. **TBC API integration** — deferred per Stage 0 plan (BOG-first, then TBC).
+
+**Files added this session (BOG part, all gitignored):**
+- `_scratch_bog_token.py` — Stage 1a OAuth token test
+- `_scratch_bog_statement.py` — Stage 1b/2 statement fetch + spot-check
+- `_scratch_bog_token_response.json` — cached Bearer token (token rotates every 30 min)
+- `_scratch_bog_statement_response.json` — raw 30-day API response (last 30 days, 1000 of 6,152 records)
+
+**Production wire-in plan (DEFERRED — separate sprint, user approval required):**
+- Build `dashboard_pipeline/bog_bank_connector.py` (analogous to `rs_waybill_connector.py`):
+  - `BOGBankConnector(client_id, client_secret)` with auto-load `.env`
+  - `fetch_statement(start, end)` with internal date-window slicing for the 1000-limit
+  - `to_xls_dataframe(records)` matching the 26-column XLSX schema for drop-in replacement
+- Then update `bank_reconciliation.py` to consume BOG API output instead of `Financial_Analysis/ბოგ ბანკი ამონაწერი/*.xlsx`
+- Cleanup pending: 4 `_scratch_bog_*` files after wire-in.
+
+---
+
 ## 0. დღევანდელი session-ი (2026-05-04 დღე — Sprint A + Sprint A addon)
 
 ### 0a. Sprint A — rs.ge connector PROOFED + production module created
