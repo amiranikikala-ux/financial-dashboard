@@ -69,7 +69,7 @@ class Movement:
     movement_id: str
     payment_id: str
     external_payment_id: str
-    debit_credit: int  # 1 = debit (outgoing), 2 = credit (incoming)
+    debit_credit: int  # 0 = debit (outgoing), 1 = credit (incoming) — TBC convention verified 2026-05-04 live capture
     value_date: str
     description: str
     amount: float
@@ -384,13 +384,13 @@ def to_xls_dataframe(movements: Iterable[Movement]) -> pd.DataFrame:
     Note: `ნაშთი` (running balance) is statement-level, not per-record API
     field. Output leaves it blank — pipeline does not consume it.
 
-    debitCredit==1 → outgoing (გასული თანხა)
-    debitCredit==2 → incoming (შემოსული თანხა)
+    debitCredit==0 → outgoing (გასული თანხა)
+    debitCredit==1 → incoming (შემოსული თანხა)
     """
     rows = []
     for m in movements:
         amt = _signed_amount(m)
-        is_debit = m.debit_credit == 1
+        is_debit = m.debit_credit == 0
         rows.append({
             "თარიღი": _format_dt(m.value_date),
             "დანიშნულება": m.description,

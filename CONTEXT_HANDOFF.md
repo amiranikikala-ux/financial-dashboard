@@ -1,29 +1,27 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-04 ღამე. 2026-05-03 / 2026-05-04 morning ისტორია → `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-03_2026-05-04.md`. წინა → `CONTEXT_HISTORY_2026-04_2026-05-02.md`.
+> **განახლდა**: 2026-05-05 (Stage 3 closure session). წინა მდგომარეობა → `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-03_2026-05-04.md`. ადრე → `CONTEXT_HISTORY_2026-04_2026-05-02.md`.
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 1. ბოლო session-ის შედეგი (2026-05-04 ღამე)
+## 1. ბოლო session-ის შედეგი (2026-05-05)
 
-🎉 **3 ბანკის connector კოდი მზადაა** + დღევანდელი governance cleanup დამთავრდა.
+🎉 **TBC Stage 3 PROOFED** — connector bug-ი (debitCredit კონვენცია) გასწორდა, live verify წარმატებული.
 
 | ბანკი | Connector | Live verify | Commit |
 |---|---|---|---|
 | **rs.ge** | ✅ committed earlier | ✅ PROOFED | `52de7ba`/`bf8d204`/`dc2f9de` |
 | **BOG** | ✅ committed | ✅ **PROOFED** (453 records / 3,891.84 dbt / 5,336.42 crd, 100% parity 2026-03-01..03) | `4c14920` |
-| **TBC DBI** | ✅ committed | ⏳ **PENDING** (account blocked — too many wrong-action probes during URI discovery) | `3c80236` |
+| **TBC DBI** | ✅ committed + bug-fix | ✅ **PROOFED** (104 records / 9,641.40 dbt / 9,994.94 crd, signed-sum 353.54 vs XLSX 353.54 exact, 4/5 unique spot-checks 1:1, 1/5 legitimate 3-way replicate) | `3c80236` + Stage-3 fix |
 | **Governance** | ✅ short-language rule + doc cleanup + CONTEXT_HANDOFF trim 656→143 lines | n/a | `a5b88c8` |
 
-**Local branch**: `main` is **3 commits ahead of origin/main** (`a5b88c8` + `4c14920` + `3c80236`). Push pending — user-controlled.
+**TBC bug discovered + fixed (2026-05-05):** `debitCredit` field convention was `0=outgoing, 1=incoming` (not `1/2` as connector assumed). 12 outgoing records (incl. 1,900 ₾ ELIZI debt-payment) had been misclassified as `dc=0` (default). Fix: `is_debit = m.debit_credit == 0`. Verified offline against cached SOAP response — totals match 100%, 4 unique spot-checks 1:1 with `03.2026.xlsx` sheet `transactions_history`.
 
-⚠️ **TBC account temporary block** (Stage 3 verify blocker):
-- Cause: SDK SOAPAction URI was undocumented in available materials → discovered via probing (`http://www.mygemini.com/schemas/mygemini/GetAccountMovements` confirmed correct, body wrapper `GetAccountMovementsRequestIo`, body field `accountMovementFilterIo` with `pager`/`accountNumber`/`accountCurrencyCode`/`periodFrom`/`periodTo`)
-- Wrong-attempts triggered TBC auto-block ("User is currently blocked")
-- Auto-unblock typically 15-30 min, OR call TBC support
-- After unblock: fresh DigiPass code → run `conn.fetch_movements(date(2026,3,1), date(2026,3,3), nonce='<9-digit OTP>')` → verify 104 records / 9,641.40 dbt / 9,994.94 crd / per-ID match vs `2026.xlsx` sheet `GE90TB7793336020100005-GEL`
+**Decision (2026-05-05): ALL THREE banks → API.** No XLSX fallback. TBC requires one DigiPass OTP per pipeline run (5-15 min validity, one-time use). BOG + rs.ge fully unattended via env-var creds. XLSX directories retained for historical archive only.
+
+**Local branch**: `main` is **3 commits ahead of origin/main** (`a5b88c8` + `4c14920` + `3c80236`) + Stage-3 fix to commit. Push pending — user-controlled.
 
 **Pipeline integration (BOG + TBC + rs.ge) NOT yet wired in** — connectors standalone, ready when user approves wire-in strategy.
 
@@ -77,24 +75,17 @@
 
 ## 4. ღია სამუშაო — შემდეგი session (priority order)
 
-1. **TBC Stage 3 verification** (BLOCKED until TBC account auto-unblocks, 15-30 min):
-   - Wait for auto-unblock OR user calls TBC support
-   - Get fresh DigiPass nonce from user (PIN 0777 → 9-digit OTP, ~5-15 min validity)
-   - Run: `from dashboard_pipeline.tbc_bank_connector import TBCBankConnector; from datetime import date; conn = TBCBankConnector(); movs = conn.fetch_movements(date(2026,3,1), date(2026,3,3), nonce='<OTP>')`
-   - Verify: 104 records, debit 9,641.40, credit 9,994.94 — per-ID match vs `2026.xlsx`
-   - **DO NOT** retry-storm the TBC SOAP if first attempt fails — investigate offline first to avoid re-block
-   - SDK URI confirmed: `http://www.mygemini.com/schemas/mygemini/GetAccountMovements`, wrapper `GetAccountMovementsRequestIo`
+1. **Pipeline wire-in** — replace `Financial_Analysis/{bank}/*.xlsx` consumption in `bank_reconciliation.py` with live API fetch. Three connectors share `to_xls_dataframe()` drop-in pattern. Order: BOG (fully automated) → rs.ge (fully automated) → TBC (needs UI button for DigiPass OTP entry).
 
-2. **Wire-in strategy decision** (user picks): live SOAP only / SOAP+XLSX augment / SOAP-current+XLSX-history (recommended — analog rs.ge Sprint A)
+2. **TBC DigiPass UX** — dashboard-side flow: button click → prompt for 9-digit OTP → invoke connector → fetch & ingest. Single OTP per pipeline run.
 
-3. **Pipeline wire-in** (separate sprint, user approval): replace `Financial_Analysis/{bank}/*.xlsx` consumption in `bank_reconciliation.py` with live API fetch — TBC + BOG + rs.ge all share the same `to_xls_dataframe()` drop-in pattern
+3. **Multi-month backtest** (one per bank): 12 months parity vs XLSX before fully retiring XLSX archive ingest. ~1 session per bank.
 
-4. **rs.ge Sprint A follow-ups** (carryover from morning):
+4. **rs.ge Sprint A follow-ups** (carryover):
    - SOAP run for 26 SOAP_PENDING orphan TINs (~5 min) → updates `Financial_Analysis/orphan_resolver_review_2026-05-04.xlsx`
    - User reviews orphan Excel and applies 4,647 mappings via MegaPlus UI
-   - Pipeline integration of `rs_waybill_connector` (separate Sprint, user approval)
 
-5. **Push** — 3 local commits ahead of origin/main (`a5b88c8`, `4c14920`, `3c80236`)
+5. **Push** — local commits ahead of origin/main (`a5b88c8`, `4c14920`, `3c80236`) + this session's Stage-3 fix
 
 ---
 
