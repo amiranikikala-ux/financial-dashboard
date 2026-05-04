@@ -222,7 +222,13 @@ def _g(d: dict, *keys: str) -> Any:
 
 def _g_str(d: dict, *keys: str) -> str:
     v = _g(d, *keys)
-    return str(v) if v is not None else ""
+    if v is None:
+        return ""
+    # BOG returns numeric IDs as floats — XLSX/pipeline expect int-string
+    # form (e.g. "112251085657" not "112251085657.0").
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))
+    return str(v)
 
 
 def _g_float(d: dict, *keys: str) -> float:
