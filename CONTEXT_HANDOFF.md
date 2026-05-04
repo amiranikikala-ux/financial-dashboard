@@ -1,20 +1,31 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-04 საღამო. 2026-05-03 / 2026-05-04 morning ისტორია → `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-03_2026-05-04.md`. წინა → `CONTEXT_HISTORY_2026-04_2026-05-02.md`.
+> **განახლდა**: 2026-05-04 ღამე. 2026-05-03 / 2026-05-04 morning ისტორია → `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-03_2026-05-04.md`. წინა → `CONTEXT_HISTORY_2026-04_2026-05-02.md`.
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 1. ბოლო session-ის შედეგი (2026-05-04)
+## 1. ბოლო session-ის შედეგი (2026-05-04 ღამე)
 
-🎉 **ბანკების ინტეგრაცია PROOFED ერთ დღეში** (3 სპრინტი):
+🎉 **3 ბანკის connector კოდი მზადაა** + დღევანდელი governance cleanup დამთავრდა.
 
-- **rs.ge Sprint A** — production connector module + orphan resolver delivered + committed (`52de7ba` / `bf8d204` / `dc2f9de`)
-- **BOG** Stage 1-3 — auth + live API + 100% XLSX parity (453 ჩანაწერი, debit 3,891.84 / credit 5,336.42)
-- **TBC DBI** Stage 0-2 — auth + XLSX parity (104 ჩანაწერი, debit 9,641.40 / credit 9,994.94)
+| ბანკი | Connector | Live verify | Commit |
+|---|---|---|---|
+| **rs.ge** | ✅ committed earlier | ✅ PROOFED | `52de7ba`/`bf8d204`/`dc2f9de` |
+| **BOG** | ✅ committed | ✅ **PROOFED** (453 records / 3,891.84 dbt / 5,336.42 crd, 100% parity 2026-03-01..03) | `4c14920` |
+| **TBC DBI** | ✅ committed | ⏳ **PENDING** (account blocked — too many wrong-action probes during URI discovery) | `3c80236` |
+| **Governance** | ✅ short-language rule + doc cleanup + CONTEXT_HANDOFF trim 656→143 lines | n/a | `a5b88c8` |
 
-⚠️ BOG + TBC: production კოდი ჯერ არ დაწერილა, pipeline wire-in ჯერ არ მომხდარა — მხოლოდ scratch test artifacts (gitignored).
+**Local branch**: `main` is **3 commits ahead of origin/main** (`a5b88c8` + `4c14920` + `3c80236`). Push pending — user-controlled.
+
+⚠️ **TBC account temporary block** (Stage 3 verify blocker):
+- Cause: SDK SOAPAction URI was undocumented in available materials → discovered via probing (`http://www.mygemini.com/schemas/mygemini/GetAccountMovements` confirmed correct, body wrapper `GetAccountMovementsRequestIo`, body field `accountMovementFilterIo` with `pager`/`accountNumber`/`accountCurrencyCode`/`periodFrom`/`periodTo`)
+- Wrong-attempts triggered TBC auto-block ("User is currently blocked")
+- Auto-unblock typically 15-30 min, OR call TBC support
+- After unblock: fresh DigiPass code → run `conn.fetch_movements(date(2026,3,1), date(2026,3,3), nonce='<9-digit OTP>')` → verify 104 records / 9,641.40 dbt / 9,994.94 crd / per-ID match vs `2026.xlsx` sheet `GE90TB7793336020100005-GEL`
+
+**Pipeline integration (BOG + TBC + rs.ge) NOT yet wired in** — connectors standalone, ready when user approves wire-in strategy.
 
 ---
 
@@ -66,26 +77,24 @@
 
 ## 4. ღია სამუშაო — შემდეგი session (priority order)
 
-1. **TBC Stage 3 design** — `dashboard_pipeline/tbc_bank_connector.py` (analog `rs_waybill_connector.py`):
-   - `TBCBankConnector(username, password)` with auto-load `.env`
-   - `fetch_movements(start, end, nonce)` with internal paging (700 max per page)
-   - `to_xls_dataframe(movements)` matching the 24-column XLSX schema
-   - Interactive Nonce prompt (DigiPass cannot be automated)
-   - Composite join key (docNum + amount + counterparty)
+1. **TBC Stage 3 verification** (BLOCKED until TBC account auto-unblocks, 15-30 min):
+   - Wait for auto-unblock OR user calls TBC support
+   - Get fresh DigiPass nonce from user (PIN 0777 → 9-digit OTP, ~5-15 min validity)
+   - Run: `from dashboard_pipeline.tbc_bank_connector import TBCBankConnector; from datetime import date; conn = TBCBankConnector(); movs = conn.fetch_movements(date(2026,3,1), date(2026,3,3), nonce='<OTP>')`
+   - Verify: 104 records, debit 9,641.40, credit 9,994.94 — per-ID match vs `2026.xlsx`
+   - **DO NOT** retry-storm the TBC SOAP if first attempt fails — investigate offline first to avoid re-block
+   - SDK URI confirmed: `http://www.mygemini.com/schemas/mygemini/GetAccountMovements`, wrapper `GetAccountMovementsRequestIo`
 
-2. **BOG Stage 4 design** — `dashboard_pipeline/bog_bank_connector.py`:
-   - `BOGBankConnector(client_id, client_secret)` with auto-load `.env`
-   - `fetch_statement(start, end)` with internal date-window slicing for 1000-limit
-   - `to_xls_dataframe(records)` matching 26-column XLSX schema
+2. **Wire-in strategy decision** (user picks): live SOAP only / SOAP+XLSX augment / SOAP-current+XLSX-history (recommended — analog rs.ge Sprint A)
 
-3. **Wire-in strategy decision** (user picks): live SOAP only / SOAP+XLSX augment / SOAP-current+XLSX-history (recommended — analog rs.ge Sprint A)
+3. **Pipeline wire-in** (separate sprint, user approval): replace `Financial_Analysis/{bank}/*.xlsx` consumption in `bank_reconciliation.py` with live API fetch — TBC + BOG + rs.ge all share the same `to_xls_dataframe()` drop-in pattern
 
 4. **rs.ge Sprint A follow-ups** (carryover from morning):
    - SOAP run for 26 SOAP_PENDING orphan TINs (~5 min) → updates `Financial_Analysis/orphan_resolver_review_2026-05-04.xlsx`
    - User reviews orphan Excel and applies 4,647 mappings via MegaPlus UI
    - Pipeline integration of `rs_waybill_connector` (separate Sprint, user approval)
 
-5. **Cleanup** — 8 `_scratch_tbc_*` + 4 `_scratch_bog_*` + 6 `_scratch_rs_*` files (all gitignored) — delete after wire-in commits
+5. **Push** — 3 local commits ahead of origin/main (`a5b88c8`, `4c14920`, `3c80236`)
 
 ---
 
@@ -112,7 +121,7 @@
 | Tool surface | 29 (incl. `data_quality_guard`) |
 | Dashboard tabs | 16 |
 | `data.json` | 106 MB (post-MegaPlus-rediscovery, 2026-05-03) |
-| Local branch | `main` up-to-date with `origin/main` |
+| Local branch | `main` 3 commits ahead of `origin/main` (push pending) |
 | MegaPlus DB integration | LIVE — 53 tables / 282+308 suppliers across 2 stores / 720K active orders / 2024-03 → 2026-04 |
 | MegaPlus watch folder layout | `Financial_Analysis/მეგაპლიუსის არქიტექტურა/{დვაბზუ,ოზურგეთი}/` (legacy `მეგა პლუს backup*` glob still supported) |
 | Phase B exploratory data | POS active rows 1,552,457 (4yr); negative-margin 4.13% / 95,682 ₾ loss; PRODUCTS orphans 4,918 / 685,804 ₾ (verified 2026-05-04, 2x larger than chat-history claim) |
