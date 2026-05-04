@@ -101,6 +101,7 @@ from dashboard_pipeline.constants import (
 # Module imports — file utilities
 # ---------------------------------------------------------------------------
 from dashboard_pipeline.bank_cache import list_bog_statement_paths
+from dashboard_pipeline.rsge_cache import list_rsge_waybill_paths
 from dashboard_pipeline.file_utils import (
     set_anchor_file,
     _financial_analysis_path,
@@ -310,7 +311,7 @@ def _load_pipeline_config(script_dir):
             {
                 "label_ka": "RS ზედნადები",
                 "source_kind": "rs_waybills",
-                "paths": list_rs_waybill_files(),
+                "paths": list_rsge_waybill_paths(),
             },
             {
                 "label_ka": "შემოტანილი პროდუქცია",
@@ -1248,10 +1249,11 @@ def _read_and_parse_rs(rs_files, object_mapping):
 
     Returns (df, agg_df) or (None, None) if no RS data.
     """
+    from dashboard_pipeline.rsge_cache import read_waybill_file
     all_rs = []
     for f in rs_files:
         try:
-            df = pd.read_excel(f)
+            df = read_waybill_file(f)
             df['file_source'] = os.path.basename(f)
             all_rs.append(df)
         except Exception as e:
@@ -1392,7 +1394,7 @@ def run():
     tbc_foodmart_cashback_bundle = inc["tbc_foodmart_cashback_bundle"]
 
     logger.info("Reading RS files...")
-    rs_files = list_rs_waybill_files()
+    rs_files = list_rsge_waybill_paths()
     imported_products_bundle = collect_imported_products_bundle(
         rs_files, object_mapping=object_mapping
     )
@@ -1742,9 +1744,9 @@ def run():
                         load_rs_waybills,
                         reconcile,
                     )
-                    rs_folder = fa_dir / "რს ზედნადები"
-                    if rs_folder.is_dir():
-                        rs_df = load_rs_waybills(rs_folder)
+                    rsge_paths = list_rsge_waybill_paths()
+                    if rsge_paths:
+                        rs_df = load_rs_waybills(rsge_paths)
                         per_store_data = {}
                         for sid, rollup in (megaplus_combined.get("stores") or {}).items():
                             wd = (rollup or {}).get("waybill_data")

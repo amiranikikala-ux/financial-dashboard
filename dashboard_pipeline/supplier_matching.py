@@ -23,6 +23,7 @@ from dashboard_pipeline.bank_cache import (
     list_bog_statement_paths,
     read_bank_statement,
 )
+from dashboard_pipeline.rsge_cache import read_waybill_file
 from dashboard_pipeline.file_utils import (
     _normalize_iban_ge,
     clean_id,
@@ -226,7 +227,7 @@ def build_supplier_master(rs_files, supplier_registry=None):
 
     for f in sorted(rs_files):
         try:
-            df = pd.read_excel(f)
+            df = read_waybill_file(f)
         except Exception:
             continue
         if "ორგანიზაცია" not in df.columns:
@@ -426,7 +427,7 @@ def _build_waybill_reference_index(rs_files):
     ref_to_supplier_ids = defaultdict(set)
     for f in sorted(rs_files):
         try:
-            df = pd.read_excel(f)
+            df = read_waybill_file(f)
         except Exception:
             continue
         if "ორგანიზაცია" not in df.columns or "ზედნადები" not in df.columns:
@@ -454,7 +455,7 @@ def collect_rs_tax_ids(rs_files):
     ids = set()
     for f in sorted(rs_files):
         try:
-            df = pd.read_excel(f)
+            df = read_waybill_file(f)
             for org in df['ორგანიზაცია'].dropna().unique():
                 m = re.search(r'\((\d+)', str(org))
                 if m:

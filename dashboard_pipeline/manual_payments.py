@@ -12,6 +12,7 @@ import pandas as pd
 from dashboard_pipeline.date_filters import parse_source_datetime
 from dashboard_pipeline.logging_config import get_logger
 from dashboard_pipeline.file_utils import _financial_analysis_path, clean_id
+from dashboard_pipeline.rsge_cache import read_waybill_file
 
 logger = get_logger(__name__)
 
@@ -129,7 +130,7 @@ def collect_rs_suppliers_by_tax_id(rs_files):
     by_id = {}
     for f in sorted(rs_files):
         try:
-            d = pd.read_excel(f)
+            d = read_waybill_file(f)
             if "ორგანიზაცია" not in d.columns:
                 continue
             for org in d["ორგანიზაცია"].dropna().unique():

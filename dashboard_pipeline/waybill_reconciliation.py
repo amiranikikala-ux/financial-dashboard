@@ -122,17 +122,20 @@ def parse_g_time(g_time: int | str | None) -> pd.Timestamp | None:
         return None
 
 
-def load_rs_waybills(folder: Path) -> pd.DataFrame:
-    """Read every `*.xls` from the rs.ge folder, normalize columns.
+def load_rs_waybills(paths) -> pd.DataFrame:
+    """Read every rs.ge waybill source path (parquet or .xls), normalize columns.
+
+    `paths` is an iterable of file paths. Auto-dispatches via
+    `rsge_cache.read_waybill_file` so cache-parquet and legacy XLS both work.
 
     Returns a DataFrame with normalized columns:
       zed, zed_base, status, type, tax_id, supplier_name, amount,
       act_date, cancel_date, destination, source_file
     """
-    folder = Path(folder)
+    from dashboard_pipeline.rsge_cache import read_waybill_file
     frames = []
-    for path in sorted(folder.glob("*.xls")):
-        df = pd.read_excel(path, dtype=str)
+    for path in sorted(Path(p) for p in paths):
+        df = read_waybill_file(path)
         df["_source_file"] = path.name
         frames.append(df)
     if not frames:
