@@ -262,11 +262,15 @@ def _read_imported_products_file(path):
 
 def _bank_positive_debit_total_ge():
     """BOG+TBC all files positive debit total — same filter as get_bank_payments."""
+    from dashboard_pipeline.bank_cache import (
+        list_bog_statement_paths,
+        read_bank_statement,
+    )
+
     total = 0.0
-    for f in list_bog_bank_statement_xlsx():
+    for f in list_bog_statement_paths():
         try:
-            header_idx = find_header_row(f)
-            df = pd.read_excel(f, header=header_idx)
+            df = read_bank_statement(f)
             cols = df.columns
             debit_col = next(
                 (c for c in cols if "დებეტი" in str(c) and "ბრუნვა" not in str(c)), None

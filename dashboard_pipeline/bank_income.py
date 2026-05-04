@@ -33,6 +33,10 @@ from dashboard_pipeline.constants import (
     _object_order_for_pos,
     detect_object,
 )
+from dashboard_pipeline.bank_cache import (
+    list_bog_statement_paths,
+    read_bank_statement,
+)
 from dashboard_pipeline.file_utils import (
     find_header_row,
     _excel_cell,
@@ -250,12 +254,11 @@ def _process_tbc_samurneo_file(path, *, patterns, include_all):
 
 
 def _process_bog_samurneo_file(path, *, patterns, include_all):
-    """Parse one BOG yearly xlsx into per-file samurneo aggregates."""
+    """Parse one BOG yearly cache file into per-file samurneo aggregates."""
     out_exp = []
     out_ret = []
     try:
-        header_idx = find_header_row(path)
-        df = pd.read_excel(path, header=header_idx)
+        df = read_bank_statement(path)
     except Exception as exc:
         logger.error("BOG samurneo %s: %s", path, exc)
         return {
@@ -453,7 +456,7 @@ def collect_bog_samurneo_flow(
     """Aggregate BOG samurneo flow across all BOG yearly xlsx files."""
     patterns, include_all = _load_samurneo_patterns(script_dir)
     fingerprint = _content_fingerprint_samurneo(patterns, include_all, bank="BOG")
-    files = list(list_bog_bank_statement_xlsx())
+    files = [str(p) for p in list_bog_statement_paths()]
     payloads = _run_cached_per_file(
         files,
         processor=lambda f: _process_bog_samurneo_file(
@@ -600,10 +603,9 @@ def _empty_tax_flow_payload(status):
 
 
 def _process_bog_tax_flow_file(path, *, patterns, treasury_in_markers):
-    """Parse one BOG yearly xlsx into per-file tax-flow aggregates."""
+    """Parse one BOG yearly cache file into per-file tax-flow aggregates."""
     try:
-        header_idx = find_header_row(path)
-        df = pd.read_excel(path, header=header_idx)
+        df = read_bank_statement(path)
     except Exception as exc:
         logger.error("BOG tax flow %s: %s", path, exc)
         return _empty_tax_flow_payload("read_error")
@@ -806,7 +808,7 @@ def collect_tax_flow(script_dir, *, use_cache: bool = False, cache_path=None):
     patterns, treasury_in_markers = _load_tax_flow_config(script_dir)
     fingerprint = _content_fingerprint_tax_flow(patterns, treasury_in_markers)
 
-    bog_files = list(list_bog_bank_statement_xlsx())
+    bog_files = [str(p) for p in list_bog_statement_paths()]
     tbc_files = list(list_tbc_bank_statement_xlsx())
     bog_norm = {os.path.normpath(p) for p in bog_files}
     all_files = list(bog_files) + list(tbc_files)
@@ -1058,10 +1060,9 @@ def _empty_bog_pos_payload(status):
 
 
 def _process_bog_pos_terminal_income_file(path, *, patterns, object_mapping):
-    """Parse one BOG yearly xlsx into per-file POS-income aggregates."""
+    """Parse one BOG yearly cache file into per-file POS-income aggregates."""
     try:
-        header_idx = find_header_row(path)
-        df = pd.read_excel(path, header=header_idx)
+        df = read_bank_statement(path)
     except Exception as exc:
         logger.error("BOG POS income %s: %s", path, exc)
         return _empty_bog_pos_payload("read_error")
@@ -1132,7 +1133,7 @@ def collect_bog_pos_terminal_income(
     patterns = _load_bog_pos_patterns(script_dir)
     object_mapping = object_mapping or load_object_mapping(script_dir)
     fingerprint = _content_fingerprint_bog_pos(patterns, object_mapping)
-    files = list(list_bog_bank_statement_xlsx())
+    files = [str(p) for p in list_bog_statement_paths()]
     payloads = _run_cached_per_file(
         files,
         processor=lambda f: _process_bog_pos_terminal_income_file(
@@ -1532,11 +1533,10 @@ def _process_tbc_expense_categories_file(
 def _process_bog_expense_categories_file(
     path, *, cats_norm, object_mapping, other_id
 ):
-    """Parse one BOG yearly xlsx into per-category row lists."""
+    """Parse one BOG yearly cache file into per-category row lists."""
     rows_by_category = {}
     try:
-        header_idx = find_header_row(path)
-        df = pd.read_excel(path, header=header_idx)
+        df = read_bank_statement(path)
     except Exception as exc:
         logger.error("BOG expenses %s: %s", path, exc)
         return {"status": "read_error", "rows_by_category": {}}
@@ -1674,7 +1674,7 @@ def collect_bog_expense_categories(
     fingerprint = _content_fingerprint_expense_categories(
         cfg_blob, object_mapping, bank="BOG", other_id=BOG_OTHER_EXPENSE_ID
     )
-    files = list(list_bog_bank_statement_xlsx())
+    files = [str(p) for p in list_bog_statement_paths()]
     payloads = _run_cached_per_file(
         files,
         processor=lambda f: _process_bog_expense_categories_file(

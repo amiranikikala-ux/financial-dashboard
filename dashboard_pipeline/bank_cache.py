@@ -128,10 +128,36 @@ def append_bog_cache(df_new: pd.DataFrame) -> dict[int, int]:
     return added
 
 
+def list_bog_statement_paths() -> list[Path]:
+    """Sorted list of BOG cache parquet files (one per year)."""
+    if not BOG_DIR.exists():
+        return []
+    return sorted(BOG_DIR.glob("*.parquet"))
+
+
+def read_bank_statement(path) -> pd.DataFrame:
+    """Auto-dispatch: parquet → read_parquet; xlsx/xls → find_header_row + read_excel.
+
+    Returned DataFrame uses the same Georgian column names whether the source
+    is parquet or XLSX, so downstream column-lookup code is unaffected.
+    """
+    p = Path(path)
+    suffix = p.suffix.lower()
+    if suffix == ".parquet":
+        return pd.read_parquet(p)
+    if suffix in (".xlsx", ".xls"):
+        from dashboard_pipeline.file_utils import find_header_row
+        header_idx = find_header_row(str(p))
+        return pd.read_excel(p, header=header_idx)
+    raise ValueError(f"read_bank_statement: unsupported extension {suffix!r} ({p})")
+
+
 __all__ = [
     "read_bog_cache",
     "write_bog_cache",
     "append_bog_cache",
+    "list_bog_statement_paths",
+    "read_bank_statement",
     "BOG_DIR",
     "CACHE_ROOT",
 ]

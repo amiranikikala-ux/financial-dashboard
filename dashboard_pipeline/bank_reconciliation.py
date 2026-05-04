@@ -29,6 +29,10 @@ from dashboard_pipeline.constants import (
     RECON_FINAL_STATUSES,
     RECON_MATCH_STATUSES,
 )
+from dashboard_pipeline.bank_cache import (
+    list_bog_statement_paths,
+    read_bank_statement,
+)
 from dashboard_pipeline.date_filters import parse_source_datetime
 from dashboard_pipeline.file_utils import (
     _excel_cell,
@@ -1011,10 +1015,9 @@ def get_bank_payments(
 
     raw_lines = []
     logger.info("Reading BOG bank statements...")
-    for f in list_bog_bank_statement_xlsx():
+    for f in list_bog_statement_paths():
         try:
-            header_idx = find_header_row(f)
-            df = pd.read_excel(f, header=header_idx)
+            df = read_bank_statement(f)
             cols = df.columns
             debit_col = next(
                 (c for c in cols if "\u10d3\u10d4\u10d1\u10d4\u10e2\u10d8" in str(c) and "\u10d1\u10e0\u10e3\u10dc\u10d5\u10d0" not in str(c)),

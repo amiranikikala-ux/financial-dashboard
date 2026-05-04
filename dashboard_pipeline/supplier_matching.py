@@ -19,6 +19,10 @@ from dashboard_pipeline.config_loaders import (
     load_supplier_matching_registry,
     supplier_matching_registry_path,
 )
+from dashboard_pipeline.bank_cache import (
+    list_bog_statement_paths,
+    read_bank_statement,
+)
 from dashboard_pipeline.file_utils import (
     _normalize_iban_ge,
     clean_id,
@@ -469,7 +473,7 @@ def infer_bog_receiver_id_to_rs_tax_id(rs_files, bog_glob=None):
     სხვა შემთხვევაში — glob-ის სტრიქონი (ტესტი/სპეც. შერჩევა).
     """
     if bog_glob is None:
-        bog_files = list_bog_bank_statement_xlsx()
+        bog_files = [str(p) for p in list_bog_statement_paths()]
     else:
         bog_files = sorted(glob.glob(bog_glob))
     rs_tax_ids = collect_rs_tax_ids(rs_files)
@@ -477,8 +481,7 @@ def infer_bog_receiver_id_to_rs_tax_id(rs_files, bog_glob=None):
     targets = defaultdict(set)
     for f in bog_files:
         try:
-            header_idx = find_header_row(f)
-            df = pd.read_excel(f, header=header_idx)
+            df = read_bank_statement(f)
             cols = df.columns
             debit_col = next(
                 (c for c in cols if 'დებეტი' in str(c) and 'ბრუნვა' not in str(c)), None

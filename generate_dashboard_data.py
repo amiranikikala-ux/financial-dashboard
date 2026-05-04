@@ -100,6 +100,7 @@ from dashboard_pipeline.constants import (
 # ---------------------------------------------------------------------------
 # Module imports — file utilities
 # ---------------------------------------------------------------------------
+from dashboard_pipeline.bank_cache import list_bog_statement_paths
 from dashboard_pipeline.file_utils import (
     set_anchor_file,
     _financial_analysis_path,
@@ -299,7 +300,7 @@ def _load_pipeline_config(script_dir):
             {
                 "label_ka": "BOG ბანკის ამონაწერი",
                 "source_kind": "bog_bank_statement",
-                "paths": list_bog_bank_statement_xlsx(),
+                "paths": [str(p) for p in list_bog_statement_paths()],
             },
             {
                 "label_ka": "TBC ბანკის ამონაწერი",
