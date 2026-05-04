@@ -1,62 +1,48 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-04 ღამე (Sprint A Step 4-5: cache infrastructure built + verified). წინა → `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-03_2026-05-04.md`. ადრე → `CONTEXT_HISTORY_2026-04_2026-05-02.md`.
+> **განახლდა**: 2026-05-05 ღამე (Sprint A Step 4b: BOG pipeline wire-in PROOFED — Sprint A სრულად დახურულია). წინა → `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-03_2026-05-04.md`. ადრე → `CONTEXT_HISTORY_2026-04_2026-05-02.md`.
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-04 ღამე) — Sprint A Step 4-5 PROOFED
+## 0. ბოლო session-ის შედეგი (2026-05-05 ღამე) — Sprint A Step 4b PROOFED · Sprint A CLOSED
 
-🎉 **BOG cache infrastructure built + full backfill verified 1:1 vs XLSX across 4 years.**
+🎉 **ბოგ-ის pipeline ექსკლუზიურად parquet cache-დან კითხულობს. Excel ფაილები აღარაა pipeline-ის dependency.**
 
 | საკითხი | სტატუსი |
 |---|---|
-| `dashboard_pipeline/bank_cache.py` (read/write/append parquet) | ✅ NEW |
-| `dashboard_pipeline/_backfill_bog.py` (one-time CLI runner) | ✅ NEW |
-| `requirements.txt` (+pyarrow==24.0.0) | ✅ |
-| `Financial_Analysis/cache/bog/{2023,2024,2025,2026}.parquet` | ✅ 171,869 rows total (gitignored) |
-| Q1 2025 parity proof (XLSX vs API) | ✅ 11,912=11,912 / debit 139,708.09 / credit 138,965.08 / 5/5 spot-checks |
-| 2023 Apr-Dec parity (XLSX-covered window) | ✅ 26,892=26,892 / 0.00 ₾ diff / all 26,892 EntryIds match |
-| 2024 full-year parity | ✅ 53,935=53,935 / 0.00 ₾ diff |
-| 2025 full-year parity | ✅ 65,116=65,116 / 0.00 ₾ diff |
-| 2026 Feb parity | ✅ 4,644=4,644 / 0.00 ₾ diff |
-| 2026 Mar parity | ✅ (already PROOFED 2026-05-05 prior; 5,075 rows) |
-| Append-only idempotency | ✅ re-running on overlap window adds 0 rows |
+| `bank_cache.py::list_bog_statement_paths()` + `read_bank_statement()` (auto-dispatch parquet/xlsx) | ✅ NEW |
+| 8 surgical edits (handoff-ში 6 + ნაპოვნი 2 დამატებითი ad hoc) | ✅ |
+| `bank_reconciliation.py::get_bank_payments` (BOG read loop) | ✅ |
+| `bank_income.py::_process_bog_samurneo_file` | ✅ |
+| `bank_income.py::_process_bog_pos_terminal_income_file` | ✅ |
+| `bank_income.py::_process_bog_expense_categories_file` | ✅ |
+| `bank_income.py::_process_bog_tax_flow_file` (helper called from tax_flow dispatcher) | ✅ |
+| `bank_income.py::tax_flow` path-list site | ✅ |
+| `file_utils.py::_bank_positive_debit_total_ge` (debit cross-check) | ✅ |
+| `supplier_matching.py::infer_bog_receiver_id_to_rs_tax_id` (NEW — handoff missed) | ✅ |
+| `generate_dashboard_data.py` source-manifest path list (NEW — handoff missed) | ✅ |
+| Pipeline run (12 წუთი, 0 errors / 0 warnings, data.json 101.36 MB) | ✅ |
+| Diff vs pre-swap baseline (27/30 numeric sub-sections IDENTICAL) | ✅ |
 
-**Two new facts surfaced:**
-1. **2023 Jan-Mar — bonus history.** XLSX `2023.xlsx` only covers `01.04.2023-31.12.2023` (period stamped in metadata row 6). API gave us **4,705 extra rows** for Jan-Mar 2023 — dashboard's historical depth will extend 3 months further once cache is wired in.
-2. **Second BOG account (`GE66BG0000000603627033GEL`)** — savings/deposit, NOT registered in API. Money never leaves company directly from it (always returns to main first). User-confirmed: don't register it. Saved as memory `project_bog_two_accounts.md`. XLSX/API "diff" rows in 2024 (8 rows = 690 ₾ in/out) and 2025 (3 rows = 500 ₾ in/out) are exclusively this account; net P&L impact = 0.
+**Numeric verification — `data.json` actual delta:**
 
-**Local branch**: `main` in sync with `origin/main` at session start; this session adds 1 NEW commit (cache infra + handoff). Push pending.
+| section | delta | მიზეზი |
+|---|---|---|
+| `pos_terminal_income.bog` | +11,312 lines / +109,086.96 ₾ ↑ | bonus historical depth |
+| `tax_flow.out` (BOG) | +6 lines / +10,338.83 ₾ ↑ | bonus historical depth |
+| `vat_reconciliation` | +109,086.96 ₾ gross / +92,446.58 ₾ net ↑ | mirrors POS rise (÷ 1.18) |
+| `bank_reconciliation`, `samurneo_movement`, `monthly_pnl`, `supplier_aging`, ე.ი. დანარჩენი | **IDENTICAL** | swap არ შეცვალა |
 
----
+**Bonus historical depth (cent-perfect explanation of ↑):**
+- 2023 Jan-Mar (XLSX `2023.xlsx` covered Apr-Dec only): +4,652 POS rows / +40,173.28 ₾
+- 2026 Apr-May (newer than `03.2026.xlsx` cutoff): +6,660 POS rows / +68,913.68 ₾
+- **Sum: +11,312 rows / +109,086.96 ₾** = data.json delta ✅ ცენტამდე
 
-## 0a. ღია — Sprint A Step 4 (continuation): pipeline wire-in (6 sites, not 5)
+**Commit**: `c4fd1c6` on `main`. Local branch is 3 commits ahead of `origin/main` (push pending — user-side).
 
-**არ დაწყებულა.** ფრთხილ სუფთა სესიას იმსახურებს — touches 6 production read sites in 3 files:
-
-| # | ფაილი : ფუნქცია | ხაზი | რას აკეთებს |
-|---|---|---|---|
-| 1 | `bank_reconciliation.py::get_bank_payments` | 1014 | BOG მიერ-XLSX iteration → reconcile lines |
-| 2 | `bank_income.py::_process_bog_samurneo_file` | 252 | per-file სამურნეო expense aggregates |
-| 3 | `bank_income.py::_process_bog_pos_terminal_income_file` | 1060 | POS-income aggregates |
-| 4 | `bank_income.py::_process_bog_expense_categories_file` | 1532 | expense-category aggregates |
-| 5 | `bank_income.py::tax_flow` BOG branch | 809 | **NEW — was missed in earlier handoff.** BOG part of `_run_cached_per_file` dispatcher (BOG+TBC mixed). |
-| 6 | `file_utils.py::_bank_positive_debit_total_ge` | 266 | reconciliation total cross-check |
-
-**Strategy** (agreed but not yet executed): add to `bank_cache.py`:
-- `list_bog_statement_paths()` → returns `Financial_Analysis/cache/bog/*.parquet` paths
-- `read_bank_statement(path)` → auto-dispatch by extension (parquet → `pd.read_parquet`; xlsx → `find_header_row` + `pd.read_excel`). TBC sites can use this verbatim — they keep XLSX paths until Sprint C.
-
-Then 6 surgical edits, each replacing `for f in list_bog_bank_statement_xlsx(): … find_header_row(f) … pd.read_excel(f, …)` with `for f in list_bog_statement_paths(): … read_bank_statement(f)`.
-
-**Risk:** caches in `_run_cached_per_file` use file fingerprint; switching from XLSX paths to parquet paths invalidates them all → first pipeline run after the swap is full-rebuild (slow but correct). Subsequent runs cache normally.
-
-**Verify after swap:**
-- Backup current `data.json` → run pipeline → diff numerically.
-- BOG-related figures **may legitimately rise** because of bonus 2023 Jan-Mar 4,705 rows (3 extra months of debit/credit feeding through samurneo / POS / expense categories / reconciliation totals). NOT a regression — historical depth gain.
-- Spot-check: per-month bank reconciliation totals 2024 onwards (where cache and XLSX are identical) must match 1:1 with prior data.json byte-for-byte for those months.
+**House-keeping**: `data.json.PRE_BOG_PARQUET_BACKUP` (106 MB) დაცულია repo-ფესვში შესადარებელ შეფერხებად — gitignored, წავშლი/წაშლის უფლება მომავალ session-ში.
 
 ---
 
@@ -146,19 +132,24 @@ Then 6 surgical edits, each replacing `for f in list_bog_bank_statement_xlsx(): 
 
 ---
 
-## 4. ღია სამუშაო — შემდეგი session (Sprint A = BOG pipeline wire-in)
+## 4. ღია სამუშაო — შემდეგი session (Sprint B = rs.ge pipeline wire-in)
 
-**Sprint A status (2026-05-04 ღამე):**
-- ✅ Step 2 (data inventory): 6 read sites identified — see §0a above (5 from earlier handoff + 1 missed: `bank_income.py::tax_flow` BOG branch line 809).
-- ✅ Step 3 (spot-check): Q1 2025 + full-year 2024/2025 + 2026 Feb verified 1:1 vs XLSX (see §0).
-- ✅ Step 4a (cache infra): `bank_cache.py` + `_backfill_bog.py` built; backfill 2023-01-01 → 2026-05-04 done (171,869 rows).
-- 🚧 **Step 4b (pipeline wire-in)** — **THIS is next session's primary task.** 6-site surgical refactor; details + risk in §0a.
-- ⏳ Step 5 (verify pipeline data.json): blocked on 4b.
-- ⏳ Step 6 (user review): blocked on 5.
+**Sprint A status: ✅ CLOSED** (commit `c4fd1c6`). All 6 steps done — scope agreed, data inventory complete (8 read sites, not 6), spot-check 1:1, cache infra (`bank_cache.py` + `_backfill_bog.py`, 171,869 rows), wire-in surgical refactor, pipeline verify (cent-perfect diff), see §0.
 
-**Then Sprint B (rs.ge), Sprint C (TBC + UI button + DigiPass modal).** Total 4-7 sessions estimated (Sprint A reduced because Step 4a is done).
+**Sprint B (rs.ge) — has not started.** Mirror Sprint A structure:
 
-**rs.ge Sprint A carryover (non-blocking, side task):**
+| Step | რა |
+|---|---|
+| 1. Scope agree | რს.ge connector უკვე PROOFED (§1). Repeat Sprint A's 6-step pattern: cache infra → wire-in → verify. |
+| 2. Data inventory | რს.ge XLSX read sites (not yet enumerated — find via `grep "list_rs_waybill_files"` and similar). |
+| 3. Spot-check | Compare connector output vs current XLSX outputs row-by-row, 5+ representative samples. |
+| 4. Cache infra | `bank_cache.py` extension or new `rsge_cache.py` — parquet store, append-only, per-year. Backfill runner. Schema = SOAP response shape. |
+| 5. Wire-in | Surgical refactor — replace `pd.read_excel(rs_xlsx)` sites with cache reads. |
+| 6. Verify | Pre-/post-swap data.json diff; bonus historical depth expected (similar to BOG). |
+
+**Then Sprint C** = TBC + UI ღილაკი + DigiPass modal (last sprint).
+
+**rs.ge Sprint A carryover (non-blocking, parallel side task):**
 - SOAP run for 26 SOAP_PENDING orphan TINs → updates `Financial_Analysis/orphan_resolver_review_2026-05-04.xlsx`
 - User reviews orphan Excel and applies 4,647 mappings via MegaPlus UI
 
@@ -186,8 +177,8 @@ Then 6 surgical edits, each replacing `for f in list_bog_bank_statement_xlsx(): 
 | pytest (key suites) | 39/39 waybill_reconciliation + 50/50 supplier_profitability + retail_sales_revenue_formula |
 | Tool surface | 29 (incl. `data_quality_guard`) |
 | Dashboard tabs | 16 |
-| `data.json` | 106 MB (post-MegaPlus-rediscovery, 2026-05-03) |
-| Local branch | `main` 3 commits ahead of `origin/main` (push pending) |
+| `data.json` | 101.36 MB (post-BOG-parquet-wire-in, 2026-05-05) |
+| Local branch | `main` 3 commits ahead of `origin/main` (push pending — user-side) |
 | MegaPlus DB integration | LIVE — 53 tables / 282+308 suppliers across 2 stores / 720K active orders / 2024-03 → 2026-04 |
 | MegaPlus watch folder layout | `Financial_Analysis/მეგაპლიუსის არქიტექტურა/{დვაბზუ,ოზურგეთი}/` (legacy `მეგა პლუს backup*` glob still supported) |
 | Phase B exploratory data | POS active rows 1,552,457 (4yr); negative-margin 4.13% / 95,682 ₾ loss; PRODUCTS orphans 4,918 / 685,804 ₾ (verified 2026-05-04, 2x larger than chat-history claim) |
