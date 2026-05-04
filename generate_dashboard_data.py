@@ -101,6 +101,7 @@ from dashboard_pipeline.constants import (
 # Module imports — file utilities
 # ---------------------------------------------------------------------------
 from dashboard_pipeline.bank_cache import list_bog_statement_paths
+from dashboard_pipeline.tbc_cache import list_tbc_statement_paths
 from dashboard_pipeline.rsge_cache import list_rsge_waybill_paths
 from dashboard_pipeline.file_utils import (
     set_anchor_file,
@@ -306,7 +307,7 @@ def _load_pipeline_config(script_dir):
             {
                 "label_ka": "TBC ბანკის ამონაწერი",
                 "source_kind": "tbc_bank_statement",
-                "paths": list_tbc_bank_statement_xlsx(),
+                "paths": [str(p) for p in list_tbc_statement_paths()],
             },
             {
                 "label_ka": "RS ზედნადები",

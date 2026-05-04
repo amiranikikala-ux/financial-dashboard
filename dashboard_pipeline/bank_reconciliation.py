@@ -33,6 +33,7 @@ from dashboard_pipeline.bank_cache import (
     list_bog_statement_paths,
     read_bank_statement,
 )
+from dashboard_pipeline.tbc_cache import list_tbc_statement_paths
 from dashboard_pipeline.date_filters import parse_source_datetime
 from dashboard_pipeline.file_utils import (
     _excel_cell,
@@ -1062,10 +1063,9 @@ def get_bank_payments(
             logger.error("Reading BOG %s: %s", f, e)
 
     logger.info("Reading TBC bank statements...")
-    for f in list_tbc_bank_statement_xlsx():
+    for f in [str(p) for p in list_tbc_statement_paths()]:
         try:
-            header_idx = find_header_row(f)
-            df = pd.read_excel(f, header=header_idx)
+            df = read_bank_statement(f)
             cols = df.columns
             debit_col = next((c for c in cols if "\u10d2\u10d0\u10e1\u10e3\u10da\u10d8 \u10d7\u10d0\u10dc\u10ee\u10d0" in str(c)), None)
             if not debit_col:

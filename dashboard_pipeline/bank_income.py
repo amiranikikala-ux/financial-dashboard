@@ -37,6 +37,7 @@ from dashboard_pipeline.bank_cache import (
     list_bog_statement_paths,
     read_bank_statement,
 )
+from dashboard_pipeline.tbc_cache import list_tbc_statement_paths
 from dashboard_pipeline.file_utils import (
     find_header_row,
     _excel_cell,
@@ -175,8 +176,7 @@ def _process_tbc_samurneo_file(path, *, patterns, include_all):
     out_exp = []
     out_ret = []
     try:
-        header_idx = find_header_row(path)
-        df = pd.read_excel(path, header=header_idx)
+        df = read_bank_statement(path)
     except Exception as exc:
         logger.error("TBC samurneo %s: %s", path, exc)
         return {
@@ -437,7 +437,7 @@ def collect_tbc_samurneo_flow(
     """
     patterns, include_all = _load_samurneo_patterns(script_dir)
     fingerprint = _content_fingerprint_samurneo(patterns, include_all, bank="TBC")
-    files = list(list_tbc_bank_statement_xlsx())
+    files = [str(p) for p in list_tbc_statement_paths()]
     payloads = _run_cached_per_file(
         files,
         processor=lambda f: _process_tbc_samurneo_file(
@@ -686,8 +686,7 @@ def _process_bog_tax_flow_file(path, *, patterns, treasury_in_markers):
 def _process_tbc_tax_flow_file(path, *, patterns, treasury_in_markers):
     """Parse one TBC yearly xlsx into per-file tax-flow aggregates."""
     try:
-        header_idx = find_header_row(path)
-        df = pd.read_excel(path, header=header_idx)
+        df = read_bank_statement(path)
     except Exception as exc:
         logger.error("TBC tax flow %s: %s", path, exc)
         return _empty_tax_flow_payload("read_error")
@@ -809,7 +808,7 @@ def collect_tax_flow(script_dir, *, use_cache: bool = False, cache_path=None):
     fingerprint = _content_fingerprint_tax_flow(patterns, treasury_in_markers)
 
     bog_files = [str(p) for p in list_bog_statement_paths()]
-    tbc_files = list(list_tbc_bank_statement_xlsx())
+    tbc_files = [str(p) for p in list_tbc_statement_paths()]
     bog_norm = {os.path.normpath(p) for p in bog_files}
     all_files = list(bog_files) + list(tbc_files)
 
@@ -910,8 +909,7 @@ def _process_tbc_foodmart_cashback_file(path, *, patterns):
     300 rows happens at merge time (matches samurneo template).
     """
     try:
-        header_idx = find_header_row(path)
-        df = pd.read_excel(path, header=header_idx)
+        df = read_bank_statement(path)
     except Exception as exc:
         logger.error("TBC foodmart cashback %s: %s", path, exc)
         return _empty_foodmart_cashback_payload("read_error")
@@ -976,7 +974,7 @@ def collect_tbc_foodmart_cashback(
     """
     patterns = list(FOODMART_CASHBACK_DEFAULT_PATTERNS)
     fingerprint = _content_fingerprint_foodmart_cashback(patterns)
-    files = list(list_tbc_bank_statement_xlsx())
+    files = [str(p) for p in list_tbc_statement_paths()]
     payloads = _run_cached_per_file(
         files,
         processor=lambda f: _process_tbc_foodmart_cashback_file(
@@ -1218,8 +1216,7 @@ def _process_tbc_card_income_file(path, *, terminal_ids, object_mapping):
     legitimate rows — the cache must not alter this filter semantics.
     """
     try:
-        header_idx = find_header_row(path)
-        df = pd.read_excel(path, header=header_idx)
+        df = read_bank_statement(path)
     except Exception as exc:
         logger.error("TBC card income %s: %s", path, exc)
         return _empty_tbc_card_income_payload("read_error")
@@ -1303,7 +1300,7 @@ def collect_tbc_card_income(
     fingerprint = _content_fingerprint_tbc_card_income(
         terminal_ids, label_ka, object_mapping
     )
-    files = list(list_tbc_bank_statement_xlsx())
+    files = [str(p) for p in list_tbc_statement_paths()]
     payloads = _run_cached_per_file(
         files,
         processor=lambda f: _process_tbc_card_income_file(
@@ -1488,8 +1485,7 @@ def _process_tbc_expense_categories_file(
     """
     rows_by_category = {}
     try:
-        header_idx = find_header_row(path)
-        df = pd.read_excel(path, header=header_idx)
+        df = read_bank_statement(path)
     except Exception as exc:
         logger.error("TBC expenses %s: %s", path, exc)
         return {"status": "read_error", "rows_by_category": {}}
@@ -1636,7 +1632,7 @@ def collect_tbc_expense_categories(
     fingerprint = _content_fingerprint_expense_categories(
         cfg_blob, object_mapping, bank="TBC", other_id=TBC_OTHER_EXPENSE_ID
     )
-    files = list(list_tbc_bank_statement_xlsx())
+    files = [str(p) for p in list_tbc_statement_paths()]
     payloads = _run_cached_per_file(
         files,
         processor=lambda f: _process_tbc_expense_categories_file(

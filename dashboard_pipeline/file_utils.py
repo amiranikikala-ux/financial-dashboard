@@ -266,6 +266,7 @@ def _bank_positive_debit_total_ge():
         list_bog_statement_paths,
         read_bank_statement,
     )
+    from dashboard_pipeline.tbc_cache import list_tbc_statement_paths
 
     total = 0.0
     for f in list_bog_statement_paths():
@@ -284,10 +285,9 @@ def _bank_positive_debit_total_ge():
                 total += float(amt)
         except Exception:
             continue
-    for f in list_tbc_bank_statement_xlsx():
+    for f in list_tbc_statement_paths():
         try:
-            header_idx = find_header_row(f)
-            df = pd.read_excel(f, header=header_idx)
+            df = read_bank_statement(f)
             cols = df.columns
             debit_col = next((c for c in cols if "გასული თანხა" in str(c)), None)
             if not debit_col:
