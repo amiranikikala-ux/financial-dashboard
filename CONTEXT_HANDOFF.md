@@ -1,8 +1,128 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-04 დღე (rolling from 2026-05-04 ღამე — **🎉 Sprint A (rs.ge connector) PROOFED + Sprint A addon (orphan resolver) DELIVERED — 4,647/4,918 PRODUCTS orphans (94.5%) auto-resolved with cross-source evidence; 271 unresolved breakdown verified as 245 NO_MATCH + 26 SOAP_PENDING**). **2 ახალი production module დაემატა**: `dashboard_pipeline/rs_waybill_connector.py` (live SOAP fetch + XLS-equivalent DataFrame) + `dashboard_pipeline/orphan_resolver.py` (read-only review file generator). **NO CHANGE TO LIVE PIPELINE, NO COMMITS, NO PUSH** — only new files under `dashboard_pipeline/` + new review xlsx in `Financial_Analysis/`. ადრინდელი დღის 3 commit (`61ffe93` + `e8dc73f` + `aef42c9`) ისევ local main-ზე — push pending. data.json fresh (106 MB, 2026-05-03 02:36).
+> **განახლდა**: 2026-05-04 საღამო (rolling from 2026-05-04 დღე — **🎉 TBC DBI Stage 1a + 1b + 2 PROOFED ერთი session-ში: 100% parity vs manual XLSX for window 2026-03-01 → 2026-03-03 (104 rows, debit 9,641.40 / credit 9,994.94 — match to the cent, 4/5 random documentNumber spot-checks exact, 1 spot-check artifact from documentNumber duplication on TBC side — non-blocking)**). NO production code change yet — only scratch artifacts (gitignored).
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`. სრული ისტორია (აპრილი 18 → მაისი 2) → `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-04_2026-05-02.md`.
+
+---
+
+## 0. დღევანდელი session-ი (2026-05-04 — Sprint A + Sprint A addon + BOG Stage 1-3 PROOFED + TBC DBI Stage 1a/1b PROOFED)
+
+### 0f. TBC DBI (Direct Bank Integration) — Stage 0/1a/1b/2 PROOFED საღამოს session-ში
+
+**Status**: ✅ end-to-end PROOFED — Stage 0 (research) + Stage 1a (password change) + Stage 1b (auth verification) + Stage 2 (XLSX parity 100% to the cent). Stage 3 (production connector module) ღია — separate sprint.
+
+**Source materials (user-provided + research, 2026-05-04 evening):**
+- `New folder/WSDL_XSD_and_Single_WSDL.zip` (TBC DBI WSDL/XSD v1.14, 2017-2023) — user-მა მოიტანა
+- Official docs: `developers.tbcbank.ge/docs/dbi-overview` + sub-pages (test environment, password change, account movement, digital certificate, go-live)
+- Official .NET SDK: `github.com/TBCBank/TBC.OpenAPI.SDK.DBI` (verified C# source — auth scheme + WS-Security pattern)
+
+**Verified facts (source-1:1):**
+
+| ფაქტი | მნიშვნელობა |
+|---|---|
+| **Production endpoint** | `https://dbi.tbconline.ge/dbi/dbiService` (Standard tier, NO certificate) |
+| Test endpoints | `https://test.tbconline.ge/dbi/dbiService` (no cert, requires TBCRootCer.cer locally — Python SSL handshake failed) · `https://secdbitst.tbconline.ge/dbi/dbiService` (with cert) |
+| Standard+ production | `https://secdbi.tbconline.ge/dbi/dbiService` (requires .pfx client cert) |
+| **Username** | `FOODTIME_TBC` (uppercase, with FOOD not FUD) |
+| **IBAN** | `GE90TB7793336020100005` (GEL) |
+| **Auth scheme** | WS-Security `UsernameToken` — **plain text** Username + Password + Nonce (verified from SDK `src/TBC.OpenAPI.SDK.DBI/Models/SecurityConfig.cs` — NO PasswordDigest, NO wsu:Created, NO Type attribute) |
+| **Nonce semantics** | DigiPass-generated 9-digit OTP (PIN: 0777, 9-digit code shown) — validity window ~5-15 min (one code reused successfully across 2 calls then expired on 3rd) |
+| **Password complexity** | 8+ chars · 1+ uppercase · 1+ lowercase · 1+ digit · 1+ symbol · cannot match username/old · `&` and `<` forbidden |
+| **5 services available** | StatementService (aggregates) · MovementService (per-transaction, paged 700 max) · PaymentService · PostboxService · ChangePasswordService |
+| **Statement vs Movement** | StatementService = aggregates only (opening/closing balance + debit/credit sums) · MovementService = per-transaction detail (40+ fields, BOG analog) |
+| **Movement field richer than BOG** | 40+ fields incl. partnerTaxCode · taxpayerCode · treasuryCode · operationCode · exchangeRate · partnerPersonalNumber/DocumentType (cash withdrawal) |
+| **DateTime format in requests** | `yyyy-MM-dd'T'HH:mm:ss.SSS` (e.g. `2026-03-01T00:00:00.000` — milliseconds REQUIRED) |
+| **Response wrapping** | `<accountMovement>` per-row (NOT `<movement>`) · `<result><pager><totalCount>` block |
+
+**Stage 1a — password change PROOFED (2026-05-04 evening):**
+- SMS one-time temporary password → user-chosen permanent (16 chars, satisfies complexity rules)
+- SOAP `ChangePasswordService.ChangePassword` returned: `<message>Credentials have been successfully changed!</message>`
+- Server response: HTTP 200, 383 bytes
+- Test artifact: `_scratch_tbc_chpwd.py`
+
+**Stage 1b — auth verification PROOFED (2026-05-04 evening):**
+- SOAP `StatementService.GetAccountStatement` for week 2026-04-27 → 2026-05-03
+- HTTP 200, real account data returned:
+
+| | მნიშვნელობა |
+|---|---|
+| openingDate | 2026-04-27 |
+| openingBalance | 571.12 ₾ |
+| closingDate | 2026-05-03 |
+| closingBalance | 322.64 ₾ |
+| creditSum | 27,319.82 ₾ |
+| debitSum | 27,568.30 ₾ |
+
+- Test artifact: `_scratch_tbc_auth.py` + `_scratch_tbc_auth_response.xml`
+
+**Stage 2 — XLSX parity PROOFED (2026-05-04 evening, 3rd run with fresh DigiPass `050570513`):**
+
+| | XLSX | SOAP | match |
+|---|---|---|---|
+| Record count | 104 | 104 | ✓ |
+| Sum debits | 9,641.40 ₾ | 9,641.40 ₾ | ✓ to the cent |
+| Sum credits | 9,994.94 ₾ | 9,994.94 ₾ | ✓ to the cent |
+| 5 random documentNumber spot-checks | 4/5 exact | — | ✓ amounts + partner names |
+
+**1 spot-check artifact (non-blocking):** documentNumber `1772438632` appeared multiple times on the TBC side (one fee row + one principal row sharing the same docNum). Spot-check's dict-keyed-by-docNum collapsed them, so XLSX side picked the -1.00 fee row while SOAP side picked the -480.00 principal row. Aggregate sums still match to the cent → both sides have all 104 rows. Resolution: production connector should key on a composite (docNum + amount + counterparty) when joining, not docNum alone.
+
+**Earlier debug iterations (now fixed in `_scratch_tbc_statement.py`):**
+- Filter element: `<accountMovementFilterIo>` (was `<filter>`)
+- Response element: `<accountMovement>` (was `<movement>`)
+- DateTime: added milliseconds `.000` / `.999`
+- DigiPass per-call validity: ~5-15 min — code `050570513` worked first try after fresh PIN entry
+
+**Live discovery — XLSX file naming convention:**
+- `03.2026.xlsx` actually contains **12 months** of data: 2025-03 → 2026-03 (NOT just March 2026)
+- 19,919 rows total for IBAN `GE90TB7793336020100005`
+- Per-month volume: ~1,500 rows/month, total debit/credit ~95K-140K ₾/month
+
+**Files added this session (all gitignored, all `_scratch_tbc_*` prefix):**
+
+| ფაილი | სტატუსი | რას აკეთებს |
+|---|---|---|
+| `_scratch_tbc_probe.py` | DONE (delete OK) | endpoint discovery probe (was used to find production URL) |
+| `_scratch_tbc_chpwd.py` | DONE | Stage 1a password change (one-shot, success) |
+| `_scratch_tbc_chpwd_request.xml` | DONE (delete OK) | debug — passwords redacted |
+| `_scratch_tbc_chpwd_response.xml` | DONE (delete OK) | server "successfully changed" message |
+| `_scratch_tbc_auth.py` | DONE | Stage 1b — fetches StatementService aggregates |
+| `_scratch_tbc_auth_response.xml` | DONE | live week aggregates response |
+| `_scratch_tbc_statement.py` | DONE | Stage 2 — MovementService + XLSX parity (PROOFED 2026-05-04 evening) |
+| `_scratch_tbc_statement_response.xml` | DONE | live 104-movement response, all pages concatenated |
+
+**.env additions (gitignored):**
+```
+TBC_DBI_ENDPOINT=https://dbi.tbconline.ge/dbi/dbiService
+TBC_USERNAME=FOODTIME_TBC
+TBC_PASSWORD=<set>
+TBC_NONCE=<requires fresh DigiPass code each run>
+TBC_ACCOUNT_NUMBER=GE90TB7793336020100005
+TBC_ACCOUNT_CURRENCY=GEL
+```
+
+**🆕 Critical operational finding — DigiPass automation limit:**
+- Hardware DigiPass token: PIN 0777 → 9-digit OTP, no USB/Bluetooth, NO automation path
+- Bank confirmed (separate phone call by user): DigiPass cannot be bypassed for DBI
+- Practical workflow: **interactive prompt** at sync time — user runs script, script asks "enter DigiPass code", user types 9 digits, script proceeds
+- One DigiPass code valid ~5-15 min window → enough for full backfill OR daily sync in single call
+- Daily friction: ~10 seconds of human input
+
+**Open for next session — priority order:**
+
+1. **Stage 3 design** — `dashboard_pipeline/tbc_bank_connector.py` (analog `rs_waybill_connector.py`):
+   - `TBCBankConnector(username, password)` with auto-load `.env`
+   - `fetch_movements(start, end, nonce)` with internal paging (700 max per page per docs)
+   - `to_xls_dataframe(movements)` matching the 24-column XLSX schema (`თარიღი / დანიშნულება / ტრანზაქციის ტიპი / თანხა / ვალუტა / ანგარიშის ნომერი / ...`) for drop-in replacement
+   - **Interactive Nonce prompt** OR `nonce` parameter (user-supplied per run)
+   - Composite join key (docNum + amount + counterparty) — single docNum collision verified Stage 2
+2. **Wire-in to pipeline** (separate sprint, user approval needed) — replace `Financial_Analysis/თბს ბანკი ამონაწერი/*.xlsx` consumption in `bank_reconciliation.py` with live SOAP fetch
+3. **Cleanup pending**: 8 `_scratch_tbc_*` files (all gitignored) — delete after Stage 3 connector module is committed
+
+**Decision points for user:**
+- Wire-in strategy: live SOAP only (no XLSX), OR augment (SOAP writes daily XLSX into existing folder, pipeline unchanged), OR SOAP for current period + XLSX preserved for history (recommended — analog rs.ge Sprint A finalization)
+- Whether to also add Standard+ certificate path (for future redundancy / if TBC requires migration to Standard+)
+- Whether to wire-in BOG production module first (already PROOFED Stage 3 in §0e) before TBC
 
 ---
 
