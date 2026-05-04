@@ -61,6 +61,8 @@ Financial_Analysis/გაყიდული პროდუქტები ს�
 Financial_Analysis/გაყიდული პროდუქტები სოფ დვაბზუ/
 # Imported products CSVs (RS.ge waybill data, sensitive supplier/price info)
 Financial_Analysis/შემოტანილი პროდუქცია/
+# MegaPlus daily backups (PLUS_*.zip — large, machine-local, regenerated each backup cycle)
+Financial_Analysis/მეგაპლიუსის არქიტექტურა/
 
 # Debug / scratch / temp ფაილები (სამუშაო, არა საბოლოო)
 debug_*.py
