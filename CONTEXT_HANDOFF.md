@@ -1,6 +1,6 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-05 (Stage 3 closure session). წინა მდგომარეობა → `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-03_2026-05-04.md`. ადრე → `CONTEXT_HISTORY_2026-04_2026-05-02.md`.
+> **განახლდა**: 2026-05-05 ღამე (wire-in scope agree session). წინა → `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-03_2026-05-04.md`. ადრე → `CONTEXT_HISTORY_2026-04_2026-05-02.md`.
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
@@ -8,22 +8,41 @@
 
 ## 1. ბოლო session-ის შედეგი (2026-05-05)
 
-🎉 **TBC Stage 3 PROOFED** — connector bug-ი (debitCredit კონვენცია) გასწორდა, live verify წარმატებული.
+🎉 **TBC Stage 3 PROOFED** + **BOG 1-month parity PROOFED** + **Variant 1 wire-in scope locked**.
 
 | ბანკი | Connector | Live verify | Commit |
 |---|---|---|---|
-| **rs.ge** | ✅ committed earlier | ✅ PROOFED | `52de7ba`/`bf8d204`/`dc2f9de` |
-| **BOG** | ✅ committed | ✅ **PROOFED** (453 records / 3,891.84 dbt / 5,336.42 crd, 100% parity 2026-03-01..03) | `4c14920` |
-| **TBC DBI** | ✅ committed + bug-fix | ✅ **PROOFED** (104 records / 9,641.40 dbt / 9,994.94 crd, signed-sum 353.54 vs XLSX 353.54 exact, 4/5 unique spot-checks 1:1, 1/5 legitimate 3-way replicate) | `3c80236` + Stage-3 fix |
-| **Governance** | ✅ short-language rule + doc cleanup + CONTEXT_HANDOFF trim 656→143 lines | n/a | `a5b88c8` |
+| **rs.ge** | ✅ | ✅ PROOFED | `52de7ba`/`bf8d204`/`dc2f9de` |
+| **BOG** | ✅ + ID-float fix | ✅ **PROOFED** 3 days + **1 full month** (March 2026: 5,075=5,075 records, debit 52,521.36 = 52,521.36, credit 53,521.33 = 53,521.33, 31 days exact, 5/5 ID spot-checks 1:1) | `4c14920` + `a7f4ea9` |
+| **TBC DBI** | ✅ + dc-convention fix | ✅ **PROOFED** (104=104, 9,641.40 / 9,994.94 exact, 4/5 unique 1:1) | `3c80236` + `ace7d9f` |
+| **Governance** | ✅ | n/a | `a5b88c8` |
 
-**TBC bug discovered + fixed (2026-05-05):** `debitCredit` field convention was `0=outgoing, 1=incoming` (not `1/2` as connector assumed). 12 outgoing records (incl. 1,900 ₾ ELIZI debt-payment) had been misclassified as `dc=0` (default). Fix: `is_debit = m.debit_credit == 0`. Verified offline against cached SOAP response — totals match 100%, 4 unique spot-checks 1:1 with `03.2026.xlsx` sheet `transactions_history`.
+**Two bugs found + fixed this session:**
+1. **TBC** `debitCredit` was `0/1`, not `1/2` — 12 outgoing records had been misclassified.
+2. **BOG** numeric IDs were returned as floats with trailing `.0` — broke per-row spot-checks against XLSX (e.g. `"112251085657.0"` vs `"112251085657"`). Fixed in `_g_str()` via `float.is_integer()` check.
 
-**Decision (2026-05-05): ALL THREE banks → API.** No XLSX fallback. TBC requires one DigiPass OTP per pipeline run (5-15 min validity, one-time use). BOG + rs.ge fully unattended via env-var creds. XLSX directories retained for historical archive only.
+**Local branch**: `main` is 5 commits ahead of `origin/main` — **all pushed** (latest: `a7f4ea9`).
 
-**Local branch**: `main` is **3 commits ahead of origin/main** (`a5b88c8` + `4c14920` + `3c80236`) + Stage-3 fix to commit. Push pending — user-controlled.
+---
 
-**Pipeline integration (BOG + TBC + rs.ge) NOT yet wired in** — connectors standalone, ready when user approves wire-in strategy.
+## 1b. Wire-in architecture — DECIDED 2026-05-05 ღამე (Variant 1, 10 locked decisions)
+
+| # | გადაწყვეტილება | მნიშვნელობა |
+|---|---|---|
+| 1 | Source | API only — no XLSX in pipeline |
+| 2 | Cache path | `C:\financial-dashboard\Financial_Analysis\cache\{bog,tbc,rsge}\` |
+| 3 | Cache format | parquet (one file per bank per year) |
+| 4 | Data model | **Append-only** — old records never mutate, refreshes only ADD new entries |
+| 5 | Trigger | Manual button only — NO background scheduler |
+| 6 | Button location | Top of bank tab, single "განახლება" button refreshes all 3 banks together |
+| 7 | Refresh flow | Button click → modal asks for DigiPass OTP → fetch BOG + rs.ge + TBC concurrently → cache append → dashboard reload, ~30-60s wait |
+| 8 | Backfill | One-time manual script, 2023-01-01 → today, runs via parent venv. Error → STOP + ask user |
+| 9 | Phase order | A. BOG (simplest, fully automated) → B. rs.ge → C. TBC + UI button. Each phase fully closed before next. |
+| 10 | Retroactive corrections | **DEFERRED** — user knowingly accepts that bank-side mutations to old records will be missed. If later observed to matter, add 30-day re-fetch + changes log feature. |
+
+**User-side note (2026-05-05 ღამე):** sessions ended on user fatigue + "თავიდან დავიწყოთ" framing. New chat is preferred for sprint A. This handoff carries the locked scope forward — **do not relitigate decisions 1-10 unless user reopens them explicitly**.
+
+**Pipeline integration (BOG + TBC + rs.ge) NOT yet wired in** — connectors standalone, parity verified. Sprint A = BOG read-site swap.
 
 ---
 
@@ -73,19 +92,34 @@
 
 ---
 
-## 4. ღია სამუშაო — შემდეგი session (priority order)
+## 4. ღია სამუშაო — შემდეგი session (Sprint A = BOG wire-in)
 
-1. **Pipeline wire-in** — replace `Financial_Analysis/{bank}/*.xlsx` consumption in `bank_reconciliation.py` with live API fetch. Three connectors share `to_xls_dataframe()` drop-in pattern. Order: BOG (fully automated) → rs.ge (fully automated) → TBC (needs UI button for DigiPass OTP entry).
+**Sprint A: BOG XLSX → cache wire-in** (Variant 1 per §1b above). Architecture fully agreed; do not relitigate.
 
-2. **TBC DigiPass UX** — dashboard-side flow: button click → prompt for 9-digit OTP → invoke connector → fetch & ingest. Single OTP per pipeline run.
+**Step 2 (data inventory) — start here:**
+- 4 BOG read sites identified: `bank_reconciliation.py::get_bank_payments` (line 1014–1018, main), `bank_income.py::_process_bog_samurneo_file` (252–258), `_process_bog_pos_terminal_income_file` (1060–1064), `_process_bog_expense_categories_file` (1532–1539). Plus `file_utils.py::_bank_positive_debit_total_ge` (266–269).
+- Adapter ready: `bog_bank_connector.to_xls_dataframe()` returns 26-Georgian-column DataFrame matching XLSX schema 1:1.
+- Header detection: pipeline uses `find_header_row(file)` (file_utils.py:106) to skip metadata block — cache rows go in flat (no metadata block needed). Pipeline read functions need a small abstraction: `_read_bog_dataframe()` helper that returns the same DataFrame whether sourced from XLSX or parquet cache.
 
-3. **Multi-month backtest** (one per bank): 12 months parity vs XLSX before fully retiring XLSX archive ingest. ~1 session per bank.
+**Step 3 (spot-check) — before any code:**
+- Already partially done: 1-month parity locked (March 2026, 5,075 rows, 5/5 ID spot-checks). Add: 2025 full-year spot-check (one quarter sample is enough — Q1 2025) to confirm pattern stability across the backfill window.
 
-4. **rs.ge Sprint A follow-ups** (carryover):
-   - SOAP run for 26 SOAP_PENDING orphan TINs (~5 min) → updates `Financial_Analysis/orphan_resolver_review_2026-05-04.xlsx`
-   - User reviews orphan Excel and applies 4,647 mappings via MegaPlus UI
+**Step 4 (implement BOG only):**
+- `dashboard_pipeline/bank_cache.py` (new) — `read_bog_cache(year)`, `write_bog_cache(year, df)`, `append_bog_cache(df_new)` (parquet, year-partitioned).
+- `dashboard_pipeline/_backfill_bog.py` (new, one-time runner) — fetches 2023-01 → today via API in monthly windows, writes parquet per year. Error → STOP + raise. Console progress per month.
+- Replace 4 read sites + `_bank_positive_debit_total_ge` to call `read_bog_cache()` returning concatenated DataFrame across years.
+- Backfill script run as user-approved manual step (separate session, will take time + several thousand API calls).
 
-5. **Push** — local commits ahead of origin/main (`a5b88c8`, `4c14920`, `3c80236`) + this session's Stage-3 fix
+**Step 5 (verify):**
+- Pipeline run with cache → compare `data.json` to last XLSX-based `data.json`. Per-store / per-month bank reconciliation totals must match 1:1.
+
+**Step 6 (user review):** user opens dashboard, confirms numbers unchanged.
+
+**Then Sprint B (rs.ge), Sprint C (TBC + UI button + DigiPass modal).** Total 5-8 sessions estimated.
+
+**rs.ge Sprint A carryover (non-blocking, side task):**
+- SOAP run for 26 SOAP_PENDING orphan TINs → updates `Financial_Analysis/orphan_resolver_review_2026-05-04.xlsx`
+- User reviews orphan Excel and applies 4,647 mappings via MegaPlus UI
 
 ---
 
