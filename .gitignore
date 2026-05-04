@@ -71,6 +71,10 @@ _scratch_*.py
 _scratch_*.ps1
 _scratch_*.json
 _scratch_*.xml
+_scratch_*.parquet
+
+# Bank-statement parquet cache (rebuilt via dashboard_pipeline._backfill_bog)
+Financial_Analysis/cache/
 temp.json
 headers_log.txt
 headers_output.json
