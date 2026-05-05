@@ -1,12 +1,62 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-05 (Sprint C step 6 Phase 2 UI CLOSED — modal + hook + Cashflow button + RefreshButton relabel. End-to-end smoke-test PASSED with real OTP: BOG +201, rs.ge +19/16, TBC +12. ⚠️ Git commit pending). წინა → `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-03_2026-05-04.md`. ადრე → `CONTEXT_HISTORY_2026-04_2026-05-02.md`.
+> **განახლდა**: 2026-05-05 ბოლო (Sprint C step 6 Phase 2 COMMITTED + pushed; alias UI smoke-test exposed truncation architecture issue → deferred to combined "MegaPlus product↔supplier mapping" Sprint together with companion request "შეუსაბამო პროდუქცია" tab). წინა → `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-03_2026-05-04.md`. ადრე → `CONTEXT_HISTORY_2026-04_2026-05-02.md`.
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-05) — Sprint C step 6 Phase 2 UI CLOSED · Sprint C step 6 ცენტრი 100% დახურული
+## 0. ბოლო session-ის შედეგი (2026-05-05 ღამე) — Phase 2 commit + push · alias UI ხარვეზის აღმოჩენა · ახალი Sprint დაგეგმვა
+
+| საკითხი | სტატუსი |
+|---|---|
+| Sprint C step 6 Phase 2 commit `b9f44ba` (7 files, +616 / −5) — bank refresh UI live on main | ✅ |
+| Push `d21e8e2..b9f44ba` to origin/main — 13 commits caught up | ✅ |
+| House-keeping: removed 3 PRE_*_PARQUET_BACKUP files (296 MB) from repo root | ✅ |
+| **Alias UI smoke-test** — discovered architectural issue (see PREVIEW below) | 🔴 deferred |
+| #6 (rs.ge SOAP for 26 SOAP_PENDING orphan TINs) — verified ALREADY DONE in 2026-05-04 run; review xlsx has all 26 names resolved | ✅ no work pending on my side |
+| User-side carryover (out of agent scope): apply 4,647 RS_CODES mappings + 26 SOAP-resolved mappings via MegaPlus UI | 🟡 user-only |
+
+### Alias UI smoke-test outcome (2026-05-05)
+
+User clicked through `(215133193) შპს კორიდა` modal. Live API rejected the
+confirm: `retail_code_or_barcode '4860103357229' ცოცხალ retail_sales-ში ვერ
+მოიძებნა`. Investigation revealed:
+
+- `retail_sales.by_product` is truncated to top 1000 of `products_total_count = 8460`
+- `/api/aliases/confirm` validates retail codes against this truncated slice
+- 0/104 unverified suppliers had visibly-clickable candidates in the original
+  `unverified`-only gate; 5 (კორიდა, აროშიძე, თისო, ექსტრამითი, გი-შო+) only
+  surface candidates after Path 2 cosmetic patch — but only თისო's two
+  candidates (codes 1050, 1066) live inside the truncated slice and would
+  validate successfully
+
+User's correct insight: "გორილა შემოვიდა, გაიყიდა — რა პრობლემაა?". Answer:
+the data exists, the dashboard truncation hides it from the validator. Pure
+display-layer artefact bleeding into validation logic.
+
+User's redesign direction (captured live):
+- Top-line dashboard → curated 20-30 best sellers (less noise)
+- Per-supplier full products + alias confirmation → dedicated drill-down view
+- Validation API → must consult full retail universe regardless of display
+
+**Companion request added same session**: new tab „შეუსაბამო პროდუქცია" listing
+every PRODUCTS-table orphan (empty/zero-UUID/ghost supplier link) with the
+resolver's best-guess supplier alongside, plus user-status field
+(გასასწორებელი / გაკეთებულია / უგულებელყოფილი).
+
+Both requests combined → single Sprint, captured in
+`HANDOFF_ARCHIVE/PREVIEWS/SUPPLIER_ALIAS_REDESIGN_2026-05-05.md`.
+
+### Path 2 cosmetic patch (uncommitted, reverted)
+Made a minimal `SupplierModal.jsx` patch lifting the alias section out of the
+`unverified`-only gate so the 5 partial/verified suppliers would show buttons.
+Reverted at session close — full redesign supersedes it. `dist/` rebuilt twice
+(once with patch, once after revert).
+
+---
+
+## 0a. Sprint C step 6 Phase 2 commit details (2026-05-05 — committed in `b9f44ba`)
 
 🎉 **ბანკის ჩანართზე ლურჯი ღილაკი „ბანკიდან ახალი მონაცემის ჩამოტანა" — ცოცხალი. End-to-end real OTP test პირველად გაიარა.** Modal იხსნება, კოდი იღება, BOG/რს.გე/TBC ერთად განახლდება, pipeline ავტომატურად ეშვება.
 
@@ -26,9 +76,9 @@
 
 **🆕 Memory added**: `feedback_single_url_workflow.md` — user wants ONE URL only (port 8000). After every frontend change run `npm run build` to update `dist/`. Never run Vite dev (port 5173). Confused user multiple times this session.
 
-**⚠️ NOT YET COMMITTED**: All Phase 2 frontend changes still uncommitted. User ended session before commit. Next session: stage Phase 2 files (`useBankRefresh.js`, `BankRefreshModal.jsx`, `Cashflow.jsx`, `App.jsx`, `RefreshButton.jsx`, `components.css`) + commit message → `feat(bank-refresh): Sprint C step 6 Phase 2 — UI modal + hook + Cashflow launcher button`. Also note service-venv pyarrow install in commit body (one-time machine-state change).
+**✅ COMMITTED + PUSHED**: Phase 2 frontend changes shipped in `b9f44ba` and pushed to `origin/main` 2026-05-05 ღამე. Service-venv pyarrow install noted in commit body.
 
-**Phase 2 files changed**:
+**Phase 2 files committed**:
 - NEW: `rs-dashboard/src/hooks/useBankRefresh.js`, `rs-dashboard/src/components/BankRefreshModal.jsx`
 - EDIT: `rs-dashboard/src/Cashflow.jsx`, `rs-dashboard/src/App.jsx`, `rs-dashboard/src/components/RefreshButton.jsx`, `rs-dashboard/src/styles/components.css`
 
@@ -180,27 +230,30 @@
 
 ---
 
-## 4. ღია სამუშაო — შემდეგი session (Sprint C step 6 Phase 2 = UI)
+## 4. ღია სამუშაო — შემდეგი session
 
-**Sprint A status: ✅ CLOSED** (commit `c4fd1c6`) — BOG pipeline wire-in.
-**Sprint B status: ✅ CLOSED** (commits `eba02cf` + `de55942`) — rs.ge pipeline wire-in.
-**Sprint C ცენტრი: ✅ CLOSED** (commits `c8aea4b` + `0e8c816`) — TBC pipeline wire-in.
-**Sprint C step 6 Phase 1 (Backend): ✅ CLOSED** (commit `31bb1ab`) — rs.ge upsert + `/api/banks/refresh` orchestrator + 23/23 tests.
+**All bank-refresh sprints CLOSED:**
+- Sprint A (BOG wire-in) `c4fd1c6` · Sprint B (rs.ge wire-in) `eba02cf` + `de55942` · Sprint C ცენტრი (TBC wire-in) `c8aea4b` + `0e8c816` · Sprint C step 6 Phase 1 (backend orchestrator) `31bb1ab` · Sprint C step 6 Phase 2 (UI) `b9f44ba`.
 
-**Sprint C step 6 Phase 2 (UI) — შემდეგი session:**
+**Next Sprint candidate (DECISION READY, scope captured 2026-05-05):**
 
-| ნაწილი | რა |
-|---|---|
-| Frontend new component | `rs-dashboard/src/components/BankRefreshModal.jsx` — 9-digit OTP input (regex-validated client-side), per-bank progress rows (BOG / rs.ge / TBC), success/error messaging |
-| Frontend new hook | `rs-dashboard/src/hooks/useBankRefresh.js` — `start(nonce)` POSTs `/api/banks/refresh`, polls `/api/status` every 2s for `bank_refresh.state`, triggers data reload on success |
-| Bank tab insertion | Top of `rs-dashboard/src/Cashflow.jsx` (~line 79+) — „ბანკიდან ახალი მონაცემის ჩამოტანა" button + "ბოლო განახლება: N წთ წინ" age indicator |
-| Header button rename | `RefreshButton.jsx` label `განახლება` → `ხელახლა გათვლა` (clearer that it's recalc-only, not bank-fetch) |
-| Smoke test | Vite dev → click button → enter real OTP (PIN 0777) → 3 progress lines → success → dashboard reloads with fresh data |
-| Reference | `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_C6_BANK_REFRESH_BUTTON_PREVIEW.md` (final scope locked 2026-05-08) |
+🆕 **MegaPlus product↔supplier mapping unified Sprint** — combines two related
+user requests captured during the 2026-05-05 alias-UI smoke-test:
 
-**rs.ge Sprint A carryover (non-blocking, parallel side task — still open):**
-- SOAP run for 26 SOAP_PENDING orphan TINs → updates `Financial_Analysis/orphan_resolver_review_2026-05-04.xlsx`
-- User reviews orphan Excel and applies 4,647 mappings via MegaPlus UI
+1. **Alias UI redesign** — fix the truncation-driven dead-end (top-1000 retail
+   slice blocks alias confirmations). Move alias confirmation into a per-supplier
+   drill-down view with full-retail validation. Top-line dashboard reduces to
+   curated 20-30 best sellers.
+2. **„შეუსაბამო პროდუქცია" tab** — new dashboard tab listing every PRODUCTS-table
+   orphan (empty/zero-UUID/ghost supplier link) with the resolver's best-guess
+   supplier alongside, plus user-status field.
+
+Combined estimate: 2-3 sessions. Full scope + columns + sub-task table in
+`HANDOFF_ARCHIVE/PREVIEWS/SUPPLIER_ALIAS_REDESIGN_2026-05-05.md`.
+
+**rs.ge Sprint A carryover (non-blocking, USER-ONLY work — agent-side complete):**
+- ✅ SOAP for 26 SOAP_PENDING orphan TINs — DONE in 2026-05-04 run; xlsx has all 26 names resolved (23 = `შპს კოსტ-კასტლ გეო` ოზურგეთი, 3 = `ლ. ჯ.` ფიზ. პირი დვაბზუ).
+- 🟡 User-only: review `Financial_Analysis/orphan_resolver_review_2026-05-04.xlsx` and apply 4,647 RS_CODES mappings + 26 SOAP-resolved mappings via MegaPlus UI. (No agent intervention possible — MegaPlus has no write API we can use.)
 
 ---
 
@@ -209,7 +262,7 @@
 | # | task | size | risk |
 |---|---|---|---|
 | 🟡 **xfail-cleanup carryover (NEW 2026-05-08)** | 26 incremental-cache tests xfail-marked because Sprint A/B/C parquet wire-in broke their fixtures. `collect_*` funcs (bank_income / pos_terminal / tax_flow / samurneo) now read from `Financial_Analysis/cache/` parquet, but fixtures only redirect XLSX. Real fix = parametrize cache root in `bank_income`, then unmark. Files: `test_pos_terminal_income_incremental.py` (9), `test_samurneo_incremental.py` (7, file-level), `test_tax_flow_incremental.py` (7), `test_tbc_pos_terminal_matching.py` (3). | ~1-2 sessions | LOW (ფარავს რეალურ regression-ს) |
-| 🟡 0a CODE COMPLETE — smoke-test pending | Sprint C alias UI browser smoke-test (endpoint LIVE, 8 tests green, just need user-side click via `_vite-dev.bat` → modal → ალიასის კანდიდატები → დადასტურდი). | ~30 წთ | LOW |
+| 🔴 alias UI smoke-test FAILED 2026-05-05 — superseded | Smoke-test exposed truncation issue: 0/104 unverified suppliers had visibly-clickable candidates; only 5 partial/verified suppliers (კორიდა, აროშიძე, თისო, ექსტრამითი, გი-შო+) had visible buttons after Path 2 patch, and only თისო's candidates validated against the truncated retail slice. Architectural fix moved into the unified MegaPlus mapping Sprint (see §4). | superseded | — |
 | 🚨 0c — DECISION READY | MAX vendor-tag file integration (`Financial_Analysis/მეგა პლუს/კომპანიების გაყიდვა მოგება.xls`, 116 suppliers, დვაბზუ only). 3 paths: (A) read-only side-by-side, (B) soft replacement on tax_id match, (C) loader only. ოზურგეთი analog ⏳. | A=1 / B=2 / C=0.5 sessions | HIGH |
 | 🚧 CAL | calendar heatmap supplier modal-ში — Step 3 spot-check ღიაა. `supplier.profitability.daily_breakdown[]` sparse aggregation. | ~1 session | LOW |
 | 🆕 0f Sprint D candidate | Cross-source revenue gap (MAX vs RS waybill: ვასაძე@დვაბზუ Q1 2026: pipeline 3,888 ₾ vs MAX 11,477 ₾, gap 7,589 ₾). | 2-3 inv + 1-2 impl | MEDIUM |
@@ -228,7 +281,7 @@
 | Tool surface | 29 (incl. `data_quality_guard`) |
 | Dashboard tabs | 16 |
 | `data.json` | 101.34 MB (post-TBC-parquet-wire-in, 2026-05-07) |
-| Local branch | `main` 8 commits ahead of `origin/main` (push pending — user-side) |
+| Local branch | `main` in sync with `origin/main` (pushed 2026-05-05 ღამე — `b9f44ba`) |
 | Cache state | BOG: 171,869 rows (2023-2026) · rs.ge: 22,408 rows (2022-2026) · TBC: 50,924 rows (2023-2026, dedup by `ტრანზაქციის ID`) |
 | MegaPlus DB integration | LIVE — 53 tables / 282+308 suppliers across 2 stores / 720K active orders / 2024-03 → 2026-04 |
 | MegaPlus watch folder layout | `Financial_Analysis/მეგაპლიუსის არქიტექტურა/{დვაბზუ,ოზურგეთი}/` (legacy `მეგა პლუს backup*` glob still supported) |
