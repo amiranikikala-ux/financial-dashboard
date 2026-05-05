@@ -453,11 +453,15 @@ export default function SupplierModal({
     return supplierWaybills.filter((w) => String(w?.date || '').startsWith(effectiveWaybillsMonth));
   }, [supplierWaybills, effectiveWaybillsMonth]);
 
-  const filteredWaybillsTotal = useMemo(() => {
-    return filteredWaybills.reduce((acc, w) => {
-      const v = Number(w?.amount) || 0;
-      return acc + (w?.is_return ? -v : v);
-    }, 0);
+  const filteredWaybillsTotals = useMemo(() => {
+    let incoming = 0;
+    let returns = 0;
+    for (const w of filteredWaybills) {
+      const v = Math.abs(Number(w?.amount) || 0);
+      if (w?.is_return) returns += v;
+      else incoming += v;
+    }
+    return { incoming, returns };
   }, [filteredWaybills]);
   const filteredTopProducts = useMemo(() => {
     const q = productSearch.trim().toLowerCase();
@@ -784,7 +788,10 @@ export default function SupplierModal({
               </select>
               <span style={{ flex: 1 }} />
               <span style={{ fontSize: 13, color: '#94a3b8' }}>
-                {filteredWaybills.length} ზედნადები · წმინდა ჯამი <strong style={{ color: '#86efac' }}>{fmt(filteredWaybillsTotal)}</strong>
+                {filteredWaybills.length} ზედნადები · შემოტანა <strong style={{ color: '#86efac' }}>{fmt(filteredWaybillsTotals.incoming)}</strong>
+                {filteredWaybillsTotals.returns > 0 && (
+                  <> · დაბრუნება <strong style={{ color: '#fca5a5' }}>{fmt(filteredWaybillsTotals.returns)}</strong></>
+                )}
               </span>
             </div>
             <div style={{ maxHeight: 280, overflowY: 'auto', borderTop: '1px solid #1e293b' }}>
