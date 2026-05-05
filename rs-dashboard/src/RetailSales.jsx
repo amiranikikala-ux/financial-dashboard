@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import CollapsibleSection from './components/CollapsibleSection.jsx';
 import ExportButton from './components/ExportButton.jsx';
 
@@ -57,8 +58,9 @@ export default function RetailSales({ retailSales, responseMeta }) {
   const byObject = asArray(summary.by_object);
   const byMonth = asArray(summary.by_month);
   const topCategoriesByProfit = asArray(summary.top_categories_by_profit).slice(0, 12);
-  const topProductsByRevenue = asArray(summary.top_products_by_revenue).slice(0, 12);
-  const topProductsByProfit = asArray(summary.top_products_by_profit).slice(0, 12);
+  const [topProductsLimit, setTopProductsLimit] = useState(20);
+  const topProductsByRevenue = asArray(summary.top_products_by_revenue).slice(0, topProductsLimit);
+  const topProductsByProfit = asArray(summary.top_products_by_profit).slice(0, topProductsLimit);
   const duplicatePolicy =
     summary.duplicate_policy && typeof summary.duplicate_policy === 'object'
       ? summary.duplicate_policy
@@ -306,6 +308,23 @@ export default function RetailSales({ retailSales, responseMeta }) {
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="controls" style={{ marginTop: 12, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 13, color: '#94a3b8' }}>TOP პროდუქტების რაოდენობა:</span>
+        <select
+          value={topProductsLimit}
+          onChange={(e) => setTopProductsLimit(Number(e.target.value))}
+          style={{
+            background: '#1e293b', color: '#e2e8f0',
+            border: '1px solid #334155', borderRadius: 6,
+            padding: '4px 8px', fontSize: 13,
+          }}
+        >
+          <option value={20}>20</option>
+          <option value={30}>30</option>
+          <option value={50}>50</option>
+        </select>
       </div>
 
       <div className="retail-sales-grid-2">

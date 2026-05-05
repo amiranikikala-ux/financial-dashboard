@@ -515,11 +515,24 @@ def synthesize_from_megaplus(megaplus_live):
     by_product_full.sort(key=lambda r: r.get("revenue_ge", 0), reverse=True)
     by_product = by_product_full[:PRODUCT_LIMIT]
 
+    # Flat key list for /api/aliases/confirm validation — covers the FULL
+    # retail universe so aliases targeting products outside the top-1000
+    # truncation (kორიდა → გორილა etc.) are accepted.
+    retail_known_keys_set = set()
+    for row in by_product_full:
+        bc = (row.get("barcode") or "").strip()
+        pc = (row.get("product_code") or "").strip()
+        if bc:
+            retail_known_keys_set.add(bc)
+        if pc:
+            retail_known_keys_set.add(pc)
+    retail_known_keys = sorted(retail_known_keys_set)
+
     # ─── Top lists ──────────────────────────────────────────────────────────
     top_categories_by_profit = sorted(by_category, key=lambda r: r.get("profit_ge", 0), reverse=True)[:25]
     top_objects_by_profit = sorted(by_object, key=lambda r: r.get("profit_ge", 0), reverse=True)
-    top_products_by_revenue = sorted(by_product_full, key=lambda r: r.get("revenue_ge", 0), reverse=True)[:25]
-    top_products_by_profit = sorted(by_product_full, key=lambda r: r.get("profit_ge", 0), reverse=True)[:25]
+    top_products_by_revenue = sorted(by_product_full, key=lambda r: r.get("revenue_ge", 0), reverse=True)[:50]
+    top_products_by_profit = sorted(by_product_full, key=lambda r: r.get("profit_ge", 0), reverse=True)[:50]
 
     return {
         "label_ka": "გაყიდული პროდუქცია (MegaPlus DB direct)",
@@ -571,6 +584,7 @@ def synthesize_from_megaplus(megaplus_live):
         "products_total_count": len(by_product_full),
         "products_truncated": len(by_product_full) > PRODUCT_LIMIT,
         "by_product": by_product,
+        "retail_known_keys": retail_known_keys,
         "by_month": by_month,
         "by_category_by_month": by_category_by_month,
         "by_object_by_month": by_object_by_month,

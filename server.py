@@ -831,11 +831,20 @@ async def post_vat_cash_outflow(request: Request, payload: dict = Body(...)):
 # Sprint C — Supplier alias confirmation
 # ---------------------------------------------------------------------------
 def _build_retail_known_keys(data: dict) -> set:
-    """Mirror generate_dashboard_data.py:1657-1664 — collect every barcode
-    and product_code present in retail_sales.by_product so the endpoint
-    rejects aliases pointing at rows that don't exist."""
+    """Collect every barcode and product_code from the FULL retail universe
+    so aliases targeting products outside the top-1000 dashboard slice
+    (kორიდა → გორილა etc.) are accepted.
+
+    Pipeline serializes ``retail_sales.retail_known_keys`` (flat string list
+    covering all 8460+ products). Falls back to walking the truncated
+    ``by_product`` slice if that field is missing — keeps the endpoint
+    functional with older data.json files."""
+    rs = data.get("retail_sales") or {}
+    flat = rs.get("retail_known_keys")
+    if isinstance(flat, list) and flat:
+        return {str(k).strip() for k in flat if str(k).strip()}
     keys: set = set()
-    for row in (data.get("retail_sales") or {}).get("by_product") or []:
+    for row in rs.get("by_product") or []:
         bc = (row.get("barcode") or "").strip()
         pc = (row.get("product_code") or "").strip()
         if bc:
