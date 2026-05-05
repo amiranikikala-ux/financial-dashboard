@@ -1,58 +1,152 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-05 ბოლო (Sprint C step 6 Phase 2 COMMITTED + pushed; alias UI smoke-test exposed truncation architecture issue → deferred to combined "MegaPlus product↔supplier mapping" Sprint together with companion request "შეუსაბამო პროდუქცია" tab). წინა → `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-03_2026-05-04.md`. ადრე → `CONTEXT_HISTORY_2026-04_2026-05-02.md`.
+> **განახლდა**: 2026-05-06 ღამე — **Alias UI redesign Part 2 DONE** + **SupplierModal payments + waybills expandable panels** + **orphan/duplicate empty-state guard**. 3 commits local on main (not yet pushed). წინა → `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-03_2026-05-04.md`.
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-05 ღამე) — Phase 2 commit + push · alias UI ხარვეზის აღმოჩენა · ახალი Sprint დაგეგმვა
+## 0. ბოლო session-ის შედეგი (2026-05-06 ღამე) — Alias UI fix + SupplierModal panels SHIPPED
+
+🎉 **Part 2 of the MegaPlus mapping Sprint CLOSED.** Alias confirmation now validates against the full 8 460 retail universe (no longer rejected on top-1000 truncation). SupplierModal grew two expandable panels: გადახდები (per-month bank+manual lines) and ზედნადებები (per-month live waybills, returns highlighted).
+
+| საკითხი | სტატუსი |
+|---|---|
+| `dashboard_pipeline/retail_sales.py` — `retail_sales.retail_known_keys` (flat 13 389-key list, full universe) | ✅ NEW |
+| `server.py::_build_retail_known_keys` — prefers full-universe list, falls back to old by_product walk | ✅ |
+| Smoke-test: kორიდა / გორილა (4860103357229, outside top-1000) → 200 OK | ✅ |
+| `rs-dashboard/src/RetailSales.jsx` — TOP პროდუქტების ჩამოსაშლელი (20/30/50, default 20) | ✅ |
+| `rs-dashboard/src/SupplierModal.jsx` — Top პროდუქტები ძიება + ჩამოსაშლელი (20/30/50/100); replaced cosmetic `(max 10000000)` hint | ✅ |
+| `dashboard_pipeline/bank_reconciliation.py::build_supplier_payment_lines` — index by tax_id from matched_high + manual_payments | ✅ NEW |
+| `generate_dashboard_data.py::_build_supplier_waybill_lines` — index by tax_id, drops გაუქმებული, keeps active+completed+returns | ✅ NEW |
+| `data["supplier_payment_lines"]` (194 keys, 7 152 lines) + `data["supplier_waybill_lines"]` (262 keys, ~22 k lines) | ✅ |
+| `dashboard_pipeline/api_contracts.py::_build_suppliers_response` — surfaces both indexes on suppliers tab | ✅ |
+| SupplierModal: „გადახდები (N) ▾" (blue) + „ზედნადებები (N) ▾" (green) buttons next to supplier name | ✅ |
+| Each panel: month dropdown (default newest with data) + chronological table (date / amount / source / purpose-or-type) | ✅ |
+| Waybill returns: red `დაბრუნება` badge + minus sign + subtracted from net total | ✅ |
+| Empty-state guard for `OrphanProducts.jsx` + `DuplicateProducts.jsx` (was crashing on missing pipeline section) | ✅ |
+| 3 commits local (not yet pushed): `9ba42dd` · `478af20` · `f74dca1` | 🟡 push pending |
+
+### Side discoveries this session
+
+- **Service venv missing pyodbc** — caused orphan_products + duplicate_products to silently produce empty sections in service-triggered pipeline runs. Fixed by `pip install pyodbc==5.3.0` into `C:\financial-dashboard\venv\` (same pattern as 2026-05-05's pyarrow fix). Both venvs now have full deps but the parent venv is still authoritative per project rule.
+- **Service-triggered pipeline runs orphan_products + duplicate_products under NT AUTHORITY\SYSTEM** — fails SQL Server login (`Login failed for user 'NT AUTHORITY\SYSTEM'`). MegaPlus DBs reject the service account. CLI runs (parent venv, user account) work fine. Means: bank-refresh-button → service pipeline → orphan/duplicate sections come back EMPTY. Workaround: re-run pipeline manually (`venv\Scripts\python.exe generate_dashboard_data.py`) using user account. Long-term fix: NSSM service account or SQL auth.
+- **Service worker caches frontend bundle** — Ctrl+Shift+R doesn't bypass it. User has to either Incognito or DevTools → Application → Service Workers → Unregister. Worth adding to onboarding.
+
+### Architectural decisions taken (locked, do-not-relitigate)
+
+1. **`retail_known_keys` lives at `data["retail_sales"]["retail_known_keys"]`** as a flat sorted string list. Server prefers it; falls back to `by_product` walk for compatibility with older data.json. Don't move it elsewhere.
+2. **Per-supplier payment lines + waybill lines are top-level data.json indexes** (`supplier_payment_lines`, `supplier_waybill_lines`), keyed by tax_id. Slim per-row schema (~10 fields). Surfaced via `_build_suppliers_response` so the modal reads them off the suppliers tab response — no extra API endpoint.
+3. **Waybill panel filters out `გაუქმებული` only.** Active + completed + return-type rows all visible. Returns marked with `is_return: true` flag (substring check `"დაბრუნება" in type`), red badge in UI, subtracted from net total.
+4. **Bigger button preferred over small arrow icon for SupplierModal.** User asked for small arrow; tried; user reverted to original "გადახდები (N) ▾" labeled button. Don't shrink to icon-only.
+
+### Live findings (2026-05-06 dataset)
+
+- 194 / 261 suppliers have at least one matched payment (74%) — 7 152 payment lines total
+- 262 / 261 suppliers have at least one live waybill (covers 100% incl. some without supplier table presence)
+- Sample თესტ-მომწოდებელი:
+  - **შპს ჯიდიაი** (406181616): 484 გადახდა, 667 ზედნადები
+  - **შპს იფქლი** (200179118): 4 846 ზედნადები (large supplier, 2022+)
+
+### Commits shipped this session (LOCAL ONLY — push pending)
+
+| SHA | Title |
+|---|---|
+| `9ba42dd` | fix(dashboard-tabs): guard orphan/duplicate sections against empty pipeline payload |
+| `478af20` | fix(alias-confirm): validate against full retail universe, not truncated top-1000 |
+| `f74dca1` | feat(supplier-modal): per-supplier payments + waybills expandable panels + product search |
+
+### Still open
+
+- 🟡 **Push 3 local commits to origin/main** — user-side action.
+- 🟡 **Service venv MEGAPLUS DB auth** — `NT AUTHORITY\SYSTEM` cannot reach `MEGAPLUS_1329` / `MEGAPLUS_1301`. Service-triggered pipeline runs leave orphan_products + duplicate_products empty. Either (a) reconfigure NSSM to run under user account, or (b) switch SQL auth to a service-friendly login.
+- 🟡 **Service worker caching surprised the user mid-session** — bundles look stale to the user. Consider unregistering SW on the dev/local host, or adding a UI banner that says "ახალი ვერსია · Ctrl+Shift+R".
+
+---
+
+## 0a. წინა session-ის შედეგი (2026-05-05 დღე გაგრძელება) — MegaPlus mapping Sprint Part 1 SHIPPED · Duplicates tab BONUS
+
+🎉 **2 ახალი ჩანართი dashboard-ზე ცოცხლად, MegaPlus DB-ზე პირდაპირი query, ყოველ pipeline-ის გაშვებაზე ახლდება. Part 2 (alias UI რედიზაინი) ცალკე session-ში.**
+
+| საკითხი | სტატუსი |
+|---|---|
+| `dashboard_pipeline/orphan_resolver.py` რეფაქტორი — `build_orphan_dataframe(soap_cache)` ცალკე CLI-სგან | ✅ |
+| `dashboard_pipeline/orphan_products_section.py` (NEW) — live MegaPlus SQL → JSON bundle | ✅ |
+| `Financial_Analysis/orphan_soap_cache.json` (NEW) — bootstrap-ნული 2026-05-04 xlsx-დან (2 TIN-ს სახელი) | ✅ |
+| `dashboard_pipeline/orphan_user_status.py` (NEW) — atomic JSON load/save „ignored" flag-ისთვის | ✅ |
+| `dashboard_pipeline/duplicate_products_section.py` (NEW) — same-barcode/diff-P_ID detector + phantom stock classifier | ✅ |
+| `server.py` — `POST /api/orphan-products/status` endpoint (rate-limit 60/min, write lock) | ✅ NEW |
+| `dashboard_pipeline/api_contracts.py` — orphan_products + duplicate_products tabs registered | ✅ |
+| `generate_dashboard_data.py` — both sections wired (try/except, non-fatal) | ✅ |
+| `rs-dashboard/src/OrphanProducts.jsx` (NEW) — 5-card summary + 4 filters + 5-col table + ignore button | ✅ |
+| `rs-dashboard/src/DuplicateProducts.jsx` (NEW) — cluster-list view, phantom highlight, store/view filters | ✅ |
+| `rs-dashboard/src/{App.jsx,tabConfig.js}` — both tabs registered in Sales group | ✅ |
+| Vite build × 3, service restart × 3 (admin/UAC) — no errors at the end | ✅ |
+| End-to-end browser smoke-test via playwright — both tabs render + ignore-toggle persists | ✅ |
+| 5 commits push-ნული `b9f44ba..abb41dd` to `origin/main` | ✅ |
+
+### Live findings (2026-05-05 dataset)
+
+**Orphan products (PRODUCTS-table rows where supplier link is empty/zero/ghost):**
+- 4 925 ცალი / 685 805 ₾ lifetime revenue
+- დვაბზუ 2 480 (97.9% resolved), ოზურგეთი 2 445 (91.9% resolved)
+- 7 ახალი orphan ბოლო 24 საათში (4 918 → 4 925, +2 119 ₾)
+
+**Duplicate barcodes (same P_BARCODE, different P_ID):**
+- 3 401 დუბლიკატი ბარკოდი (1 525 დვაბზუ + 1 876 ოზურგეთი)
+- 36 phantom-stock შემთხვევა — 6 787 ცრუ ერთეული = **8 899 ₾** sell-basis (6 940 ₾ cost-basis)
+- ოზურგეთი 25 phantom (7 183 ₾), დვაბზუ 11 phantom (1 716 ₾)
+- Top phantom case: ბარკოდი `5449000185259` კაპი ატამი 0.5ლ — active P_ID 84189 stock=-1 574, phantom P_ID 84251 stock=1 596
+
+### Architectural decisions taken (locked, do-not-relitigate)
+
+1. **No Excel intermediary in pipeline.** orphan_resolver.py CLI still writes xlsx for human review, but the pipeline calls `build_orphan_dataframe()` directly — same data, faster cycle, fixes in MegaPlus reflect immediately. User explicitly asked for this when noticing Excel was redundant ("რს ბოგ თბს APIდან, მეგა DB-დან — Excel რად გვინდა?").
+2. **SOAP cache persists at `Financial_Analysis/orphan_soap_cache.json`.** Pipeline reads it on every run; CLI updates it only when user runs orphan_resolver.py interactively (rs.ge password prompt). For unknown TINs the section just shows ცარიელი best_supplier_name.
+3. **User „ignored" flag persists at `Financial_Analysis/orphan_user_status.json`.** Atomic write (tmp + rename), rate-limit 60/min on the API, single-state schema (`ignored: {key: {ignored_at, note}}`). „გასასწორებელი" is the implicit default. „გაკეთებულია" is auto — when user adds supplier in MegaPlus, the row drops out of next pipeline.
+4. **„დუბლიკატები" ჩანართი has NO user_status.** Fix happens by deleting/merging in MegaPlus, no need for ignore flow. Cluster disappears next pipeline run.
+
+### Phantom-stock classification (locked)
+
+For each duplicate-barcode cluster, each variant is classified:
+- **active** — has lifetime sales > 0 OR sale_lines > 0
+- **phantom** — has `P_QUANT > 0` AND no sales (only when cluster has ≥1 active variant)
+- **dormant** — empty record (no stock, no sales)
+
+P_QUANT confirmed = current stock (probed for P_ID 87819: P_QUANT=46, GET=580 received, ORDERS=347 sold, GACERA=5 movements; balance reconciles via internal moves/issuances). Negative P_QUANT in active variants is a sign that purchases land on the duplicate while sales hit the active variant — exactly the user-reported scenario.
+
+### Commits shipped this session (all pushed to origin/main)
+
+| SHA | Sprint | Title |
+|---|---|---|
+| `f318cad` | MegaPlus mapping Step 1 | live MegaPlus DB query + SOAP name cache for data.json section |
+| `0ab6000` | MegaPlus mapping Step 2 | persistent user "ignored" flag + API endpoint |
+| `e75643b` | MegaPlus mapping Step 3+4 | „შეუსაბამო პროდუქცია" dashboard tab + ignore button |
+| `abb41dd` | Bonus | „დუბლირებული პროდუქცია" tab + phantom-stock detector |
+| `06233db` | (previous) | docs(handoff): close 2026-05-05 ღამე session |
+
+### Still open (Part 2 of the unified Sprint)
+
+🔴 **Alias UI redesign** — exposed by 2026-05-05 ღამე smoke-test, scope captured in `HANDOFF_ARCHIVE/PREVIEWS/SUPPLIER_ALIAS_REDESIGN_2026-05-05.md`. Same architectural issue: `retail_sales.by_product` truncated to top-1000 of `products_total_count = 8460`, `/api/aliases/confirm` validates against this slice. Need:
+- Decouple alias-confirm validation from the truncated dashboard slice → consult full 8 460 retail universe
+- Move alias UI into per-supplier drill-down (or keep inline with full retail universe lookup)
+- Reduce top-line dashboard `retail_sales.by_product` to 20-30 best sellers (display-only)
+
+Estimate: 1-2 sessions.
+
+---
+
+## 0a. წინა session-ის შედეგი (2026-05-05 ღამე) — Bank refresh UI Phase 2 + alias UI scope locked
 
 | საკითხი | სტატუსი |
 |---|---|
 | Sprint C step 6 Phase 2 commit `b9f44ba` (7 files, +616 / −5) — bank refresh UI live on main | ✅ |
 | Push `d21e8e2..b9f44ba` to origin/main — 13 commits caught up | ✅ |
 | House-keeping: removed 3 PRE_*_PARQUET_BACKUP files (296 MB) from repo root | ✅ |
-| **Alias UI smoke-test** — discovered architectural issue (see PREVIEW below) | 🔴 deferred |
-| #6 (rs.ge SOAP for 26 SOAP_PENDING orphan TINs) — verified ALREADY DONE in 2026-05-04 run; review xlsx has all 26 names resolved | ✅ no work pending on my side |
-| User-side carryover (out of agent scope): apply 4,647 RS_CODES mappings + 26 SOAP-resolved mappings via MegaPlus UI | 🟡 user-only |
+| Alias UI smoke-test — discovered truncation architectural issue (top-1000 slice blocks confirm validator) | 🔴 deferred → see §0 Still open |
+| Companion request: „შეუსაბამო პროდუქცია" tab to surface PRODUCTS orphans | ✅ DELIVERED in §0 today |
+| #6 (rs.ge SOAP for 26 SOAP_PENDING orphan TINs) — verified ALREADY DONE | ✅ |
 
-### Alias UI smoke-test outcome (2026-05-05)
-
-User clicked through `(215133193) შპს კორიდა` modal. Live API rejected the
-confirm: `retail_code_or_barcode '4860103357229' ცოცხალ retail_sales-ში ვერ
-მოიძებნა`. Investigation revealed:
-
-- `retail_sales.by_product` is truncated to top 1000 of `products_total_count = 8460`
-- `/api/aliases/confirm` validates retail codes against this truncated slice
-- 0/104 unverified suppliers had visibly-clickable candidates in the original
-  `unverified`-only gate; 5 (კორიდა, აროშიძე, თისო, ექსტრამითი, გი-შო+) only
-  surface candidates after Path 2 cosmetic patch — but only თისო's two
-  candidates (codes 1050, 1066) live inside the truncated slice and would
-  validate successfully
-
-User's correct insight: "გორილა შემოვიდა, გაიყიდა — რა პრობლემაა?". Answer:
-the data exists, the dashboard truncation hides it from the validator. Pure
-display-layer artefact bleeding into validation logic.
-
-User's redesign direction (captured live):
-- Top-line dashboard → curated 20-30 best sellers (less noise)
-- Per-supplier full products + alias confirmation → dedicated drill-down view
-- Validation API → must consult full retail universe regardless of display
-
-**Companion request added same session**: new tab „შეუსაბამო პროდუქცია" listing
-every PRODUCTS-table orphan (empty/zero-UUID/ghost supplier link) with the
-resolver's best-guess supplier alongside, plus user-status field
-(გასასწორებელი / გაკეთებულია / უგულებელყოფილი).
-
-Both requests combined → single Sprint, captured in
-`HANDOFF_ARCHIVE/PREVIEWS/SUPPLIER_ALIAS_REDESIGN_2026-05-05.md`.
-
-### Path 2 cosmetic patch (uncommitted, reverted)
-Made a minimal `SupplierModal.jsx` patch lifting the alias section out of the
-`unverified`-only gate so the 5 partial/verified suppliers would show buttons.
-Reverted at session close — full redesign supersedes it. `dist/` rebuilt twice
-(once with patch, once after revert).
+Detailed scope: `HANDOFF_ARCHIVE/PREVIEWS/SUPPLIER_ALIAS_REDESIGN_2026-05-05.md`.
 
 ---
 
@@ -235,25 +329,23 @@ Reverted at session close — full redesign supersedes it. `dist/` rebuilt twice
 **All bank-refresh sprints CLOSED:**
 - Sprint A (BOG wire-in) `c4fd1c6` · Sprint B (rs.ge wire-in) `eba02cf` + `de55942` · Sprint C ცენტრი (TBC wire-in) `c8aea4b` + `0e8c816` · Sprint C step 6 Phase 1 (backend orchestrator) `31bb1ab` · Sprint C step 6 Phase 2 (UI) `b9f44ba`.
 
-**Next Sprint candidate (DECISION READY, scope captured 2026-05-05):**
+**MegaPlus mapping Sprint — Part 1 CLOSED (2026-05-05 დღე გაგრძელება):**
+- ✅ Live MegaPlus DB query architecture — `f318cad` · `0ab6000` · `e75643b`
+- ✅ BONUS „დუბლიკატები" tab — `abb41dd`
+- 🔴 **Part 2 — Alias UI redesign STILL OPEN** (scope: `HANDOFF_ARCHIVE/PREVIEWS/SUPPLIER_ALIAS_REDESIGN_2026-05-05.md`).
 
-🆕 **MegaPlus product↔supplier mapping unified Sprint** — combines two related
-user requests captured during the 2026-05-05 alias-UI smoke-test:
+### Next-session candidates
 
-1. **Alias UI redesign** — fix the truncation-driven dead-end (top-1000 retail
-   slice blocks alias confirmations). Move alias confirmation into a per-supplier
-   drill-down view with full-retail validation. Top-line dashboard reduces to
-   curated 20-30 best sellers.
-2. **„შეუსაბამო პროდუქცია" tab** — new dashboard tab listing every PRODUCTS-table
-   orphan (empty/zero-UUID/ghost supplier link) with the resolver's best-guess
-   supplier alongside, plus user-status field.
+1. 🔴 **Alias UI redesign** (Part 2 of MegaPlus mapping Sprint) — top priority.
+   Decouple `/api/aliases/confirm` validation from `data.json.retail_sales.by_product` truncation. Reduce dashboard top-line to 20-30 best sellers. Move alias confirmation into per-supplier drill-down. Estimate 1-2 sessions.
 
-Combined estimate: 2-3 sessions. Full scope + columns + sub-task table in
-`HANDOFF_ARCHIVE/PREVIEWS/SUPPLIER_ALIAS_REDESIGN_2026-05-05.md`.
+2. 🆕 More MegaPlus data-quality tabs (continuing the pattern). User noticed phantom-stock issue mid-session — there may be more (e.g., price-change history anomalies, fictitious stock on closed accounts, etc.). Ask user explicitly.
+
+3. 🚨 0c — MAX vendor-tag file integration (`Financial_Analysis/მეგა პლუს/კომპანიების გაყიდვა მოგება.xls`, 116 suppliers, დვაბზუ only). 3 paths still on the table.
 
 **rs.ge Sprint A carryover (non-blocking, USER-ONLY work — agent-side complete):**
-- ✅ SOAP for 26 SOAP_PENDING orphan TINs — DONE in 2026-05-04 run; xlsx has all 26 names resolved (23 = `შპს კოსტ-კასტლ გეო` ოზურგეთი, 3 = `ლ. ჯ.` ფიზ. პირი დვაბზუ).
-- 🟡 User-only: review `Financial_Analysis/orphan_resolver_review_2026-05-04.xlsx` and apply 4,647 RS_CODES mappings + 26 SOAP-resolved mappings via MegaPlus UI. (No agent intervention possible — MegaPlus has no write API we can use.)
+- ✅ SOAP for 26 SOAP_PENDING orphan TINs — DONE.
+- 🟡 User-only: apply 4,647 RS_CODES mappings + remaining SOAP mappings via MegaPlus UI. As of 2026-05-05 დღე live count: ოზურგეთი 23 SOAP-products already cleared (vs xlsx 2026-05-04 baseline), დვაბზუ 3 still pending. „შეუსაბამო პროდუქცია" ჩანართი now shows the live remaining list.
 
 ---
 
@@ -262,7 +354,7 @@ Combined estimate: 2-3 sessions. Full scope + columns + sub-task table in
 | # | task | size | risk |
 |---|---|---|---|
 | 🟡 **xfail-cleanup carryover (NEW 2026-05-08)** | 26 incremental-cache tests xfail-marked because Sprint A/B/C parquet wire-in broke their fixtures. `collect_*` funcs (bank_income / pos_terminal / tax_flow / samurneo) now read from `Financial_Analysis/cache/` parquet, but fixtures only redirect XLSX. Real fix = parametrize cache root in `bank_income`, then unmark. Files: `test_pos_terminal_income_incremental.py` (9), `test_samurneo_incremental.py` (7, file-level), `test_tax_flow_incremental.py` (7), `test_tbc_pos_terminal_matching.py` (3). | ~1-2 sessions | LOW (ფარავს რეალურ regression-ს) |
-| 🔴 alias UI smoke-test FAILED 2026-05-05 — superseded | Smoke-test exposed truncation issue: 0/104 unverified suppliers had visibly-clickable candidates; only 5 partial/verified suppliers (კორიდა, აროშიძე, თისო, ექსტრამითი, გი-შო+) had visible buttons after Path 2 patch, and only თისო's candidates validated against the truncated retail slice. Architectural fix moved into the unified MegaPlus mapping Sprint (see §4). | superseded | — |
+| 🔴 **alias UI redesign — STILL OPEN (Part 2 of MegaPlus mapping Sprint)** | Smoke-test 2026-05-05 exposed: `retail_sales.by_product` truncated to top 1000 of 8 460; `/api/aliases/confirm` validates against this slice, so candidates outside top-1000 are rejected. Fix path: (a) decouple alias-confirm validation from the truncated dashboard slice (consult full retail universe), (b) reduce dashboard top-line to 20-30 best sellers, (c) move alias confirmation into per-supplier drill-down. 5 known smoke-test targets: კორიდა / აროშიძე / თისო / ექსტრამითი / გი-შო+ — only თისო (codes 1050, 1066) validates today. | 1-2 sessions | LOW |
 | 🚨 0c — DECISION READY | MAX vendor-tag file integration (`Financial_Analysis/მეგა პლუს/კომპანიების გაყიდვა მოგება.xls`, 116 suppliers, დვაბზუ only). 3 paths: (A) read-only side-by-side, (B) soft replacement on tax_id match, (C) loader only. ოზურგეთი analog ⏳. | A=1 / B=2 / C=0.5 sessions | HIGH |
 | 🚧 CAL | calendar heatmap supplier modal-ში — Step 3 spot-check ღიაა. `supplier.profitability.daily_breakdown[]` sparse aggregation. | ~1 session | LOW |
 | 🆕 0f Sprint D candidate | Cross-source revenue gap (MAX vs RS waybill: ვასაძე@დვაბზუ Q1 2026: pipeline 3,888 ₾ vs MAX 11,477 ₾, gap 7,589 ₾). | 2-3 inv + 1-2 impl | MEDIUM |
@@ -279,13 +371,16 @@ Combined estimate: 2-3 sessions. Full scope + columns + sub-task table in
 |---|---|
 | pytest (key suites) | 39/39 waybill_reconciliation + 50/50 supplier_profitability + retail_sales_revenue_formula |
 | Tool surface | 29 (incl. `data_quality_guard`) |
-| Dashboard tabs | 16 |
-| `data.json` | 101.34 MB (post-TBC-parquet-wire-in, 2026-05-07) |
-| Local branch | `main` in sync with `origin/main` (pushed 2026-05-05 ღამე — `b9f44ba`) |
+| Dashboard tabs | 18 (16 + ⚠️ შეუსაბამო პროდუქცია + 👥 დუბლიკატები — both added 2026-05-05 დღე) |
+| `data.json` | ~108.8 MB after orphan_products + duplicate_products sections injected (2026-05-05 დღე) |
+| Local branch | `main` in sync with `origin/main` (pushed 2026-05-05 დღე — `abb41dd`) |
 | Cache state | BOG: 171,869 rows (2023-2026) · rs.ge: 22,408 rows (2022-2026) · TBC: 50,924 rows (2023-2026, dedup by `ტრანზაქციის ID`) |
 | MegaPlus DB integration | LIVE — 53 tables / 282+308 suppliers across 2 stores / 720K active orders / 2024-03 → 2026-04 |
 | MegaPlus watch folder layout | `Financial_Analysis/მეგაპლიუსის არქიტექტურა/{დვაბზუ,ოზურგეთი}/` (legacy `მეგა პლუს backup*` glob still supported) |
-| Phase B exploratory data | POS active rows 1,552,457 (4yr); negative-margin 4.13% / 95,682 ₾ loss; PRODUCTS orphans 4,918 / 685,804 ₾ (verified 2026-05-04, 2x larger than chat-history claim) |
+| MegaPlus orphan products (live 2026-05-05) | 4 925 ცალი / 685 805 ₾ · დვაბზუ 2 480 (97.9% resolved) · ოზურგეთი 2 445 (91.9% resolved) |
+| MegaPlus duplicate barcodes (live 2026-05-05) | 3 401 დუბლიკატი (1 525 დვაბზუ + 1 876 ოზურგეთი) · 36 phantom-stock = 6 787 ცრუ ერთეული = 8 899 ₾ sell-basis |
+| Live API endpoints (post-2026-05-05) | `/api/data?tab=orphan_products` · `/api/data?tab=duplicate_products` · `POST /api/orphan-products/status` (rate-limit 60/min) |
+| Persistent state files | `Financial_Analysis/orphan_soap_cache.json` (TIN→name, ~2 entries) · `Financial_Analysis/orphan_user_status.json` (ignored map, currently empty) |
 | MCP servers | gitnexus · playwright · filesystem · github · sqlite · sequential-thinking · memory · brave-search · time · fetch · context7 |
 
 ---
