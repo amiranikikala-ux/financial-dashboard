@@ -94,7 +94,7 @@ export default function OrphanProducts({ orphanProducts }) {
     return { active, ignored, activeRev, ignoredRev };
   }, [rows]);
 
-  if (!op) {
+  if (!op || !op.summary) {
     return (
       <div style={{ padding: 24, color: '#94a3b8' }}>
         <h2 style={{ color: '#e2e8f0', marginBottom: 12 }}>⚠️ შეუსაბამო პროდუქცია</h2>

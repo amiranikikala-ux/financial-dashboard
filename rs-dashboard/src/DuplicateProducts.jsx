@@ -68,7 +68,7 @@ export default function DuplicateProducts({ duplicateProducts }) {
     });
   }, [clusters, storeFilter, phantomOnly, search]);
 
-  if (!dp) {
+  if (!dp || !dp.summary) {
     return (
       <div style={{ padding: 24, color: '#94a3b8' }}>
         <h2 style={{ color: '#e2e8f0', marginBottom: 12 }}>👥 დუბლირებული პროდუქცია</h2>
