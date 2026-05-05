@@ -6,6 +6,7 @@ Extracted from generate_dashboard_data.py lines 7069-8371.
 import json
 import os
 from collections import defaultdict
+from typing import Any, Dict, List
 
 import pandas as pd
 
@@ -681,6 +682,79 @@ def build_strict_supplier_payment_rows(rows):
             }
         )
     return out
+
+
+def build_supplier_payment_lines(matched_high_rows, manual_rows):
+    """Index strict-bank matched rows + manual journal rows by supplier tax_id.
+
+    Powers the SupplierModal "გადახდები" expandable panel — caller writes the
+    result to ``data["supplier_payment_lines"]`` and the API serves it
+    alongside other per-supplier data.
+
+    Each entry in the returned dict is a list of slim dicts:
+      - ``date``   (``YYYY-MM-DD`` or ``""`` if missing — manual entries
+                    occasionally have no date)
+      - ``amount`` (float)
+      - ``source`` (``"BOG"`` / ``"TBC"`` / ``"manual"``)
+      - ``purpose`` (truncated to 120 chars, manual rows use ``comment``)
+
+    Lists are sorted newest-first, so the modal can show the latest payments
+    without re-sorting on the client.
+    """
+    by_tax_id: Dict[str, List[Dict[str, Any]]] = {}
+
+    def _push(tax_id, date_str, amount, source, purpose):
+        tid = str(tax_id or "").strip()
+        if not tid:
+            return
+        amt = float(amount or 0)
+        if amt <= 0:
+            return
+        by_tax_id.setdefault(tid, []).append(
+            {
+                "date": str(date_str or ""),
+                "amount": amt,
+                "source": str(source or ""),
+                "purpose": str(purpose or "")[:120],
+            }
+        )
+
+    for row in matched_high_rows or []:
+        if not isinstance(row, dict):
+            continue
+        tid = str(row.get("matched_tax_id") or "").strip()
+        if not tid:
+            continue
+        purpose = (
+            row.get("raw_purpose")
+            or row.get("raw_description")
+            or row.get("raw_receiver_name")
+            or row.get("raw_partner_name")
+            or ""
+        )
+        _push(
+            tid,
+            _normalize_supplier_payment_row_date(row.get("row_date")),
+            row.get("amount"),
+            row.get("source_bank") or "bank",
+            purpose,
+        )
+
+    for row in manual_rows or []:
+        if not isinstance(row, dict):
+            continue
+        _push(
+            row.get("matched_tax_id"),
+            _normalize_supplier_payment_row_date(row.get("row_date")),
+            row.get("amount"),
+            "manual",
+            row.get("comment") or "ხელით ჟურნალი",
+        )
+
+    for tid, lines in by_tax_id.items():
+        lines.sort(key=lambda r: r.get("date") or "", reverse=True)
+
+    return by_tax_id
 
 
 def _write_bank_status_excel(rows, download_dir, filename, title_ka):

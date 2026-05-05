@@ -60,6 +60,8 @@ FIELD_DEFAULTS = {
     "waybill_reconciliation": {},
     "orphan_products": {},
     "duplicate_products": {},
+    "supplier_payment_lines": {},
+    "supplier_waybill_lines": {},
 }
 
 # ერთი ჭერი: სრული rollup/API პასუხები დიდი მოცულობისას (OOM-ისგან დასაცავად ზედა საზღვარი).
@@ -73,7 +75,7 @@ WAYBILLS_MAX_RESPONSE_LIMIT = FULL_VIEW_ROW_CAP
 WAYBILL_ALLOWED_SORTS = {"amount_asc", "amount_desc", "date_asc", "date_desc"}
 
 TAB_ALLOWLIST = {
-    "suppliers": ["suppliers"],
+    "suppliers": ["suppliers", "supplier_payment_lines"],
     "waybills": ["waybills"],
     "analytics": ["suppliers"],
     "cashflow": [
@@ -1967,13 +1969,23 @@ def _build_suppliers_response(cache, period_filter=None, **_kwargs):
     concentration = cache.get(
         "supplier_concentration", FIELD_DEFAULTS["supplier_concentration"]
     )
+    payment_lines = cache.get(
+        "supplier_payment_lines", FIELD_DEFAULTS["supplier_payment_lines"]
+    )
+    waybill_lines = cache.get(
+        "supplier_waybill_lines", FIELD_DEFAULTS["supplier_waybill_lines"]
+    )
     if not bool((period_filter or {}).get("applied")):
         return {
             "suppliers": cache.get("suppliers", FIELD_DEFAULTS["suppliers"]),
             "supplier_concentration": concentration,
+            "supplier_payment_lines": payment_lines,
+            "supplier_waybill_lines": waybill_lines,
         }
     recomputed = _recompute_suppliers_response(cache, period_filter)
     recomputed["supplier_concentration"] = concentration
+    recomputed["supplier_payment_lines"] = payment_lines
+    recomputed["supplier_waybill_lines"] = waybill_lines
     return recomputed
 
 

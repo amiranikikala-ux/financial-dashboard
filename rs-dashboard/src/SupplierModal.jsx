@@ -267,6 +267,8 @@ export default function SupplierModal({
   localPayments = {},
   persistLocalPayments,
   allSuppliers,
+  paymentLines = {},
+  waybillLines = {},
   onClose,
 }) {
   const [fetchedAging, setFetchedAging] = useState(null);
@@ -283,6 +285,10 @@ export default function SupplierModal({
   const [confirmedAliases, setConfirmedAliases] = useState(() => new Set());
   const [pendingAliases, setPendingAliases] = useState(() => new Set());
   const [aliasError, setAliasError] = useState(null);
+  const [paymentsExpanded, setPaymentsExpanded] = useState(false);
+  const [paymentsMonthFilter, setPaymentsMonthFilter] = useState('');
+  const [waybillsExpanded, setWaybillsExpanded] = useState(false);
+  const [waybillsMonthFilter, setWaybillsMonthFilter] = useState('');
 
   const handleConfirmAlias = async (product) => {
     const cand = product?.name_candidate;
@@ -397,6 +403,73 @@ export default function SupplierModal({
   const importedTopProducts = Array.isArray(importedEntry?.top_products) ? importedEntry.top_products : [];
   const importedHasSource = Boolean(importedDetail?.has_source);
   const importedTopLimit = Number(importedDetail?.supplier_top_products_limit) || 0;
+
+  const [productLimit, setProductLimit] = useState(20);
+  const [productSearch, setProductSearch] = useState('');
+
+  const supplierPayments = useMemo(() => {
+    if (!taxId) return [];
+    return Array.isArray(paymentLines?.[taxId]) ? paymentLines[taxId] : [];
+  }, [taxId, paymentLines]);
+
+  const paymentMonths = useMemo(() => {
+    const months = new Set();
+    for (const p of supplierPayments) {
+      const d = String(p?.date || '');
+      if (d.length >= 7) months.add(d.slice(0, 7));
+    }
+    return Array.from(months).sort().reverse();
+  }, [supplierPayments]);
+
+  const effectivePaymentsMonth = paymentsMonthFilter || paymentMonths[0] || '';
+
+  const filteredPayments = useMemo(() => {
+    if (!effectivePaymentsMonth) return supplierPayments;
+    return supplierPayments.filter((p) => String(p?.date || '').startsWith(effectivePaymentsMonth));
+  }, [supplierPayments, effectivePaymentsMonth]);
+
+  const filteredPaymentsTotal = useMemo(() => {
+    return filteredPayments.reduce((acc, p) => acc + (Number(p?.amount) || 0), 0);
+  }, [filteredPayments]);
+
+  const supplierWaybills = useMemo(() => {
+    if (!taxId) return [];
+    return Array.isArray(waybillLines?.[taxId]) ? waybillLines[taxId] : [];
+  }, [taxId, waybillLines]);
+
+  const waybillMonths = useMemo(() => {
+    const months = new Set();
+    for (const w of supplierWaybills) {
+      const d = String(w?.date || '');
+      if (d.length >= 7) months.add(d.slice(0, 7));
+    }
+    return Array.from(months).sort().reverse();
+  }, [supplierWaybills]);
+
+  const effectiveWaybillsMonth = waybillsMonthFilter || waybillMonths[0] || '';
+
+  const filteredWaybills = useMemo(() => {
+    if (!effectiveWaybillsMonth) return supplierWaybills;
+    return supplierWaybills.filter((w) => String(w?.date || '').startsWith(effectiveWaybillsMonth));
+  }, [supplierWaybills, effectiveWaybillsMonth]);
+
+  const filteredWaybillsTotal = useMemo(() => {
+    return filteredWaybills.reduce((acc, w) => {
+      const v = Number(w?.amount) || 0;
+      return acc + (w?.is_return ? -v : v);
+    }, 0);
+  }, [filteredWaybills]);
+  const filteredTopProducts = useMemo(() => {
+    const q = productSearch.trim().toLowerCase();
+    const list = q
+      ? importedTopProducts.filter((p) => {
+          const name = String(p?.product_name || '').toLowerCase();
+          const code = String(p?.product_code || '').toLowerCase();
+          return name.includes(q) || code.includes(q);
+        })
+      : importedTopProducts;
+    return list.slice(0, productLimit);
+  }, [importedTopProducts, productSearch, productLimit]);
   // backend label-ი ხშირად შეიცავს „(REFERENCE)" ინგლისურად — ვაცილებთ
   // და ფიქსირებულ ქართულ სათაურს ვაჩვენებთ.
   const importedSectionTitle = 'შემოტანილი პროდუქცია — შესამოწმებლად';
@@ -573,7 +646,41 @@ export default function SupplierModal({
 
         {/* Header */}
         <div className="supplier-modal-header">
-          <div className="supplier-modal-org" id="supplier-modal-title">{displayOrg}</div>
+          <div className="supplier-modal-org" id="supplier-modal-title">
+            {displayOrg}
+            {supplierPayments.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setPaymentsExpanded((v) => !v)}
+                title="გადახდების სია"
+                style={{
+                  marginLeft: 10, padding: '3px 10px',
+                  background: paymentsExpanded ? '#3b82f6' : '#1e293b',
+                  color: '#e2e8f0', border: '1px solid #334155',
+                  borderRadius: 6, fontSize: 13, cursor: 'pointer',
+                  verticalAlign: 'middle',
+                }}
+              >
+                გადახდები ({supplierPayments.length}) {paymentsExpanded ? '▴' : '▾'}
+              </button>
+            )}
+            {supplierWaybills.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setWaybillsExpanded((v) => !v)}
+                title="ზედნადებების სია (გაუქმებულის გარეშე)"
+                style={{
+                  marginLeft: 8, padding: '3px 10px',
+                  background: waybillsExpanded ? '#10b981' : '#1e293b',
+                  color: '#e2e8f0', border: '1px solid #334155',
+                  borderRadius: 6, fontSize: 13, cursor: 'pointer',
+                  verticalAlign: 'middle',
+                }}
+              >
+                ზედნადებები ({supplierWaybills.length}) {waybillsExpanded ? '▴' : '▾'}
+              </button>
+            )}
+          </div>
           <div className="supplier-modal-meta-row">
             {taxId && <span className="supplier-modal-taxid">ID: {taxId}</span>}
             {waybillCount > 0 && <span className="supplier-modal-taxid">{waybillCount} ზედნადები</span>}
@@ -587,6 +694,144 @@ export default function SupplierModal({
             )}
           </div>
         </div>
+
+        {paymentsExpanded && supplierPayments.length > 0 && (
+          <div style={{
+            margin: '8px 0 16px', padding: 12,
+            background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, color: '#94a3b8' }}>თვე:</span>
+              <select
+                value={effectivePaymentsMonth}
+                onChange={(e) => setPaymentsMonthFilter(e.target.value)}
+                style={{
+                  background: '#1e293b', color: '#e2e8f0',
+                  border: '1px solid #334155', borderRadius: 6,
+                  padding: '4px 8px', fontSize: 13,
+                }}
+              >
+                {paymentMonths.map((m) => <option key={m} value={m}>{m}</option>)}
+                <option value="">ყველა თვე</option>
+              </select>
+              <span style={{ flex: 1 }} />
+              <span style={{ fontSize: 13, color: '#94a3b8' }}>
+                {filteredPayments.length} გადახდა · ჯამი <strong style={{ color: '#86efac' }}>{fmt(filteredPaymentsTotal)}</strong>
+              </span>
+            </div>
+            <div style={{ maxHeight: 280, overflowY: 'auto', borderTop: '1px solid #1e293b' }}>
+              <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+                <thead style={{ position: 'sticky', top: 0, background: '#0f172a' }}>
+                  <tr style={{ color: '#94a3b8', textAlign: 'left' }}>
+                    <th style={{ padding: '6px 8px', borderBottom: '1px solid #334155' }}>თარიღი</th>
+                    <th style={{ padding: '6px 8px', borderBottom: '1px solid #334155', textAlign: 'right' }}>თანხა</th>
+                    <th style={{ padding: '6px 8px', borderBottom: '1px solid #334155' }}>წყარო</th>
+                    <th style={{ padding: '6px 8px', borderBottom: '1px solid #334155' }}>დანიშნულება</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredPayments.map((p, i) => (
+                    <tr key={`${p.date}-${i}`} style={{ borderBottom: '1px solid #1e293b' }}>
+                      <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{p.date || '—'}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', color: '#86efac', whiteSpace: 'nowrap' }}>
+                        {fmtPrecise(p.amount)}
+                      </td>
+                      <td style={{ padding: '6px 8px' }}>
+                        <span style={{
+                          fontSize: 11, padding: '2px 6px', borderRadius: 4,
+                          background: p.source === 'manual' ? '#7c3aed' : '#334155',
+                          color: '#e2e8f0',
+                        }}>
+                          {p.source === 'manual' ? 'ხელით' : p.source}
+                        </span>
+                      </td>
+                      <td style={{ padding: '6px 8px', color: '#cbd5e1', maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {p.purpose || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredPayments.length === 0 && (
+                    <tr>
+                      <td colSpan="4" style={{ padding: 14, textAlign: 'center', color: '#94a3b8', fontStyle: 'italic' }}>
+                        ამ თვეში გადახდა არ არის.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {waybillsExpanded && supplierWaybills.length > 0 && (
+          <div style={{
+            margin: '8px 0 16px', padding: 12,
+            background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, color: '#94a3b8' }}>თვე:</span>
+              <select
+                value={effectiveWaybillsMonth}
+                onChange={(e) => setWaybillsMonthFilter(e.target.value)}
+                style={{
+                  background: '#1e293b', color: '#e2e8f0',
+                  border: '1px solid #334155', borderRadius: 6,
+                  padding: '4px 8px', fontSize: 13,
+                }}
+              >
+                {waybillMonths.map((m) => <option key={m} value={m}>{m}</option>)}
+                <option value="">ყველა თვე</option>
+              </select>
+              <span style={{ flex: 1 }} />
+              <span style={{ fontSize: 13, color: '#94a3b8' }}>
+                {filteredWaybills.length} ზედნადები · წმინდა ჯამი <strong style={{ color: '#86efac' }}>{fmt(filteredWaybillsTotal)}</strong>
+              </span>
+            </div>
+            <div style={{ maxHeight: 280, overflowY: 'auto', borderTop: '1px solid #1e293b' }}>
+              <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+                <thead style={{ position: 'sticky', top: 0, background: '#0f172a' }}>
+                  <tr style={{ color: '#94a3b8', textAlign: 'left' }}>
+                    <th style={{ padding: '6px 8px', borderBottom: '1px solid #334155' }}>თარიღი</th>
+                    <th style={{ padding: '6px 8px', borderBottom: '1px solid #334155' }}>ზედნადების №</th>
+                    <th style={{ padding: '6px 8px', borderBottom: '1px solid #334155', textAlign: 'right' }}>თანხა</th>
+                    <th style={{ padding: '6px 8px', borderBottom: '1px solid #334155' }}>ტიპი</th>
+                    <th style={{ padding: '6px 8px', borderBottom: '1px solid #334155' }}>სტატუსი</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredWaybills.map((w, i) => (
+                    <tr key={`${w.waybill_number}-${i}`} style={{ borderBottom: '1px solid #1e293b' }}>
+                      <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{w.date || '—'}</td>
+                      <td style={{ padding: '6px 8px', fontFamily: 'monospace', fontSize: 12, color: '#cbd5e1' }}>{w.waybill_number || '—'}</td>
+                      <td style={{
+                        padding: '6px 8px', textAlign: 'right', whiteSpace: 'nowrap',
+                        color: w.is_return ? '#fca5a5' : '#86efac',
+                      }}>
+                        {w.is_return ? '−' : ''}{fmtPrecise(w.amount)}
+                      </td>
+                      <td style={{ padding: '6px 8px', color: '#cbd5e1' }}>
+                        {w.is_return ? (
+                          <span style={{
+                            fontSize: 11, padding: '2px 6px', borderRadius: 4,
+                            background: '#7f1d1d', color: '#fee2e2',
+                          }}>დაბრუნება</span>
+                        ) : (w.type || '—')}
+                      </td>
+                      <td style={{ padding: '6px 8px', color: '#94a3b8', fontSize: 12 }}>{w.status || '—'}</td>
+                    </tr>
+                  ))}
+                  {filteredWaybills.length === 0 && (
+                    <tr>
+                      <td colSpan="5" style={{ padding: 14, textAlign: 'center', color: '#94a3b8', fontStyle: 'italic' }}>
+                        ამ თვეში ზედნადები არ არის.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* 3 KPI */}
         <div className="supplier-modal-kpis">
@@ -1086,12 +1331,38 @@ export default function SupplierModal({
 
           {importedEntry && importedTopProducts.length > 0 && (
             <>
-              <div className="supplier-modal-section-title" style={{ marginTop: 8 }}>
-                Top პროდუქტები
-                {importedTopLimit > 0 && <span className="supplier-modal-section-hint"> (max {importedTopLimit})</span>}
+              <div className="supplier-modal-section-title" style={{ marginTop: 8, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                <span>Top პროდუქტები</span>
+                <span className="supplier-modal-section-hint">({importedTopProducts.length})</span>
+                <span style={{ flex: 1 }} />
+                <input
+                  type="text"
+                  placeholder="ძიება..."
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  style={{
+                    background: '#1e293b', color: '#e2e8f0',
+                    border: '1px solid #334155', borderRadius: 6,
+                    padding: '4px 8px', fontSize: 13, width: 140,
+                  }}
+                />
+                <select
+                  value={productLimit}
+                  onChange={(e) => setProductLimit(Number(e.target.value))}
+                  style={{
+                    background: '#1e293b', color: '#e2e8f0',
+                    border: '1px solid #334155', borderRadius: 6,
+                    padding: '4px 8px', fontSize: 13,
+                  }}
+                >
+                  <option value={20}>20</option>
+                  <option value={30}>30</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
               </div>
               <div className="supplier-modal-products">
-                {importedTopProducts.map((product, index) => (
+                {filteredTopProducts.map((product, index) => (
                   <div
                     key={`${product.product_code || product.product_name || 'product'}-${index}`}
                     className="supplier-modal-product"
@@ -1117,6 +1388,11 @@ export default function SupplierModal({
                     </div>
                   </div>
                 ))}
+                {filteredTopProducts.length === 0 && productSearch.trim() && (
+                  <div className="supplier-modal-product" style={{ color: '#94a3b8', fontStyle: 'italic' }}>
+                    ძიებაზე „{productSearch}" პროდუქტი ვერ მოიძებნა.
+                  </div>
+                )}
               </div>
             </>
           )}

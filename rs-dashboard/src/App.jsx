@@ -515,6 +515,8 @@ function App() {
             localPayments={localPayments}
             persistLocalPayments={persistLocalPayments}
             allSuppliers={data.suppliers}
+            paymentLines={data.supplier_payment_lines || {}}
+            waybillLines={data.supplier_waybill_lines || {}}
             formatNumber={formatNumber}
             onClose={() => setSelectedSupplier(null)}
           />

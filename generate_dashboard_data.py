@@ -182,6 +182,7 @@ from dashboard_pipeline.bank_income import (
 from dashboard_pipeline.manual_payments import (
     manual_payments_csv_path,
     load_manual_payments,
+    load_manual_payment_rows,
     sync_manual_payments_journal,
     read_manual_journal_full,
     read_manual_journal_rows,
@@ -241,6 +242,7 @@ from dashboard_pipeline.bank_reconciliation import (
     write_bank_ambiguous_excel,
     write_bank_non_supplier_excel,
     write_bank_matched_high_excel,
+    build_supplier_payment_lines,
 )
 
 # ---------------------------------------------------------------------------
@@ -1201,6 +1203,9 @@ def _process_rs_suppliers(df, agg_df, rs_files, supplier_registry_cfg, script_di
     bank_ambiguous_rows = bank_reconciliation_status_rows.get("ambiguous", [])
     bank_non_supplier_rows = bank_reconciliation_status_rows.get("non_supplier", [])
     bank_matched_high_rows = bank_reconciliation_status_rows.get("matched_high", [])
+    supplier_payment_lines = build_supplier_payment_lines(
+        bank_matched_high_rows, load_manual_payment_rows()
+    )
     write_suppliers_excel(suppliers_data, download_dir)
     write_bank_unmatched_excel(
         [_line_for_excel(r) for r in bank_unmatched_only_rows],
@@ -1225,9 +1230,10 @@ def _process_rs_suppliers(df, agg_df, rs_files, supplier_registry_cfg, script_di
     
     waybills_df = df[[c for c in safe_cols.keys() if c in df.columns]].rename(columns=safe_cols)
     waybills_df = waybills_df.fillna("N/A")
-    
+
     waybills_data = waybills_df.to_dict(orient='records')
-    
+    supplier_waybill_lines = _build_supplier_waybill_lines(waybills_data)
+
     manual_grand = float(sum(manual_only.values()))
     return {
         "suppliers_data": suppliers_data,
@@ -1242,7 +1248,43 @@ def _process_rs_suppliers(df, agg_df, rs_files, supplier_registry_cfg, script_di
         "manual_grand": manual_grand,
         "manual_only": manual_only,
         "strict_bank_only_map": strict_bank_only_map,
+        "supplier_payment_lines": supplier_payment_lines,
+        "supplier_waybill_lines": supplier_waybill_lines,
     }
+
+
+def _build_supplier_waybill_lines(waybills_data):
+    """Index waybills by supplier tax_id for the SupplierModal "ზედნადებები"
+    panel. Drops cancelled (გაუქმებული) entries — keeps active + completed +
+    return-type rows so the user sees the full live picture per supplier."""
+    by_tid = {}
+    for row in waybills_data or []:
+        if not isinstance(row, dict):
+            continue
+        status = str(row.get("status") or "").strip()
+        if status == "გაუქმებული":
+            continue
+        org = str(row.get("supplier") or "")
+        tid = str(_extract_tax_id_from_org(org) or "").strip()
+        if not tid:
+            continue
+        date_str = str(row.get("date") or "")[:10]
+        try:
+            amount = float(row.get("effective_amount") or row.get("nominal_amount") or 0)
+        except (TypeError, ValueError):
+            amount = 0.0
+        wb_type = str(row.get("type") or "").strip()
+        by_tid.setdefault(tid, []).append({
+            "date": date_str,
+            "waybill_number": str(row.get("waybill_number") or ""),
+            "amount": amount,
+            "status": status,
+            "type": wb_type,
+            "is_return": "დაბრუნება" in wb_type,
+        })
+    for tid, lines in by_tid.items():
+        lines.sort(key=lambda r: r.get("date") or "", reverse=True)
+    return by_tid
 
 
 def _read_and_parse_rs(rs_files, object_mapping):
@@ -1529,6 +1571,8 @@ def run():
             "supplier_aging": supplier_aging_result["suppliers"],
             "aging_summary": supplier_aging_result["summary"],
             "ap_monthly_trend": ap_monthly_trend,
+            "supplier_payment_lines": rs_result.get("supplier_payment_lines") or {},
+            "supplier_waybill_lines": rs_result.get("supplier_waybill_lines") or {},
             # supplier_concentration ცარიელ placeholder-ად ვამატებ; ქვემოთ
             # data dict-ის აშენების მერე ვაქცევ რეალურ payload-ად რომ
             # `prepare_supplier_brief` ხედავდეს ფინალურ suppliers + meta-ს.
