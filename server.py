@@ -82,6 +82,20 @@ _pipeline_status = {
     "runs_total": 0,
 }
 
+# Bank-cache refresh state (Sprint C step 6 Phase 1) — distinct from
+# `_pipeline_status` because bank refresh = remote API fetch into parquet
+# caches, whereas pipeline = local recompute of `data.json`. The bank
+# orchestrator kicks `_run_pipeline` only after the API fetch finishes.
+_bank_refresh_lock = Lock()
+_bank_refresh_status = {
+    "state": "idle",            # idle | running | error
+    "started_at": None,         # ISO timestamp of current/last run start
+    "completed_at": None,       # ISO timestamp of last successful completion
+    "last_error": None,
+    "last_result": None,        # full per-bank dict from refresh_all_banks
+    "runs_total": 0,
+}
+
 
 def _run_pipeline():
     """Run generate_dashboard_data in a subprocess (thread-safe).
@@ -422,6 +436,7 @@ async def get_status():
             **_pipeline_status,
             "schedule_interval_min": SCHEDULE_INTERVAL_MIN,
         },
+        "bank_refresh": dict(_bank_refresh_status),
         "server_time": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -435,6 +450,95 @@ async def trigger_refresh(request: Request):
     thread = Thread(target=_run_pipeline, daemon=True)
     thread.start()
     return {"status": "started", "message": "Pipeline regeneration started in background"}
+
+
+# ---------------------------------------------------------------------------
+# Bank refresh — Sprint C step 6 Phase 1
+# ---------------------------------------------------------------------------
+
+
+def _run_bank_refresh(nonce: str) -> None:
+    """Thread target: call the bank orchestrator, then kick a pipeline regen.
+
+    The orchestrator owns its own concurrency (BOG + rs.ge in parallel,
+    then TBC). After it returns, we trigger `_run_pipeline` so the
+    refreshed parquet caches actually flow into `data.json`. The pipeline
+    lock makes this race-safe vs the global `/api/refresh` button.
+    """
+    from dashboard_pipeline.bank_refresh import refresh_all_banks
+
+    if not _bank_refresh_lock.acquire(blocking=False):
+        logger.info("Bank refresh already running, skipping")
+        return
+    try:
+        _bank_refresh_status["state"] = "running"
+        _bank_refresh_status["started_at"] = datetime.now(timezone.utc).isoformat()
+        _bank_refresh_status["last_error"] = None
+        logger.info("Bank refresh started")
+
+        result = refresh_all_banks(nonce)
+
+        _bank_refresh_status["last_result"] = result
+        _bank_refresh_status["completed_at"] = datetime.now(timezone.utc).isoformat()
+        _bank_refresh_status["runs_total"] += 1
+
+        any_ok = any(result[k]["ok"] for k in ("bog", "rsge", "tbc"))
+        all_ok = all(result[k]["ok"] for k in ("bog", "rsge", "tbc"))
+        if all_ok:
+            _bank_refresh_status["state"] = "idle"
+        else:
+            _bank_refresh_status["state"] = "error"
+            failures = [
+                f"{k}={result[k].get('error', 'failed')}"
+                for k in ("bog", "rsge", "tbc")
+                if not result[k]["ok"]
+            ]
+            _bank_refresh_status["last_error"] = "; ".join(failures)[:500]
+
+        if any_ok:
+            # At least one cache changed — kick a pipeline regen so the
+            # dashboard sees the new data. `_run_pipeline` is reentrant via
+            # `_pipeline_lock` (no-op if a pipeline is already running).
+            Thread(target=_run_pipeline, daemon=True).start()
+    except Exception as exc:
+        _bank_refresh_status["state"] = "error"
+        _bank_refresh_status["last_error"] = str(exc)[:500]
+        logger.error("Bank refresh exception: %s", exc)
+    finally:
+        _bank_refresh_lock.release()
+
+
+@app.post("/api/banks/refresh")
+@limiter.limit("1/minute")
+async def trigger_bank_refresh(request: Request, payload: dict = Body(default={})):
+    """Manually fetch fresh data from BOG / rs.ge / TBC into parquet caches.
+
+    Body: `{"nonce": "123456789"}` — 9-digit DigiPass OTP for TBC. BOG and
+    rs.ge use stored credentials; only TBC needs the OTP.
+
+    Server-side OTP shape validation runs BEFORE any thread is spawned
+    (memory: never let a malformed OTP reach `fetch_movements`).
+    """
+    from dashboard_pipeline.bank_refresh import OTP_RE
+
+    if _bank_refresh_status["state"] == "running":
+        return {
+            "status": "already_running",
+            "message": "Bank refresh is already running",
+        }
+
+    nonce = (payload.get("nonce") or "").strip()
+    if not OTP_RE.match(nonce):
+        raise HTTPException(
+            status_code=400,
+            detail="`nonce` must be exactly 9 digits (DigiPass OTP)",
+        )
+
+    Thread(target=_run_bank_refresh, args=(nonce,), daemon=True).start()
+    return {
+        "status": "started",
+        "message": "Bank refresh kicked off in background",
+    }
 
 
 # ---------------------------------------------------------------------------

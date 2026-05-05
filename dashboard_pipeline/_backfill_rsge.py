@@ -29,7 +29,7 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 from dashboard_pipeline.rs_waybill_connector import RSWaybillConnector  # noqa: E402
-from dashboard_pipeline.rsge_cache import append_rsge_cache, read_rsge_cache  # noqa: E402
+from dashboard_pipeline.rsge_cache import read_rsge_cache, upsert_rsge_cache  # noqa: E402
 
 
 def _parse_date(s: str) -> date:
@@ -53,7 +53,13 @@ def run_backfill(
     end: date,
     *,
     dry_run: bool = False,
-) -> dict[int, int]:
+) -> dict[int, dict[str, int]]:
+    """Fetch & upsert rs.ge waybills for [start, end].
+
+    Returns `{year: {"added": N, "updated": M}}` aggregated across the
+    monthly chunks. The richer shape (vs the BOG/TBC `dict[int, int]`)
+    reflects the upsert-by-ID semantics — see `rsge_cache.upsert_rsge_cache`.
+    """
     if start > end:
         raise ValueError(f"start ({start}) > end ({end})")
 
@@ -64,7 +70,7 @@ def run_backfill(
         raise RuntimeError("rs.ge auth failed — check RS_USER/RS_PASS.")
     print("  auth OK")
 
-    totals: dict[int, int] = {}
+    totals: dict[int, dict[str, int]] = {}
     api_total = 0
 
     for win_start, win_end in _month_windows(start, end):
@@ -82,13 +88,21 @@ def run_backfill(
             )
             continue
 
-        added = append_rsge_cache(waybills)
-        for y, n in added.items():
-            totals[y] = totals.get(y, 0) + n
-        added_summary = ", ".join(f"{y}+{n}" for y, n in sorted(added.items()))
+        result = upsert_rsge_cache(waybills)
+        for y, counts in result.items():
+            slot = totals.setdefault(y, {"added": 0, "updated": 0})
+            slot["added"] += int(counts.get("added", 0))
+            slot["updated"] += int(counts.get("updated", 0))
+        summary = (
+            ", ".join(
+                f"{y}+{c['added']}/u{c['updated']}"
+                for y, c in sorted(result.items())
+            )
+            or "0"
+        )
         print(
             f"  {win_start}..{win_end}: api={len(waybills):>5}  "
-            f"added={added_summary or '0'}  ({dt:.1f}s)"
+            f"upsert={summary}  ({dt:.1f}s)"
         )
 
     print(f"\nBackfill complete. API total fetched: {api_total:,}")
@@ -96,7 +110,11 @@ def run_backfill(
         print("(dry run — no parquet written)")
     else:
         for y in sorted(totals):
-            print(f"  cache rows added in {y}: {totals[y]:,}")
+            c = totals[y]
+            print(
+                f"  cache changes in {y}: +{c['added']:,} new / "
+                f"~{c['updated']:,} updated"
+            )
         print("\nCurrent cache totals:")
         for y in range(start.year, end.year + 1):
             df = read_rsge_cache(y)

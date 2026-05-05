@@ -1,20 +1,32 @@
 """
-rs.ge waybill cache — append-only parquet store.
+rs.ge waybill cache — upsert-by-ID parquet store.
 
-Architecture (locked 2026-05-05, see CONTEXT_HANDOFF.md §1b — same policy as
-BOG bank_cache.py):
+Architecture (locked 2026-05-05, see CONTEXT_HANDOFF.md §1b — diverges from
+BOG/TBC append-only model since 2026-05-08):
 - Source = rs.ge SOAP only (no XLS in pipeline after wire-in).
 - One file per year: `Financial_Analysis/cache/rsge/{year}.parquet`.
-- Append-only — old records never mutate; refreshes only ADD new IDs.
+- Upsert-by-ID — incoming waybill replaces the cached row when the ID
+  already exists. Catches supplier-side amendments (active → cancelled,
+  amount/comment edits). Without this, `WaybillReconciliation.jsx` cannot
+  fire `ghost_ap` / `amount_mismatch` flags because the cache silently
+  shows the original (stale) row.
 - Schema = 21-column XLS-equivalent from `to_xls_dataframe` + 1 hidden
   `_create_date` column for year-partitioning. Pipeline read sites continue
   to consume the 21 XLS columns; the hidden column is filtered out by
   `read_rsge_cache`.
 
+Year remains stable across upserts because rs.ge `create_date` is immutable
+on amendments — only `status` / `close_date` / amount / comment change.
+
 Public API:
 - `read_rsge_cache(year=None) -> pd.DataFrame`        — concat all years if None.
 - `write_rsge_cache(year, df_with_meta) -> Path`      — overwrite one year.
-- `append_rsge_cache(waybills) -> dict[int, int]`     — append by ID.
+- `upsert_rsge_cache(waybills) -> dict[int, dict]`    — upsert by ID,
+                                                        returns per-year
+                                                        `{"added": N, "updated": M}`.
+- `append_rsge_cache(waybills) -> dict[int, int]`     — DEPRECATED thin
+                                                        compat shim (sums
+                                                        added+updated).
 - `list_rsge_waybill_paths() -> list[Path]`           — sorted parquet paths.
 - `read_waybill_file(path) -> pd.DataFrame`           — auto-dispatch parquet/xls.
 """
@@ -90,13 +102,22 @@ def write_rsge_cache(year: int, df: pd.DataFrame) -> Path:
     return p
 
 
-def append_rsge_cache(waybills: Iterable[Waybill]) -> dict[int, int]:
+def upsert_rsge_cache(
+    waybills: Iterable[Waybill],
+) -> dict[int, dict[str, int]]:
     """
-    Append-only update — add only waybills whose `ID` is not already cached
-    in the matching year's parquet. Old rows never mutate.
+    Upsert update — for each incoming waybill:
+    - if `ID` is not already cached → ADD as new row
+    - if `ID` already exists → REPLACE the existing row in-place
+
+    Catches rs.ge-side amendments after creation: status flips
+    (active → cancelled), amount/comment corrections, close_date population
+    on cancel. Year remains stable because rs.ge `create_date` is immutable
+    on amendments.
 
     Year is taken from `Waybill.create_date` (rs.ge SOAP creation timestamp).
-    Returns `{year: rows_added}`.
+    Returns `{year: {"added": N, "updated": M}}`. A year with neither new
+    nor changed rows still appears in the dict with both counters at 0.
     """
     waybills = list(waybills)
     if not waybills:
@@ -109,29 +130,93 @@ def append_rsge_cache(waybills: Iterable[Waybill]) -> dict[int, int]:
     if create_dates.isna().any():
         bad = sum(create_dates.isna())
         raise ValueError(
-            f"append_rsge_cache: {bad} waybill(s) have unparseable create_date"
+            f"upsert_rsge_cache: {bad} waybill(s) have unparseable create_date"
         )
     df = df.copy()
     df[HIDDEN_DATE_COL] = create_dates
     df["__year"] = create_dates.year
 
-    added: dict[int, int] = {}
+    result: dict[int, dict[str, int]] = {}
     for year, chunk in df.groupby("__year"):
         year = int(year)
         chunk = chunk.drop(columns="__year")
         existing = _read_with_hidden(year)
-        if not existing.empty:
-            seen = set(existing[ID_COL].astype(str))
-            chunk = chunk[~chunk[ID_COL].astype(str).isin(seen)]
-        if chunk.empty:
-            added[year] = 0
+
+        if existing.empty:
+            combined = chunk
+            added = len(chunk)
+            updated = 0
+            changed = True
+        else:
+            chunk_ids = chunk[ID_COL].astype(str)
+            existing_ids = existing[ID_COL].astype(str)
+            chunk_id_set = set(chunk_ids)
+            existing_id_set = set(existing_ids)
+            updating = chunk_id_set & existing_id_set
+            new_only = chunk_id_set - existing_id_set
+
+            if updating:
+                # Detect whether incoming rows actually differ from cached
+                # rows. Same-content re-fetches must not bump `updated`.
+                visible_cols = [c for c in chunk.columns if c != HIDDEN_DATE_COL]
+                old_view = (
+                    existing[existing_ids.isin(updating)]
+                    .set_index(existing_ids[existing_ids.isin(updating)])[visible_cols]
+                    .sort_index()
+                    .astype(str)
+                )
+                new_view = (
+                    chunk[chunk_ids.isin(updating)]
+                    .set_index(chunk_ids[chunk_ids.isin(updating)])[visible_cols]
+                    .sort_index()
+                    .astype(str)
+                )
+                # Drop rows that are byte-identical (treat NaN as equal-NaN).
+                diff_mask = (old_view != new_view).any(axis=1)
+                truly_changed_ids = set(diff_mask[diff_mask].index)
+            else:
+                truly_changed_ids = set()
+
+            updated = len(truly_changed_ids)
+            added = len(new_only)
+            changed = bool(truly_changed_ids or new_only)
+
+            if not changed:
+                combined = existing
+            else:
+                # Drop rows in `existing` whose ID we are replacing, then
+                # concat the (possibly reduced) chunk.
+                replace_ids = truly_changed_ids
+                kept = existing[~existing_ids.isin(replace_ids)]
+                # Only carry rows from chunk that are either new or truly
+                # changed — same-content rows from chunk would otherwise
+                # duplicate kept rows that we deliberately retained.
+                emit_mask = chunk_ids.isin(replace_ids | new_only)
+                combined = pd.concat([kept, chunk[emit_mask]], ignore_index=True)
+
+        result[year] = {"added": added, "updated": updated}
+
+        if not changed:
             continue
-        combined = pd.concat([existing, chunk], ignore_index=True)
+
         combined = combined.sort_values(HIDDEN_DATE_COL, kind="stable")
         combined = combined.reset_index(drop=True)
         write_rsge_cache(year, combined)
-        added[year] = len(chunk)
-    return added
+
+    return result
+
+
+def append_rsge_cache(waybills: Iterable[Waybill]) -> dict[int, int]:
+    """
+    DEPRECATED thin compat shim around `upsert_rsge_cache`.
+
+    Returns `{year: added + updated}` so legacy `_backfill_rsge.py` output
+    formatting (`f"{y}+{n}"`) keeps working without an update. New code
+    should call `upsert_rsge_cache` directly to preserve the added/updated
+    split.
+    """
+    detailed = upsert_rsge_cache(waybills)
+    return {y: counts["added"] + counts["updated"] for y, counts in detailed.items()}
 
 
 def list_rsge_waybill_paths() -> list[Path]:
@@ -161,6 +246,7 @@ def read_waybill_file(path) -> pd.DataFrame:
 __all__ = [
     "read_rsge_cache",
     "write_rsge_cache",
+    "upsert_rsge_cache",
     "append_rsge_cache",
     "list_rsge_waybill_paths",
     "read_waybill_file",
