@@ -31,6 +31,7 @@ const Valuation = lazy(() => import('./Valuation.jsx'));
 const Executive = lazy(() => import('./Executive.jsx'));
 const ImportedProducts = lazy(() => import('./ImportedProducts.jsx'));
 const OrphanProducts = lazy(() => import('./OrphanProducts.jsx'));
+const DuplicateProducts = lazy(() => import('./DuplicateProducts.jsx'));
 const RetailSales = lazy(() => import('./RetailSales.jsx'));
 const Cashflow = lazy(() => import('./Cashflow.jsx'));
 const SupplierModal = lazy(() => import('./SupplierModal.jsx'));
@@ -496,6 +497,10 @@ function App() {
         ) : activeTab === 'orphan_products' ? (
           <Suspense fallback={tabSuspenseFallback}>
             <OrphanProducts orphanProducts={data.orphan_products} />
+          </Suspense>
+        ) : activeTab === 'duplicate_products' ? (
+          <Suspense fallback={tabSuspenseFallback}>
+            <DuplicateProducts duplicateProducts={data.duplicate_products} />
           </Suspense>
         ) : null}
       </div>

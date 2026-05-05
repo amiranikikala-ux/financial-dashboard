@@ -59,6 +59,7 @@ FIELD_DEFAULTS = {
     "category_anomalies": {},
     "waybill_reconciliation": {},
     "orphan_products": {},
+    "duplicate_products": {},
 }
 
 # ერთი ჭერი: სრული rollup/API პასუხები დიდი მოცულობისას (OOM-ისგან დასაცავად ზედა საზღვარი).
@@ -97,6 +98,7 @@ TAB_ALLOWLIST = {
     "category_anomalies": ["category_anomalies"],
     "waybill_reconciliation": ["waybill_reconciliation"],
     "orphan_products": ["orphan_products"],
+    "duplicate_products": ["duplicate_products"],
     "executive_export": [
         "monthly_pnl",
         "budget",
@@ -291,6 +293,19 @@ TAB_RESPONSE_META = {
             'User-marked "უგულებელყოფილი" persists in Financial_Analysis/orphan_user_status.json.',
         ],
     },
+    "duplicate_products": {
+        "trust_label": "audited",
+        "trust_badge_ka": "MegaPlus Duplicates",
+        "scope_ka": (
+            "Same P_BARCODE recorded as 2+ distinct P_ID rows. Each cluster lists "
+            "all variants with stock (P_QUANT) and lifetime sales; phantom-stock "
+            "variants (stock>0, zero sales) are highlighted."
+        ),
+        "notes_ka": [
+            "Live MegaPlus DB query — clean up in MegaPlus and the cluster disappears next pipeline run.",
+            "Phantom-stock variants inflate apparent inventory; the active variant often shows negative P_QUANT.",
+        ],
+    },
     "waybill_reconciliation": {
         "trust_label": "audited",
         "trust_badge_ka": "rs.ge ↔ MegaPlus Reconciliation",
@@ -334,6 +349,7 @@ STATIC_RESPONSE_TABS = {
     "category_anomalies",
     "waybill_reconciliation",
     "orphan_products",
+    "duplicate_products",
 }
 
 DYNAMIC_SOURCE_ARTIFACTS = {

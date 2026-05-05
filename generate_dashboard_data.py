@@ -1877,11 +1877,7 @@ def run():
         logger.warning("პროდუქციული მოგება — ვერ აშენდა: %s", exc)
 
     # ----- შეუსაბამო პროდუქცია (PRODUCTS orphans) -----
-    # Reads the most recent Financial_Analysis/orphan_resolver_review_*.xlsx
-    # produced by `python -m dashboard_pipeline.orphan_resolver` and exposes
-    # it on data["orphan_products"] for the dashboard tab. Non-fatal — if no
-    # review file exists yet, the section is omitted and the UI shows a
-    # placeholder. User refreshes by re-running the resolver CLI.
+    # Live MegaPlus DB query. Non-fatal on failure.
     try:
         from dashboard_pipeline.orphan_products_section import build_orphan_products_bundle
         fa_dir = Path(script_dir) / "Financial_Analysis"
@@ -1890,6 +1886,18 @@ def run():
             data["orphan_products"] = orphan_bundle
     except Exception as exc:
         logger.warning("orphan_products: ვერ ჩაიდო data.json-ში: %s", exc)
+
+    # ----- დუბლირებული პროდუქცია (PRODUCTS duplicate barcodes) -----
+    # Surfaces same-barcode rows split across distinct P_IDs and flags
+    # phantom-stock cases (variant with P_QUANT>0 and zero sales). Live
+    # MegaPlus DB query. Non-fatal on failure.
+    try:
+        from dashboard_pipeline.duplicate_products_section import build_duplicate_products_bundle
+        dup_bundle = build_duplicate_products_bundle()
+        if dup_bundle is not None:
+            data["duplicate_products"] = dup_bundle
+    except Exception as exc:
+        logger.warning("duplicate_products: ვერ ჩაიდო data.json-ში: %s", exc)
 
     _write_outputs(data, script_dir, inc)
 
