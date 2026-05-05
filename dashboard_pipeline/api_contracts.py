@@ -58,6 +58,7 @@ FIELD_DEFAULTS = {
     "supplier_concentration": {},
     "category_anomalies": {},
     "waybill_reconciliation": {},
+    "orphan_products": {},
 }
 
 # ერთი ჭერი: სრული rollup/API პასუხები დიდი მოცულობისას (OOM-ისგან დასაცავად ზედა საზღვარი).
@@ -95,6 +96,7 @@ TAB_ALLOWLIST = {
     "supplier_concentration": ["supplier_concentration"],
     "category_anomalies": ["category_anomalies"],
     "waybill_reconciliation": ["waybill_reconciliation"],
+    "orphan_products": ["orphan_products"],
     "executive_export": [
         "monthly_pnl",
         "budget",
@@ -277,6 +279,18 @@ TAB_RESPONSE_META = {
             "Duplicate clusters group raw P_GROUP by stripped numeric code prefix + lowercase.",
         ],
     },
+    "orphan_products": {
+        "trust_label": "audited",
+        "trust_badge_ka": "MegaPlus Orphans",
+        "scope_ka": (
+            "PRODUCTS rows whose supplier link is empty/zero/ghost, with the "
+            "resolver's best-guess supplier from RS_CODES + DISTRIBUTORS + SOAP."
+        ),
+        "notes_ka": [
+            "Live MegaPlus DB query each pipeline run — fixes in MegaPlus clear automatically.",
+            'User-marked "უგულებელყოფილი" persists in Financial_Analysis/orphan_user_status.json.',
+        ],
+    },
     "waybill_reconciliation": {
         "trust_label": "audited",
         "trust_badge_ka": "rs.ge ↔ MegaPlus Reconciliation",
@@ -319,6 +333,7 @@ STATIC_RESPONSE_TABS = {
     "supplier_concentration",
     "category_anomalies",
     "waybill_reconciliation",
+    "orphan_products",
 }
 
 DYNAMIC_SOURCE_ARTIFACTS = {

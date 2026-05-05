@@ -30,6 +30,7 @@ const Budget = lazy(() => import('./Budget.jsx'));
 const Valuation = lazy(() => import('./Valuation.jsx'));
 const Executive = lazy(() => import('./Executive.jsx'));
 const ImportedProducts = lazy(() => import('./ImportedProducts.jsx'));
+const OrphanProducts = lazy(() => import('./OrphanProducts.jsx'));
 const RetailSales = lazy(() => import('./RetailSales.jsx'));
 const Cashflow = lazy(() => import('./Cashflow.jsx'));
 const SupplierModal = lazy(() => import('./SupplierModal.jsx'));
@@ -491,6 +492,10 @@ function App() {
         ) : activeTab === 'waybill_reconciliation' ? (
           <Suspense fallback={tabSuspenseFallback}>
             <WaybillReconciliation data={data} />
+          </Suspense>
+        ) : activeTab === 'orphan_products' ? (
+          <Suspense fallback={tabSuspenseFallback}>
+            <OrphanProducts orphanProducts={data.orphan_products} />
           </Suspense>
         ) : null}
       </div>
