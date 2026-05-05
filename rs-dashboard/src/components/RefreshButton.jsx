@@ -31,7 +31,7 @@ export default function RefreshButton({ status, refreshing, onRefresh }) {
         title={
           isRunning
             ? 'მონაცემები მზადდება...'
-            : 'მონაცემების ხელახლა გენერაცია'
+            : 'არსებული მონაცემების ხელახლა გათვლა (ბანკიდან ახალი მონაცემი არ ჩამოვა — ამისთვის ბანკის ჩანართის ლურჯი ღილაკი)'
         }
       >
         <svg
@@ -47,7 +47,7 @@ export default function RefreshButton({ status, refreshing, onRefresh }) {
         >
           <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
         </svg>
-        {isRunning ? 'მიმდინარეობს...' : 'განახლება'}
+        {isRunning ? 'მიმდინარეობს...' : 'ხელახლა გათვლა'}
       </button>
       {ageLabel && (
         <span

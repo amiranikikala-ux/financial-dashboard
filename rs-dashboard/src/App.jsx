@@ -463,6 +463,7 @@ function App() {
               data={data}
               reloadKey={reloadKey}
               formatNumber={formatNumber}
+              onDataReload={() => setReloadKey((k) => k + 1)}
             />
           </Suspense>
         ) : activeTab === 'insights' ? (

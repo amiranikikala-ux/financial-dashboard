@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { fetchApiJson } from './lib/api.js';
 import CalendarRangePicker from './components/CalendarRangePicker.jsx';
+import BankRefreshModal from './components/BankRefreshModal.jsx';
 
 /** TBC ხარჯები — tbc_expense_categories.json რიგით */
 const TBC_TAXONOMY_ORDER = [
@@ -76,7 +77,7 @@ function buildCanonicalPeriodParams(fromDate, toDate, fromTime, toTime) {
   };
 }
 
-export default function Cashflow({ data, reloadKey, formatNumber, fromDate, fromTime, toDate, toTime }) {
+export default function Cashflow({ data, reloadKey, formatNumber, fromDate, fromTime, toDate, toTime, onDataReload }) {
   const [showPosDailyTable, setShowPosDailyTable] = useState(false);
   const [showSalaryBreakdown, setShowSalaryBreakdown] = useState(false);
   const [showUnmatchedBankDetail, setShowUnmatchedBankDetail] = useState(false);
@@ -84,6 +85,9 @@ export default function Cashflow({ data, reloadKey, formatNumber, fromDate, from
   const [posDateFrom, setPosDateFrom] = useState('');
   const [posDateTo, setPosDateTo] = useState('');
   const [showDownloads, setShowDownloads] = useState(false);
+  const [showBankRefreshModal, setShowBankRefreshModal] = useState(false);
+  const [bankRefreshAgeLabel, setBankRefreshAgeLabel] = useState('');
+  const [bankRefreshTick, setBankRefreshTick] = useState(0);
   const [cashflowTbcExpensesDetail, setCashflowTbcExpensesDetail] = useState({
     key: '',
     detail: null,
@@ -372,8 +376,61 @@ export default function Cashflow({ data, reloadKey, formatNumber, fromDate, from
     XLSX.writeFile(wb, `TBC_ხარჯები_შეჯამება_${stamp}.xlsx`);
   };
 
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/status')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (cancelled || !json) return;
+        const completedAt = json?.bank_refresh?.completed_at;
+        if (!completedAt) {
+          setBankRefreshAgeLabel('');
+          return;
+        }
+        const ageSec = Math.max(
+          0,
+          Math.round((Date.now() - new Date(completedAt).getTime()) / 1000),
+        );
+        let label;
+        if (ageSec < 60) label = `${ageSec} წმ წინ`;
+        else if (ageSec < 3600) label = `${Math.floor(ageSec / 60)} წთ წინ`;
+        else if (ageSec < 86400)
+          label = `${Math.floor(ageSec / 3600)} სთ წინ`;
+        else label = `${Math.floor(ageSec / 86400)} დღის წინ`;
+        setBankRefreshAgeLabel(label);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [bankRefreshTick, reloadKey]);
+
+  const handleBankRefreshDataReload = () => {
+    setBankRefreshTick((v) => v + 1);
+    onDataReload?.();
+  };
+
   return (
     <div className="cashflow-page">
+      <div className="bank-refresh-launcher">
+        <button
+          type="button"
+          className="bank-refresh-launcher__btn"
+          onClick={() => setShowBankRefreshModal(true)}
+        >
+          ბანკიდან ახალი მონაცემის ჩამოტანა
+        </button>
+        {bankRefreshAgeLabel && (
+          <span className="bank-refresh-launcher__age">
+            ბოლო ჩამოტანა: {bankRefreshAgeLabel}
+          </span>
+        )}
+      </div>
+      <BankRefreshModal
+        open={showBankRefreshModal}
+        onClose={() => setShowBankRefreshModal(false)}
+        onDataReload={handleBankRefreshDataReload}
+      />
       <div className="tab-hero">
         <span className="tab-hero-title">💳 ბანკის ანალიზი</span>
         <span className="tab-hero-desc">POS შემოსავალი · TBC/BOG ხარჯი · არამიბმული ბანკი · სამეურნეო მოძრაობა</span>

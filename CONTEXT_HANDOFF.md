@@ -1,12 +1,40 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-08 (Sprint C step 6 Phase 1 BACKEND CLOSED — rs.ge cache upsert + `/api/banks/refresh` orchestrator + 23/23 ახალი ტესტი მწვანე. Phase 2 = UI, შემდეგი session). წინა → `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-03_2026-05-04.md`. ადრე → `CONTEXT_HISTORY_2026-04_2026-05-02.md`.
+> **განახლდა**: 2026-05-05 (Sprint C step 6 Phase 2 UI CLOSED — modal + hook + Cashflow button + RefreshButton relabel. End-to-end smoke-test PASSED with real OTP: BOG +201, rs.ge +19/16, TBC +12. ⚠️ Git commit pending). წინა → `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-03_2026-05-04.md`. ადრე → `CONTEXT_HISTORY_2026-04_2026-05-02.md`.
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-08) — Sprint C step 6 Phase 1 backend CLOSED · Phase 2 (UI) გადაიდო
+## 0. ბოლო session-ის შედეგი (2026-05-05) — Sprint C step 6 Phase 2 UI CLOSED · Sprint C step 6 ცენტრი 100% დახურული
+
+🎉 **ბანკის ჩანართზე ლურჯი ღილაკი „ბანკიდან ახალი მონაცემის ჩამოტანა" — ცოცხალი. End-to-end real OTP test პირველად გაიარა.** Modal იხსნება, კოდი იღება, BOG/რს.გე/TBC ერთად განახლდება, pipeline ავტომატურად ეშვება.
+
+| საკითხი | სტატუსი |
+|---|---|
+| `rs-dashboard/src/hooks/useBankRefresh.js` (NEW) — POST /api/banks/refresh + 2s poll /api/status until idle | ✅ |
+| `rs-dashboard/src/components/BankRefreshModal.jsx` (NEW) — DigiPass OTP input + 3 bank progress rows + close-on-finish | ✅ |
+| `rs-dashboard/src/Cashflow.jsx` — top-of-tab launcher button + age indicator + modal mount | ✅ |
+| `rs-dashboard/src/App.jsx` — pass `onDataReload={() => setReloadKey(k+1)}` to Cashflow | ✅ |
+| `rs-dashboard/src/components/RefreshButton.jsx` — label `განახლება` → `ხელახლა გათვლა` + tooltip clarifies recalc-only | ✅ |
+| `rs-dashboard/src/styles/components.css` — bank-refresh-* styles (overlay, modal, rows, launcher) | ✅ |
+| Vite build successful (Cashflow chunk = 41.61 kB, +0.4 kB) | ✅ |
+| End-to-end real OTP test (user-driven): BOG +201 / rs.ge +19 added +16 updated / TBC +12 — all `ok=True` | ✅ 🎉 |
+| **rs.ge upsert validated in production**: 16 retroactively-changed waybills caught (the exact failure mode Phase 1 was designed to fix) | ✅ |
+
+**🐛 Critical side-fix discovered & resolved (NOT scope creep, blocking)**: Service venv (`C:\financial-dashboard\venv\`) was missing `pyarrow` → pipeline silently produced empty `pos_terminal_income.total_ge=0.0`/`line_count=0` despite parquet caches being healthy. User saw "GEL 0" everywhere on Bank tab. Fix: `pip install pyarrow==24.0.0` into service venv. Pipeline regen restored real values (POS 2,035,340 ₾ / 206,239 lines, matches §0a TBC 392,689.69). Service venv vs parent venv inconsistency is a project-rule violation (`CLAUDE.md` says parent venv only) — long-term fix is to reconfigure NSSM, but for now both venvs work.
+
+**🆕 Memory added**: `feedback_single_url_workflow.md` — user wants ONE URL only (port 8000). After every frontend change run `npm run build` to update `dist/`. Never run Vite dev (port 5173). Confused user multiple times this session.
+
+**⚠️ NOT YET COMMITTED**: All Phase 2 frontend changes still uncommitted. User ended session before commit. Next session: stage Phase 2 files (`useBankRefresh.js`, `BankRefreshModal.jsx`, `Cashflow.jsx`, `App.jsx`, `RefreshButton.jsx`, `components.css`) + commit message → `feat(bank-refresh): Sprint C step 6 Phase 2 — UI modal + hook + Cashflow launcher button`. Also note service-venv pyarrow install in commit body (one-time machine-state change).
+
+**Phase 2 files changed**:
+- NEW: `rs-dashboard/src/hooks/useBankRefresh.js`, `rs-dashboard/src/components/BankRefreshModal.jsx`
+- EDIT: `rs-dashboard/src/Cashflow.jsx`, `rs-dashboard/src/App.jsx`, `rs-dashboard/src/components/RefreshButton.jsx`, `rs-dashboard/src/styles/components.css`
+
+---
+
+## 0a. წინა session-ის შედეგი (2026-05-08) — Sprint C step 6 Phase 1 backend CLOSED · Phase 2 (UI) გადაიდო
 
 🎉 **rs.ge cache append-only → upsert-by-ID. სუპლაიერების ცვლილებები (active → cancelled, თანხის გასწორება) ახლა cache-ში გადაიწერება.** ეს ფიქსი — სცენარი, რომელიც user-მა მოყვა (200 ₾ ზედნადები, შეცდომა, 150 ₾-ით გასწორდა) ახლა WaybillReconciliation.jsx-ის `ghost_ap` / `amount_mismatch` ფლეგებს ააქტიურებს, ცარიელი ნულის ნაცვლად.
 
