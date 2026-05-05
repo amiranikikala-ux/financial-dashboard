@@ -23,6 +23,8 @@ Usage (PowerShell, parent venv):
 
 from __future__ import annotations
 
+import json
+import logging
 import os
 import sys
 from dataclasses import dataclass
@@ -35,7 +37,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dashboard_pipeline.megaplus_backup import _connect, _db_name_for
 
+logger = logging.getLogger(__name__)
+
 STORES = {"1329": "დვაბზუ", "1301": "ოზურგეთი"}
+
+SOAP_CACHE_FILENAME = "orphan_soap_cache.json"
 
 # ─── SQL building blocks ─────────────────────────────────────────────────────
 
@@ -279,7 +285,74 @@ def soap_fallback_names(unresolved_tins: set[str]) -> dict[str, str]:
     return out
 
 
+# ─── SOAP cache (persisted across pipeline runs) ─────────────────────────────
+
+
+def _soap_cache_path(financial_analysis_dir: Path | None = None) -> Path:
+    base = financial_analysis_dir or (Path(__file__).resolve().parent.parent / "Financial_Analysis")
+    return base / SOAP_CACHE_FILENAME
+
+
+def load_soap_cache(financial_analysis_dir: Path | None = None) -> dict[str, str]:
+    """Read TIN→supplier_name mapping previously resolved via SOAP. Empty dict if missing."""
+    path = _soap_cache_path(financial_analysis_dir)
+    if not path.exists():
+        return {}
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        return {str(k).strip(): str(v).strip() for k, v in data.items() if k and v}
+    except (OSError, ValueError) as e:
+        logger.warning("orphan_soap_cache: read failed (%s) — treating as empty", e)
+        return {}
+
+
+def save_soap_cache(cache: dict[str, str], financial_analysis_dir: Path | None = None) -> None:
+    path = _soap_cache_path(financial_analysis_dir)
+    path.parent.mkdir(exist_ok=True)
+    with path.open("w", encoding="utf-8") as f:
+        json.dump(cache, f, ensure_ascii=False, indent=2, sort_keys=True)
+
+
 # ─── main entry ──────────────────────────────────────────────────────────────
+
+
+def build_orphan_dataframe(soap_cache: dict[str, str] | None = None) -> pd.DataFrame:
+    """Query MegaPlus DB across all stores and return the resolved orphan DataFrame.
+
+    Non-interactive. Pipeline-callable. Names for TINs not in DISTRIBUTORS are
+    filled from `soap_cache` (a {TIN: supplier_name} dict, typically loaded
+    from Financial_Analysis/orphan_soap_cache.json). Rows with TINs unknown to
+    both DISTRIBUTORS and the cache keep `best_supplier_name=None` and
+    resolution_method='RS_CODES (TIN unknown to DISTRIBUTORS)'.
+    """
+    soap_cache = soap_cache or {}
+    frames = []
+    for sid, label in STORES.items():
+        frames.append(build_review_for_store(sid, label))
+    if not frames:
+        return pd.DataFrame()
+    combined = pd.concat(frames, ignore_index=True)
+    if combined.empty:
+        return combined
+
+    # Apply SOAP cache: where TIN is known but DISTRIBUTORS lookup failed,
+    # fill the name from cache and re-tag resolution_method.
+    if soap_cache:
+        cache_keys = set(soap_cache.keys())
+        mask = (
+            combined["best_DIST_UUID"].isna()
+            & combined["best_TIN"].notna()
+            & combined["best_TIN"].astype(str).isin(cache_keys)
+        )
+        if int(mask.sum()) > 0:
+            combined.loc[mask, "best_supplier_name"] = (
+                combined.loc[mask, "best_TIN"].astype(str).map(soap_cache)
+            )
+            combined.loc[mask, "resolution_method"] = (
+                "SOAP fallback (TIN not in DISTRIBUTORS — manual add needed)"
+            )
+    return combined
 
 
 def build_review_for_store(store_id: str, label: str) -> pd.DataFrame:
@@ -340,21 +413,27 @@ def build_review_for_store(store_id: str, label: str) -> pd.DataFrame:
 
 
 def main() -> int:
-    frames = []
-    for sid, label in STORES.items():
-        frames.append(build_review_for_store(sid, label))
+    # Load persisted SOAP cache (so we only ask rs.ge for *new* unresolved TINs)
+    soap_cache = load_soap_cache()
+    if soap_cache:
+        print(f"  [soap-cache] loaded {len(soap_cache)} TIN(s) from disk")
 
-    combined = pd.concat(frames, ignore_index=True)
+    combined = build_orphan_dataframe(soap_cache)
+    if combined.empty:
+        print("no orphans found")
+        return 0
 
-    # Single SOAP call for all unresolved TINs across both stores (deduped)
+    # SOAP fallback ONLY for TINs not yet in cache and not in DISTRIBUTORS
     unresolved_tins = set(
         combined.loc[
-            combined["best_TIN"].notna() & combined["best_DIST_UUID"].isna(),
+            combined["best_TIN"].notna()
+            & combined["best_DIST_UUID"].isna()
+            & ~combined["best_TIN"].astype(str).isin(soap_cache.keys()),
             "best_TIN",
         ].astype(str)
     )
     if unresolved_tins:
-        print(f"\n=== SOAP fallback ({len(unresolved_tins)} unique unresolved TINs) ===")
+        print(f"\n=== SOAP fallback ({len(unresolved_tins)} new unresolved TINs) ===")
         soap_names = soap_fallback_names(unresolved_tins)
         if soap_names:
             mask = combined["best_DIST_UUID"].isna() & combined["best_TIN"].astype(str).isin(soap_names.keys())
@@ -363,6 +442,9 @@ def main() -> int:
                 mask, "resolution_method"
             ] = "SOAP fallback (TIN not in DISTRIBUTORS — manual add needed)"
             print(f"  → applied {len(soap_names)} names to {int(mask.sum())} rows")
+            soap_cache.update(soap_names)
+            save_soap_cache(soap_cache)
+            print(f"  → updated cache to {len(soap_cache)} TIN(s)")
 
     today = datetime.now().strftime("%Y-%m-%d")
     out_dir = Path("Financial_Analysis")

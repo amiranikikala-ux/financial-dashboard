@@ -1876,6 +1876,21 @@ def run():
     except Exception as exc:
         logger.warning("პროდუქციული მოგება — ვერ აშენდა: %s", exc)
 
+    # ----- შეუსაბამო პროდუქცია (PRODUCTS orphans) -----
+    # Reads the most recent Financial_Analysis/orphan_resolver_review_*.xlsx
+    # produced by `python -m dashboard_pipeline.orphan_resolver` and exposes
+    # it on data["orphan_products"] for the dashboard tab. Non-fatal — if no
+    # review file exists yet, the section is omitted and the UI shows a
+    # placeholder. User refreshes by re-running the resolver CLI.
+    try:
+        from dashboard_pipeline.orphan_products_section import build_orphan_products_bundle
+        fa_dir = Path(script_dir) / "Financial_Analysis"
+        orphan_bundle = build_orphan_products_bundle(fa_dir)
+        if orphan_bundle is not None:
+            data["orphan_products"] = orphan_bundle
+    except Exception as exc:
+        logger.warning("orphan_products: ვერ ჩაიდო data.json-ში: %s", exc)
+
     _write_outputs(data, script_dir, inc)
 
 if __name__ == "__main__":
