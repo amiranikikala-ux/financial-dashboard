@@ -34,7 +34,7 @@ from dashboard_pipeline._validate_aliases import (
     AliasValidationError,
     append_alias_atomic,
 )
-from dashboard_pipeline import orphan_user_status
+from dashboard_pipeline import orphan_user_status, supplier_archive
 from dashboard_pipeline.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -1003,6 +1003,62 @@ async def post_orphan_status(request: Request, payload: dict = Body(...)):
         "product_id": product_id,
         "user_status": "ignored" if ignored_raw else "active",
         "ignored_count_total": len(new_map),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Suppliers — user archive flag
+# ---------------------------------------------------------------------------
+_supplier_archive_lock = Lock()
+
+
+@app.post("/api/suppliers/archive")
+@limiter.limit("60/minute")
+async def post_supplier_archive(request: Request, payload: dict = Body(...)):
+    """Toggle the user's "archived" flag on a single supplier.
+
+    Body:
+        {
+            "tax_id":   "200000000",   (required)
+            "archived": true,          (required boolean)
+            "note":     "..."          (optional)
+        }
+    """
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Body must be a JSON object.")
+
+    tax_id = payload.get("tax_id")
+    archived_raw = payload.get("archived")
+    note = payload.get("note")
+
+    if not isinstance(tax_id, str) or not tax_id.strip():
+        raise HTTPException(status_code=400, detail="`tax_id` (string) is required.")
+    if not isinstance(archived_raw, bool):
+        raise HTTPException(status_code=400, detail="`archived` (boolean) is required.")
+    if note is not None and not isinstance(note, str):
+        raise HTTPException(status_code=400, detail="`note` must be a string when provided.")
+
+    with _supplier_archive_lock:
+        try:
+            new_map = supplier_archive.set_status(
+                tax_id=tax_id.strip(),
+                archived=archived_raw,
+                note=note,
+            )
+        except OSError as exc:
+            logger.error("supplier archive write failed: %s", exc)
+            raise HTTPException(status_code=500, detail=f"ფაილის ჩაწერა ვერ მოხერხდა: {exc}")
+
+    logger.info(
+        "supplier archive %s: %s (total archived=%d)",
+        "archived" if archived_raw else "restored",
+        tax_id.strip(), len(new_map),
+    )
+    return {
+        "success": True,
+        "tax_id": tax_id.strip(),
+        "archived": archived_raw,
+        "archived_count_total": len(new_map),
     }
 
 

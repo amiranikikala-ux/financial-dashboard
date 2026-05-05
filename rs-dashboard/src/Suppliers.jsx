@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { extractTaxId, mergeSupplier } from './financeMerge.js';
+import { fetchApiJson } from './lib/api.js';
 import SupplierConcentrationWidget from './components/SupplierConcentrationWidget.jsx';
 import CollapsibleSection from './components/CollapsibleSection.jsx';
 
@@ -75,6 +76,37 @@ export default function Suppliers({
   const [supplierSortKey, setSupplierSortKey] = useState('debt_asc');
   const [payAmount, setPayAmount] = useState('');
   const [recordedFlash, setRecordedFlash] = useState(false);
+  const [archiveOverrides, setArchiveOverrides] = useState({});
+  const [pendingArchiveTid, setPendingArchiveTid] = useState(null);
+  const [archiveError, setArchiveError] = useState(null);
+
+  const isArchived = useCallback((sup) => {
+    const tid = extractTaxId(sup['ორგანიზაცია']);
+    if (tid && tid in archiveOverrides) return archiveOverrides[tid];
+    return Boolean(sup.archived);
+  }, [archiveOverrides]);
+
+  const handleToggleArchive = useCallback(async (sup, becomeArchived) => {
+    const tid = extractTaxId(sup['ორგანიზაცია']);
+    if (!tid) {
+      setArchiveError('ამ ფირმას საიდენტიფიკაციო ნომერი არ აქვს — არქივი ვერ ჩაიწერა.');
+      return;
+    }
+    setPendingArchiveTid(tid);
+    setArchiveError(null);
+    try {
+      await fetchApiJson('/api/suppliers/archive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tax_id: tid, archived: becomeArchived }),
+      });
+      setArchiveOverrides((prev) => ({ ...prev, [tid]: becomeArchived }));
+    } catch (err) {
+      setArchiveError(`ვერ შეინახა: ${err?.message || err}`);
+    } finally {
+      setPendingArchiveTid(null);
+    }
+  }, []);
 
   const parseMoney = (raw) => {
     const n = parseFloat(String(raw || '').replace(/\s/g, '').replace(',', '.'));
@@ -114,15 +146,17 @@ export default function Suppliers({
     return sorted;
   }, [suppliers, nameNeedle, supplierSortKey, getDisplay]);
 
-  const { realSuppliers, nonRsRows } = useMemo(() => {
+  const { realSuppliers, archivedSuppliers, nonRsRows } = useMemo(() => {
     const real = [];
+    const archived = [];
     const nonRs = [];
     for (const sup of filteredSuppliers) {
       if (isNonRsSyntheticRow(sup)) nonRs.push(sup);
+      else if (isArchived(sup)) archived.push(sup);
       else real.push(sup);
     }
-    return { realSuppliers: real, nonRsRows: nonRs };
-  }, [filteredSuppliers]);
+    return { realSuppliers: real, archivedSuppliers: archived, nonRsRows: nonRs };
+  }, [filteredSuppliers, isArchived]);
 
   const nonRsTotalBank = useMemo(
     () => nonRsRows.reduce((sum, sup) => sum + (Number(getDisplay(sup).strictBankPaid) || 0), 0),
@@ -429,6 +463,18 @@ export default function Suppliers({
                     <span className="sup-org-name" title={sup['ორგანიზაცია']}>
                       {stripTaxIdPrefix(sup['ორგანიზაცია']) || sup['ორგანიზაცია']}
                     </span>
+                    <button
+                      type="button"
+                      className="sup-archive-btn"
+                      title="არქივში გადატანა"
+                      disabled={pendingArchiveTid === d.tid}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleArchive(sup, true);
+                      }}
+                    >
+                      📥
+                    </button>
                   </td>
                   <td className="sup-td-num">{sup.waybills_count}</td>
                   <td
@@ -465,6 +511,43 @@ export default function Suppliers({
           </tbody>
         </table>
       </div>
+
+      {archiveError ? (
+        <div className="trust-banner-sub trust-banner-sub--warn" style={{ marginTop: 8 }}>
+          {archiveError}
+        </div>
+      ) : null}
+
+      {archivedSuppliers.length > 0 ? (
+        <CollapsibleSection
+          title={`📦 არქივი (${archivedSuppliers.length})`}
+          subtitle="დაარქივებული ფირმები — მთავარ ცხრილში არ ჩანან, მაგრამ თანხები იჯამება ჩვეულებრივ. დაბრუნებისთვის — ↩"
+          defaultOpen={false}
+        >
+          <div className="non-rs-list">
+            {archivedSuppliers.map((sup, idx) => {
+              const d = getDisplay(sup);
+              const taxId = extractTaxId(sup['ორგანიზაცია']) || '—';
+              return (
+                <div key={`arch-${idx}`} className="non-rs-row">
+                  <span className="non-rs-row-id">{taxId}</span>
+                  <span className="non-rs-row-name">{stripTaxIdPrefix(sup['ორგანიზაცია']) || sup['ორგანიზაცია']}</span>
+                  <span className="non-rs-row-amount">{formatNumber(d.debt)}</span>
+                  <button
+                    type="button"
+                    className="sup-archive-btn"
+                    title="არქივიდან დაბრუნება"
+                    disabled={pendingArchiveTid === taxId}
+                    onClick={() => handleToggleArchive(sup, false)}
+                  >
+                    ↩
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </CollapsibleSection>
+      ) : null}
 
       {nonRsRows.length > 0 ? (
         <CollapsibleSection

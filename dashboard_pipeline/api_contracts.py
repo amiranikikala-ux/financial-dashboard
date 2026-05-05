@@ -24,6 +24,7 @@ from dashboard_pipeline.date_filters import (
 )
 from dashboard_pipeline.imported_products import collect_imported_products_bundle
 from dashboard_pipeline.retail_sales import collect_retail_sales_bundle
+from dashboard_pipeline.supplier_archive import load as _load_supplier_archive
 from dashboard_pipeline.supplier_matching import _normalize_waybill_ref
 from dashboard_pipeline.truth_boundary import (
     build_payment_scope_summary,
@@ -1965,6 +1966,18 @@ def _recompute_suppliers_response(
     return response
 
 
+def _annotate_archive_flag(suppliers):
+    archived_map = _load_supplier_archive()
+    if not archived_map:
+        for sup in suppliers:
+            sup["archived"] = False
+        return suppliers
+    for sup in suppliers:
+        tid = _extract_tax_id_from_org(sup.get("ორგანიზაცია"))
+        sup["archived"] = bool(tid and tid in archived_map)
+    return suppliers
+
+
 def _build_suppliers_response(cache, period_filter=None, **_kwargs):
     concentration = cache.get(
         "supplier_concentration", FIELD_DEFAULTS["supplier_concentration"]
@@ -1977,12 +1990,17 @@ def _build_suppliers_response(cache, period_filter=None, **_kwargs):
     )
     if not bool((period_filter or {}).get("applied")):
         return {
-            "suppliers": cache.get("suppliers", FIELD_DEFAULTS["suppliers"]),
+            "suppliers": _annotate_archive_flag(
+                list(cache.get("suppliers", FIELD_DEFAULTS["suppliers"]))
+            ),
             "supplier_concentration": concentration,
             "supplier_payment_lines": payment_lines,
             "supplier_waybill_lines": waybill_lines,
         }
     recomputed = _recompute_suppliers_response(cache, period_filter)
+    recomputed["suppliers"] = _annotate_archive_flag(
+        list(recomputed.get("suppliers", []))
+    )
     recomputed["supplier_concentration"] = concentration
     recomputed["supplier_payment_lines"] = payment_lines
     recomputed["supplier_waybill_lines"] = waybill_lines
