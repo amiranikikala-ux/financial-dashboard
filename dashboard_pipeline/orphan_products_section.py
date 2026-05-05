@@ -28,6 +28,7 @@ from dashboard_pipeline.orphan_resolver import (
     build_orphan_dataframe,
     load_soap_cache,
 )
+from dashboard_pipeline import orphan_user_status
 
 logger = logging.getLogger(__name__)
 
@@ -81,11 +82,17 @@ def build_orphan_products_bundle(financial_analysis_dir: Path) -> dict[str, Any]
         logger.info("orphan_products: 0 orphans returned — section omitted")
         return None
 
+    user_ignored = orphan_user_status.load(financial_analysis_dir)
+
     # ---- public rows ----
     rows_out: list[dict[str, Any]] = []
     by_resolution = {"resolved_single": 0, "multi_candidate": 0, "no_match": 0}
     by_store_acc: dict[str, dict[str, Any]] = {}
     total_revenue = 0.0
+    ignored_count = 0
+    ignored_revenue = 0.0
+    active_count = 0
+    active_revenue = 0.0
 
     for _, rec in df.iterrows():
         n_cand = _int(rec.get("n_candidates"))
@@ -123,9 +130,19 @@ def build_orphan_products_bundle(financial_analysis_dir: Path) -> dict[str, Any]
         all_tins_raw = _clean_str(rec.get("all_candidate_TINs")) or ""
         all_tins = [t.strip() for t in all_tins_raw.split(",") if t.strip()]
 
+        product_id = _int(rec.get("P_ID"))
+        ignored_entry = user_ignored.get(f"{store}::{product_id}")
+        is_ignored = ignored_entry is not None
+        if is_ignored:
+            ignored_count += 1
+            ignored_revenue += revenue
+        else:
+            active_count += 1
+            active_revenue += revenue
+
         rows_out.append({
             "store": store,
-            "product_id": _int(rec.get("P_ID")),
+            "product_id": product_id,
             "product_name": _clean_str(rec.get("P_NAME")),
             "barcode": _clean_str(rec.get("P_BARCODE")) or "",
             "orphan_kind": _clean_str(rec.get("orphan_kind")),
@@ -139,6 +156,8 @@ def build_orphan_products_bundle(financial_analysis_dir: Path) -> dict[str, Any]
             "all_candidate_tins": all_tins,
             "resolution_method": _clean_str(method),
             "resolution_bucket": bucket,
+            "user_status": "ignored" if is_ignored else "active",
+            "ignored_at": (ignored_entry or {}).get("ignored_at") if is_ignored else None,
         })
 
     rows_out.sort(key=lambda r: r["lifetime_revenue_ge"], reverse=True)
@@ -162,14 +181,23 @@ def build_orphan_products_bundle(financial_analysis_dir: Path) -> dict[str, Any]
             "total_revenue_ge": _round(total_revenue),
             "by_resolution": by_resolution,
             "by_store": by_store,
+            "user_status_counts": {
+                "active": active_count,
+                "ignored": ignored_count,
+            },
+            "user_status_revenue_ge": {
+                "active": _round(active_revenue),
+                "ignored": _round(ignored_revenue),
+            },
         },
         "rows": rows_out,
     }
 
     logger.info(
-        "orphan_products: %d რიგი (%.0f ₾) | resolved=%d, multi=%d, no_match=%d | source=megaplus_sql_live",
+        "orphan_products: %d რიგი (%.0f ₾) | resolved=%d, multi=%d, no_match=%d | active=%d, ignored=%d | source=megaplus_sql_live",
         len(rows_out), total_revenue,
         by_resolution["resolved_single"], by_resolution["multi_candidate"],
         by_resolution["no_match"],
+        active_count, ignored_count,
     )
     return bundle

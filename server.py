@@ -34,6 +34,7 @@ from dashboard_pipeline._validate_aliases import (
     AliasValidationError,
     append_alias_atomic,
 )
+from dashboard_pipeline import orphan_user_status
 from dashboard_pipeline.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -922,6 +923,77 @@ async def post_alias_confirm(request: Request, payload: dict = Body(...)):
             'დადასტურდა — მომდევნო pipeline run-ი ანალიზში დაამატებს. '
             'ხელით განახლება: „განაახლე მონაცემები" ღილაკი.'
         ),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Orphan products — user status (ignored / active)
+# ---------------------------------------------------------------------------
+_orphan_status_lock = Lock()
+
+
+@app.post("/api/orphan-products/status")
+@limiter.limit("60/minute")
+async def post_orphan_status(request: Request, payload: dict = Body(...)):
+    """Toggle the user's "ignored" flag on a single orphan product.
+
+    Body:
+        {
+            "store":       "დვაბზუ",       (required)
+            "product_id":  12345,            (required)
+            "ignored":     true,             (required boolean)
+            "note":        "..."             (optional)
+        }
+
+    Persists to ``Financial_Analysis/orphan_user_status.json``. The
+    dashboard's `data["orphan_products"].rows` exposes user_status on
+    every pipeline run, so the change becomes visible after the next
+    pipeline cycle (or immediate refresh).
+    """
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Body must be a JSON object.")
+
+    store = payload.get("store")
+    if not isinstance(store, str) or not store.strip():
+        raise HTTPException(status_code=400, detail="`store` is required (string).")
+
+    product_id_raw = payload.get("product_id")
+    try:
+        product_id = int(product_id_raw)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="`product_id` must be an integer.")
+
+    ignored_raw = payload.get("ignored")
+    if not isinstance(ignored_raw, bool):
+        raise HTTPException(status_code=400, detail="`ignored` must be a boolean.")
+
+    note = payload.get("note")
+    if note is not None and not isinstance(note, str):
+        raise HTTPException(status_code=400, detail="`note` must be a string when provided.")
+
+    with _orphan_status_lock:
+        try:
+            new_map = orphan_user_status.set_status(
+                store=store.strip(),
+                product_id=product_id,
+                ignored=ignored_raw,
+                note=note,
+            )
+        except OSError as exc:
+            logger.error("orphan status write failed: %s", exc)
+            raise HTTPException(status_code=500, detail=f"ფაილის ჩაწერა ვერ მოხერხდა: {exc}")
+
+    logger.info(
+        "orphan status %s: %s::%d (total ignored=%d)",
+        "ignored" if ignored_raw else "cleared",
+        store.strip(), product_id, len(new_map),
+    )
+    return {
+        "success": True,
+        "store": store.strip(),
+        "product_id": product_id,
+        "user_status": "ignored" if ignored_raw else "active",
+        "ignored_count_total": len(new_map),
     }
 
 
