@@ -25,6 +25,9 @@ download/
 .DS_Store
 Thumbs.db
 
+# Telegram bot runtime state (per-machine offset cursor)
+.telegram_bot_offset.json
+
 # Environment secrets (API keys, tokens) — NEVER commit real .env files!
 .env
 .env.local
