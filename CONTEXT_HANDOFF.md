@@ -1,12 +1,95 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-06 ღამე — **ნაღდი ფული გავრცელდა ყველგან** (Forecast/VAT/Budget/Valuation). ბიზნეს-კონტექსტი ფაილშია. Supplier modal-ის თვის ფილტრი chip-ებზე გადავიდა. **6 commit push-ნული origin/main-ზე.** ღია — AI-ზე MY_BUSINESS.md wire-up.
+> **განახლდა**: 2026-05-07 ღამე — **MY_BUSINESS.md AI-ში ჩაშენდა + ხელის გადახდების ცოცხალი ჟურნალი** (POST/DELETE/GET endpoints + UI 🗑 button + live overlay). 7 commit ლოკალურად, push pending. ღია — supplier-ზე non-zero debt-ით KPI verification, supplier_archive.json commit, თუ Telegram bot service.
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-06 ღამე) — Forecast/VAT/Budget/Valuation cash flow + MY_BUSINESS context + Supplier UI polish
+## 0. ბოლო session-ის შედეგი (2026-05-07 ღამე) — AI ↔ MY_BUSINESS.md wire-up + Manual payments journal end-to-end
+
+🎉 **7 commit ლოკალურად (ჯერ origin-ზე არ push-ნულა).** წინა session-ში ღია იყო AI wire-up — ახლა ცოცხლადაა. გარდა ამისა, owner-მა ცხადი ფესვიანი პრობლემა აღმოაჩინა: ხელით გადახდილი ფული ბრაუზერის localStorage-ში „ცხოვრობდა", AI ვერ ხედავდა (72,972 ₾ ჯიდიაიზე → ცრუ ვალი 56,787 ₾). ამის გადასაჭრელად ცოცხალი ჟურნალი ჩავაშენე — backend + pipeline + UI.
+
+| საკითხი | სტატუსი | SHA |
+|---|---|---|
+| **#1 AI wire-up MY_BUSINESS.md → system_prompt** (Option A — `business_context.py` module) | ✅ | `ef4192d` |
+| **MY_BUSINESS.md per-supplier 2K clarification** (owner-ის მიერ — ჯიდიაი test-ზე) | ✅ | `2b004dd` |
+| **mtime-based reload** (owner edits → AI უცვლის რესტარტს არ ითხოვს) | ✅ | `ca81634` |
+| **Manual payments journal — backend** (POST/DELETE/GET + 24 ცდა) | ✅ | `3584ecb` |
+| **Manual payments journal — pipeline integration** (id passthrough + 4 ცდა) | ✅ | `0cdddbc` |
+| **Manual payments UI — POST + 🗑** (🗑 button on manual rows + replace localStorage) | ✅ | `4e56e0f` |
+| **Manual payments UI — live overlay + KPI fix** (no waiting for pipeline regen) | ✅ | `528de6c` `95eb57b` |
+| Cloud migration preview (paused per owner — Mini PC route) | 📁 | `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_CLOUD_MIGRATION_PREVIEW.md` |
+
+### Headline ცვლილებები (2026-05-07 ღამე)
+
+| | ადრე | ახლა |
+|---|---|---|
+| AI ხედავს მფლობელის სტრატეგიულ პასუხებს | ❌ ცარიელი | ✅ ყოველ ჩატში სავალდებულო კონტექსტი |
+| ხელის გადახდის შენახვა | ბრაუზერის localStorage (AI უხილავი) | სერვერის `manual_payments_journal.csv` |
+| ხელის გადახდის წაშლა | ❌ შეუძლებელი | ✅ 🗑 ღილაკი per-row |
+| ცოცხალი overlay pipeline-ის გარეშე | ❌ 60 წუთი ცდა | ✅ მაშინვე GET-ით |
+| MY_BUSINESS.md update → AI | რესტარტი საჭირო | ✅ mtime auto-reload |
+
+### Architectural decisions taken (locked, do-not-relitigate)
+
+1. **`Financial_Analysis/manual_payments_journal.csv`** — ცალკე ფაილი legacy `manual_payments.csv`-ს არ ეხება. Columns: `id, tax_id, amount, date, comment, created_at, deleted_at`. Soft delete-ი (deleted_at) — წაშლის ისტორია არ იკარგება.
+2. **localStorage-ი მხოლოდ fallback-ად დარჩა** — POST წარმატებაზე bypass-ი ხდება, ცოცხალი overlay აიტვირთავს entry-ს /api/manual-payments-დან. POST-ი ფეილზე → localStorage-ში (offline mode), user-ი ცხადი alert-ით ეცნობება.
+3. **Live journal overlay in SupplierModal** — `useEffect` მოდალის გახსნაზე `/api/manual-payments?tax_id=X` ეკითხება. `journalRefreshTick` re-fetch-ის triggerი (POST/delete-ის შემდეგ).
+4. **`livePendingJournalTotal` KPI ფიქსი** — entries რომელთა `id`-ი data.json-ში არ არის + არც deleted-ში → totalPaidIncludingLocal-ში დამატებული. Hint: „+X ხელის ჟურნალიდან".
+5. **AI tools არ შეცვლილა** — journal entries იგივე `manual` source-ით უკვე არსებული `build_supplier_payment_lines`-ით ნახულობს. AI tool-ი `read_data_json` → ხედავს pipeline regen-ის შემდეგ. `recall_context`/`compute` უცვლელია.
+
+### Open / next session
+
+- 🔴 **KPI verification on non-zero-debt supplier** — owner-მა ცადა ჯიდიაიზე (debt=0 ისედაც), ამიტომ `debtAfterLocal = max(0, 0-100) = 0` → ვიზუალური ცვლილება ვერ ხედავდა. ცადო **შპს ფუდმარტი** (53,774 ₾ ვალი) ან სხვა non-zero supplier — და დაადასტურე KPI მუშაობს. **ეს არის owner-ის ბოლო ღია საკითხი (2026-05-07 03:50 chat).**
+- 🔴 **7 commit push origin/main-ზე** — ლოკალურადაა ცომიტი (`ef4192d`..`95eb57b`). User-side action.
+- 🟡 **`supplier_archive.json` uncommitted** — წინა session-ში 212919742 archived via UI; ჯერ commit-ად არ გასულა. ცალკე commit.
+- 🟡 **Telegram bot ავტო-ჩართვა** — telegram_bot.py ხელით ეშვება (ამ session-ში re-started PID 150). NSSM-ით service უნდა გავხადოთ.
+- 🟡 **13 pre-existing test failures** — `test_expense_categories_incremental.py` + `test_foodmart_cashback_incremental.py`. Unrelated, ცალკე session.
+- 🟡 **Tooltip layer** — KPI labels + ცხრილის headers dashboard-wide. Owner-ის ადრინდელი მოთხოვნა.
+- 🟡 **`pos_income` field rename** — ცრუ სახელი (შიგთავსი total_income-ია). 15 frontend callsite. Low urgency cleanup.
+- ⏸ **Mini PC დაყენება** (24/7 availability) — owner-მა cloud უარყო (~70 ₾/თვე). გადადებულია hardware-ის ყიდვამდე. Preview: `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_CLOUD_MIGRATION_PREVIEW.md`.
+
+### Live findings (2026-05-07 ღამე)
+
+- **ჯიდიაი UI ხედავდა „0 ვალი", AI ხედავდა „56,787 ₾ ვალი"** — root cause: 72,972 ₾ ბრაუზერის localStorage-ში; AI მხოლოდ data.json-ს კითხულობდა.
+- **Legacy `manual_payments.csv`-ში 274 row, მხოლოდ 2 amount>0** — ჯიდიაი 313,922 ₾ + 1 სხვა. ნაღდი გადახდები მასიურად არ ფიქსირდებოდა.
+- **AI პირველ ცდაზე სწორად უპასუხა** „რა არის ჩემი მიზანი ვალის ჩამოყვანაში?" → 2,000 ₾ — wire-up მუშაობს. Owner-მა შემდეგ უპრეციზიროდა — per-supplier, არა total. MY_BUSINESS.md შესწორდა.
+- ცდები: 39 ახალი (11 business_context + 13 journal + 4 pipeline + 11 endpoint), ყველა მწვანე. 7 pre-existing AGENTS.md-related failure (test_ai_prompts_phase4b3) — ჩემს ცვლილებამდე უკვე იყო.
+
+### Side discoveries this session
+
+- **Telegram bot service-ად არ რეგისტრირდება** — `tasklist`-ში არ ჩანდა, manually started PID 150-ით. PostToolUse hook-ი ხელახლა ჩართოს ან NSSM-ად დარეგისტრირდეს (Task #2).
+- **Old manual entries with empty `row_date`** — legacy `manual_payments.csv`-ის ჯიდიაი 313,922 ₾ entry-ს თარიღი არ აქვს, ამიტომ თვე-chip ფილტრში არ ჩანს. „ყველა თვე" toggle-ით უნდა იხსნა. ცალკე fix: row_date populate.
+- **Owner-ის preference: monthly-cost rejection** — DigitalOcean ~70 ₾/თვე უარყვეს, ერთჯერადი hardware preferred. Mini PC ან ძველი ლეპტოპი.
+- **MY_BUSINESS.md cache reload** — first iteration: cached on first call. Owner-ის edit-ი → backend restart საჭირო. Fixed: mtime-based, edit-ი მაშინვე ხილულია AI-ზე.
+
+### Verification commands (next session)
+
+```powershell
+# Hard refresh ბრაუზერში: Ctrl+Shift+R
+# შემდეგ: გახსე შპს ფუდმარტი (404460187, debt 53,774 ₾)
+# დაამატე 100 ₾
+# ვერიფიკაცია:
+#   - სია-ში: ახალი row "ხელით" იისფერი + 🗑
+#   - "სულ გადახდილი" → +100 ₾
+#   - "+X ხელის ჟურნალიდან" hint გამოჩნდება
+#   - "დარჩენილი ვალი" → 53,674 ₾ (53,774 - 100)
+# ცადე delete: 🗑 → row გაქრება + KPI უკან
+```
+
+```bash
+# Server-side journal სანახავად:
+cat /c/financial-dashboard/Financial_Analysis/manual_payments_journal.csv
+
+# Tests:
+cd /c/financial-dashboard
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -m pytest tests/test_manual_payments_journal.py tests/test_manual_payments_journal_pipeline.py tests/test_server_manual_payments_endpoint.py tests/test_ai_business_context.py
+```
+
+---
+
+## 0a. წინა session-ის შედეგი (2026-05-06 ღამე) — Forecast/VAT/Budget/Valuation cash flow + MY_BUSINESS context + Supplier UI polish
 
 🎉 **6 commit push-ნული origin/main-ზე.** წინა session-მა ნაღდი ფული P&L-ში ჩაშენა; ეს session-ი მის გავრცელებას აკეთებდა — Forecast, VAT reconciliation, Budget, Valuation. გარდა ამისა, AI-ის 10 სტრატეგიული კითხვაზე მფლობელის პასუხები ფაილში სტრუქტურდა, და Supplier modal-ის თვის ფილტრი dropdown-დან chip ღილაკებზე გადაიყვანა.
 
