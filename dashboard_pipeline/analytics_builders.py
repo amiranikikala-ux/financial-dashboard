@@ -1003,7 +1003,7 @@ def build_budget(monthly_pnl, forecast_data, budget_config):
                 "month": month_dt.strftime("%Y-%m"),
                 "year": int(month_dt.year),
                 "month_num": int(month_dt.month),
-                "income": _safe_float(total.get("pos_income")),
+                "income": _safe_float(total.get("total_income")),
                 "expenses": _safe_float(total.get("expenses")),
                 "net": _safe_float(total.get("net")),
             }
@@ -1379,7 +1379,7 @@ def build_company_valuation(
         last_12_rows = valid_rows[-12:]
         annual_revenue = float(
             sum(
-                _safe_float(((r.get("total") or {}).get("pos_income")))
+                _safe_float(((r.get("total") or {}).get("total_income")))
                 for r in last_12_rows
             )
         )
