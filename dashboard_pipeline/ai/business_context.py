@@ -6,9 +6,10 @@ answers to the AI's strategic interview (10Q) — generic textbook KPI
 advice may not apply; this context lets the AI tailor recommendations
 to the owner's actual reality.
 
-Loaded lazily and cached on first call. ``reload_business_context()``
-forces a re-read (useful in tests or when the owner edits the file
-mid-session).
+Cache is keyed on the file's mtime so owner edits become visible to the
+next AI turn without a backend restart. When the file content is
+unchanged across turns the Anthropic prompt cache still hits, since the
+final prompt string is byte-identical.
 
 Missing file → returns ``None``. Empty / whitespace-only file → returns
 ``None``. Both cases are non-fatal: the AI continues without the extra
@@ -24,7 +25,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _BUSINESS_CONTEXT_PATH = _PROJECT_ROOT / "Financial_Analysis" / "MY_BUSINESS.md"
 
 _cached: Optional[str] = None
-_loaded = False
+_cached_mtime: Optional[float] = None
 
 
 def get_business_context_path() -> Path:
@@ -32,24 +33,34 @@ def get_business_context_path() -> Path:
 
 
 def load_business_context() -> Optional[str]:
-    """Return MY_BUSINESS.md content (cached). ``None`` if missing/empty."""
-    global _cached, _loaded
-    if _loaded:
-        return _cached
-    _loaded = True
+    """Return MY_BUSINESS.md content. Re-reads when the file's mtime changes."""
+    global _cached, _cached_mtime
     try:
-        text = _BUSINESS_CONTEXT_PATH.read_text(encoding="utf-8")
+        mtime = _BUSINESS_CONTEXT_PATH.stat().st_mtime
     except (FileNotFoundError, OSError):
         _cached = None
+        _cached_mtime = None
         return None
+
+    if _cached_mtime == mtime:
+        return _cached
+
+    try:
+        text = _BUSINESS_CONTEXT_PATH.read_text(encoding="utf-8")
+    except OSError:
+        _cached = None
+        _cached_mtime = None
+        return None
+
     text = text.strip()
     _cached = text or None
+    _cached_mtime = mtime
     return _cached
 
 
 def reload_business_context() -> Optional[str]:
-    """Force re-read on next call."""
-    global _cached, _loaded
+    """Force re-read on next call (drops mtime cache)."""
+    global _cached, _cached_mtime
     _cached = None
-    _loaded = False
+    _cached_mtime = None
     return load_business_context()

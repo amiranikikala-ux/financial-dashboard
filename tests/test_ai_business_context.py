@@ -53,17 +53,20 @@ def test_load_business_context_returns_none_for_empty_file(tmp_path, monkeypatch
     assert bc.load_business_context() is None
 
 
-def test_load_business_context_is_cached(tmp_path, monkeypatch):
+def test_load_business_context_picks_up_edits_via_mtime(tmp_path, monkeypatch):
+    import os
+    import time
+
     file = tmp_path / "ctx.md"
     file.write_text("first", encoding="utf-8")
     monkeypatch.setattr(bc, "_BUSINESS_CONTEXT_PATH", file)
     bc.reload_business_context()
     assert bc.load_business_context() == "first"
 
+    time.sleep(0.05)
+    new_mtime = time.time()
     file.write_text("second", encoding="utf-8")
-    assert bc.load_business_context() == "first"
-
-    bc.reload_business_context()
+    os.utime(file, (new_mtime, new_mtime))
     assert bc.load_business_context() == "second"
 
 
