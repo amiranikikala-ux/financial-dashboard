@@ -1865,6 +1865,19 @@ def run():
                             data, inc, object_mapping, budget_config,
                             sector_benchmarks, supplier_aging_result,
                         )
+                        # VAT reconciliation also reads retail_sales for max_pos_ge
+                        # / cashreg_in_ge. Its first pass at line 1647 ran before
+                        # synthesis, so every month had max_pos_ge=0. Recompute
+                        # now with the synthesized bundle.
+                        data["vat_reconciliation"] = compute_vat_reconciliation(
+                            retail_sales_bundle=data["retail_sales"],
+                            tbc_card_income_bundle=tbc_card_income_bundle,
+                            bog_pos_income_bundle=inc["bog_pos_income_bundle"],
+                            manual_journal_full=manual_rows,
+                            audit_excel_path=audit_excel_path,
+                            cash_outflow_journal_path=cash_journal_path,
+                            invoices_issued_path=invoices_issued_path,
+                        )
             else:
                 logger.info("MegaPlus cache ცარიელია — data.json-ში megaplus_live არ ჩაიდება")
         else:
