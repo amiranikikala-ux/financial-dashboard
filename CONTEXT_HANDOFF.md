@@ -1,12 +1,71 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-07 ღამე — **3 features SHIPPED + Telegram bot LIVE + AI strategic interview DONE**. 3 commits პუშნული origin/main-ზე (`9e672ad`, `37c4623`, `b91587e`). ახალი task ღიაა: **Megaplus სალაროს wire-in** (B-ვარიანტი — დღევანდელი დისკუსიის შედეგი). წინა → `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-03_2026-05-04.md`.
+> **განახლდა**: 2026-05-08 ღამე — **Megaplus სალაროს wire-in Session 1 (backend) DONE**. ნაღდი ფული P&L-ის income მხარეს ახლა ჩანს. `total_income` 2.04M → 5.48M ₾ გაიზარდა, `net_margin` −178% → −3.36%-ზე. ცვლილებები ჯერ არ არის push-ნული. შემდეგი ნაბიჯი: Session 2 (frontend PnL.jsx).
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-07 ღამე) — Waybill totals split + Suppliers archive + Telegram bot SHIPPED · Megaplus სალარო next
+## 0. ბოლო session-ის შედეგი (2026-05-08 ღამე) — Megaplus სალარო Session 1 (backend wire-in) DONE
+
+🎉 **ნაღდი ფული P&L-ის income მხარეს ახლა ჩანს.** `monthly_pnl[].total.cash_income` ახალი ველია, წყარო — `retail_sales.by_object_by_month` per-object MAX POS, ფორმულა — `cashreg_in = max(0, MAX_POS − bank_card)` (იგივე, რასაც `vat_reconciliation` იყენებს Sprint 5.8-დან).
+
+| საკითხი | სტატუსი |
+|---|---|
+| `dashboard_pipeline/analytics_builders.py::build_monthly_pnl` — ახალი `retail_sales_bundle` პარამეტრი, per-object cashreg_in ფორმულა | ✅ |
+| ახალი ველები: `total.cash_income`, `total.total_income`, per-object იგივე | ✅ |
+| `pos_income` ველი უცვლელი — UI რეგრესია არ არის | ✅ |
+| `build_financial_ratios` — კითხულობს `total_income`-ს, ძველ row-ზე ჩამოვარდება `pos_income`-ზე (backward compat) | ✅ |
+| `generate_dashboard_data.py:539` callsite — `retail_sales_bundle=data.get("retail_sales")` | ✅ |
+| `dashboard_pipeline/api_contracts.py::_build_pnl_summary_response` — period-filter callsite, retail bundle თვეების მიხედვით ფილტრავს | ✅ |
+| ახალი helper: `_filter_retail_sales_bundle_by_months` | ✅ |
+| `tests/test_monthly_pnl_cash_income.py` (NEW) — 8 ცდა, ყველა მწვანე | ✅ 8/8 |
+| Pipeline regen + spot-check parity vs `retail_sales` წყარო | ✅ 15/15 |
+| Invariant `total_income == pos_income + cash_income` | ✅ 42/42 |
+| `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_MEGAPLUS_CASH_INCOME_PREVIEW.md` (NEW) | ✅ |
+| ცვლილებები ჯერ არ არის committed (working tree dirty) | 🟡 commit + push pending |
+
+### Headline ცვლილება (2026-05-08 dataset)
+
+| მაჩვენებელი | ადრე | ახლა |
+|---|---|---|
+| `financial_ratios.company.total_income` | 2,037,224 ₾ (ბანკის ბარათით) | **5,480,688 ₾** (+ Megaplus ნაღდი) |
+| `financial_ratios.company.total_expenses` | 5,664,754 ₾ | 5,664,754 ₾ (უცვლელი) |
+| `financial_ratios.company.net_margin_pct` | −178.06% | **−3.36%** |
+| `monthly_pnl` total net | −3,627,529 ₾ | −184,066 ₾ |
+
+### Critical pipeline fix (2026-05-08 ღამე)
+
+`_build_analytics` თავიდან მუშაობდა ცარიელ `retail_sales`-ზე — pipeline-ში `data["retail_sales"]` მხოლოდ მოგვიანებით ივსებოდა MegaPlus DB-დან synthesis-ით (`generate_dashboard_data.py:1842`). გამოსავალი: synthesis-ის შემდეგ `_build_analytics`-ი ხელახლა გამოიძახება. log-ში ჩანს ახალი ხაზი: „Rebuilding analytics after retail_sales synthesis to surface Megaplus სალარო cash income".
+
+### Architectural decisions taken (locked, do-not-relitigate)
+
+1. **`pos_income` ველი უცვლელი დარჩა** — UI 15 callsite-ში მას კითხულობს. ახალი ველები (`cash_income`, `total_income`) დამატებითია, არა ჩანაცვლება. UI რეგრესია არ არის.
+2. **`build_monthly_pnl`-ის `retail_sales_bundle` პარამეტრი optional-ია** — `None`-ზე ჩამოვარდება ძველ ქცევას, ანუ ცდის fixture-ები არ ტყდება.
+3. **Per-object cashreg_in ფორმულა იგივეა, რაც `vat_reconciliation`-ში** — ერთი მათემატიკა ორ ადგილას, აუდიტ-შემოწმებული 2026 Q1-ზე (Sprint 5.8).
+4. **synthesis-შემდგომი rebuild = ერთი ფუნქციის ხელახლა გამოძახება** — duplicate logger output მისაღებია, კოდის რეფაქტორს არ აპირებს.
+
+### Open / next session
+
+- 🟡 **Session 2 (frontend PnL.jsx surface)** — 15 callsite `m.total?.pos_income`-ზე. რეკომენდაცია: გადასვლა `total_income`-ზე + ცალკე row „ნაღდი ფული" დასამატებლად. სხვა ფაილები: `Forecast.jsx`, `Executive.jsx`, `Insights.jsx`, `DebtPlan.jsx`, `App.jsx`. Estimate: 0.5–1 session.
+- 🟡 **Push 4 ცვლილება origin/main-ზე** — user-side action. 3 modified + 1 new test + 1 preview file.
+- 🟡 **Supplier payments still in expenses** — net_margin ისევ უარყოფითია (−3.36%) რადგან supplier გადახდები expense-ში ითვლება. რეალურ P&L-ში ეს COGS-ია, ცალკე ხარჯი არა. ცალკე sprint-ი: COGS detachment.
+- 🟡 **`vat_reconciliation` იყენებს pre-synthesis retail_sales-ს** — ამიტომ `vat_reconciliation.by_month[].max_pos_ge = 0` ყველა თვისთვის. იგივე ფესვი (synthesis მოგვიანებით ხდება), იგივე გამოსავალი (ან synthesis-ი ადრე გადავიტანოთ, ან vat-ი ხელახლა გადავთვალოთ). ცალკე fix.
+
+### Live findings (2026-05-08 dataset)
+
+- 2026-04 პარიტეტი: დვაბზუ pos=34,159 + cash=72,106 → total=106,266 ₾ (ემთხვევა `retail_sales.by_object_by_month` რიცხვს ცენტამდე). ოზურგეთი pos=27,842 + cash=57,800 → total=85,642 ₾ (იგივე).
+- `გაუნაწილებელი` ობიექტი — TBC POS-ის shop-attribution ხშირად ვერ მუშაობს, ეს ხაზი ერთვება pos_income-ში მაგრამ retail-ში არ ჩანს, ამიტომ cash_income=0 (მოსალოდნელია).
+- Pre-existing 13 ცდის ფეილი `test_expense_categories_incremental.py` + `test_foodmart_cashback_incremental.py`-ში — git stash-ით დადასტურდა, ჩემს ცვლილებას არ უკავშირდება (იგივე ფესვი, რაც § 5-ის xfail-cleanup carryover).
+
+### Side discoveries this session
+
+- **`AGENTS.md`-ის ერთი ცდა (`test_ai_prompts_phase4b3.py::test_agents_md_has_prompt_hygiene_section`)** — ეძებს „Ruthlessly prune", მაგრამ AGENTS.md-ში წერია „ruthlessly prune" (პატარა r). pre-existing case-mismatch, არც ერთ ჩემს ცვლილებას არ უკავშირდება. ცალკე trivial fix.
+- **`_scratch_cash_income_spotcheck.py`** — დროებითი ცდა-სკრიპტი, untracked. შემდეგ session-ში წაშლა შეიძლება, ან tests/-ში გადატანა.
+
+---
+
+## 0a. წინა session-ის შედეგი (2026-05-07 ღამე) — Waybill totals split + Suppliers archive + Telegram bot SHIPPED · Megaplus სალარო next
 
 🎉 **3 commit გავიდა origin/main-ზე. AI Advisor-ი ცოცხლად ტელეგრამიდან მუშაობს.** მფლობელმა AI-ს დააკვირდა, AI-მ data-ს დახედა და თვითონ მოიფიქრა 10 სტრატეგიული კითხვა ბიზნესის შესახებ — ეს შემდეგი step-ის (ბიზნესის კონტექსტი → MY_BUSINESS.md) ფუნდამენტია.
 
@@ -434,7 +493,9 @@ Detailed scope: `HANDOFF_ARCHIVE/PREVIEWS/SUPPLIER_ALIAS_REDESIGN_2026-05-05.md`
 
 | # | task | size | risk |
 |---|---|---|---|
-| 🔴 **Megaplus სალაროს wire-in (NEW 2026-05-07 ღამე)** | TOP priority. ნაღდი ფული P&L income მხარეს უნდა შევიდეს. Source-first sprint: Megaplus per-sale Excel → pipeline ფორმულა → data.json income field → spot-check 5+. ფიქსავს `−178%` net margin საკითხს (root cause: cash sales არ ჩანს income-ში, supplier payments expense-ში ორმაგად ითვლება). | 1-2 sessions | MEDIUM |
+| 🟡 **Megaplus სალარო Session 2 (frontend) — Session 1 backend DONE 2026-05-08 ღამე** | PnL.jsx-ში 15 callsite-ი `m.total?.pos_income`-ზე — გადასვლა `total_income`-ზე + ცალკე row „ნაღდი ფული". სხვა ფაილები: Forecast.jsx, Executive.jsx, Insights.jsx, DebtPlan.jsx, App.jsx. Backend რიცხვები სწორია (cash 5.48M, parity 15/15). | 0.5–1 session | LOW |
+| 🟡 **COGS detachment (followup of Megaplus wire-in)** | `total_expenses` ისევ შეიცავს supplier payments-ს, ამიტომ net_margin −3.36%-ია. რეალურ P&L-ში supplier payment = COGS, არა ცალკე ხარჯი. გამოყოფა: (a) `bank_reconciliation.matched_high` lines-ის expense ბუნდლიდან გამორიცხვა, (b) financial_ratios-ში `cogs` ცალკე ფიგურა. | 1-2 sessions | MEDIUM |
+| 🟡 **vat_reconciliation pre-synthesis bug (NEW 2026-05-08 ღამე)** | `vat_reconciliation.by_month[].max_pos_ge = 0` ყველა თვისთვის, რადგან `compute_vat_reconciliation` ცარიელ `retail_sales_bundle`-ს იღებს — synthesis მოგვიანებით ხდება (`generate_dashboard_data.py:1645` რბის `:1842`-მდე). გამოსავალი: ან synthesis ადრე გადავიტანოთ, ან vat-ი ხელახლა გადავთვალოთ. | ~30 წთ | LOW |
 | 🟡 **AI strategic interview answers (NEW 2026-05-07 ღამე)** | User უპასუხებს AI-ს 10 კითხვას (ნაღდი ფული, decision-maker, ჯიდიაი ხასიათი, AP days სტრატეგია, სეზონი, ვასაძე dependency, customer base, წითელი ხაზი). შემდეგ პასუხები სტრუქტურდება ფაილში (TBD: `Financial_Analysis/MY_BUSINESS.md` ან `dashboard_pipeline/ai/business_context.py` module). Inject system prompt-ში. სრული ლისტი → §0 above. | ~1 session | LOW |
 | 🟡 **Telegram bot ფონური სერვისი (NEW 2026-05-07 ღამე)** | Currently runs as standalone Python process (`telegram_bot.py`). Process restart needed after each reboot. NSSM second service ან systemd unit. ⚠️ Bash on Windows quirk spawned 2 instances ერთდროულად — race-ის თავიდან ასარიდებლად single-instance enforcement (lock file ან existing-process check) | ~30-60 წთ | LOW |
 | 🟡 **xfail-cleanup carryover (NEW 2026-05-08)** | 26 incremental-cache tests xfail-marked because Sprint A/B/C parquet wire-in broke their fixtures. `collect_*` funcs (bank_income / pos_terminal / tax_flow / samurneo) now read from `Financial_Analysis/cache/` parquet, but fixtures only redirect XLSX. Real fix = parametrize cache root in `bank_income`, then unmark. Files: `test_pos_terminal_income_incremental.py` (9), `test_samurneo_incremental.py` (7, file-level), `test_tax_flow_incremental.py` (7), `test_tbc_pos_terminal_matching.py` (3). | ~1-2 sessions | LOW (ფარავს რეალურ regression-ს) |
@@ -456,14 +517,14 @@ Detailed scope: `HANDOFF_ARCHIVE/PREVIEWS/SUPPLIER_ALIAS_REDESIGN_2026-05-05.md`
 | pytest (key suites) | 39/39 waybill_reconciliation + 50/50 supplier_profitability + retail_sales_revenue_formula |
 | Tool surface | 29 (incl. `data_quality_guard`) |
 | Dashboard tabs | 18 (16 + ⚠️ შეუსაბამო პროდუქცია + 👥 დუბლიკატები — both added 2026-05-05 დღე) |
-| `data.json` | ~111.1 MB (2026-05-06 build, public + dist mirrored) |
-| Local branch | `main` in sync with `origin/main` (pushed 2026-05-07 ღამე — `b91587e`) |
+| `data.json` | 116.00 MB (2026-05-08 build, public · dist not mirrored — pre-Session-1 stale) |
+| Local branch | `main`, 3 modified + 2 untracked (Megaplus Session 1 not yet pushed): `analytics_builders.py`, `api_contracts.py`, `generate_dashboard_data.py`, `tests/test_monthly_pnl_cash_income.py`, `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_MEGAPLUS_CASH_INCOME_PREVIEW.md` |
 | Cache state | BOG: 171,869 rows (2023-2026) · rs.ge: 22,408 rows (2022-2026, last refresh 2026-05-05 14:52, no 2026-05-06 yet) · TBC: 50,924 rows (2023-2026, dedup by `ტრანზაქციის ID`) |
 | MegaPlus DB integration | LIVE — 53 tables / 282+308 suppliers across 2 stores / 720K active orders / 2024-03 → 2026-04 |
 | MegaPlus watch folder layout | `Financial_Analysis/მეგაპლიუსის არქიტექტურა/{დვაბზუ,ოზურგეთი}/` (legacy `მეგა პლუს backup*` glob still supported) |
 | MegaPlus orphan products (live 2026-05-05) | 4 925 ცალი / 685 805 ₾ · დვაბზუ 2 480 (97.9% resolved) · ოზურგეთი 2 445 (91.9% resolved) |
 | MegaPlus duplicate barcodes (live 2026-05-05) | 3 401 დუბლიკატი (1 525 დვაბზუ + 1 876 ოზურგეთი) · 36 phantom-stock = 6 787 ცრუ ერთეული = 8 899 ₾ sell-basis |
-| Margin -178% root cause | `total_income=2.04M` (bank-only) vs `total_expenses=5.66M` (incl. supplier payments as expense) → fix = Megaplus სალარო wire-in (see §5) |
+| Margin status (2026-05-08 ღამე) | `total_income=5.48M` (ბანკის ბარათით 2.04M + Megaplus ნაღდი 3.44M) vs `total_expenses=5.66M` (still incl. supplier payments) → `net_margin=−3.36%`. სრული გამოსასწორებლად საჭიროა COGS detachment (იხ. §5). |
 | Live API endpoints (post-2026-05-07) | `/api/data?tab=orphan_products` · `/api/data?tab=duplicate_products` · `POST /api/orphan-products/status` · `POST /api/suppliers/archive` · `POST /api/chat` · `POST /api/banks/refresh` (all rate-limited) |
 | Persistent state files | `Financial_Analysis/orphan_soap_cache.json` (TIN→name, ~2 entries) · `Financial_Analysis/orphan_user_status.json` (ignored map, currently empty) · `Financial_Analysis/supplier_archive.json` (archived suppliers, currently empty — NEW 2026-05-07) |
 | Telegram bot | `@ioli_market_ai_bot` (id=8724250734), allowed_chat_id=6805108691, runs via `python telegram_bot.py`, offset cursor `.telegram_bot_offset.json` (gitignored). Standalone process — needs manual start after reboot. NSSM service deferred (see §5) |
