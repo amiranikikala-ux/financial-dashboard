@@ -64,23 +64,92 @@ def _retail_sales_max_pos_by_object_month(retail_sales_bundle):
     return dict(out)
 
 
+def _retail_sales_cogs_by_object_month(retail_sales_bundle):
+    """Per-(month, object) COGS (cost of goods sold) from retail_sales bundle.
+
+    Returns {"YYYY-MM": {object_label: cost_ge}}; empty dict when bundle is
+    None or has no by_object_by_month section. Used to surface real gross
+    margin in monthly_pnl. Matches MegaPlus per-sale `cost_paid` aggregation.
+    """
+    out = defaultdict(dict)
+    rows = (retail_sales_bundle or {}).get("by_object_by_month") or []
+    for row in rows:
+        month = str((row or {}).get("month") or "")
+        if len(month) < 7 or month[4] != "-":
+            continue
+        obj = str((row or {}).get("object") or "").strip()
+        if not obj:
+            continue
+        try:
+            cost = float(row.get("cost_ge") or 0)
+        except (TypeError, ValueError):
+            continue
+        out[month][obj] = cost
+    return dict(out)
+
+
+def _supplier_payments_by_month(supplier_payment_lines):
+    """Total supplier payments per month from supplier_payment_lines index.
+
+    supplier_payment_lines is {tax_id: [{date, amount, source, purpose}, ...]}
+    as built by build_supplier_payment_lines. Returns {"YYYY-MM": total_ge}.
+    Per-object split is not available because purpose-text → object resolution
+    is unreliable; total-level only for now.
+    """
+    out = defaultdict(float)
+    if not supplier_payment_lines:
+        return dict(out)
+    for _tax_id, lines in supplier_payment_lines.items():
+        for line in lines or []:
+            date = str((line or {}).get("date") or "")
+            if len(date) < 7:
+                continue
+            month = date[:7]
+            try:
+                amount = float(line.get("amount") or 0)
+            except (TypeError, ValueError):
+                continue
+            out[month] += amount
+    return dict(out)
+
+
 def build_monthly_pnl(
     pos_bundle,
     tbc_expenses_bundle,
     object_mapping,
     bog_expenses_bundle=None,
     retail_sales_bundle=None,
+    supplier_payment_lines=None,
 ):
     """
     თვიური P&L: POS შემოსავალი (ბანკი) + ნაღდი ფული (Megaplus სალარო) +
-    TBC/BOG ხარჯები ობიექტების ჭრილში.
+    TBC/BOG ხარჯები ობიექტების ჭრილში + COGS (Megaplus per-sale cost) +
+    operating_expenses (bank outflows minus supplier payments).
+
+    Two layers of P&L now coexist:
+
+    Cash-flow layer (legacy, per-object):
+      pos_income, cash_income, total_income, expenses, net
+      `expenses` here = ALL bank outflows including supplier payments;
+      `net` = total_income − expenses (cash burn, not real margin).
+
+    Accrual layer (new, per-object cogs/gross_margin; total-only for the
+    rest because supplier_payment_lines have no per-object info):
+      cogs (per-obj + total) — from retail_sales by_object_by_month.cost_ge
+      gross_margin (per-obj + total) = total_income − cogs
+      supplier_payments (total) — sum of supplier_payment_lines per month
+      operating_expenses (total) = expenses − supplier_payments
+      net_profit (total) = gross_margin − operating_expenses
+      gross_margin_pct, net_margin_pct (total)
 
     cashreg_in formula (per Sprint 5.8 vat_reconciliation): for each
     (month, object), `cash_income = max(0, max_pos − bank_card)`, where
     max_pos comes from retail_sales.by_object_by_month and bank_card is the
     POS terminal income aggregated from `pos_bundle.pnl_lines`. When
     retail_sales_bundle is None (older callers / fixtures), cash_income is
-    0.0 and `total_income == pos_income` for backward compat.
+    0.0 and `total_income == pos_income` for backward compat. When
+    supplier_payment_lines is None, supplier_payments is 0 and
+    operating_expenses == expenses (legacy behaviour).
     """
     mapping = object_mapping or _clone_default_object_mapping()
     default_object = str(mapping.get("default_object") or OBJECT_UNALLOCATED)
@@ -107,6 +176,8 @@ def build_monthly_pnl(
                 month_expenses[month][obj] += float(line.get("თანხა") or 0)
 
     max_pos_by_month = _retail_sales_max_pos_by_object_month(retail_sales_bundle)
+    cogs_by_month = _retail_sales_cogs_by_object_month(retail_sales_bundle)
+    supplier_payments_by_month = _supplier_payments_by_month(supplier_payment_lines)
 
     months = sorted(
         set(month_income.keys())
@@ -132,24 +203,41 @@ def build_monthly_pnl(
         total_pos_income = 0.0
         total_cash_income = 0.0
         total_expenses = 0.0
+        total_cogs = 0.0
         max_pos_for_month = max_pos_by_month.get(month, {})
+        cogs_for_month = cogs_by_month.get(month, {})
         for obj in objects_order:
             pos_income = float(month_income[month].get(obj) or 0)
             expenses = float(month_expenses[month].get(obj) or 0)
             max_pos = float(max_pos_for_month.get(obj) or 0)
             cash_income = max(0.0, max_pos - pos_income)
             obj_total_income = pos_income + cash_income
+            cogs = float(cogs_for_month.get(obj) or 0)
+            gross_margin = obj_total_income - cogs
             total_pos_income += pos_income
             total_cash_income += cash_income
             total_expenses += expenses
+            total_cogs += cogs
             month_objects[obj] = {
                 "pos_income": pos_income,
                 "cash_income": cash_income,
                 "total_income": obj_total_income,
                 "expenses": expenses,
                 "net": float(obj_total_income - expenses),
+                "cogs": cogs,
+                "gross_margin": gross_margin,
             }
         total_income = total_pos_income + total_cash_income
+        supplier_payments = float(supplier_payments_by_month.get(month) or 0)
+        operating_expenses = total_expenses - supplier_payments
+        gross_margin = total_income - total_cogs
+        net_profit = gross_margin - operating_expenses
+        gross_margin_pct = (
+            round(gross_margin / total_income * 100, 2) if total_income else 0.0
+        )
+        net_margin_pct = (
+            round(net_profit / total_income * 100, 2) if total_income else 0.0
+        )
         out.append(
             {
                 "month": month,
@@ -160,6 +248,13 @@ def build_monthly_pnl(
                     "total_income": float(total_income),
                     "expenses": float(total_expenses),
                     "net": float(total_income - total_expenses),
+                    "cogs": float(total_cogs),
+                    "gross_margin": float(gross_margin),
+                    "supplier_payments": supplier_payments,
+                    "operating_expenses": float(operating_expenses),
+                    "net_profit": float(net_profit),
+                    "gross_margin_pct": gross_margin_pct,
+                    "net_margin_pct": net_margin_pct,
                 },
             }
         )

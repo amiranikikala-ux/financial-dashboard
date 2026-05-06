@@ -1419,6 +1419,9 @@ def _build_pnl_summary_response(cache, period_filter=None, **_kwargs):
         + tbc_excluded_unparseable
         + bog_excluded_unparseable
     )
+    supplier_payment_lines = (
+        cache.get("supplier_payment_lines") if isinstance(cache, dict) else None
+    )
     return {
         "monthly_pnl": build_monthly_pnl(
             {"pnl_lines": pos_lines},
@@ -1426,6 +1429,7 @@ def _build_pnl_summary_response(cache, period_filter=None, **_kwargs):
             object_mapping,
             bog_expenses_bundle=filtered_bog_expenses,
             retail_sales_bundle=filtered_retail_bundle,
+            supplier_payment_lines=supplier_payment_lines,
         ),
         "pnl_period_meta": period_meta,
     }

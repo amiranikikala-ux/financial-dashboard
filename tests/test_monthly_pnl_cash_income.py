@@ -44,10 +44,33 @@ def _make_pos_bundle(lines):
 
 
 def _make_retail_bundle(rows):
-    """rows: list of (month, object, revenue_ge) tuples."""
+    """rows: list of (month, object, revenue_ge[, cost_ge]) tuples.
+
+    cost_ge is optional; defaults to 0 when not supplied (legacy tests don't
+    care about COGS).
+    """
+    bundle_rows = []
+    for row in rows:
+        month, obj, revenue = row[0], row[1], row[2]
+        cost = row[3] if len(row) >= 4 else 0
+        bundle_rows.append({
+            "month": month,
+            "object": obj,
+            "revenue_ge": revenue,
+            "cost_ge": cost,
+        })
+    return {"by_object_by_month": bundle_rows}
+
+
+def _make_supplier_payment_lines(by_month):
+    """by_month: dict {YYYY-MM: total_amount}. Builds a single fake tax_id
+    line per month so the date→month aggregation in
+    _supplier_payments_by_month can sum it up.
+    """
     return {
-        "by_object_by_month": [
-            {"month": m, "object": o, "revenue_ge": r} for (m, o, r) in rows
+        "999999999": [
+            {"date": f"{m}-15", "amount": amt, "source": "TBC", "purpose": "test"}
+            for m, amt in by_month.items()
         ]
     }
 
@@ -247,3 +270,117 @@ def test_period_filter_response_includes_cash_income():
     assert sliced is not None
     assert len(sliced["by_object_by_month"]) == 1
     assert sliced["by_object_by_month"][0]["month"] == "2026-03"
+
+
+# ---------------------------------------------------------------------------
+# 9. cogs surfaces from retail_sales.cost_ge per (object, month)
+# ---------------------------------------------------------------------------
+
+def test_cogs_per_object_from_retail_bundle():
+    pos = _make_pos_bundle([
+        _pos_line("2026-03-15", OBJECT_DVABZU, 50_000.0),
+    ])
+    retail = _make_retail_bundle([
+        ("2026-03", OBJECT_DVABZU, 80_000.0, 65_000.0),  # cogs = 65K
+    ])
+    out = build_monthly_pnl(
+        pos, None, _make_object_mapping(), retail_sales_bundle=retail
+    )
+    obj = out[0]["objects"][OBJECT_DVABZU]
+    assert obj["cogs"] == 65_000.0
+    assert obj["gross_margin"] == 80_000.0 - 65_000.0
+    assert out[0]["total"]["cogs"] == 65_000.0
+    assert out[0]["total"]["gross_margin"] == 15_000.0
+
+
+# ---------------------------------------------------------------------------
+# 10. supplier_payments aggregate from supplier_payment_lines per month
+# ---------------------------------------------------------------------------
+
+def test_supplier_payments_aggregated_by_month():
+    pos = _make_pos_bundle([
+        _pos_line("2026-03-15", OBJECT_DVABZU, 50_000.0),
+    ])
+    retail = _make_retail_bundle([
+        ("2026-03", OBJECT_DVABZU, 80_000.0, 65_000.0),
+    ])
+    spl = _make_supplier_payment_lines({"2026-03": 40_000.0})
+    out = build_monthly_pnl(
+        pos, None, _make_object_mapping(),
+        retail_sales_bundle=retail, supplier_payment_lines=spl,
+    )
+    total = out[0]["total"]
+    assert total["supplier_payments"] == 40_000.0
+    # operating_expenses = expenses (0 here) − supplier_payments → −40K
+    # (expenses bucket is empty in this fixture; the formula still applies)
+    assert total["operating_expenses"] == 0.0 - 40_000.0
+    # net_profit = gross_margin − operating_expenses
+    assert total["net_profit"] == 15_000.0 - (0.0 - 40_000.0)
+
+
+# ---------------------------------------------------------------------------
+# 11. real P&L identity: net_profit == gross_margin − operating_expenses
+# ---------------------------------------------------------------------------
+
+def test_real_pnl_identity_holds():
+    """End-to-end: realistic numbers, all four accrual fields consistent."""
+    pos = _make_pos_bundle([
+        _pos_line("2026-03-15", OBJECT_DVABZU, 100_000.0),
+    ])
+    retail = _make_retail_bundle([
+        ("2026-03", OBJECT_DVABZU, 250_000.0, 200_000.0),  # 250K rev, 200K cogs
+    ])
+    # Mock expenses: 180K total bank outflow
+    tbc_bundle = {
+        "categories": [
+            {
+                "lines": [
+                    {"თარიღი": "2026-03-15 00:00:00", "object": OBJECT_DVABZU,
+                     "თანხა": 180_000.0},
+                ],
+            },
+        ],
+    }
+    spl = _make_supplier_payment_lines({"2026-03": 150_000.0})  # 150K to suppliers
+    out = build_monthly_pnl(
+        pos, tbc_bundle, _make_object_mapping(),
+        retail_sales_bundle=retail, supplier_payment_lines=spl,
+    )
+    total = out[0]["total"]
+    # Sanity
+    assert total["total_income"] == 250_000.0
+    assert total["cogs"] == 200_000.0
+    assert total["gross_margin"] == 50_000.0
+    assert total["expenses"] == 180_000.0
+    assert total["supplier_payments"] == 150_000.0
+    assert total["operating_expenses"] == 30_000.0  # 180K − 150K
+    assert total["net_profit"] == 20_000.0  # 50K − 30K
+    # Margin percentages
+    assert total["gross_margin_pct"] == 20.0
+    assert total["net_margin_pct"] == 8.0
+
+
+# ---------------------------------------------------------------------------
+# 12. backward-compat: when supplier_payment_lines is None,
+#     operating_expenses == expenses (legacy behaviour for old fixtures)
+# ---------------------------------------------------------------------------
+
+def test_operating_expenses_falls_back_when_no_supplier_lines():
+    pos = _make_pos_bundle([
+        _pos_line("2026-03-15", OBJECT_DVABZU, 100_000.0),
+    ])
+    tbc_bundle = {
+        "categories": [
+            {
+                "lines": [
+                    {"თარიღი": "2026-03-15 00:00:00", "object": OBJECT_DVABZU,
+                     "თანხა": 70_000.0},
+                ],
+            },
+        ],
+    }
+    out = build_monthly_pnl(pos, tbc_bundle, _make_object_mapping())
+    total = out[0]["total"]
+    assert total["expenses"] == 70_000.0
+    assert total["supplier_payments"] == 0.0
+    assert total["operating_expenses"] == 70_000.0  # no subtraction

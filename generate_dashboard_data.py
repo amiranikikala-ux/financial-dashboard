@@ -542,6 +542,7 @@ def _build_analytics(data, inc, object_mapping, budget_config, sector_benchmarks
         object_mapping,
         bog_expenses_bundle=bog_expenses_bundle,
         retail_sales_bundle=data.get("retail_sales"),
+        supplier_payment_lines=data.get("supplier_payment_lines"),
     )
     data["financial_ratios"] = build_financial_ratios(
         data.get("monthly_pnl", []),
