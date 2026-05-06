@@ -1318,8 +1318,19 @@ def build_system_prompt(
         advisor persona; ``"investigate"`` swaps in the Sprint 2 discrepancy-
         hunter persona.
     """
+    from dashboard_pipeline.ai.business_context import load_business_context
+
     resolved = _resolve_mode(mode)
     base = _SYSTEM_PROMPT_BY_MODE[resolved].strip()
+
+    business_context = load_business_context()
+    if business_context:
+        base = (
+            f"{base}\n\n"
+            f"# 📋 ბიზნესის კონტექსტი (მფლობელის პასუხები — სავალდებულო)\n"
+            f"{business_context}\n"
+        )
+
     if extra_context:
         return f"{base}\n\n# დამატებითი კონტექსტი\n{extra_context.strip()}\n"
     return base
