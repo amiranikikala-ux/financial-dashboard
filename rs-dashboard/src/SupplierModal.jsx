@@ -638,8 +638,20 @@ export default function SupplierModal({
   const strictBankPaid = Number(supplier.strict_bank_paid ?? aging?.strict_bank_paid) || 0;
   const manualPaid = Number(supplier.manual_paid ?? aging?.manual_paid) || 0;
   const localPaidForThis = taxId ? Number(localPayments?.[taxId]) || 0 : 0;
-  const totalPaidIncludingLocal = paid + localPaidForThis;
-  const debtAfterLocal = Math.max(0, debt - localPaidForThis);
+  // Live journal entries that aren't yet reflected in data.json's manual_paid
+  // aggregate (pipeline regen pending). Same dedupe logic as supplierPayments.
+  const livePendingJournalTotal = useMemo(() => {
+    if (!taxId) return 0;
+    const raw = Array.isArray(paymentLines?.[taxId]) ? paymentLines[taxId] : [];
+    const seen = new Set();
+    for (const p of raw) if (p?.id) seen.add(p.id);
+    return liveJournalEntries
+      .filter((e) => !seen.has(e.id) && !(deletedManualPaymentIds && deletedManualPaymentIds.has(e.id)))
+      .reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
+  }, [taxId, paymentLines, liveJournalEntries, deletedManualPaymentIds]);
+  const pendingPaidForThis = localPaidForThis + livePendingJournalTotal;
+  const totalPaidIncludingLocal = paid + pendingPaidForThis;
+  const debtAfterLocal = Math.max(0, debt - pendingPaidForThis);
   const paymentScopeRaw =
     String(supplier.payment_scope || aging?.payment_scope || '').trim() || 'unpaid_or_unmatched';
   const paymentScopeMeta = getPaymentScopeMeta(paymentScopeRaw);
@@ -1043,6 +1055,9 @@ export default function SupplierModal({
           <div className="supplier-modal-kpi">
             <div className="kpi-label">სულ გადახდილი</div>
             <div className="kpi-value amount-positive">{fmt(totalPaidIncludingLocal)}</div>
+            {livePendingJournalTotal > 0 && (
+              <div className="supplier-modal-kpi-hint">+{fmt(livePendingJournalTotal)} ხელის ჟურნალიდან</div>
+            )}
             {localPaidForThis > 0 && (
               <div className="supplier-modal-kpi-hint">+{fmt(localPaidForThis)} ბრაუზერიდან</div>
             )}
