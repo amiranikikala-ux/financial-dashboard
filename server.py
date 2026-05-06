@@ -34,7 +34,11 @@ from dashboard_pipeline._validate_aliases import (
     AliasValidationError,
     append_alias_atomic,
 )
-from dashboard_pipeline import orphan_user_status, supplier_archive
+from dashboard_pipeline import (
+    manual_payments_journal,
+    orphan_user_status,
+    supplier_archive,
+)
 from dashboard_pipeline.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -1060,6 +1064,89 @@ async def post_supplier_archive(request: Request, payload: dict = Body(...)):
         "archived": archived_raw,
         "archived_count_total": len(new_map),
     }
+
+
+# ---------------------------------------------------------------------------
+# Manual cash payments journal — owner-entered cash payments to suppliers
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/manual-payments")
+@limiter.limit("120/minute")
+async def get_manual_payments(request: Request, tax_id: str | None = None):
+    """List active journal entries. Optionally filter by ?tax_id=..."""
+    try:
+        if tax_id:
+            entries = manual_payments_journal.read_entries_for_tax_id(tax_id)
+        else:
+            entries = manual_payments_journal.read_active_entries()
+    except OSError as exc:
+        logger.error("manual_payments journal read failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"ჟურნალის წაკითხვა ვერ მოხერხდა: {exc}")
+    return {"entries": entries, "count": len(entries)}
+
+
+@app.post("/api/manual-payments")
+@limiter.limit("60/minute")
+async def post_manual_payment(request: Request, payload: dict = Body(...)):
+    """Append one manual cash payment to the journal.
+
+    Body:
+        {
+            "tax_id":  "406181616",        (required, digit string)
+            "amount":  72972.50,           (required, > 0)
+            "date":    "2026-05-07",       (optional, ISO date)
+            "comment": "ჯიდიაი ნაღდი"     (optional)
+        }
+    """
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Body must be a JSON object.")
+
+    tax_id = payload.get("tax_id")
+    amount = payload.get("amount")
+    date = payload.get("date") or ""
+    comment = payload.get("comment") or ""
+
+    if not isinstance(tax_id, str) or not tax_id.strip():
+        raise HTTPException(status_code=400, detail="`tax_id` (string) is required.")
+    if not isinstance(amount, (int, float)):
+        raise HTTPException(status_code=400, detail="`amount` (number) is required.")
+    if isinstance(date, str) is False:
+        raise HTTPException(status_code=400, detail="`date` must be a string when provided.")
+    if isinstance(comment, str) is False:
+        raise HTTPException(status_code=400, detail="`comment` must be a string when provided.")
+
+    try:
+        saved = manual_payments_journal.append_entry(
+            tax_id=tax_id.strip(),
+            amount=float(amount),
+            date=date.strip(),
+            comment=comment.strip(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except OSError as exc:
+        logger.error("manual_payments journal write failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"ჟურნალში ჩაწერა ვერ მოხერხდა: {exc}")
+
+    return {"success": True, "entry": saved}
+
+
+@app.delete("/api/manual-payments/{entry_id}")
+@limiter.limit("60/minute")
+async def delete_manual_payment(request: Request, entry_id: str):
+    """Soft-delete one journal entry by ID."""
+    eid = (entry_id or "").strip()
+    if not eid:
+        raise HTTPException(status_code=400, detail="entry_id is required.")
+    try:
+        ok = manual_payments_journal.soft_delete_entry(eid)
+    except OSError as exc:
+        logger.error("manual_payments journal delete failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"წაშლა ვერ მოხერხდა: {exc}")
+    if not ok:
+        raise HTTPException(status_code=404, detail="Entry not found or already deleted.")
+    return {"success": True, "id": eid}
 
 
 # ---------------------------------------------------------------------------
