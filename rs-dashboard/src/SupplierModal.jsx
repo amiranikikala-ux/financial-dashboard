@@ -287,8 +287,10 @@ export default function SupplierModal({
   const [aliasError, setAliasError] = useState(null);
   const [paymentsExpanded, setPaymentsExpanded] = useState(false);
   const [paymentsMonthFilter, setPaymentsMonthFilter] = useState('');
+  const [paymentsShowOlder, setPaymentsShowOlder] = useState(false);
   const [waybillsExpanded, setWaybillsExpanded] = useState(false);
   const [waybillsMonthFilter, setWaybillsMonthFilter] = useState('');
+  const [waybillsShowOlder, setWaybillsShowOlder] = useState(false);
 
   const handleConfirmAlias = async (product) => {
     const cand = product?.name_candidate;
@@ -711,7 +713,7 @@ export default function SupplierModal({
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 13, color: '#94a3b8' }}>თვე:</span>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {paymentMonths.map((m) => {
+                {(paymentsShowOlder ? paymentMonths : paymentMonths.slice(0, 6)).map((m) => {
                   const active = effectivePaymentsMonth === m;
                   return (
                     <button
@@ -730,6 +732,20 @@ export default function SupplierModal({
                     </button>
                   );
                 })}
+                {paymentMonths.length > 6 && (
+                  <button
+                    type="button"
+                    onClick={() => setPaymentsShowOlder((v) => !v)}
+                    style={{
+                      background: '#1e293b', color: '#94a3b8',
+                      border: '1px dashed #334155',
+                      borderRadius: 6, padding: '4px 10px', fontSize: 13,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {paymentsShowOlder ? '↑ ჩაკეცე' : `ძველი თვეები (+${paymentMonths.length - 6})`}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setPaymentsMonthFilter('__all__')}
@@ -801,7 +817,7 @@ export default function SupplierModal({
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 13, color: '#94a3b8' }}>თვე:</span>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {waybillMonths.map((m) => {
+                {(waybillsShowOlder ? waybillMonths : waybillMonths.slice(0, 6)).map((m) => {
                   const active = effectiveWaybillsMonth === m;
                   return (
                     <button
@@ -820,6 +836,20 @@ export default function SupplierModal({
                     </button>
                   );
                 })}
+                {waybillMonths.length > 6 && (
+                  <button
+                    type="button"
+                    onClick={() => setWaybillsShowOlder((v) => !v)}
+                    style={{
+                      background: '#1e293b', color: '#94a3b8',
+                      border: '1px dashed #334155',
+                      borderRadius: 6, padding: '4px 10px', fontSize: 13,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {waybillsShowOlder ? '↑ ჩაკეცე' : `ძველი თვეები (+${waybillMonths.length - 6})`}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setWaybillsMonthFilter('__all__')}
