@@ -421,7 +421,9 @@ export default function SupplierModal({
     return Array.from(months).sort().reverse();
   }, [supplierPayments]);
 
-  const effectivePaymentsMonth = paymentsMonthFilter || paymentMonths[0] || '';
+  const effectivePaymentsMonth = paymentsMonthFilter === '__all__'
+    ? ''
+    : (paymentsMonthFilter || paymentMonths[0] || '');
 
   const filteredPayments = useMemo(() => {
     if (!effectivePaymentsMonth) return supplierPayments;
@@ -446,7 +448,9 @@ export default function SupplierModal({
     return Array.from(months).sort().reverse();
   }, [supplierWaybills]);
 
-  const effectiveWaybillsMonth = waybillsMonthFilter || waybillMonths[0] || '';
+  const effectiveWaybillsMonth = waybillsMonthFilter === '__all__'
+    ? ''
+    : (waybillsMonthFilter || waybillMonths[0] || '');
 
   const filteredWaybills = useMemo(() => {
     if (!effectiveWaybillsMonth) return supplierWaybills;
@@ -706,18 +710,40 @@ export default function SupplierModal({
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 13, color: '#94a3b8' }}>თვე:</span>
-              <select
-                value={effectivePaymentsMonth}
-                onChange={(e) => setPaymentsMonthFilter(e.target.value)}
-                style={{
-                  background: '#1e293b', color: '#e2e8f0',
-                  border: '1px solid #334155', borderRadius: 6,
-                  padding: '4px 8px', fontSize: 13,
-                }}
-              >
-                {paymentMonths.map((m) => <option key={m} value={m}>{m}</option>)}
-                <option value="">ყველა თვე</option>
-              </select>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {paymentMonths.map((m) => {
+                  const active = effectivePaymentsMonth === m;
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setPaymentsMonthFilter(m)}
+                      style={{
+                        background: active ? '#3b82f6' : '#1e293b',
+                        color: active ? '#ffffff' : '#cbd5e1',
+                        border: `1px solid ${active ? '#3b82f6' : '#334155'}`,
+                        borderRadius: 6, padding: '4px 10px', fontSize: 13,
+                        cursor: 'pointer', fontWeight: active ? 600 : 400,
+                      }}
+                    >
+                      {m}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setPaymentsMonthFilter('__all__')}
+                  style={{
+                    background: paymentsMonthFilter === '__all__' ? '#3b82f6' : '#1e293b',
+                    color: paymentsMonthFilter === '__all__' ? '#ffffff' : '#cbd5e1',
+                    border: `1px solid ${paymentsMonthFilter === '__all__' ? '#3b82f6' : '#334155'}`,
+                    borderRadius: 6, padding: '4px 10px', fontSize: 13,
+                    cursor: 'pointer', fontWeight: paymentsMonthFilter === '__all__' ? 600 : 400,
+                  }}
+                >
+                  ყველა თვე
+                </button>
+              </div>
               <span style={{ flex: 1 }} />
               <span style={{ fontSize: 13, color: '#94a3b8' }}>
                 {filteredPayments.length} გადახდა · ჯამი <strong style={{ color: '#86efac' }}>{fmt(filteredPaymentsTotal)}</strong>
@@ -774,18 +800,40 @@ export default function SupplierModal({
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 13, color: '#94a3b8' }}>თვე:</span>
-              <select
-                value={effectiveWaybillsMonth}
-                onChange={(e) => setWaybillsMonthFilter(e.target.value)}
-                style={{
-                  background: '#1e293b', color: '#e2e8f0',
-                  border: '1px solid #334155', borderRadius: 6,
-                  padding: '4px 8px', fontSize: 13,
-                }}
-              >
-                {waybillMonths.map((m) => <option key={m} value={m}>{m}</option>)}
-                <option value="">ყველა თვე</option>
-              </select>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {waybillMonths.map((m) => {
+                  const active = effectiveWaybillsMonth === m;
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setWaybillsMonthFilter(m)}
+                      style={{
+                        background: active ? '#10b981' : '#1e293b',
+                        color: active ? '#ffffff' : '#cbd5e1',
+                        border: `1px solid ${active ? '#10b981' : '#334155'}`,
+                        borderRadius: 6, padding: '4px 10px', fontSize: 13,
+                        cursor: 'pointer', fontWeight: active ? 600 : 400,
+                      }}
+                    >
+                      {m}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setWaybillsMonthFilter('__all__')}
+                  style={{
+                    background: waybillsMonthFilter === '__all__' ? '#10b981' : '#1e293b',
+                    color: waybillsMonthFilter === '__all__' ? '#ffffff' : '#cbd5e1',
+                    border: `1px solid ${waybillsMonthFilter === '__all__' ? '#10b981' : '#334155'}`,
+                    borderRadius: 6, padding: '4px 10px', fontSize: 13,
+                    cursor: 'pointer', fontWeight: waybillsMonthFilter === '__all__' ? 600 : 400,
+                  }}
+                >
+                  ყველა თვე
+                </button>
+              </div>
               <span style={{ flex: 1 }} />
               <span style={{ fontSize: 13, color: '#94a3b8' }}>
                 {filteredWaybills.length} ზედნადები · შემოტანა <strong style={{ color: '#86efac' }}>{fmt(filteredWaybillsTotals.incoming)}</strong>
