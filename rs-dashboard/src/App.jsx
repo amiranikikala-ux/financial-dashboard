@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import './index.css';
 import { STORAGE_KEY } from './financeMerge.js';
 import DashboardTabs from './components/DashboardTabs.jsx';
@@ -78,6 +78,7 @@ function App() {
   const [activeTab, setActiveTab] = useHashTab('suppliers');
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [localPayments, setLocalPayments] = useState({});
+  const [deletedManualPaymentIds, setDeletedManualPaymentIds] = useState(() => new Set());
   const [importedProductsResponse, setImportedProductsResponse] = useState(null);
   const [importedProductsLoading, setImportedProductsLoading] = useState(false);
   const [importedProductsError, setImportedProductsError] = useState(null);
@@ -87,6 +88,7 @@ function App() {
   const [globalToDate, setGlobalToDate] = useState('');
   const [globalFromTime, setGlobalFromTime] = useState('00:00');
   const [globalToTime, setGlobalToTime] = useState('23:59');
+  const hasInitialLoadRef = useRef(false);
 
   const buildCanonicalPeriodParams = useCallback((tabKey) => {
     if (!SAFE_PERIOD_REQUEST_TABS.has(tabKey)) return null;
@@ -155,7 +157,9 @@ function App() {
     appendCanonicalPeriodParams(params, requestTab);
     setTimeout(() => {
       if (active) {
-        setLoading(true);
+        if (!hasInitialLoadRef.current) {
+          setLoading(true);
+        }
         setError(null);
       }
     }, 0);
@@ -170,6 +174,7 @@ function App() {
           ...json,
         });
         setLoading(false);
+        hasInitialLoadRef.current = true;
       })
       .catch((err) => {
         if (!active) return;
@@ -191,7 +196,9 @@ function App() {
     appendCanonicalPeriodParams(params, 'cashflow_summary');
     setTimeout(() => {
       if (active) {
-        setLoading(true);
+        if (!hasInitialLoadRef.current) {
+          setLoading(true);
+        }
         setError(null);
       }
     }, 0);
@@ -207,6 +214,7 @@ function App() {
           ...json,
         });
         setLoading(false);
+        hasInitialLoadRef.current = true;
       })
       .catch((err) => {
         if (!active || err.name === 'AbortError') return;
@@ -274,6 +282,22 @@ function App() {
     } catch {
       /* ignore */
     }
+  }, []);
+
+  const handleManualPaymentDelete = useCallback(async (id) => {
+    if (!id) return;
+    const res = await fetch(`/api/manual-payments/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      throw new Error(detail || 'წაშლა ვერ მოხერხდა');
+    }
+    setDeletedManualPaymentIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
   }, []);
 
   const formatNumber = (num) => {
@@ -519,6 +543,8 @@ function App() {
             waybillLines={data.supplier_waybill_lines || {}}
             formatNumber={formatNumber}
             onClose={() => setSelectedSupplier(null)}
+            deletedManualPaymentIds={deletedManualPaymentIds}
+            onDeleteManualPayment={handleManualPaymentDelete}
           />
         </Suspense>
       )}

@@ -178,10 +178,31 @@ export default function Suppliers({
     selectedOne && payVal > 0 && extractTaxId(selectedOne['ორგანიზაცია']),
   );
 
-  const handleRecordPayment = () => {
+  const handleRecordPayment = async () => {
     if (!canRecord) return;
     const tid = extractTaxId(selectedOne['ორგანიზაცია']);
     if (!tid) return;
+    let serverOk = false;
+    try {
+      const res = await fetch('/api/manual-payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tax_id: tid,
+          amount: payVal,
+          date: new Date().toISOString().slice(0, 10),
+          comment: 'ბრაუზერიდან',
+        }),
+      });
+      serverOk = res.ok;
+    } catch {
+      serverOk = false;
+    }
+    if (!serverOk) {
+      window.alert(
+        'სერვერს ვერ მივწვდი — გადახდა მხოლოდ ბრაუზერშია შენახული. AI ვერ დაინახავს, სანამ ხელახლა არ ცადო.',
+      );
+    }
     const next = { ...localPayments, [tid]: (Number(localPayments[tid]) || 0) + payVal };
     persistLocalPayments(next);
     setPayAmount('');

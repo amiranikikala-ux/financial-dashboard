@@ -270,7 +270,11 @@ export default function SupplierModal({
   paymentLines = {},
   waybillLines = {},
   onClose,
+  deletedManualPaymentIds,
+  onDeleteManualPayment,
 }) {
+  const [deletingPaymentIds, setDeletingPaymentIds] = useState(() => new Set());
+  const [paymentDeleteError, setPaymentDeleteError] = useState('');
   const [fetchedAging, setFetchedAging] = useState(null);
   const [agingLoading, setAgingLoading] = useState(!initialAgingData || initialAgingData.length === 0);
   const [importedResult, setImportedResult] = useState({ key: '', detail: null, error: '' });
@@ -411,8 +415,28 @@ export default function SupplierModal({
 
   const supplierPayments = useMemo(() => {
     if (!taxId) return [];
-    return Array.isArray(paymentLines?.[taxId]) ? paymentLines[taxId] : [];
-  }, [taxId, paymentLines]);
+    const raw = Array.isArray(paymentLines?.[taxId]) ? paymentLines[taxId] : [];
+    if (!deletedManualPaymentIds || deletedManualPaymentIds.size === 0) return raw;
+    return raw.filter((p) => !(p?.id && deletedManualPaymentIds.has(p.id)));
+  }, [taxId, paymentLines, deletedManualPaymentIds]);
+
+  const handleDeleteManualPayment = async (id) => {
+    if (!id || !onDeleteManualPayment) return;
+    if (!window.confirm('გადახდის ჩანაწერი წავშალოთ?')) return;
+    setDeletingPaymentIds((prev) => new Set([...prev, id]));
+    setPaymentDeleteError('');
+    try {
+      await onDeleteManualPayment(id);
+    } catch (e) {
+      setPaymentDeleteError(e?.message || 'წაშლა ვერ მოხერხდა');
+    } finally {
+      setDeletingPaymentIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
 
   const paymentMonths = useMemo(() => {
     const months = new Set();
@@ -607,8 +631,29 @@ export default function SupplierModal({
   const payVal = parseMoney(payAmount);
   const canRecord = Boolean(taxId && payVal > 0 && persistLocalPayments);
 
-  const handleRecordPayment = () => {
+  const handleRecordPayment = async () => {
     if (!canRecord) return;
+    let serverOk = false;
+    try {
+      const res = await fetch('/api/manual-payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tax_id: taxId,
+          amount: payVal,
+          date: new Date().toISOString().slice(0, 10),
+          comment: 'ბრაუზერიდან',
+        }),
+      });
+      serverOk = res.ok;
+    } catch {
+      serverOk = false;
+    }
+    if (!serverOk) {
+      window.alert(
+        'სერვერს ვერ მივწვდი — გადახდა მხოლოდ ბრაუზერშია. AI ვერ დაინახავს, სანამ ხელახლა არ ცადო.',
+      );
+    }
     const next = { ...(localPayments || {}), [taxId]: (Number(localPayments?.[taxId]) || 0) + payVal };
     persistLocalPayments(next);
     setPayAmount('');
@@ -765,6 +810,11 @@ export default function SupplierModal({
                 {filteredPayments.length} გადახდა · ჯამი <strong style={{ color: '#86efac' }}>{fmt(filteredPaymentsTotal)}</strong>
               </span>
             </div>
+            {paymentDeleteError && (
+              <div style={{ padding: '6px 12px', color: '#fca5a5', fontSize: 12, background: '#3f1d1d', borderTop: '1px solid #1e293b' }}>
+                ⚠ {paymentDeleteError}
+              </div>
+            )}
             <div style={{ maxHeight: 280, overflowY: 'auto', borderTop: '1px solid #1e293b' }}>
               <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
                 <thead style={{ position: 'sticky', top: 0, background: '#0f172a' }}>
@@ -773,32 +823,58 @@ export default function SupplierModal({
                     <th style={{ padding: '6px 8px', borderBottom: '1px solid #334155', textAlign: 'right' }}>თანხა</th>
                     <th style={{ padding: '6px 8px', borderBottom: '1px solid #334155' }}>წყარო</th>
                     <th style={{ padding: '6px 8px', borderBottom: '1px solid #334155' }}>დანიშნულება</th>
+                    <th style={{ padding: '6px 8px', borderBottom: '1px solid #334155', width: 36 }}></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredPayments.map((p, i) => (
-                    <tr key={`${p.date}-${i}`} style={{ borderBottom: '1px solid #1e293b' }}>
-                      <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{p.date || '—'}</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'right', color: '#86efac', whiteSpace: 'nowrap' }}>
-                        {fmtPrecise(p.amount)}
-                      </td>
-                      <td style={{ padding: '6px 8px' }}>
-                        <span style={{
-                          fontSize: 11, padding: '2px 6px', borderRadius: 4,
-                          background: p.source === 'manual' ? '#7c3aed' : '#334155',
-                          color: '#e2e8f0',
-                        }}>
-                          {p.source === 'manual' ? 'ხელით' : p.source}
-                        </span>
-                      </td>
-                      <td style={{ padding: '6px 8px', color: '#cbd5e1', maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {p.purpose || '—'}
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredPayments.map((p, i) => {
+                    const isManualDeletable = p.source === 'manual' && p.id;
+                    const isDeleting = deletingPaymentIds.has(p.id);
+                    return (
+                      <tr key={p.id || `${p.date}-${i}`} style={{ borderBottom: '1px solid #1e293b' }}>
+                        <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{p.date || '—'}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', color: '#86efac', whiteSpace: 'nowrap' }}>
+                          {fmtPrecise(p.amount)}
+                        </td>
+                        <td style={{ padding: '6px 8px' }}>
+                          <span style={{
+                            fontSize: 11, padding: '2px 6px', borderRadius: 4,
+                            background: p.source === 'manual' ? '#7c3aed' : '#334155',
+                            color: '#e2e8f0',
+                          }}>
+                            {p.source === 'manual' ? 'ხელით' : p.source}
+                          </span>
+                        </td>
+                        <td style={{ padding: '6px 8px', color: '#cbd5e1', maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {p.purpose || '—'}
+                        </td>
+                        <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                          {isManualDeletable && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteManualPayment(p.id)}
+                              disabled={isDeleting}
+                              title="ჩანაწერის წაშლა"
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                cursor: isDeleting ? 'wait' : 'pointer',
+                                color: '#f87171',
+                                fontSize: 14,
+                                padding: 2,
+                                opacity: isDeleting ? 0.5 : 1,
+                              }}
+                            >
+                              🗑
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {filteredPayments.length === 0 && (
                     <tr>
-                      <td colSpan="4" style={{ padding: 14, textAlign: 'center', color: '#94a3b8', fontStyle: 'italic' }}>
+                      <td colSpan="5" style={{ padding: 14, textAlign: 'center', color: '#94a3b8', fontStyle: 'italic' }}>
                         ამ თვეში გადახდა არ არის.
                       </td>
                     </tr>
