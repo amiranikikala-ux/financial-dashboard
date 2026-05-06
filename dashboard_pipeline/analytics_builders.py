@@ -764,7 +764,7 @@ def build_forecast(monthly_pnl):
         return float(sum(sample) / len(sample))
 
     total_income_series = [
-        _safe_amount(((h.get("row") or {}).get("total") or {}).get("pos_income"))
+        _safe_amount(((h.get("row") or {}).get("total") or {}).get("total_income"))
         for h in valid_history
     ]
     total_expenses_series = [
@@ -777,7 +777,7 @@ def build_forecast(monthly_pnl):
         objects_map = (h.get("row") or {}).get("objects") or {}
         for obj in object_names:
             obj_data = objects_map.get(obj) or {}
-            object_income_series[obj].append(_safe_amount(obj_data.get("pos_income")))
+            object_income_series[obj].append(_safe_amount(obj_data.get("total_income")))
             object_expenses_series[obj].append(_safe_amount(obj_data.get("expenses")))
 
     if valid_history:
@@ -845,7 +845,7 @@ def build_forecast(monthly_pnl):
     for h in valid_history:
         month_num = int(pd.Timestamp(h["month_dt"]).month)
         total_data = ((h.get("row") or {}).get("total") or {})
-        income = _safe_amount(total_data.get("pos_income"))
+        income = _safe_amount(total_data.get("total_income"))
         expenses = _safe_amount(total_data.get("expenses"))
         net = _safe_amount(total_data.get("net"))
         by_month_raw[month_num]["income"].append(income)
@@ -922,10 +922,10 @@ def build_forecast(monthly_pnl):
             sum(_safe_amount(((r.get("total") or {}).get(metric_key))) for r in rows)
         )
 
-    last_12_income = _sum_total(last_12_rows, "pos_income")
+    last_12_income = _sum_total(last_12_rows, "total_income")
     last_12_expenses = _sum_total(last_12_rows, "expenses")
     last_12_net = _sum_total(last_12_rows, "net")
-    prev_12_income = _sum_total(prev_12_rows, "pos_income")
+    prev_12_income = _sum_total(prev_12_rows, "total_income")
     prev_12_expenses = _sum_total(prev_12_rows, "expenses")
     prev_12_net = _sum_total(prev_12_rows, "net")
 
