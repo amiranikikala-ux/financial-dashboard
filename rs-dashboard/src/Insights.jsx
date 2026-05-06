@@ -8,6 +8,7 @@ const fmtPct = (v, sign = true) => {
   return `${sign && n > 0 ? '+' : ''}${n.toFixed(1)}%`;
 };
 const toNum = (v) => Number(v) || 0;
+const incomeOf = (m) => toNum(m?.total?.total_income ?? m?.total?.pos_income);
 
 function monthLabel(m) {
   if (!m) return '—';
@@ -142,7 +143,7 @@ export default function Insights({ reloadKey, fromDate, fromTime, toDate, toTime
     let totalIncome = 0;
     let totalExpenses = 0;
     for (const m of last6) {
-      totalIncome += toNum(m.total?.pos_income);
+      totalIncome += incomeOf(m);
       totalExpenses += toNum(m.total?.expenses);
     }
     const avgIncome = totalIncome / n;
@@ -152,7 +153,7 @@ export default function Insights({ reloadKey, fromDate, fromTime, toDate, toTime
     // approximate cumulative cash from all-time net
     let totalCash = 0;
     for (const m of sorted) {
-      totalCash += toNum(m.total?.pos_income) - toNum(m.total?.expenses);
+      totalCash += incomeOf(m) - toNum(m.total?.expenses);
     }
     const runwayMonths = isBurning ? Math.max(0, Math.floor(totalCash / Math.abs(netMonthly))) : null;
     return { avgIncome, avgExpenses, netMonthly, isBurning, runwayMonths, totalCash, months: n };
@@ -168,7 +169,7 @@ export default function Insights({ reloadKey, fromDate, fromTime, toDate, toTime
     const monthly = [];
 
     for (const m of last12) {
-      const income = toNum(m.total?.pos_income);
+      const income = incomeOf(m);
       const expenses = toNum(m.total?.expenses);
       const net = income - expenses;
       const profitable = net > 0;
@@ -195,13 +196,13 @@ export default function Insights({ reloadKey, fromDate, fromTime, toDate, toTime
     if (last6.length < 2) return null;
 
     // Margin risk (higher margin = lower risk)
-    const totalInc = last6.reduce((a, m) => a + toNum(m.total?.pos_income), 0);
+    const totalInc = last6.reduce((a, m) => a + incomeOf(m), 0);
     const totalExp = last6.reduce((a, m) => a + toNum(m.total?.expenses), 0);
     const marginPct = totalInc > 0 ? ((totalInc - totalExp) / totalInc) * 100 : 0;
     const marginScore = Math.min(100, Math.max(0, marginPct * 2)); // 50% margin = 100 score
 
     // Volatility risk (standard deviation of monthly net / avg)
-    const nets = last6.map((m) => toNum(m.total?.pos_income) - toNum(m.total?.expenses));
+    const nets = last6.map((m) => incomeOf(m) - toNum(m.total?.expenses));
     const avgNet = nets.reduce((a, v) => a + v, 0) / nets.length;
     const variance = nets.reduce((a, v) => a + Math.pow(v - avgNet, 2), 0) / nets.length;
     const stdDev = Math.sqrt(variance);
@@ -211,8 +212,8 @@ export default function Insights({ reloadKey, fromDate, fromTime, toDate, toTime
     // Growth trend (last 3 vs prev 3)
     const prev3 = last6.slice(0, 3);
     const curr3 = last6.slice(-3);
-    const prev3Avg = prev3.reduce((a, m) => a + toNum(m.total?.pos_income), 0) / 3;
-    const curr3Avg = curr3.reduce((a, m) => a + toNum(m.total?.pos_income), 0) / 3;
+    const prev3Avg = prev3.reduce((a, m) => a + incomeOf(m), 0) / 3;
+    const curr3Avg = curr3.reduce((a, m) => a + incomeOf(m), 0) / 3;
     const growthPct = prev3Avg > 0 ? ((curr3Avg - prev3Avg) / prev3Avg) * 100 : 0;
     const growthScore = Math.min(100, Math.max(0, 50 + growthPct));
 
@@ -247,8 +248,8 @@ export default function Insights({ reloadKey, fromDate, fromTime, toDate, toTime
 
     const lastM = sorted[sorted.length - 1];
     const prevM = sorted[sorted.length - 2];
-    const lastInc = toNum(lastM.total?.pos_income);
-    const prevInc = toNum(prevM.total?.pos_income);
+    const lastInc = incomeOf(lastM);
+    const prevInc = incomeOf(prevM);
     const lastExp = toNum(lastM.total?.expenses);
     const prevExp = toNum(prevM.total?.expenses);
     const lastNet = lastInc - lastExp;
@@ -296,8 +297,8 @@ export default function Insights({ reloadKey, fromDate, fromTime, toDate, toTime
     if (sorted.length >= 3) {
       let declining = 0;
       for (let i = sorted.length - 1; i >= 1; i--) {
-        const curr = toNum(sorted[i].total?.pos_income) - toNum(sorted[i].total?.expenses);
-        const prev = toNum(sorted[i - 1].total?.pos_income) - toNum(sorted[i - 1].total?.expenses);
+        const curr = incomeOf(sorted[i]) - toNum(sorted[i].total?.expenses);
+        const prev = incomeOf(sorted[i - 1]) - toNum(sorted[i - 1].total?.expenses);
         if (curr < prev) declining++;
         else break;
       }
@@ -312,7 +313,7 @@ export default function Insights({ reloadKey, fromDate, fromTime, toDate, toTime
 
     // All-time high/low check in last month
     if (sorted.length >= 6) {
-      const allNets = sorted.map((m) => toNum(m.total?.pos_income) - toNum(m.total?.expenses));
+      const allNets = sorted.map((m) => incomeOf(m) - toNum(m.total?.expenses));
       const max = Math.max(...allNets);
       const min = Math.min(...allNets);
       if (lastNet === max && lastNet > 0) {
