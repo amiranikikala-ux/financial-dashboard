@@ -210,13 +210,17 @@ export default function Executive({ executiveSummary, fromDate, fromTime, toDate
         const row = { თვე: m.month || '—' };
         for (const obj of pnlObjects) {
           const vals = m.objects?.[obj] || {};
-          const income = toNum(vals.pos_income);
+          const pos = toNum(vals.pos_income);
+          const cash = toNum(vals.cash_income);
           const expenses = toNum(vals.expenses);
-          row[`${obj} POS`] = income;
+          row[`${obj} POS`] = pos;
+          row[`${obj} ნაღდი`] = cash;
           row[`${obj} ხარჯი`] = expenses;
-          row[`${obj} net`] = toNum(vals.net ?? income - expenses);
+          row[`${obj} net`] = toNum(vals.net ?? pos + cash - expenses);
         }
         row['სულ POS'] = toNum(m.total?.pos_income);
+        row['სულ ნაღდი'] = toNum(m.total?.cash_income);
+        row['სულ შემოსავალი'] = toNum(m.total?.total_income ?? m.total?.pos_income);
         row['სულ ხარჯი'] = toNum(m.total?.expenses);
         row['სულ net'] = toNum(m.total?.net);
         return row;
@@ -225,10 +229,13 @@ export default function Executive({ executiveSummary, fromDate, fromTime, toDate
         const totalRow = { თვე: 'ჯამი' };
         for (const obj of pnlObjects) {
           totalRow[`${obj} POS`] = pnlRows.reduce((acc, r) => acc + toNum(r[`${obj} POS`]), 0);
+          totalRow[`${obj} ნაღდი`] = pnlRows.reduce((acc, r) => acc + toNum(r[`${obj} ნაღდი`]), 0);
           totalRow[`${obj} ხარჯი`] = pnlRows.reduce((acc, r) => acc + toNum(r[`${obj} ხარჯი`]), 0);
           totalRow[`${obj} net`] = pnlRows.reduce((acc, r) => acc + toNum(r[`${obj} net`]), 0);
         }
         totalRow['სულ POS'] = pnlRows.reduce((acc, r) => acc + toNum(r['სულ POS']), 0);
+        totalRow['სულ ნაღდი'] = pnlRows.reduce((acc, r) => acc + toNum(r['სულ ნაღდი']), 0);
+        totalRow['სულ შემოსავალი'] = pnlRows.reduce((acc, r) => acc + toNum(r['სულ შემოსავალი']), 0);
         totalRow['სულ ხარჯი'] = pnlRows.reduce((acc, r) => acc + toNum(r['სულ ხარჯი']), 0);
         totalRow['სულ net'] = pnlRows.reduce((acc, r) => acc + toNum(r['სულ net']), 0);
         pnlRows.push(totalRow);
