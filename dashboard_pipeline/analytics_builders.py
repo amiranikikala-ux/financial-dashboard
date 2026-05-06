@@ -39,14 +39,48 @@ from dashboard_pipeline.export_artifacts import (
 # build_monthly_pnl
 # ---------------------------------------------------------------------------
 
+def _retail_sales_max_pos_by_object_month(retail_sales_bundle):
+    """Per-(month, object) MAX POS revenue from retail_sales bundle.
+
+    Mirror of vat_reconciliation._retail_sales_by_object_month so cashreg_in
+    in monthly_pnl matches the audit-tested formula in vat_reconciliation
+    (Sprint 5.8). Returns {"YYYY-MM": {object_label: revenue_ge}}; empty dict
+    when bundle is None or has no by_object_by_month section.
+    """
+    out = defaultdict(dict)
+    rows = (retail_sales_bundle or {}).get("by_object_by_month") or []
+    for row in rows:
+        month = str((row or {}).get("month") or "")
+        if len(month) < 7 or month[4] != "-":
+            continue
+        obj = str((row or {}).get("object") or "").strip()
+        if not obj:
+            continue
+        try:
+            revenue = float(row.get("revenue_ge") or 0)
+        except (TypeError, ValueError):
+            continue
+        out[month][obj] = revenue
+    return dict(out)
+
+
 def build_monthly_pnl(
     pos_bundle,
     tbc_expenses_bundle,
     object_mapping,
     bog_expenses_bundle=None,
+    retail_sales_bundle=None,
 ):
     """
-    თვიური P&L: POS შემოსავალი და TBC/BOG ხარჯები ობიექტების ჭრილში.
+    თვიური P&L: POS შემოსავალი (ბანკი) + ნაღდი ფული (Megaplus სალარო) +
+    TBC/BOG ხარჯები ობიექტების ჭრილში.
+
+    cashreg_in formula (per Sprint 5.8 vat_reconciliation): for each
+    (month, object), `cash_income = max(0, max_pos − bank_card)`, where
+    max_pos comes from retail_sales.by_object_by_month and bank_card is the
+    POS terminal income aggregated from `pos_bundle.pnl_lines`. When
+    retail_sales_bundle is None (older callers / fixtures), cash_income is
+    0.0 and `total_income == pos_income` for backward compat.
     """
     mapping = object_mapping or _clone_default_object_mapping()
     default_object = str(mapping.get("default_object") or OBJECT_UNALLOCATED)
@@ -72,8 +106,12 @@ def build_monthly_pnl(
                 obj = str(line.get("object") or OBJECT_COMMON)
                 month_expenses[month][obj] += float(line.get("თანხა") or 0)
 
+    max_pos_by_month = _retail_sales_max_pos_by_object_month(retail_sales_bundle)
+
     months = sorted(
-        set(month_income.keys()) | set(month_expenses.keys()),
+        set(month_income.keys())
+        | set(month_expenses.keys())
+        | set(max_pos_by_month.keys()),
         key=_month_sort_key,
     )
     objects_order = _object_order_for_monthly_pnl(mapping)
@@ -82,6 +120,7 @@ def build_monthly_pnl(
     for month in months:
         dynamic_objects.update(month_income[month].keys())
         dynamic_objects.update(month_expenses[month].keys())
+        dynamic_objects.update(max_pos_by_month.get(month, {}).keys())
     for obj in sorted(dynamic_objects):
         if obj not in seen_objects:
             objects_order.append(obj)
@@ -90,24 +129,35 @@ def build_monthly_pnl(
     out = []
     for month in months:
         month_objects = {}
-        total_income = 0.0
+        total_pos_income = 0.0
+        total_cash_income = 0.0
         total_expenses = 0.0
+        max_pos_for_month = max_pos_by_month.get(month, {})
         for obj in objects_order:
             pos_income = float(month_income[month].get(obj) or 0)
             expenses = float(month_expenses[month].get(obj) or 0)
-            total_income += pos_income
+            max_pos = float(max_pos_for_month.get(obj) or 0)
+            cash_income = max(0.0, max_pos - pos_income)
+            obj_total_income = pos_income + cash_income
+            total_pos_income += pos_income
+            total_cash_income += cash_income
             total_expenses += expenses
             month_objects[obj] = {
                 "pos_income": pos_income,
+                "cash_income": cash_income,
+                "total_income": obj_total_income,
                 "expenses": expenses,
-                "net": float(pos_income - expenses),
+                "net": float(obj_total_income - expenses),
             }
+        total_income = total_pos_income + total_cash_income
         out.append(
             {
                 "month": month,
                 "objects": month_objects,
                 "total": {
-                    "pos_income": float(total_income),
+                    "pos_income": float(total_pos_income),
+                    "cash_income": float(total_cash_income),
+                    "total_income": float(total_income),
                     "expenses": float(total_expenses),
                     "net": float(total_income - total_expenses),
                 },
@@ -414,9 +464,16 @@ def build_financial_ratios(monthly_pnl, supplier_aging, ap_monthly_trend):
         key=lambda x: _month_sort_key(str((x or {}).get("month") or "უცნობი თვე")),
     )
 
-    total_income = sum(
-        float(((m.get("total") or {}).get("pos_income") or 0)) for m in monthly_rows
-    )
+    def _row_income(total_block):
+        # Prefer the new total_income field (pos + cash); fall back to
+        # pos_income for monthly_pnl rows produced before the Megaplus
+        # cash wire-in.
+        block = total_block or {}
+        if "total_income" in block:
+            return float(block.get("total_income") or 0)
+        return float(block.get("pos_income") or 0)
+
+    total_income = sum(_row_income(m.get("total")) for m in monthly_rows)
     total_expenses = sum(
         float(((m.get("total") or {}).get("expenses") or 0)) for m in monthly_rows
     )
@@ -483,8 +540,7 @@ def build_financial_ratios(monthly_pnl, supplier_aging, ap_monthly_trend):
     objects = {}
     for obj_name in [OBJECT_OZURGETI, OBJECT_DVABZU]:
         obj_total_income = sum(
-            float((((m.get("objects") or {}).get(obj_name) or {}).get("pos_income") or 0))
-            for m in monthly_rows
+            _row_income((m.get("objects") or {}).get(obj_name)) for m in monthly_rows
         )
         obj_total_expenses = sum(
             float((((m.get("objects") or {}).get(obj_name) or {}).get("expenses") or 0))
@@ -514,7 +570,7 @@ def build_financial_ratios(monthly_pnl, supplier_aging, ap_monthly_trend):
     monthly_trend = []
     for m in monthly_rows[-12:]:
         total_row = m.get("total") or {}
-        income_amount = float(total_row.get("pos_income") or 0)
+        income_amount = _row_income(total_row)
         expenses_amount = float(total_row.get("expenses") or 0)
         net_amount = float(total_row.get("net") or 0)
         net_margin_pct = round(_safe_pct(net_amount, income_amount), 2)

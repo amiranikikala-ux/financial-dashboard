@@ -541,6 +541,7 @@ def _build_analytics(data, inc, object_mapping, budget_config, sector_benchmarks
         tbc_expenses_bundle,
         object_mapping,
         bog_expenses_bundle=bog_expenses_bundle,
+        retail_sales_bundle=data.get("retail_sales"),
     )
     data["financial_ratios"] = build_financial_ratios(
         data.get("monthly_pnl", []),
@@ -1849,6 +1850,19 @@ def run():
                             float(ov.get("gross_margin_pct") or 0),
                             int(synthetic.get("products_total_count") or 0),
                             len(synthetic.get("by_month") or []),
+                        )
+                        # The first _build_analytics pass ran before MegaPlus
+                        # synthesized retail_sales — so monthly_pnl had no
+                        # cash income. Rebuild now that retail_sales is fully
+                        # populated; this overwrites monthly_pnl, financial_
+                        # ratios, forecast, budget, valuation, executive.
+                        logger.info(
+                            "Rebuilding analytics after retail_sales synthesis "
+                            "to surface Megaplus სალარო cash income"
+                        )
+                        _build_analytics(
+                            data, inc, object_mapping, budget_config,
+                            sector_benchmarks, supplier_aging_result,
                         )
             else:
                 logger.info("MegaPlus cache ცარიელია — data.json-ში megaplus_live არ ჩაიდება")

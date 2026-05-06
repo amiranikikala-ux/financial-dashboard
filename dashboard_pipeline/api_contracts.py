@@ -1343,6 +1343,23 @@ def _build_cashflow_bank_unmatched_detail_response(cache, **_kwargs):
     }
 
 
+def _filter_retail_sales_bundle_by_months(bundle, allowed_months):
+    """Slice retail_sales_bundle.by_object_by_month down to allowed months.
+
+    Used in the period-filter pnl response so cash income reflects only
+    months that survived filtering. Returns a thin bundle the
+    `build_monthly_pnl` helper can consume.
+    """
+    if not bundle or not allowed_months:
+        return None
+    rows = (bundle or {}).get("by_object_by_month") or []
+    allowed = set(allowed_months)
+    sliced = [row for row in rows if str((row or {}).get("month") or "") in allowed]
+    if not sliced:
+        return None
+    return {"by_object_by_month": sliced}
+
+
 def _build_pnl_summary_response(cache, period_filter=None, **_kwargs):
     if not bool((period_filter or {}).get("applied")):
         return {"monthly_pnl": cache.get("monthly_pnl", FIELD_DEFAULTS["monthly_pnl"])}
@@ -1350,6 +1367,7 @@ def _build_pnl_summary_response(cache, period_filter=None, **_kwargs):
     tbc_expenses_bundle = cache.get("tbc_expenses") if isinstance(cache, dict) else {}
     bog_expenses_bundle = cache.get("bog_expenses") if isinstance(cache, dict) else {}
     object_mapping = cache.get("object_mapping") if isinstance(cache, dict) else None
+    retail_sales_bundle = cache.get("retail_sales") if isinstance(cache, dict) else None
     pos_lines, pos_total_rows, pos_matched_rows, pos_excluded_unparseable = (
         _filter_period_source_rows(
             (pos_bundle or {}).get("pnl_lines") or (pos_bundle or {}).get("lines") or [],
@@ -1369,6 +1387,26 @@ def _build_pnl_summary_response(cache, period_filter=None, **_kwargs):
         bog_matched_rows,
         bog_excluded_unparseable,
     ) = _filter_pnl_expense_bundle(bog_expenses_bundle, period_filter)
+    # Filter retail_sales by the months that survived pos/expense filtering
+    # so cash income matches the same period window.
+    allowed_months = set()
+    for line in pos_lines:
+        ts = parse_source_datetime((line or {}).get("თარიღი"))
+        if ts is not None and ts == ts:
+            allowed_months.add(f"{ts.year:04d}-{ts.month:02d}")
+    for category in (filtered_tbc_expenses or {}).get("categories") or []:
+        for line in category.get("lines") or []:
+            ts = parse_source_datetime((line or {}).get("თარიღი"))
+            if ts is not None and ts == ts:
+                allowed_months.add(f"{ts.year:04d}-{ts.month:02d}")
+    for category in (filtered_bog_expenses or {}).get("categories") or []:
+        for line in category.get("lines") or []:
+            ts = parse_source_datetime((line or {}).get("თარიღი"))
+            if ts is not None and ts == ts:
+                allowed_months.add(f"{ts.year:04d}-{ts.month:02d}")
+    filtered_retail_bundle = _filter_retail_sales_bundle_by_months(
+        retail_sales_bundle, allowed_months
+    )
     period_meta = serialize_period_filter(period_filter)
     period_meta["total_rows_seen"] = int(
         pos_total_rows + tbc_total_rows + bog_total_rows
@@ -1387,6 +1425,7 @@ def _build_pnl_summary_response(cache, period_filter=None, **_kwargs):
             filtered_tbc_expenses,
             object_mapping,
             bog_expenses_bundle=filtered_bog_expenses,
+            retail_sales_bundle=filtered_retail_bundle,
         ),
         "pnl_period_meta": period_meta,
     }
