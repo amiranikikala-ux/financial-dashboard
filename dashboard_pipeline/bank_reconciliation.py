@@ -703,21 +703,22 @@ def build_supplier_payment_lines(matched_high_rows, manual_rows):
     """
     by_tax_id: Dict[str, List[Dict[str, Any]]] = {}
 
-    def _push(tax_id, date_str, amount, source, purpose):
+    def _push(tax_id, date_str, amount, source, purpose, *, entry_id=None):
         tid = str(tax_id or "").strip()
         if not tid:
             return
         amt = float(amount or 0)
         if amt <= 0:
             return
-        by_tax_id.setdefault(tid, []).append(
-            {
-                "date": str(date_str or ""),
-                "amount": amt,
-                "source": str(source or ""),
-                "purpose": str(purpose or "")[:120],
-            }
-        )
+        line = {
+            "date": str(date_str or ""),
+            "amount": amt,
+            "source": str(source or ""),
+            "purpose": str(purpose or "")[:120],
+        }
+        if entry_id:
+            line["id"] = str(entry_id)
+        by_tax_id.setdefault(tid, []).append(line)
 
     for row in matched_high_rows or []:
         if not isinstance(row, dict):
@@ -749,6 +750,7 @@ def build_supplier_payment_lines(matched_high_rows, manual_rows):
             row.get("amount"),
             "manual",
             row.get("comment") or "ხელით ჟურნალი",
+            entry_id=row.get("id"),
         )
 
     for tid, lines in by_tax_id.items():

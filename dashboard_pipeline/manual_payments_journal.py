@@ -38,7 +38,7 @@ JOURNAL_COLUMNS = (
     "deleted_at",
 )
 
-_write_lock = threading.Lock()
+_io_lock = threading.RLock()
 
 
 def journal_csv_path() -> str:
@@ -149,7 +149,8 @@ def read_active_entries(path: Optional[str] = None) -> List[Dict]:
     primitive types only and are safe to JSON-encode.
     """
     p = path or journal_csv_path()
-    rows = _read_all_rows(p)
+    with _io_lock:
+        rows = _read_all_rows(p)
     return [
         {
             "id": r.id,
@@ -201,7 +202,7 @@ def append_entry(
         deleted_at="",
     )
 
-    with _write_lock:
+    with _io_lock:
         _ensure_journal_exists(p)
         rows = _read_all_rows(p)
         rows.append(entry)
@@ -230,7 +231,7 @@ def soft_delete_entry(entry_id: str, path: Optional[str] = None) -> bool:
     if not eid:
         return False
 
-    with _write_lock:
+    with _io_lock:
         rows = _read_all_rows(p)
         changed = False
         for row in rows:

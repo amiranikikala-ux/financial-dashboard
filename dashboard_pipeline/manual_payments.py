@@ -319,7 +319,30 @@ def load_manual_payments():
 def load_manual_payment_rows():
     path = manual_payments_csv_path()
     rows = read_manual_journal_rows(path)
-    return [dict(row) for row in rows if float(row.get("amount") or 0) > 0]
+    out = [dict(row) for row in rows if float(row.get("amount") or 0) > 0]
+
+    # Append event-based journal entries (manual_payments_journal.csv) so each
+    # owner-entered cash payment surfaces individually in the supplier modal
+    # with its own UUID — that lets the UI render a 🗑 delete button per row.
+    from dashboard_pipeline import manual_payments_journal as _journal
+
+    for entry in _journal.read_active_entries():
+        out.append(
+            {
+                "matched_tax_id": entry["tax_id"],
+                "matched_supplier_name": "",
+                "company": "",
+                "amount": float(entry["amount"]),
+                "comment": entry.get("comment") or "",
+                "row_date": entry.get("date") or "",
+                "status": "manual_journal_v2",
+                "source_bank": "manual_journal_v2",
+                "matched_by": "manual_journal_v2",
+                "confidence": "manual",
+                "id": entry["id"],
+            }
+        )
+    return out
 
 
 def build_manual_payment_source_meta(rows):
