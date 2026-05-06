@@ -1,12 +1,71 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-08 ღამე — **Megaplus სალაროს wire-in Session 1 (backend) DONE**. ნაღდი ფული P&L-ის income მხარეს ახლა ჩანს. `total_income` 2.04M → 5.48M ₾ გაიზარდა, `net_margin` −178% → −3.36%-ზე. ცვლილებები ჯერ არ არის push-ნული. შემდეგი ნაბიჯი: Session 2 (frontend PnL.jsx).
+> **განახლდა**: 2026-05-06 დღე — **ბუღალტრული P&L SHIPPED**. dashboard ახლა ნამდვილ მოგებას აჩვენებს: COGS Megaplus-დან, ოპერაციული ხარჯი მომწოდებლის გადახდისგან გამოყოფილი. წმინდა მოგება ადრე −178% / −4.65% (ცრუ) → ახლა **+6.1%** (338,147 ₾). 7 commit push-ნულია origin/main-ზე. შემდეგი ნაბიჯი: backend forecast/yoy ნაღდი ფულით (#15 ბლოკავს Forecast frontend Phase B-ს).
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-08 ღამე) — Megaplus სალარო Session 1 (backend wire-in) DONE
+## 0. ბოლო session-ის შედეგი (2026-05-06 დღე) — ბუღალტრული P&L SHIPPED · Cash income surfaced everywhere
+
+🎉 **7 commit push-ნულია origin/main-ზე.** dashboard-ი ჯერ არ იყო ბუღალტრული P&L-ის სიმართლე — ახლა არის. წმინდა მოგება −178% (ცრუ) → **+6.1%** (338,147 ₾). user-ის ცხადი მოთხოვნა იყო „გავაკეთოთ როგორც საჭიროა" (ბუღალტრული მიდგომა) — საქონლის ღირებულება ცალკე, ოპერაციული ხარჯი ცალკე.
+
+| საკითხი | სტატუსი | SHA |
+|---|---|---|
+| **Phase A — PnL.jsx ნაღდი ფული ცალკე სვეტში** (per-store + ჯამი) | ✅ | `09e9282` |
+| **Phase C — Executive.jsx Excel P&L ფურცელში ნაღდი** | ✅ | `e991308` |
+| **Phase D — Insights.jsx burn rate, break-even, risk score ნაღდით** | ✅ | `abdf0f4` |
+| **Backend ბუღალტრული P&L** — COGS, gross_margin, supplier_payments, operating_expenses, net_profit (per-object cogs/gross_margin; total-only opex/net) | ✅ | `03dd1b7` |
+| **Frontend ბუღალტრული P&L** — 6 KPI cards + ახალი per-month accrual table + per-shop გროს მარჟა | ✅ | `7dd0a1d` |
+| Phase B — Forecast.jsx | 🟡 ბლოკავს #15 |
+| supplier_archive 7 ფირმის სტატუსი | ✅ | `ffae9bd` |
+
+### Headline ცვლილება (2026-05-06 dataset)
+
+| | ადრე | ახლა |
+|---|---|---|
+| შემოსავალი | 2,037,224 ₾ (POS only) | **5,499,369 ₾** (POS + ნაღდი) |
+| COGS | (არ ჩანდა) | 4,265,939 ₾ (Megaplus per-sale cost) |
+| **გროს მარჟა** | (არ ჩანდა) | **1,233,430 ₾ (22.4%)** |
+| მომწოდებელს გადახდილი (cash flow) | „ხარჯში" ჩაკარგული | 4,860,159 ₾ |
+| ოპ. ხარჯი (ქირა, ხელფასი, კომუნ.) | (ვერ ვიცოდით) | 895,283 ₾ |
+| **წმინდა მარჟა** | −178% / −4.65% (ცრუ) | **+6.1%** (338,147 ₾) |
+
+### Architectural decisions taken (locked, do-not-relitigate)
+
+1. **მონაცემები ორ ფენად მოდის:**
+   - **Cash flow ფენა (legacy):** pos_income, cash_income, total_income, expenses, net — ბანკის გასვლა-შემოსვლა, „რა მოხდა ფულზე".
+   - **Accrual ფენა (ახალი):** cogs, gross_margin, supplier_payments, operating_expenses, net_profit, gross_margin_pct, net_margin_pct — „რეალური P&L".
+   - ორივე თანაცხოვრობს. UI-ზე ცალცალკე ცხრილებში.
+2. **Per-object COGS + გროს მარჟა — yes (Megaplus-დან).** Per-object operating_expenses + net_profit — **no**, რადგან supplier_payment_lines purpose-ტექსტიდან ობიექტს ვერ ვადგენთ.
+3. **გაუნაწილებელი object-ის COGS = 0** (Megaplus-ში არ ჩანს). 635K ₾ revenue-ზე COGS გაუცნობია → მისი გროს მარჟა ცრუ მაღალია. რეალური overall მარჟა 12-15% (Megaplus tracked sales-ზე), არა 22%.
+4. **ცხრილების სტრუქტურა PnL გვერდზე:** ზემოთ ბუღალტრული P&L (per-month accrual), ქვემოთ cash-flow per-store (POS/ნაღდი/ხარჯი/net). ძველი ცხრილი არ წაშლილა — შევინახეთ ცხადობისთვის.
+
+### Open / next session
+
+- 🔴 **#15 Backend forecast/yoy/seasonality ნაღდით** — analytics_builders.py-ში 3 გათვლა იყენებს pos_income-ს. ბლოკავს Phase B-ს (#11). ცვლილება: `_sum_total(rows, "pos_income")` → `_sum_total(rows, "total_income")` last_12 და prev_12-ისთვის (ხაზი 830-835). seasonality avg_income იგივე.
+- 🔴 **#4 VAT reconciliation max_pos_ge = 0 every month** — pre-synthesis retail_sales-ს კითხულობს. იგივე ფესვი, რაც უკვე გასწორებული გვაქვს `_build_analytics`-ის rebuild ლოგიკაში — vat-ი იქამდე იქმნება. ან synthesis ადრე გადავიტანოთ, ან vat-ი rebuild block-ში ჩავამატოთ.
+- 🟡 **#5 AI strategic interview answers** — User უპასუხებს 10 კითხვას, შემდეგ პასუხები სტრუქტურდება.
+- 🟡 **#6 Telegram bot Windows service** — ხელით ეშვება ახლა, NSSM-ის რეგისტრაცია საჭირო.
+- 🟡 **#7 13 pre-existing test failures** — test_expense_categories_incremental.py + test_foodmart_cashback_incremental.py.
+- 🟡 **Tooltip-ების layer** — user-მა მოითხოვა (B+b: ლამაზი, P&L-ის შემდეგ). KPI labels + table column headers მთელ dashboard-ში. ცალკე session.
+
+### Live findings (2026-05-06 dataset)
+
+- **გაუნაწილებელი 635K ₾ — POS-ზე COGS-ის უქონლობა**: Megaplus-ში არ აქვს, ამიტომ მისი მარჟა inflated. წყარო: ბანკის POS deposits რომელიც ვერ მიერთებოდა მაღაზიას. სავარაუდოდ რეალურად ერთ-ერთი 2 მაღაზიის გაყიდვაა, უბრალოდ shop-attribution არ მოხდა.
+- **84% ბანკის გასვლისა მომწოდებლისთვის წავიდა** (4.86M / 5.76M). მხოლოდ 16% (895K) რეალური ოპერაციული ხარჯი — ქირა, ხელფასი, კომუნ., საკომისიო. ეს ჯანსაღი ფურცელი/მაღაზიისთვის.
+- **მაი 2026 (ნაწილობრივი თვე)**: შემოსავალი 29,308 ₾, COGS 22,674, გროს მარჟა 6,634 ₾ (22.6%), წმინდა მოგება 5,259 ₾ (17.94%).
+- **ცდები: 12/12 მწვანე** (4 ახალი — COGS surfacing, supplier_payments aggregation, real-P&L identity, backward compat without supplier lines).
+
+### Side discoveries this session
+
+- **Pipeline regen ~17 წუთი**: Megaplus DB 1.6M+ row-ის წაკითხვის გამო. CLI-დან გავუშვი (`venv/Scripts/python.exe generate_dashboard_data.py`). Service-ი თვითონ rereadავს public/data.json-ს — restart არ დასჭირდა.
+- **Frontend pre-commit hook** ავტომატურად ბილდავს `npm run build`-ი ყოველ commit-ზე rs-dashboard/src/* ცვლილებაზე. dist/ git-ignored, შესაბამისად commit-ში არ გადადის. წავიკითხე memory-ის წესი: "single-URL workflow — always build" — შესრულდა.
+- **CONTEXT_HANDOFF.md-ის თარიღი 2026-05-08 იყო ძველ ჩანაწერებში** — დღევანდელი 2026-05-06 თარიღთან 2 დღით განსხვავდება. ან წინა session-ის თარიღი მოძველდა, ან system-ის თარიღი არასწორია. არ გამოვიკვლიე — ფოკუსზე დარჩენისთვის.
+
+---
+
+## 0a. წინა session-ის შედეგი (2026-05-08 ღამე) — Megaplus სალარო Session 1 (backend wire-in) DONE
 
 🎉 **ნაღდი ფული P&L-ის income მხარეს ახლა ჩანს.** `monthly_pnl[].total.cash_income` ახალი ველია, წყარო — `retail_sales.by_object_by_month` per-object MAX POS, ფორმულა — `cashreg_in = max(0, MAX_POS − bank_card)` (იგივე, რასაც `vat_reconciliation` იყენებს Sprint 5.8-დან).
 
