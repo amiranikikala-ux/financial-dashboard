@@ -275,6 +275,8 @@ export default function SupplierModal({
 }) {
   const [deletingPaymentIds, setDeletingPaymentIds] = useState(() => new Set());
   const [paymentDeleteError, setPaymentDeleteError] = useState('');
+  const [liveJournalEntries, setLiveJournalEntries] = useState([]);
+  const [journalRefreshTick, setJournalRefreshTick] = useState(0);
   const [fetchedAging, setFetchedAging] = useState(null);
   const [agingLoading, setAgingLoading] = useState(!initialAgingData || initialAgingData.length === 0);
   const [importedResult, setImportedResult] = useState({ key: '', detail: null, error: '' });
@@ -413,12 +415,49 @@ export default function SupplierModal({
   const [productLimit, setProductLimit] = useState(20);
   const [productSearch, setProductSearch] = useState('');
 
+  useEffect(() => {
+    if (!taxId) {
+      setLiveJournalEntries([]);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/manual-payments?tax_id=${encodeURIComponent(taxId)}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+      .then((body) => {
+        if (cancelled) return;
+        const entries = Array.isArray(body?.entries) ? body.entries : [];
+        setLiveJournalEntries(
+          entries.map((e) => ({
+            date: e.date || '',
+            amount: Number(e.amount) || 0,
+            source: 'manual',
+            purpose: e.comment || 'ხელით ჟურნალი',
+            id: e.id,
+          })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setLiveJournalEntries([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [taxId, journalRefreshTick]);
+
   const supplierPayments = useMemo(() => {
     if (!taxId) return [];
     const raw = Array.isArray(paymentLines?.[taxId]) ? paymentLines[taxId] : [];
-    if (!deletedManualPaymentIds || deletedManualPaymentIds.size === 0) return raw;
-    return raw.filter((p) => !(p?.id && deletedManualPaymentIds.has(p.id)));
-  }, [taxId, paymentLines, deletedManualPaymentIds]);
+    const seenJournalIds = new Set();
+    for (const p of raw) {
+      if (p?.id) seenJournalIds.add(p.id);
+    }
+    const liveOnly = liveJournalEntries.filter((e) => !seenJournalIds.has(e.id));
+    const merged = [...liveOnly, ...raw];
+    if (deletedManualPaymentIds && deletedManualPaymentIds.size > 0) {
+      return merged.filter((p) => !(p?.id && deletedManualPaymentIds.has(p.id)));
+    }
+    return merged;
+  }, [taxId, paymentLines, liveJournalEntries, deletedManualPaymentIds]);
 
   const handleDeleteManualPayment = async (id) => {
     if (!id || !onDeleteManualPayment) return;
@@ -651,14 +690,15 @@ export default function SupplierModal({
     }
     if (!serverOk) {
       window.alert(
-        'სერვერს ვერ მივწვდი — გადახდა მხოლოდ ბრაუზერშია. AI ვერ დაინახავს, სანამ ხელახლა არ ცადო.',
+        'სერვერს ვერ მივწვდი — გადახდას მხოლოდ ბრაუზერში ვინახავ. AI ვერ დაინახავს, სანამ ხელახლა არ ცადო.',
       );
+      const next = { ...(localPayments || {}), [taxId]: (Number(localPayments?.[taxId]) || 0) + payVal };
+      persistLocalPayments(next);
     }
-    const next = { ...(localPayments || {}), [taxId]: (Number(localPayments?.[taxId]) || 0) + payVal };
-    persistLocalPayments(next);
     setPayAmount('');
     setRecordedFlash(true);
     setTimeout(() => setRecordedFlash(false), 1400);
+    setJournalRefreshTick((t) => t + 1);
   };
 
   const handleClearLocal = () => {

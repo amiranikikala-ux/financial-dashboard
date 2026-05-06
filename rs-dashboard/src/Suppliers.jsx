@@ -200,11 +200,11 @@ export default function Suppliers({
     }
     if (!serverOk) {
       window.alert(
-        'სერვერს ვერ მივწვდი — გადახდა მხოლოდ ბრაუზერშია შენახული. AI ვერ დაინახავს, სანამ ხელახლა არ ცადო.',
+        'სერვერს ვერ მივწვდი — გადახდას მხოლოდ ბრაუზერში ვინახავ. AI ვერ დაინახავს, სანამ ხელახლა არ ცადო.',
       );
+      const next = { ...localPayments, [tid]: (Number(localPayments[tid]) || 0) + payVal };
+      persistLocalPayments(next);
     }
-    const next = { ...localPayments, [tid]: (Number(localPayments[tid]) || 0) + payVal };
-    persistLocalPayments(next);
     setPayAmount('');
     setRecordedFlash(true);
     setTimeout(() => setRecordedFlash(false), 1400);
