@@ -86,6 +86,10 @@ function sumRows(rows) {
   let cash = 0;
   let totalInc = 0;
   let expenses = 0;
+  let cogs = 0;
+  let supplierPayments = 0;
+  let operatingExpenses = 0;
+  let netProfit = 0;
   const byObj = {};
   for (const m of rows) {
     const tPos = Number(m.total?.pos_income) || 0;
@@ -95,14 +99,23 @@ function sumRows(rows) {
     cash += tCash;
     totalInc += tTot;
     expenses += Number(m.total?.expenses) || 0;
+    cogs += Number(m.total?.cogs) || 0;
+    supplierPayments += Number(m.total?.supplier_payments) || 0;
+    operatingExpenses += Number(m.total?.operating_expenses ?? m.total?.expenses) || 0;
+    netProfit += Number(m.total?.net_profit ?? m.total?.net) || 0;
     for (const [obj, vals] of Object.entries(m.objects || {})) {
       if (!byObj[obj]) {
-        byObj[obj] = { pos_income: 0, cash_income: 0, total_income: 0, expenses: 0 };
+        byObj[obj] = {
+          pos_income: 0, cash_income: 0, total_income: 0, expenses: 0,
+          cogs: 0, gross_margin: 0,
+        };
       }
       byObj[obj].pos_income += Number(vals.pos_income) || 0;
       byObj[obj].cash_income += Number(vals.cash_income) || 0;
       byObj[obj].total_income += Number(vals.total_income ?? vals.pos_income) || 0;
       byObj[obj].expenses += Number(vals.expenses) || 0;
+      byObj[obj].cogs += Number(vals.cogs) || 0;
+      byObj[obj].gross_margin += Number(vals.gross_margin ?? (vals.total_income ?? vals.pos_income ?? 0) - (vals.cogs ?? 0)) || 0;
     }
   }
   return {
@@ -111,6 +124,11 @@ function sumRows(rows) {
     totalIncome: totalInc,
     expenses,
     net: totalInc - expenses,
+    cogs,
+    grossMargin: totalInc - cogs,
+    supplierPayments,
+    operatingExpenses,
+    netProfit,
     byObj,
   };
 }
@@ -324,36 +342,58 @@ export default function PnL({ monthlyPnl }) {
         </button>
       </DateRangePicker>
 
-      {/* ---- KPI ზედა ბარათები ---- */}
+      {/* ---- KPI ბარათები (ბუღალტრული P&L) ---- */}
       <div className="kpi-grid">
         <div className="kpi-card kpi-card--accent">
-          <div className="kpi-label">სულ შემოსავალი</div>
+          <div className="kpi-label">შემოსავალი</div>
           <div className="kpi-value amount-positive">{fmt(totals.totalIncome)}</div>
           <div className="kpi-sub">
             POS: {fmt(totals.income)} · ნაღდი: {fmt(totals.cashIncome)}
           </div>
           <div className="kpi-sub">{rows.length} თვე</div>
         </div>
-        <div className="kpi-card kpi-card--warn">
-          <div className="kpi-label">სულ ხარჯი</div>
-          <div className="kpi-value amount-negative">{fmt(totals.expenses)}</div>
-          <div className="kpi-sub">TBC + BOG კატეგორიები</div>
+        <div className="kpi-card">
+          <div className="kpi-label">COGS (ნაყიდის ღირებულება)</div>
+          <div className="kpi-value amount-negative">−{fmt(totals.cogs)}</div>
+          <div className="kpi-sub">Megaplus per-sale ფაქტურიდან</div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-label">სუფთა მოგება (net)</div>
+          <div className="kpi-label">გროს მარჟა</div>
           <div
-            className={`kpi-value ${totals.net >= 0 ? 'amount-positive' : 'amount-negative'}`}
+            className={`kpi-value ${totals.grossMargin >= 0 ? 'amount-positive' : 'amount-negative'}`}
           >
-            {fmt(totals.net)}
+            {fmt(totals.grossMargin)}
           </div>
-          <div className="kpi-sub">შემოსავალი − ხარჯი</div>
+          <div className="kpi-sub">
+            {totals.totalIncome > 0
+              ? `${(totals.grossMargin / totals.totalIncome * 100).toFixed(1)}%`
+              : '—'}
+          </div>
+        </div>
+        <div className="kpi-card kpi-card--warn">
+          <div className="kpi-label">ოპ. ხარჯი (ქირა, ხელფასი, კომუნ.)</div>
+          <div className="kpi-value amount-negative">−{fmt(totals.operatingExpenses)}</div>
+          <div className="kpi-sub">
+            მომწოდებლის გადახდას არ შეიცავს
+          </div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-label">ობიექტები / თვეები</div>
-          <div className="kpi-value amount-neutral">
-            {objectSet.length} / {rows.length}
+          <div className="kpi-label">წმინდა მოგება</div>
+          <div
+            className={`kpi-value ${totals.netProfit >= 0 ? 'amount-positive' : 'amount-negative'}`}
+          >
+            {fmt(totals.netProfit)}
           </div>
-          <div className="kpi-sub">{objectSet.join(' · ')}</div>
+          <div className="kpi-sub">
+            {totals.totalIncome > 0
+              ? `${(totals.netProfit / totals.totalIncome * 100).toFixed(1)}%`
+              : '—'}
+          </div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-label">მომწოდებელს გადახდილი</div>
+          <div className="kpi-value amount-neutral">{fmt(totals.supplierPayments)}</div>
+          <div className="kpi-sub">საქონლის შეძენა (cash flow)</div>
         </div>
       </div>
 
@@ -364,6 +404,8 @@ export default function PnL({ monthlyPnl }) {
           const pos = Number(t.pos_income) || 0;
           const cash = Number(t.cash_income) || 0;
           const totalInc = Number(t.total_income) || pos;
+          const cogsObj = Number(t.cogs) || 0;
+          const grossObj = Number(t.gross_margin ?? totalInc - cogsObj);
           const exp = Number(t.expenses) || 0;
           const net = totalInc - exp;
           const sparkData = sparklinesByObj[obj] || [];
@@ -380,10 +422,19 @@ export default function PnL({ monthlyPnl }) {
                 POS: {fmt(pos)} · ნაღდი: {fmt(cash)}
               </div>
               <div className="kpi-sub">
-                ხარჯი: <span className="amount-negative">{fmt(exp)}</span>
+                გროს მარჟა:{' '}
+                <span className={grossObj >= 0 ? 'amount-positive' : 'amount-negative'}>
+                  {fmt(grossObj)}
+                </span>
+                {totalInc > 0 && (
+                  <span className="amount-neutral"> ({(grossObj / totalInc * 100).toFixed(1)}%)</span>
+                )}
               </div>
               <div className="kpi-sub">
-                net:{' '}
+                ბანკის ხარჯი: <span className="amount-negative">{fmt(exp)}</span>
+              </div>
+              <div className="kpi-sub">
+                ბანკის net:{' '}
                 <span className={net >= 0 ? 'amount-positive' : 'amount-negative'}>
                   {fmt(net)}
                 </span>
@@ -475,7 +526,118 @@ export default function PnL({ monthlyPnl }) {
         </div>
       </div>
 
-      {/* ---- თვიური ცხრილი წლიური subtotal-ებით ---- */}
+      {/* ---- ბუღალტრული P&L (ახალი) ---- */}
+      <div className="chart-card chart-card--wide">
+        <h3>ბუღალტრული P&L — შემოსავალი → COGS → გროს მარჟა → ოპ.ხარჯი → წმინდა</h3>
+        <div className="table-wrapper cashflow-table pnl-table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>თვე</th>
+                <th>შემოსავალი</th>
+                <th>COGS</th>
+                <th>გროს მარჟა</th>
+                <th>გროს %</th>
+                <th>მომწ. გადახდა</th>
+                <th>ოპ. ხარჯი</th>
+                <th>წმინდა მოგება</th>
+                <th>წმინდა %</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tableRows.map((row, idx) => {
+                if (row._type === 'year') {
+                  const grossPct = row.totalIncome > 0
+                    ? (row.grossMargin / row.totalIncome * 100).toFixed(1)
+                    : '—';
+                  const netPct = row.totalIncome > 0
+                    ? (row.netProfit / row.totalIncome * 100).toFixed(1)
+                    : '—';
+                  return (
+                    <tr key={`pnl-year-${row.year}-${idx}`} className="pnl-year-subtotal">
+                      <td><strong>{row.year} ჯამი</strong></td>
+                      <td className="amount-positive"><strong>{fmt(row.totalIncome)}</strong></td>
+                      <td className="amount-negative"><strong>−{fmt(row.cogs)}</strong></td>
+                      <td className={row.grossMargin >= 0 ? 'amount-positive' : 'amount-negative'}>
+                        <strong>{fmt(row.grossMargin)}</strong>
+                      </td>
+                      <td className="amount-neutral"><strong>{grossPct}%</strong></td>
+                      <td className="amount-neutral"><strong>{fmt(row.supplierPayments)}</strong></td>
+                      <td className="amount-negative"><strong>−{fmt(row.operatingExpenses)}</strong></td>
+                      <td className={row.netProfit >= 0 ? 'amount-positive' : 'amount-negative'}>
+                        <strong>{fmt(row.netProfit)}</strong>
+                      </td>
+                      <td className={row.netProfit >= 0 ? 'amount-positive' : 'amount-negative'}>
+                        <strong>{netPct}%</strong>
+                      </td>
+                    </tr>
+                  );
+                }
+                const m = row;
+                const tot = m.total || {};
+                const inc = Number(tot.total_income ?? tot.pos_income) || 0;
+                const cogsM = Number(tot.cogs) || 0;
+                const gross = Number(tot.gross_margin ?? inc - cogsM);
+                const supp = Number(tot.supplier_payments) || 0;
+                const opex = Number(tot.operating_expenses ?? tot.expenses) || 0;
+                const nProfit = Number(tot.net_profit ?? gross - opex);
+                const grossPctM = inc > 0 ? (gross / inc * 100).toFixed(1) : '—';
+                const netPctM = inc > 0 ? (nProfit / inc * 100).toFixed(1) : '—';
+                return (
+                  <tr key={`pnl-m-${m.month}`}>
+                    <td>{monthLabel(m.month)}</td>
+                    <td className="amount-positive">{inc ? fmt(inc) : '—'}</td>
+                    <td className="amount-negative">{cogsM ? `−${fmt(cogsM)}` : '—'}</td>
+                    <td className={gross >= 0 ? 'amount-positive' : 'amount-negative'}>
+                      {fmt(gross)}
+                    </td>
+                    <td className="amount-neutral">{grossPctM}{inc > 0 ? '%' : ''}</td>
+                    <td className="amount-neutral">{supp ? fmt(supp) : '—'}</td>
+                    <td className="amount-negative">{opex ? `−${fmt(opex)}` : '—'}</td>
+                    <td className={nProfit >= 0 ? 'amount-positive' : 'amount-negative'}>
+                      {fmt(nProfit)}
+                    </td>
+                    <td className={nProfit >= 0 ? 'amount-positive' : 'amount-negative'}>
+                      {netPctM}{inc > 0 ? '%' : ''}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="pnl-tfoot-total">
+                <td><strong>სულ ({rows.length} თვე)</strong></td>
+                <td className="amount-positive"><strong>{fmt(totals.totalIncome)}</strong></td>
+                <td className="amount-negative"><strong>−{fmt(totals.cogs)}</strong></td>
+                <td className={totals.grossMargin >= 0 ? 'amount-positive' : 'amount-negative'}>
+                  <strong>{fmt(totals.grossMargin)}</strong>
+                </td>
+                <td className="amount-neutral">
+                  <strong>
+                    {totals.totalIncome > 0
+                      ? `${(totals.grossMargin / totals.totalIncome * 100).toFixed(1)}%`
+                      : '—'}
+                  </strong>
+                </td>
+                <td className="amount-neutral"><strong>{fmt(totals.supplierPayments)}</strong></td>
+                <td className="amount-negative"><strong>−{fmt(totals.operatingExpenses)}</strong></td>
+                <td className={totals.netProfit >= 0 ? 'amount-positive' : 'amount-negative'}>
+                  <strong>{fmt(totals.netProfit)}</strong>
+                </td>
+                <td className={totals.netProfit >= 0 ? 'amount-positive' : 'amount-negative'}>
+                  <strong>
+                    {totals.totalIncome > 0
+                      ? `${(totals.netProfit / totals.totalIncome * 100).toFixed(1)}%`
+                      : '—'}
+                  </strong>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      {/* ---- ფული მაღაზიების მიხედვით (cash flow view) ---- */}
       <div className="table-wrapper cashflow-table pnl-table-scroll">
         <table>
           <thead>
