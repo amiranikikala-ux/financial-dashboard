@@ -1,12 +1,72 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-06 დღე — **ბუღალტრული P&L SHIPPED**. dashboard ახლა ნამდვილ მოგებას აჩვენებს: COGS Megaplus-დან, ოპერაციული ხარჯი მომწოდებლის გადახდისგან გამოყოფილი. წმინდა მოგება ადრე −178% / −4.65% (ცრუ) → ახლა **+6.1%** (338,147 ₾). 7 commit push-ნულია origin/main-ზე. შემდეგი ნაბიჯი: backend forecast/yoy ნაღდი ფულით (#15 ბლოკავს Forecast frontend Phase B-ს).
+> **განახლდა**: 2026-05-06 ღამე — **ნაღდი ფული გავრცელდა ყველგან** (Forecast/VAT/Budget/Valuation). ბიზნეს-კონტექსტი ფაილშია. Supplier modal-ის თვის ფილტრი chip-ებზე გადავიდა. **6 commit push-ნული origin/main-ზე.** ღია — AI-ზე MY_BUSINESS.md wire-up.
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-06 დღე) — ბუღალტრული P&L SHIPPED · Cash income surfaced everywhere
+## 0. ბოლო session-ის შედეგი (2026-05-06 ღამე) — Forecast/VAT/Budget/Valuation cash flow + MY_BUSINESS context + Supplier UI polish
+
+🎉 **6 commit push-ნული origin/main-ზე.** წინა session-მა ნაღდი ფული P&L-ში ჩაშენა; ეს session-ი მის გავრცელებას აკეთებდა — Forecast, VAT reconciliation, Budget, Valuation. გარდა ამისა, AI-ის 10 სტრატეგიული კითხვაზე მფლობელის პასუხები ფაილში სტრუქტურდა, და Supplier modal-ის თვის ფილტრი dropdown-დან chip ღილაკებზე გადაიყვანა.
+
+| საკითხი | სტატუსი | SHA |
+|---|---|---|
+| **#15 Forecast/YoY/Seasonality ნაღდით** (5 ხაზი `build_forecast`-ში) | ✅ | `4e90a1f` |
+| **#4 VAT reconciliation rebuild post-synthesis** (9 ხაზი add) | ✅ | `f58924a` |
+| **#5 MY_BUSINESS.md** (8 owner answers — 10Q AI interview captured) | ✅ | `37bf023` |
+| **Supplier modal — chip month filter** (2 dropdowns → ღილაკები) | ✅ | `8553015` |
+| **Supplier modal — collapse older months** (>6 chips → toggle „ძველი თვეები") | ✅ | `d5dd934` |
+| **Bonus — Budget + Valuation total_income** (2 ხაზი — task-გარე ფესვი) | ✅ | `03dcf02` |
+
+### Headline ცვლილებები (2026-05-06 ღამე dataset)
+
+| | ადრე | ახლა |
+|---|---|---|
+| Forecast last_12m income | 867,058 ₾ | **2,413,158 ₾** (×2.8) |
+| Forecast prev_12m income | 640,086 ₾ | **1,944,930 ₾** (×3.0) |
+| Forecast YoY ზრდა | +35.5% (ცრუ) | **+24.1%** (რეალური) |
+| Forecast 6-თვის პროგნოზი | ~327K ₾ | **~893K ₾** |
+| Forecast სეზონის #2 თვე | აპრილი | **სექტემბერი** |
+| VAT max_pos_ge | 36 თვე — 0 (ცრუ) | **36 თვე ცოცხლად, ჯამი 4.86M ₾** |
+| VAT cashreg_in_ge | 36 თვე — 0 | **2.97M ₾ ისტორიული ნაღდი გამოჩნდა** |
+| Valuation annual_revenue | 867K ₾ | **2.41M ₾** |
+
+### Architectural decisions taken (locked, do-not-relitigate)
+
+1. **Output field name `pos_income` intentionally kept** — UI 15 callsite-ში მას კითხულობს. ველის შიგთავსი ახლა `total_income`-ია (POS+ნაღდი). რეფაქტორი (rename) — ცალკე session.
+2. **VAT reconciliation რენდერდება ორჯერ** — line 1647 (synthesis-ის წინ, empty retail_sales) + line 1864 area (synthesis-ის შემდეგ, populated). მეორე უფრო ახალია, ის რჩება. ~1-2 sec extra runtime.
+3. **MY_BUSINESS.md location = `Financial_Analysis/MY_BUSINESS.md`** — markdown for owner editability. Wire-up to AI system_prompt deferred (option A: `dashboard_pipeline/ai/business_context.py` module; option B: `prompts.py`-ში static inject).
+4. **Supplier modal chip default = ბოლო 6 თვე** — owner explicitly tested 6 chips fit one row, "ძველი თვეები (+N)" toggle expands rest.
+5. **`__all__` sentinel** — SupplierModal-ის "ყველა თვე" ღილაკისთვის. ძველი `<option value="">` effectively broken იყო (fallback always collapsed to recent month).
+6. **Empty months stay hidden** — owner explicitly preferred current behavior (no chips for months with zero activity) over a fill-in-zeros variant.
+
+### Open / next session
+
+- 🔴 **AI wire-up MY_BUSINESS.md → system_prompt** — owner's strategic context not reaching AI yet. Decide A vs B from decision #3 above. ~1 session.
+- 🟡 **#6 Telegram bot Windows service** — runs as standalone process. NSSM registration needed for auto-start after reboot.
+- 🟡 **#7 13 pre-existing test failures** — `test_expense_categories_incremental.py` + `test_foodmart_cashback_incremental.py`. Unrelated to recent changes; fold in separately.
+- 🟡 **Tooltip layer** — owner requested earlier. KPI labels + table column headers dashboard-wide. Separate session.
+- 🟡 **`pos_income` field rename** — field name lies (contains total_income). 15 frontend callsites + tests. Cleanup, low urgency.
+- 🟡 **`supplier_archive.json` uncommitted** — 1 supplier (`212919742`) archived via UI at 15:15:50. Owner to commit separately or fold into next session.
+
+### Live findings (2026-05-06 ღამე dataset)
+
+- 36 of 44 VAT months გადავიდა `insufficient_data` → `no_declared_data` (data ცოცხალია, bookkeeper declarations მოლოდინშია — separate user input).
+- Forecast სეზონის #2 თვე გადავიდა აპრილიდან სექტემბერზე — ნაღდი გაყიდვა სექტემბერში მნიშვნელოვნად მაღალია card-only-ზე.
+- 30 of 261 supplier-ს აქვს 2026-05 აქტივობა; 29 — მხოლოდ 2026-04-მდე (current month, normal დროებითი).
+- Owner's clarifications added to MY_BUSINESS.md: ჯიდიაი ფული-ფულზე (no risk flag), ვასაძე ცოცხალია (false alarm), 2 მაღაზია = 1 ფინანსური ერთეული, ზაფხულის peak ფული მომწოდებლის ვალის გადახდაში მიდის.
+- Tests: 114 forecast/PnL · 84 VAT · 15 budget/valuation — all green.
+
+### Side discoveries this session
+
+- **`pos_income` field name lies** — შემცველობა ახლა total_income-ია, მაგრამ key-ის სახელი ძველია. UI კითხულობს ველს, არ აინტერესებს რა ჰქვია — ანუ functional-ად ცარიელი, მაგრამ მომავალში დებაგი დააბნევს.
+- **VAT runs twice in pipeline now** — performance hit ~1-2 sec, acceptable. ცალკე refactor — synthesis-ი ადრე გადაიტანე და ერთხელ გაუშვა.
+- **AI's question #1 + #9 pre-answered** — code changes უკვე ცხადყოფს real revenue (5.5M) და real margin (+6.1%). Owner answered remaining 8.
+
+---
+
+## 0a. წინა session-ის შედეგი (2026-05-06 დღე ნაწილი 1) — ბუღალტრული P&L SHIPPED · Cash income surfaced everywhere
 
 🎉 **7 commit push-ნულია origin/main-ზე.** dashboard-ი ჯერ არ იყო ბუღალტრული P&L-ის სიმართლე — ახლა არის. წმინდა მოგება −178% (ცრუ) → **+6.1%** (338,147 ₾). user-ის ცხადი მოთხოვნა იყო „გავაკეთოთ როგორც საჭიროა" (ბუღალტრული მიდგომა) — საქონლის ღირებულება ცალკე, ოპერაციული ხარჯი ცალკე.
 
