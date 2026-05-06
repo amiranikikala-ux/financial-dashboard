@@ -82,19 +82,37 @@ function Sparkline({ netData, color }) {
 }
 
 function sumRows(rows) {
-  let income = 0;
+  let pos = 0;
+  let cash = 0;
+  let totalInc = 0;
   let expenses = 0;
   const byObj = {};
   for (const m of rows) {
-    income += Number(m.total?.pos_income) || 0;
+    const tPos = Number(m.total?.pos_income) || 0;
+    const tCash = Number(m.total?.cash_income) || 0;
+    const tTot = Number(m.total?.total_income ?? m.total?.pos_income) || 0;
+    pos += tPos;
+    cash += tCash;
+    totalInc += tTot;
     expenses += Number(m.total?.expenses) || 0;
     for (const [obj, vals] of Object.entries(m.objects || {})) {
-      if (!byObj[obj]) byObj[obj] = { pos_income: 0, expenses: 0 };
+      if (!byObj[obj]) {
+        byObj[obj] = { pos_income: 0, cash_income: 0, total_income: 0, expenses: 0 };
+      }
       byObj[obj].pos_income += Number(vals.pos_income) || 0;
+      byObj[obj].cash_income += Number(vals.cash_income) || 0;
+      byObj[obj].total_income += Number(vals.total_income ?? vals.pos_income) || 0;
       byObj[obj].expenses += Number(vals.expenses) || 0;
     }
   }
-  return { income, expenses, net: income - expenses, byObj };
+  return {
+    income: pos,
+    cashIncome: cash,
+    totalIncome: totalInc,
+    expenses,
+    net: totalInc - expenses,
+    byObj,
+  };
 }
 
 export default function PnL({ monthlyPnl }) {
@@ -138,11 +156,13 @@ export default function PnL({ monthlyPnl }) {
       const entry = { month: monthLabel(m.month), _raw: m.month };
       for (const obj of ALL_OBJECTS) {
         const vals = m.objects?.[obj] || {};
-        entry[`${obj}_income`] = Number(vals.pos_income) || 0;
+        entry[`${obj}_income`] =
+          Number(vals.total_income ?? vals.pos_income) || 0;
         entry[`${obj}_exp`] = Number(vals.expenses) || 0;
       }
       entry['სულ_net'] = Number(m.total?.net) || 0;
-      entry['სულ_income'] = Number(m.total?.pos_income) || 0;
+      entry['სულ_income'] =
+        Number(m.total?.total_income ?? m.total?.pos_income) || 0;
       entry['სულ_expenses'] = Number(m.total?.expenses) || 0;
       return entry;
     });
@@ -153,7 +173,7 @@ export default function PnL({ monthlyPnl }) {
     for (const obj of INCOME_OBJECTS) {
       result[obj] = rows.map((m) => {
         const v = m.objects?.[obj] || {};
-        const inc = Number(v.pos_income) || 0;
+        const inc = Number(v.total_income ?? v.pos_income) || 0;
         const exp = Number(v.expenses) || 0;
         return { v: inc - exp };
       });
@@ -197,25 +217,36 @@ export default function PnL({ monthlyPnl }) {
     const hasCommon = objectSet.includes('საერთო');
     const headers = ['თვე'];
     for (const obj of nonCommon) {
-      headers.push(`${obj} POS`, `${obj} ხარჯი`, `${obj} net`);
+      headers.push(
+        `${obj} POS`,
+        `${obj} ნაღდი`,
+        `${obj} ხარჯი`,
+        `${obj} net`,
+      );
     }
     if (hasCommon) headers.push('საერთო ხარჯი');
-    headers.push('სულ POS', 'სულ ხარჯი', 'სულ net');
+    headers.push('სულ POS', 'სულ ნაღდი', 'სულ შემოსავალი', 'სულ ხარჯი', 'სულ net');
 
     const sheetData = [headers];
     for (const m of rows) {
       const row = [monthLabel(m.month)];
       for (const obj of nonCommon) {
         const v = m.objects?.[obj] || {};
-        const inc = Number(v.pos_income) || 0;
+        const pos = Number(v.pos_income) || 0;
+        const cash = Number(v.cash_income) || 0;
         const exp = Number(v.expenses) || 0;
-        row.push(inc, exp, inc - exp);
+        row.push(pos, cash, exp, pos + cash - exp);
       }
       if (hasCommon) {
         row.push(Number(m.objects?.['საერთო']?.expenses) || 0);
       }
+      const tPos = Number(m.total?.pos_income) || 0;
+      const tCash = Number(m.total?.cash_income) || 0;
+      const tTot = Number(m.total?.total_income ?? m.total?.pos_income) || 0;
       row.push(
-        Number(m.total?.pos_income) || 0,
+        tPos,
+        tCash,
+        tTot,
         Number(m.total?.expenses) || 0,
         Number(m.total?.net) || 0,
       );
@@ -225,14 +256,21 @@ export default function PnL({ monthlyPnl }) {
     const totRow = ['სულ'];
     for (const obj of nonCommon) {
       const t = totals.byObj[obj] || {};
-      const inc = Number(t.pos_income) || 0;
+      const pos = Number(t.pos_income) || 0;
+      const cash = Number(t.cash_income) || 0;
       const exp = Number(t.expenses) || 0;
-      totRow.push(inc, exp, inc - exp);
+      totRow.push(pos, cash, exp, pos + cash - exp);
     }
     if (hasCommon) {
       totRow.push(Number((totals.byObj['საერთო'] || {}).expenses) || 0);
     }
-    totRow.push(totals.income, totals.expenses, totals.net);
+    totRow.push(
+      totals.income,
+      totals.cashIncome,
+      totals.totalIncome,
+      totals.expenses,
+      totals.net,
+    );
     sheetData.push(totRow);
 
     const XLSX = await loadXlsxModule();
@@ -289,8 +327,11 @@ export default function PnL({ monthlyPnl }) {
       {/* ---- KPI ზედა ბარათები ---- */}
       <div className="kpi-grid">
         <div className="kpi-card kpi-card--accent">
-          <div className="kpi-label">სულ შემოსავალი (POS)</div>
-          <div className="kpi-value amount-positive">{fmt(totals.income)}</div>
+          <div className="kpi-label">სულ შემოსავალი</div>
+          <div className="kpi-value amount-positive">{fmt(totals.totalIncome)}</div>
+          <div className="kpi-sub">
+            POS: {fmt(totals.income)} · ნაღდი: {fmt(totals.cashIncome)}
+          </div>
           <div className="kpi-sub">{rows.length} თვე</div>
         </div>
         <div className="kpi-card kpi-card--warn">
@@ -320,9 +361,11 @@ export default function PnL({ monthlyPnl }) {
       <div className="kpi-grid pnl-obj-grid">
         {INCOME_OBJECTS.filter((o) => objectSet.includes(o)).map((obj) => {
           const t = totals.byObj[obj] || {};
-          const income = Number(t.pos_income) || 0;
+          const pos = Number(t.pos_income) || 0;
+          const cash = Number(t.cash_income) || 0;
+          const totalInc = Number(t.total_income) || pos;
           const exp = Number(t.expenses) || 0;
-          const net = income - exp;
+          const net = totalInc - exp;
           const sparkData = sparklinesByObj[obj] || [];
           const sparkColor = net >= 0 ? '#34c97e' : '#e05c6e';
           return (
@@ -332,7 +375,10 @@ export default function PnL({ monthlyPnl }) {
               style={{ borderTop: `2px solid ${OBJECT_COLORS[obj] || '#555'}` }}
             >
               <div className="kpi-label">{obj}</div>
-              <div className="kpi-value amount-positive">{fmt(income)}</div>
+              <div className="kpi-value amount-positive">{fmt(totalInc)}</div>
+              <div className="kpi-sub">
+                POS: {fmt(pos)} · ნაღდი: {fmt(cash)}
+              </div>
               <div className="kpi-sub">
                 ხარჯი: <span className="amount-negative">{fmt(exp)}</span>
               </div>
@@ -362,7 +408,7 @@ export default function PnL({ monthlyPnl }) {
 
       {/* ---- ჩარტი 1: Stacked Bar — შემოსავალი ობიექტებით ---- */}
       <div className="chart-card chart-card--wide">
-        <h3>თვიური POS შემოსავალი — ობიექტების მიხედვით</h3>
+        <h3>თვიური შემოსავალი — ობიექტების მიხედვით</h3>
         <div className="chart-area">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 8, right: 20, left: 10, bottom: 40 }}>
@@ -414,7 +460,7 @@ export default function PnL({ monthlyPnl }) {
               />
               <Tooltip content={<CustomTooltip />} />
               <Legend wrapperStyle={{ paddingTop: 8, fontSize: 13 }} />
-              <Bar dataKey="სულ_income" name="სულ POS" fill="#4f8ef7" opacity={0.6} />
+              <Bar dataKey="სულ_income" name="სულ შემოსავალი" fill="#4f8ef7" opacity={0.6} />
               <Bar dataKey="სულ_expenses" name="სულ ხარჯი" fill="#e05c6e" opacity={0.6} />
               <Line
                 type="monotone"
@@ -440,12 +486,17 @@ export default function PnL({ monthlyPnl }) {
                   <th style={{ color: OBJECT_COLORS[obj] }}>
                     {obj} POS
                   </th>
+                  <th style={{ color: OBJECT_COLORS[obj] }}>
+                    {obj} ნაღდი
+                  </th>
                   <th>{obj} ხარჯი</th>
                   <th>{obj} net</th>
                 </React.Fragment>
               ))}
               {objectSet.includes('საერთო') && <th>საერთო ხარჯი</th>}
               <th>სულ POS</th>
+              <th>სულ ნაღდი</th>
+              <th>სულ შემოსავალი</th>
               <th>სულ ხარჯი</th>
               <th>სულ net</th>
             </tr>
@@ -453,20 +504,24 @@ export default function PnL({ monthlyPnl }) {
           <tbody>
             {tableRows.map((row, idx) => {
               if (row._type === 'year') {
-                const ynet = row.income - row.expenses;
+                const ynet = row.net;
                 const nonCommon = objectSet.filter((o) => o !== 'საერთო');
                 return (
                   <tr key={`year-${row.year}-${idx}`} className="pnl-year-subtotal">
                     <td><strong>{row.year} ჯამი</strong></td>
                     {nonCommon.map((obj) => {
                       const t = row.byObj[obj] || {};
-                      const inc = Number(t.pos_income) || 0;
+                      const pos = Number(t.pos_income) || 0;
+                      const cash = Number(t.cash_income) || 0;
                       const exp = Number(t.expenses) || 0;
-                      const net = inc - exp;
+                      const net = pos + cash - exp;
                       return (
                         <React.Fragment key={obj}>
                           <td className="amount-positive">
-                            <strong>{inc ? fmt(inc) : '—'}</strong>
+                            <strong>{pos ? fmt(pos) : '—'}</strong>
+                          </td>
+                          <td className="amount-positive">
+                            <strong>{cash ? fmt(cash) : '—'}</strong>
                           </td>
                           <td className="amount-negative">
                             <strong>{exp ? fmt(exp) : '—'}</strong>
@@ -485,6 +540,8 @@ export default function PnL({ monthlyPnl }) {
                       </td>
                     )}
                     <td className="amount-positive"><strong>{fmt(row.income)}</strong></td>
+                    <td className="amount-positive"><strong>{fmt(row.cashIncome)}</strong></td>
+                    <td className="amount-positive"><strong>{fmt(row.totalIncome)}</strong></td>
                     <td className="amount-negative"><strong>{fmt(row.expenses)}</strong></td>
                     <td className={ynet >= 0 ? 'amount-positive' : 'amount-negative'}>
                       <strong>{fmt(ynet)}</strong>
@@ -496,18 +553,25 @@ export default function PnL({ monthlyPnl }) {
               // ჩვეულებრივი თვის ხაზი
               const m = row;
               const totalNet = Number(m.total?.net) || 0;
+              const monthTotalInc = Number(
+                m.total?.total_income ?? m.total?.pos_income,
+              ) || 0;
               return (
                 <tr key={m.month}>
                   <td>{monthLabel(m.month)}</td>
                   {objectSet.filter((o) => o !== 'საერთო').map((obj) => {
                     const v = m.objects?.[obj] || {};
-                    const inc = Number(v.pos_income) || 0;
+                    const pos = Number(v.pos_income) || 0;
+                    const cash = Number(v.cash_income) || 0;
                     const exp = Number(v.expenses) || 0;
-                    const net = Number(v.net ?? inc - exp);
+                    const net = Number(v.net ?? pos + cash - exp);
                     return (
                       <React.Fragment key={obj}>
                         <td className="amount-positive">
-                          {inc ? fmt(inc) : '—'}
+                          {pos ? fmt(pos) : '—'}
+                        </td>
+                        <td className="amount-positive">
+                          {cash ? fmt(cash) : '—'}
                         </td>
                         <td className="amount-negative">
                           {exp ? fmt(exp) : '—'}
@@ -528,6 +592,8 @@ export default function PnL({ monthlyPnl }) {
                     </td>
                   )}
                   <td className="amount-positive">{fmt(m.total?.pos_income)}</td>
+                  <td className="amount-positive">{fmt(m.total?.cash_income)}</td>
+                  <td className="amount-positive">{fmt(monthTotalInc)}</td>
                   <td className="amount-negative">{fmt(m.total?.expenses)}</td>
                   <td className={totalNet >= 0 ? 'amount-positive' : 'amount-negative'}>
                     {fmt(totalNet)}
@@ -541,13 +607,17 @@ export default function PnL({ monthlyPnl }) {
               <td><strong>სულ ({rows.length} თვე)</strong></td>
               {objectSet.filter((o) => o !== 'საერთო').map((obj) => {
                 const t = totals.byObj[obj] || {};
-                const inc = Number(t.pos_income) || 0;
+                const pos = Number(t.pos_income) || 0;
+                const cash = Number(t.cash_income) || 0;
                 const exp = Number(t.expenses) || 0;
-                const net = inc - exp;
+                const net = pos + cash - exp;
                 return (
                   <React.Fragment key={obj}>
                     <td className="amount-positive">
-                      <strong>{fmt(inc)}</strong>
+                      <strong>{fmt(pos)}</strong>
+                    </td>
+                    <td className="amount-positive">
+                      <strong>{fmt(cash)}</strong>
                     </td>
                     <td className="amount-negative">
                       <strong>{fmt(exp)}</strong>
@@ -566,6 +636,8 @@ export default function PnL({ monthlyPnl }) {
                 </td>
               )}
               <td className="amount-positive"><strong>{fmt(totals.income)}</strong></td>
+              <td className="amount-positive"><strong>{fmt(totals.cashIncome)}</strong></td>
+              <td className="amount-positive"><strong>{fmt(totals.totalIncome)}</strong></td>
               <td className="amount-negative"><strong>{fmt(totals.expenses)}</strong></td>
               <td className={totals.net >= 0 ? 'amount-positive' : 'amount-negative'}>
                 <strong>{fmt(totals.net)}</strong>
