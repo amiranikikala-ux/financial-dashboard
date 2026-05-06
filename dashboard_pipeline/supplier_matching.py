@@ -5,6 +5,7 @@ truth layers, legacy assist.
 Extracted from generate_dashboard_data.py lines 4709-5050 + 6490-6860.
 """
 import glob
+import html
 import re
 from collections import defaultdict
 
@@ -39,7 +40,7 @@ from dashboard_pipeline.truth_boundary import build_truth_boundary_summary
 
 def normalize_name(name):
     """სახელის ნორმალიზაცია: ბრჭყალები, ზედმეტი სივრცეები, პრეფიქსები"""
-    s = str(name).lower().strip()
+    s = html.unescape(str(name)).lower().strip()
     # ამოვშალოთ ბრჭყალები, პუნქტუაცია
     s = re.sub(r'[\"\'„"«»\(\)\[\]]', '', s)
     # ამოვშალოთ პრეფიქსები
