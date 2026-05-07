@@ -1,12 +1,82 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-07 დღე #3 — **rs.ge ფაქტურის CSV parser ცოცხალია** (44 ტესტი ✓), **5-ფაილიანი live overlay refactor** ცხრილებისთვის, **Telegram bot service-ად ავტო-სტარტი** (NSSM). სულ **6 commit push-ნული** origin/main-ზე ამ session-ში. Phase 1 (Foodmart 360°) ღია — pipeline + UI შემდეგ session-ში.
+> **განახლდა**: 2026-05-07 დღე #4 — **Phase 1 დასრულდა (Foodmart 360°)**. parser გადავიდა XLS-ზე (canonical, აღადგინა 8 დაკარგული ფაქტურა — 1,982 ₾). Pipeline → data.json → SupplierModal სექცია → ცალკე გვერდი ცოცხალი. **2 commit ლოკალურად** (`73c7ca8` `e3bc859`) — origin-ზე ჯერ არ push-ნულა.
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-07 დღე #3) — rs.ge invoice parser + live overlay + Telegram autostart
+## 0. ბოლო session-ის შედეგი (2026-05-07 დღე #4) — Phase 1 invoices end-to-end (parser → pipeline → modal → 360° page)
+
+🎉 **2 commit ლოკალურად** (`73c7ca8` Phase 1 wiring + `e3bc859` Foodmart 360° tab). origin-ზე **არ** push-ნულა — owner-ის მიერ. 53 ტესტი მწვანე (47 parser + 6 pipeline integration).
+
+| საკითხი | სტატუსი | SHA |
+|---|---|---|
+| **XLS parser path + 8 dropped invoices recovered** (1,982 ₾, 2 suppliers: ასკანა პლიუსი + ტიტე 2024) | ✅ | `73c7ca8` |
+| **supplier_invoices_section module + pipeline wire-up** (5 keys in data.json) | ✅ | `73c7ca8` |
+| **api_contracts: TAB_ALLOWLIST + FIELD_DEFAULTS + _build_suppliers_response** (3 layers) | ✅ | `73c7ca8` |
+| **SupplierModal „📋 ფაქტურები (rs.ge)" section** (KPI cards + status chips + 60-row table) | ✅ | `73c7ca8` |
+| **CLAUDE.md hard rule** — "no silent data drops" | ✅ | `73c7ca8` |
+| **Foodmart 360° tab** (4 cards + gap explainer + monthly + 60 invoice table) | ✅ | `e3bc859` |
+
+### Headline — owner verification (2026-05-07 დღე #4)
+
+| ფაქტი | მნიშვნელობა |
+|---|---|
+| ფუდმარტი buyer ფაქტურა (rs.ge XLS) | **60 ფაქტურა, 163,082.25 ₾** ✅ |
+| ფუდმარტი seller ფაქტურა (ჩვენგან) | **46 ფაქტურა, 508,573.38 ₾** ✅ |
+| TBC cashback ფუდმარტიდან | 5 ჩანაწერი (ცარიელია API-ში — გამოყვა?) |
+| ფუდმარტი აგინგი (ვალი ჩვენგან) | 53,774 ₾ |
+| **Reconciliation gap** (invoice − aging) | **109,308 ₾** — ფუდმარტი 360°-ის drill-down |
+| XLS-ით აღდგენილი buyer rows | **+8 ფაქტურა, +1,982 ₾** (CSV-ი silent-ად ჩამოაგდებდა) |
+
+### Architectural decisions taken (locked, do-not-relitigate)
+
+1. **XLS canonical for buyer registry** — `Financial_Analysis/რს ფაქტურები/ფაქტურები მყიდველი რეესტრი.xls` (7,410 unique IDs) გადაასწორა `ფაქტურები მყიდველი.csv` (7,402 valid + 16 broken pairs ≈ 8 lost). parser auto-dispatches by extension; CSV path stays for legacy/test.
+2. **5 ახალი data.json key** — `supplier_invoices` (per tax_id arrays), `supplier_invoices_summary` (per tax_id totals + status counts), `our_seller_invoices` (54 invoices we issued), `invoice_waybill_match` (Phase 1 foodmart-only — Phase 2 extends to all suppliers), `supplier_invoices_meta` (source file + counts). Bundle ≈ 2.87 MB; data.json grew 117→120 MB.
+3. **api_contracts 3-layer wire-up** — adding new field requires: (a) `FIELD_DEFAULTS`, (b) `TAB_ALLOWLIST[tab]` for allowlist-tabs **OR** (c) special builder function for tabs in `SPECIAL_TAB_BUILDERS`. suppliers tab is special → `_build_suppliers_response` updated for both period-filter branches. memory: `project_api_response_paths.md`.
+4. **Foodmart 360° hosts both supplier + cashback** — `_build_suppliers_response` includes `our_seller_invoices` + `tbc_foodmart_cashback`, so the page fetches via `tab=suppliers` (single round-trip). App.jsx maps `foodmart_360 → suppliers` in both `requestTab` and `expectedTab`.
+5. **Parser handles ISO dates + pandas Timestamp** — `parse_invoice_date` accepts `'2025-12-01 00:00:00'` (XLS-derived) AND `'01-აგვ-2026 13:19:12'` (CSV-native) AND `pd.Timestamp` / `datetime` directly; `pd.NaT` → `None`. 47 parser tests pass.
+
+### Open / next session
+
+- 🔴 **2 commit push origin/main-ზე** (`73c7ca8` `e3bc859`) — owner action.
+- 🔴 **Service restart was already done this session** — but next session should treat invoice-related API calls as live; only filtered queries (period_filter, tax_id) hit in-memory `_build_suppliers_response`.
+- 🟡 **TBC cashback in Foodmart 360° shows 5 ჩანაწერი** — owner verify ცოცხლადაა თუ არა in browser; preview-ში 36 ფიგურირებდა.
+- 🟡 **Phase 2 — all-suppliers gap analysis** — `invoice_waybill_match` ყველა 260 supplier-ზე გავრცელდეს. ცალკე session-ი (preview-ში outline-ია). Add „რეკონცილიაცია" aggregate page; Phase 1's foodmart panel reused as drill-down template.
+- 🟡 **Phase 3 — VAT input-side reconciliation** — extends `dashboard_pipeline/vat_reconciliation.py` to include input VAT (purchases). Cross-check vs bookkeeper's declaration. Red badge if >1% divergence.
+- 🟡 **Phase 4 — rs.ge SOAP automation** — `dashboard_pipeline/rs_invoice_connector.py` mirroring waybill_connector. Blocked on rs.ge UI permission grant for `dashboard_api` sub-user („ანგარიშფაქტურა" section).
+- 🟡 **Pre-existing items უცვლელი** — 13 ძველი test failure (`test_expense_categories_incremental.py` + `test_foodmart_cashback_incremental.py`); Tooltip layer; `pos_income` field rename; CSS წითელი ფერი უარყოფით ვალზე ცხრილში (`Suppliers.jsx` + `WorkingCapital.jsx`); `manual_payments_journal.csv` uncommitted (owner's data).
+- ⏸ **Mini PC** — owner cloud უარყო, hardware-ის ყიდვამდე გადადებული.
+
+### Live findings (2026-05-07 დღე #4)
+
+- **CSV vs XLS row-count truth** — buyer CSV: 7,418 raw → 7,402 parser-valid + 16 broken (8 pairs). XLS: 7,410 — exactly matches `7,402 + 8 recovered`. Verified by ID set diff. Recovered 8 IDs are real invoices from ასკანა პლიუსი (5×, 1,770 ₾) + ტიტე 2024 (3×, 212 ₾) over 2025-03..2025-12. The other 8 broken-pair IDs were CSV-export phantoms — XLS doesn't have them.
+- **HTTP 400 on /api/data?tab=foodmart_360** — initial mistake: tab-id created without backend ALLOWED_TABS membership. Fixed by `requestTab` + `expectedTab` mapping to `suppliers` instead of adding new SPECIAL_TAB_BUILDERS entry (avoids service restart loop).
+- **Service restart was needed once** — after editing `_build_suppliers_response`, in-memory module needed reload for filtered API queries. Static artifact path doesn't need restart (artifact JSON is regenerated by pipeline subprocess which re-imports modules).
+- **API artifact rebuild order** — pipeline subprocess loads `api_contracts.py` fresh → `build_static_api_artifacts(data)` → `_build_suppliers_response(data)` → produces `tab-data/suppliers.json` with new shape. Static artifact serves unfiltered queries directly (no in-memory build needed). Verified end-to-end: `supplier_invoices in api: True`.
+
+### Verification commands (next session)
+
+```powershell
+# All parser tests (XLS recovery + ISO date + Timestamp + 44 original):
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -m pytest tests/test_rs_invoice_csv_parser.py tests/test_supplier_invoices_pipeline.py -v
+# Expected: 53 passed (47 parser + 6 pipeline)
+
+# Verify API returns supplier_invoices + our_seller_invoices:
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
+import urllib.request, json
+api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=suppliers', timeout=20).read())
+print('supplier_invoices:', 'supplier_invoices' in api, len(api.get('supplier_invoices', {})))
+print('our_seller_invoices:', len(api.get('our_seller_invoices', [])))
+print('Foodmart:', api['supplier_invoices_summary']['404460187']['invoice_count'], 'invoices')
+"
+# Expected: supplier_invoices: True 242, seller: 54, foodmart: 60
+```
+
+---
+
+## 0a. წინა session-ის შედეგი (2026-05-07 დღე #3) — rs.ge invoice parser + live overlay + Telegram autostart
 
 🎉 **6 commit push-ნული** ერთ session-ში: live overlay (3 commits), Telegram autostart, რეპო-რეფაქტორი (3 commits ერთად), invoice parser. ყველაფერი origin/main-ზე გავიდა.
 
