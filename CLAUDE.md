@@ -17,6 +17,15 @@
 - გაგზავნამდე ჰკითხე თავს: **„არაპროგრამისტი 5 წამში გაიგებს?"** — თუ არა, გადაწერე უფრო მოკლედ.
 - Code, commit message, PR title = **ინგლისური**. User-თან საუბარი = **ქართული**.
 
+## 🔴 CRITICAL — მონაცემის ჩუმად ჩამოგდება აკრძალულია
+
+**წესი (set 2026-05-07): parser/pipeline/script-მა თუ რაიმე row, ფაილი, ან ფაქტი გამოტოვა — owner-ს ცხადად ეცნობოს, ციფრი მარტო არასაკმარისია.**
+
+- "16 skipped" გადმოცემა და გაგრძელება — **აკრძალულია**. უნდა დაერთოს: რა ხასიათის სტრიქონებია (sample), რატომ გამოტოვა (root cause), და კითხვა „გადავამოწმოთ რა არის ამ სტრიქონებში?".
+- ეს ვრცელდება ყველაზე: parser-ი, file reader, validation filter, dedup logic, status filter — ყველგან, სადაც მონაცემი იცრიცება.
+- სრულყოფილი ანალიზი ნიშნავს — ცარიელი slot-ი არასოდეს silent არ ხდება. არც skipped row, არც unparsed file, არც ignored field.
+- "no silent gap" Proof Gate Layer 3 (`AGENTS.md`) უკვე არსებობდა — ეს მისი გაძლიერებაა skipped data-ზე. memory: `feedback_no_silent_data_drops.md`.
+
 ## 🔴 CRITICAL — სესიის წესები
 
 - **სესიის დაწყების სავალდებულო read** (SessionStart hook აიძულებს): 3 ფაილი თანმიმდევრობით — `CONTEXT_HANDOFF.md` (ცოცხალი state) → `docs/MASTER_PLAN.md` (roadmap) → `AGENTS.md` (წესები).

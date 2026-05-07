@@ -269,6 +269,8 @@ export default function SupplierModal({
   allSuppliers,
   paymentLines = {},
   waybillLines = {},
+  supplierInvoices = {},
+  supplierInvoicesSummary = {},
   onClose,
   deletedManualPaymentIds,
   onDeleteManualPayment,
@@ -298,6 +300,7 @@ export default function SupplierModal({
   const [waybillsExpanded, setWaybillsExpanded] = useState(false);
   const [waybillsMonthFilter, setWaybillsMonthFilter] = useState('');
   const [waybillsShowOlder, setWaybillsShowOlder] = useState(false);
+  const [invoicesExpanded, setInvoicesExpanded] = useState(false);
 
   const handleConfirmAlias = async (product) => {
     const cand = product?.name_candidate;
@@ -1479,6 +1482,158 @@ export default function SupplierModal({
             </div>
           )}
         </div>
+
+        {/* 📋 ფაქტურები (rs.ge) — Phase 1 */}
+        {taxId && (() => {
+          const invoiceList = supplierInvoices[taxId] || [];
+          const invoiceSummary = supplierInvoicesSummary[taxId] || null;
+          if (invoiceList.length === 0 && !invoiceSummary) return null;
+
+          const STATUS_COLORS = {
+            'დადასტურებული': { bg: '#064e3b', fg: '#6ee7b7', border: '#10b981' },
+            'დასადასტურებელი': { bg: '#451a03', fg: '#fcd34d', border: '#f59e0b' },
+            'პირველადი': { bg: '#1e3a8a', fg: '#93c5fd', border: '#3b82f6' },
+            'კორექტირებული': { bg: '#7c2d12', fg: '#fdba74', border: '#ea580c' },
+            'გაუქმებული': { bg: '#7f1d1d', fg: '#fca5a5', border: '#ef4444' },
+          };
+          const formatGel = (v) => {
+            const n = Number(v) || 0;
+            return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) + ' ₾';
+          };
+          const totalAmount = invoiceSummary?.total_amount || 0;
+          const totalVat = invoiceSummary?.total_vat || 0;
+          const invoiceCount = invoiceSummary?.invoice_count || invoiceList.length;
+          const lastDate = invoiceSummary?.last_invoice_date || null;
+          const agingTotal = Number(supplier?.total_effective || 0);
+          const gap = totalAmount - agingTotal;
+          const sortedInvoices = [...invoiceList].sort((a, b) => {
+            const da = a.date_issued || '';
+            const db = b.date_issued || '';
+            return db.localeCompare(da);
+          });
+
+          return (
+            <div className="supplier-modal-section">
+              <div className="supplier-modal-section-title">
+                📋 ფაქტურები (rs.ge)
+                <button
+                  type="button"
+                  onClick={() => setInvoicesExpanded((v) => !v)}
+                  style={{
+                    marginLeft: 10, padding: '3px 10px',
+                    background: invoicesExpanded ? '#3b82f6' : '#1e293b',
+                    color: '#e2e8f0', border: '1px solid #334155',
+                    borderRadius: 6, fontSize: 13, cursor: 'pointer',
+                  }}
+                >
+                  სია ({invoiceCount}) {invoicesExpanded ? '▴' : '▾'}
+                </button>
+              </div>
+
+              {/* Footer KPIs */}
+              <div style={{
+                display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                gap: 10, padding: '10px 0',
+              }}>
+                <div>
+                  <div style={{ fontSize: 12, color: '#94a3b8' }}>ფაქტურის რაოდენობა</div>
+                  <div style={{ fontSize: 18, fontWeight: 600 }}>{invoiceCount}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, color: '#94a3b8' }}>ფაქტურით ჯამი</div>
+                  <div style={{ fontSize: 18, fontWeight: 600 }}>{formatGel(totalAmount)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, color: '#94a3b8' }}>დღგ ჯამი</div>
+                  <div style={{ fontSize: 18, fontWeight: 600 }}>{formatGel(totalVat)}</div>
+                </div>
+                {agingTotal > 0 && (
+                  <div>
+                    <div style={{ fontSize: 12, color: '#94a3b8' }}>აგინგ-ფაქტურა სხვაობა</div>
+                    <div style={{
+                      fontSize: 18, fontWeight: 600,
+                      color: Math.abs(gap) > 100 ? '#fbbf24' : '#10b981',
+                    }}>
+                      {formatGel(gap)}
+                    </div>
+                  </div>
+                )}
+                {lastDate && (
+                  <div>
+                    <div style={{ fontSize: 12, color: '#94a3b8' }}>ბოლო ფაქტურა</div>
+                    <div style={{ fontSize: 14 }}>{lastDate.slice(0, 10)}</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Status counts */}
+              {invoiceSummary?.status_counts && Object.keys(invoiceSummary.status_counts).length > 1 && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                  {Object.entries(invoiceSummary.status_counts).map(([status, count]) => {
+                    const colors = STATUS_COLORS[status] || { bg: '#1e293b', fg: '#cbd5e1', border: '#334155' };
+                    return (
+                      <span key={status} style={{
+                        padding: '3px 8px', fontSize: 12, borderRadius: 4,
+                        background: colors.bg, color: colors.fg,
+                        border: `1px solid ${colors.border}`,
+                      }}>
+                        {status}: {count}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Collapsible table */}
+              {invoicesExpanded && sortedInvoices.length > 0 && (
+                <div style={{
+                  marginTop: 12, maxHeight: 400, overflowY: 'auto',
+                  border: '1px solid #334155', borderRadius: 6,
+                }}>
+                  <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+                    <thead style={{ position: 'sticky', top: 0, background: '#0f172a', zIndex: 1 }}>
+                      <tr>
+                        <th style={{ textAlign: 'left', padding: '8px 6px', color: '#94a3b8', borderBottom: '1px solid #334155' }}>ID</th>
+                        <th style={{ textAlign: 'left', padding: '8px 6px', color: '#94a3b8', borderBottom: '1px solid #334155' }}>სერია</th>
+                        <th style={{ textAlign: 'left', padding: '8px 6px', color: '#94a3b8', borderBottom: '1px solid #334155' }}>თარიღი</th>
+                        <th style={{ textAlign: 'right', padding: '8px 6px', color: '#94a3b8', borderBottom: '1px solid #334155' }}>თანხა</th>
+                        <th style={{ textAlign: 'right', padding: '8px 6px', color: '#94a3b8', borderBottom: '1px solid #334155' }}>დღგ</th>
+                        <th style={{ textAlign: 'left', padding: '8px 6px', color: '#94a3b8', borderBottom: '1px solid #334155' }}>სტატუსი</th>
+                        <th style={{ textAlign: 'center', padding: '8px 6px', color: '#94a3b8', borderBottom: '1px solid #334155' }}>ზედნადები</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedInvoices.map((inv, idx) => {
+                        const colors = STATUS_COLORS[inv.status] || { bg: '#1e293b', fg: '#cbd5e1', border: '#334155' };
+                        return (
+                          <tr key={inv.id || idx} style={{ borderBottom: '1px solid #1e293b' }}>
+                            <td style={{ padding: '6px', color: '#cbd5e1', fontFamily: 'monospace', fontSize: 12 }}>{inv.id}</td>
+                            <td style={{ padding: '6px', color: '#cbd5e1' }}>{inv.series}</td>
+                            <td style={{ padding: '6px', color: '#cbd5e1' }}>{(inv.date_issued || '').slice(0, 10)}</td>
+                            <td style={{ padding: '6px', textAlign: 'right', color: '#e2e8f0' }}>{formatGel(inv.amount)}</td>
+                            <td style={{ padding: '6px', textAlign: 'right', color: '#94a3b8' }}>{formatGel(inv.vat)}</td>
+                            <td style={{ padding: '6px' }}>
+                              <span style={{
+                                padding: '2px 6px', fontSize: 11, borderRadius: 4,
+                                background: colors.bg, color: colors.fg,
+                                border: `1px solid ${colors.border}`,
+                              }}>
+                                {inv.status}
+                              </span>
+                            </td>
+                            <td style={{ padding: '6px', textAlign: 'center', color: '#94a3b8' }}>
+                              {inv.waybills?.length || 0}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* წყარო (compact) */}
         <div className="supplier-modal-section">

@@ -63,6 +63,11 @@ FIELD_DEFAULTS = {
     "duplicate_products": {},
     "supplier_payment_lines": {},
     "supplier_waybill_lines": {},
+    "supplier_invoices": {},
+    "supplier_invoices_summary": {},
+    "our_seller_invoices": [],
+    "invoice_waybill_match": [],
+    "supplier_invoices_meta": {},
 }
 
 # ერთი ჭერი: სრული rollup/API პასუხები დიდი მოცულობისას (OOM-ისგან დასაცავად ზედა საზღვარი).
@@ -76,7 +81,7 @@ WAYBILLS_MAX_RESPONSE_LIMIT = FULL_VIEW_ROW_CAP
 WAYBILL_ALLOWED_SORTS = {"amount_asc", "amount_desc", "date_asc", "date_desc"}
 
 TAB_ALLOWLIST = {
-    "suppliers": ["suppliers", "supplier_payment_lines"],
+    "suppliers": ["suppliers", "supplier_payment_lines", "supplier_invoices", "supplier_invoices_summary", "supplier_invoices_meta"],
     "waybills": ["waybills"],
     "analytics": ["suppliers"],
     "cashflow": [
@@ -2031,6 +2036,15 @@ def _build_suppliers_response(cache, period_filter=None, **_kwargs):
     waybill_lines = cache.get(
         "supplier_waybill_lines", FIELD_DEFAULTS["supplier_waybill_lines"]
     )
+    supplier_invoices = cache.get(
+        "supplier_invoices", FIELD_DEFAULTS["supplier_invoices"]
+    )
+    supplier_invoices_summary = cache.get(
+        "supplier_invoices_summary", FIELD_DEFAULTS["supplier_invoices_summary"]
+    )
+    supplier_invoices_meta = cache.get(
+        "supplier_invoices_meta", FIELD_DEFAULTS["supplier_invoices_meta"]
+    )
     if not bool((period_filter or {}).get("applied")):
         return {
             "suppliers": _annotate_archive_flag(
@@ -2039,6 +2053,9 @@ def _build_suppliers_response(cache, period_filter=None, **_kwargs):
             "supplier_concentration": concentration,
             "supplier_payment_lines": payment_lines,
             "supplier_waybill_lines": waybill_lines,
+            "supplier_invoices": supplier_invoices,
+            "supplier_invoices_summary": supplier_invoices_summary,
+            "supplier_invoices_meta": supplier_invoices_meta,
         }
     recomputed = _recompute_suppliers_response(cache, period_filter)
     recomputed["suppliers"] = _annotate_archive_flag(
@@ -2047,6 +2064,9 @@ def _build_suppliers_response(cache, period_filter=None, **_kwargs):
     recomputed["supplier_concentration"] = concentration
     recomputed["supplier_payment_lines"] = payment_lines
     recomputed["supplier_waybill_lines"] = waybill_lines
+    recomputed["supplier_invoices"] = supplier_invoices
+    recomputed["supplier_invoices_summary"] = supplier_invoices_summary
+    recomputed["supplier_invoices_meta"] = supplier_invoices_meta
     return recomputed
 
 

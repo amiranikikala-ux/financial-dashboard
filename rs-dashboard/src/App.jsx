@@ -574,6 +574,8 @@ function App() {
             allSuppliers={data.suppliers}
             paymentLines={data.supplier_payment_lines || {}}
             waybillLines={data.supplier_waybill_lines || {}}
+            supplierInvoices={data.supplier_invoices || {}}
+            supplierInvoicesSummary={data.supplier_invoices_summary || {}}
             formatNumber={formatNumber}
             onClose={() => setSelectedSupplier(null)}
             deletedManualPaymentIds={deletedManualPaymentIds}

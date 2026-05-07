@@ -35,20 +35,42 @@ GEORGIAN_MONTH_ABBREVS = {
 }
 
 _DATE_RE = re.compile(r"^\s*(\d{1,2})-([^-\s]+)-(\d{4})(?:\s+(\d{1,2}):(\d{2}):(\d{2}))?\s*$")
+_ISO_DATE_RE = re.compile(r"^\s*(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{1,2}):(\d{2}):(\d{2}))?\s*$")
 _TIN_RE = re.compile(r"^\s*\((\d+)(?:-დღგ)?\)\s*(.*)$")
 
 
 def parse_invoice_date(value) -> datetime | None:
-    """Parse rs.ge date format: '01-აგვ-2026 13:19:12' or '01-აგვ-2026'.
+    """Parse rs.ge date format: '01-აგვ-2026 13:19:12' (CSV) or '2026-08-01 13:19:12' (XLS).
 
-    Returns None for blank, NaN, or unparseable input. Caller decides whether
-    to log/skip.
+    Accepts pandas Timestamp / datetime objects directly. Returns None for
+    blank, NaN, or unparseable input. Caller decides whether to log/skip.
     """
     if value is None:
         return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, pd.Timestamp):
+        return value.to_pydatetime()
+    if isinstance(value, datetime):
+        return value
     text = str(value).strip()
     if not text or text.lower() in ("nan", "none"):
         return None
+    m_iso = _ISO_DATE_RE.match(text)
+    if m_iso:
+        try:
+            year = int(m_iso.group(1))
+            month = int(m_iso.group(2))
+            day = int(m_iso.group(3))
+            hour = int(m_iso.group(4)) if m_iso.group(4) else 0
+            minute = int(m_iso.group(5)) if m_iso.group(5) else 0
+            second = int(m_iso.group(6)) if m_iso.group(6) else 0
+            return datetime(year, month, day, hour, minute, second)
+        except ValueError:
+            return None
     m = _DATE_RE.match(text)
     if not m:
         return None
@@ -63,6 +85,21 @@ def parse_invoice_date(value) -> datetime | None:
         return datetime(year, month, day, hour, minute, second)
     except ValueError:
         return None
+
+
+def _read_invoice_table(path: str | Path) -> pd.DataFrame:
+    """Read either CSV or XLS/XLSX rs.ge invoice export into a string-typed DataFrame.
+
+    XLS is the canonical source — its export is structurally clean. CSV exports
+    occasionally truncate columns mid-row (8 known cases as of 2026-05-07,
+    affecting ~2K GEL across 2 suppliers). Auto-dispatch on extension.
+    """
+    p = Path(path)
+    suffix = p.suffix.lower()
+    if suffix in (".xls", ".xlsx"):
+        df = pd.read_excel(p, sheet_name=0, dtype=str)
+        return df.fillna("")
+    return pd.read_csv(p, encoding="utf-8-sig", dtype=str, keep_default_na=False)
 
 
 def extract_tin_and_name(text) -> tuple[str | None, str]:
@@ -139,14 +176,18 @@ class ParseStats:
 
 
 def parse_buyer_invoices(path: str | Path) -> tuple[pd.DataFrame, ParseStats]:
-    """Parse the buyer-side CSV (incoming invoices: suppliers → us).
+    """Parse the buyer-side rs.ge export (incoming invoices: suppliers → us).
+
+    Accepts both CSV and XLS/XLSX paths. XLS is the canonical source (CSV
+    export drops 8 invoices at ~2K GEL due to mid-row truncation). Same
+    column-key contract for both formats.
 
     Returns (DataFrame, stats). DataFrame columns:
         invoice_id, series, status, supplier_tax_id, supplier_name,
         date_issued, date_op, amount_ge, vat_ge, quantity, decl_period,
         waybills (list[str]), confirmed_at, raw_row_index
     """
-    raw = pd.read_csv(path, encoding="utf-8-sig", dtype=str, keep_default_na=False)
+    raw = _read_invoice_table(path)
     stats = ParseStats(rows_total=len(raw))
 
     out_rows: list[dict] = []
@@ -206,13 +247,14 @@ def parse_buyer_invoices(path: str | Path) -> tuple[pd.DataFrame, ParseStats]:
 
 
 def parse_seller_invoices(path: str | Path) -> tuple[pd.DataFrame, ParseStats]:
-    """Parse the seller-side CSV (outgoing invoices: us → customers).
+    """Parse the seller-side rs.ge export (outgoing invoices: us → customers).
 
-    Source CSV is line-item-exploded (one row per product line). This function
-    groups by invoice ID so the returned DataFrame has one row per invoice with
-    aggregated amounts and an `items` list of (description, unit, qty, value, vat).
+    Accepts both CSV and XLS/XLSX paths. Source is line-item-exploded (one row
+    per product line). Groups by invoice ID so the returned DataFrame has one
+    row per invoice with aggregated amounts and an `items` list of
+    (description, unit, qty, value, vat).
     """
-    raw = pd.read_csv(path, encoding="utf-8-sig", dtype=str, keep_default_na=False)
+    raw = _read_invoice_table(path)
     stats = ParseStats(rows_total=len(raw))
 
     item_rows: list[dict] = []

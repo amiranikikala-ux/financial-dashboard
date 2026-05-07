@@ -204,6 +204,48 @@ def test_buyer_parser_real_csv_matches_known_counts():
            abs(float(foodmart["amount_ge"].sum()) - 163082.0) < 1.0
 
 
+def test_buyer_parser_xls_recovers_csv_dropped_invoices():
+    """XLS path is the canonical source — must recover 8 invoices CSV drops.
+
+    CSV export truncates 8 invoices mid-row (~1,982 GEL across ასკანა პლიუსი
+    + ტიტე 2024). XLS export is structurally clean. Pipeline uses XLS to avoid
+    silent data loss. Verified 2026-05-07.
+    """
+    real_path = Path("Financial_Analysis/რს ფაქტურები/ფაქტურები მყიდველი რეესტრი.xls")
+    if not real_path.exists():
+        pytest.skip("real buyer XLS not present (CI fixture only)")
+    df, stats = parse_buyer_invoices(real_path)
+    assert stats.rows_total == 7410
+    assert stats.rows_valid == 7410, f"XLS should drop nothing: {stats.rows_skipped} skipped"
+    assert stats.rows_skipped == 0
+
+    csv_dropped_ids = {
+        "318492895", "320041879", "323372108", "330277037",
+        "333156271", "336776811", "338763798", "341262105",
+    }
+    recovered = df[df["invoice_id"].isin(csv_dropped_ids)]
+    assert len(recovered) == 8, f"expected all 8 CSV-dropped invoices, got {len(recovered)}"
+    assert abs(float(recovered["amount_ge"].sum()) - 1981.94) < 0.05
+
+    foodmart = df[df["supplier_tax_id"] == "404460187"]
+    assert len(foodmart) == 60
+    assert abs(float(foodmart["amount_ge"].sum()) - 163082.25) < 0.05
+
+
+def test_parse_invoice_date_accepts_iso_format():
+    """XLS-derived dates come as ISO strings ('2025-12-01 00:00:00')."""
+    assert parse_invoice_date("2025-12-01 00:00:00") == datetime(2025, 12, 1, 0, 0, 0)
+    assert parse_invoice_date("2026-04-01") == datetime(2026, 4, 1, 0, 0, 0)
+    assert parse_invoice_date("2025-08-15 14:30:45") == datetime(2025, 8, 15, 14, 30, 45)
+
+
+def test_parse_invoice_date_accepts_pandas_timestamp():
+    import pandas as pd
+    ts = pd.Timestamp("2025-12-01 13:45:00")
+    assert parse_invoice_date(ts) == datetime(2025, 12, 1, 13, 45, 0)
+    assert parse_invoice_date(pd.NaT) is None
+
+
 # -----------------------------------------------------------------------------
 # parse_seller_invoices — line-item grouping
 # -----------------------------------------------------------------------------

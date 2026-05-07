@@ -2024,6 +2024,17 @@ def run():
     except Exception as exc:
         logger.warning("duplicate_products: ვერ ჩაიდო data.json-ში: %s", exc)
 
+    # ----- რს.ge ფაქტურები — supplier_invoices Phase 1 (Foodmart 360°) -----
+    # Reads buyer XLS (canonical, no row drops) + seller CSV; builds per-supplier
+    # invoice arrays + summaries + foodmart waybill match. Non-fatal on failure.
+    try:
+        from dashboard_pipeline.supplier_invoices_section import build_supplier_invoices_bundle
+        invoices_bundle = build_supplier_invoices_bundle(Path(script_dir))
+        if invoices_bundle is not None:
+            data.update(invoices_bundle)
+    except Exception as exc:
+        logger.warning("supplier_invoices: ვერ ჩაიდო data.json-ში: %s", exc)
+
     _write_outputs(data, script_dir, inc)
 
 if __name__ == "__main__":
