@@ -351,7 +351,7 @@ export default function Suppliers({
           <div className="pay-card-stats">
             <div className="pay-card-stat">
               <span className="pay-card-stat-label">ვალი</span>
-              <span className={`pay-card-stat-value ${selectedDisplay.debt > 0 ? 'is-debt' : ''}`}>
+              <span className={`pay-card-stat-value ${Math.abs(selectedDisplay.debt) >= 1 ? 'is-debt' : ''}`}>
                 {formatNumber(selectedDisplay.debt)}
               </span>
             </div>
@@ -456,7 +456,7 @@ export default function Suppliers({
             {realSuppliers.map((sup, idx) => {
               const d = getDisplay(sup);
               const isSelected = selectedOne && sup === selectedOne;
-              const hasDebt = d.debt > 0;
+              const hasDebt = Math.abs(d.debt) >= 1;
               const returned = Number(sup.total_returned) || 0;
               return (
                 <tr

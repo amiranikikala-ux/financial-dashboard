@@ -587,7 +587,7 @@ export default function WorkingCapital({
                   <td className={amountClass(strictPaid)}>{fmt(strictPaid)}</td>
                   <td className={amountClass(manualPaid)}>{fmt(manualPaid)}</td>
                   <td className="amount-positive">{fmt(r.total_paid)}</td>
-                  <td className={debt > 0 ? 'amount-negative' : 'amount-neutral'}>
+                  <td className={Math.abs(debt) >= 1 ? 'amount-negative' : 'amount-neutral'}>
                     {fmt(debt)}
                   </td>
                   <td>{r.last_waybill_date || '—'}</td>
