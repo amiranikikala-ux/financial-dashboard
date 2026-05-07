@@ -1415,6 +1415,50 @@ def _read_and_parse_rs(rs_files, object_mapping):
     return df, agg_df
 
 
+def _live_with_fallback(builder, key, data_json_path, retries=3, delay_sec=2.0):
+    """Run a live-DB section builder with retry; on persistent failure,
+    return the previous run's bundle from data.json on disk, tagged stale.
+
+    Returns None only if both the live attempts and the on-disk fallback
+    yield nothing.
+    """
+    import time
+    for attempt in range(1, retries + 1):
+        try:
+            bundle = builder()
+        except Exception as exc:
+            bundle = None
+            logger.warning("%s: live attempt %d/%d failed — %s", key, attempt, retries, exc)
+        if bundle is not None:
+            return bundle
+        if attempt < retries:
+            time.sleep(delay_sec)
+
+    try:
+        with open(data_json_path, "r", encoding="utf-8") as f:
+            prev = json.load(f)
+    except FileNotFoundError:
+        return None
+    except Exception as exc:
+        logger.warning("%s: previous data.json read failed — %s", key, exc)
+        return None
+
+    prev_bundle = prev.get(key)
+    if not isinstance(prev_bundle, dict) or not prev_bundle:
+        return None
+
+    stale = dict(prev_bundle)
+    stale["stale"] = True
+    stale["stale_reason_ka"] = (
+        "ცოცხალი წაკითხვა MegaPlus-ის ბაზიდან ვერ მოხდა; "
+        "ნაჩვენებია ბოლო წარმატებული წაკითხვის მონაცემი."
+    )
+    if stale.get("source_generated_at") and "last_successful_at" not in stale:
+        stale["last_successful_at"] = stale["source_generated_at"]
+    logger.warning("%s: live failed; falling back to previous bundle (stale)", key)
+    return stale
+
+
 def run():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     os.chdir(script_dir)
@@ -1949,11 +1993,16 @@ def run():
         logger.warning("პროდუქციული მოგება — ვერ აშენდა: %s", exc)
 
     # ----- შეუსაბამო პროდუქცია (PRODUCTS orphans) -----
-    # Live MegaPlus DB query. Non-fatal on failure.
+    # Live MegaPlus DB query with retry + last-good fallback. Non-fatal on failure.
+    out_file_for_fallback = get_dashboard_data_path(script_dir)
     try:
         from dashboard_pipeline.orphan_products_section import build_orphan_products_bundle
         fa_dir = Path(script_dir) / "Financial_Analysis"
-        orphan_bundle = build_orphan_products_bundle(fa_dir)
+        orphan_bundle = _live_with_fallback(
+            lambda: build_orphan_products_bundle(fa_dir),
+            "orphan_products",
+            out_file_for_fallback,
+        )
         if orphan_bundle is not None:
             data["orphan_products"] = orphan_bundle
     except Exception as exc:
@@ -1962,10 +2011,14 @@ def run():
     # ----- დუბლირებული პროდუქცია (PRODUCTS duplicate barcodes) -----
     # Surfaces same-barcode rows split across distinct P_IDs and flags
     # phantom-stock cases (variant with P_QUANT>0 and zero sales). Live
-    # MegaPlus DB query. Non-fatal on failure.
+    # MegaPlus DB query with retry + last-good fallback. Non-fatal on failure.
     try:
         from dashboard_pipeline.duplicate_products_section import build_duplicate_products_bundle
-        dup_bundle = build_duplicate_products_bundle()
+        dup_bundle = _live_with_fallback(
+            build_duplicate_products_bundle,
+            "duplicate_products",
+            out_file_for_fallback,
+        )
         if dup_bundle is not None:
             data["duplicate_products"] = dup_bundle
     except Exception as exc:

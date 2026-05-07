@@ -84,6 +84,16 @@ export default function DuplicateProducts({ duplicateProducts }) {
       <h2 style={{ color: '#e2e8f0', marginBottom: 6 }}>
         👥 დუბლირებული პროდუქცია
       </h2>
+      {dp.stale && (
+        <div style={{
+          padding: '8px 12px', marginBottom: 12, borderRadius: 6,
+          background: '#3f2a14', border: '1px solid #92400e',
+          color: '#fde68a', fontSize: 13,
+        }}>
+          ⏳ ცოცხალი წაკითხვა ვერ მოხდა.
+          {' '}ნაჩვენებია ბოლო წარმატებული წაკითხვა{dp.last_successful_at ? ` (${dp.last_successful_at})` : ''}.
+        </div>
+      )}
       <p style={{ color: '#94a3b8', marginTop: 0, marginBottom: 16, fontSize: 14 }}>
         ერთი და იგივე ბარკოდი 2 (ან მეტი) ჩანაწერით MegaPlus-ში.
         წითლად მონიშნული — „ცრუ მარაგი": ჩანაწერს მარაგი უწერია, მაგრამ
