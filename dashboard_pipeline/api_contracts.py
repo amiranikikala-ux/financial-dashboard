@@ -2045,6 +2045,12 @@ def _build_suppliers_response(cache, period_filter=None, **_kwargs):
     supplier_invoices_meta = cache.get(
         "supplier_invoices_meta", FIELD_DEFAULTS["supplier_invoices_meta"]
     )
+    our_seller_invoices = cache.get(
+        "our_seller_invoices", FIELD_DEFAULTS["our_seller_invoices"]
+    )
+    tbc_foodmart_cashback = cache.get(
+        "tbc_foodmart_cashback", FIELD_DEFAULTS["tbc_foodmart_cashback"]
+    )
     if not bool((period_filter or {}).get("applied")):
         return {
             "suppliers": _annotate_archive_flag(
@@ -2056,6 +2062,8 @@ def _build_suppliers_response(cache, period_filter=None, **_kwargs):
             "supplier_invoices": supplier_invoices,
             "supplier_invoices_summary": supplier_invoices_summary,
             "supplier_invoices_meta": supplier_invoices_meta,
+            "our_seller_invoices": our_seller_invoices,
+            "tbc_foodmart_cashback": tbc_foodmart_cashback,
         }
     recomputed = _recompute_suppliers_response(cache, period_filter)
     recomputed["suppliers"] = _annotate_archive_flag(
@@ -2067,6 +2075,8 @@ def _build_suppliers_response(cache, period_filter=None, **_kwargs):
     recomputed["supplier_invoices"] = supplier_invoices
     recomputed["supplier_invoices_summary"] = supplier_invoices_summary
     recomputed["supplier_invoices_meta"] = supplier_invoices_meta
+    recomputed["our_seller_invoices"] = our_seller_invoices
+    recomputed["tbc_foodmart_cashback"] = tbc_foodmart_cashback
     return recomputed
 
 

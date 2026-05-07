@@ -42,6 +42,7 @@ const VATAudit = lazy(() => import('./VATAudit.jsx'));
 const StoreCompare = lazy(() => import('./StoreCompare.jsx'));
 const CategoryAnomalies = lazy(() => import('./CategoryAnomalies.jsx'));
 const WaybillReconciliation = lazy(() => import('./WaybillReconciliation.jsx'));
+const Foodmart360 = lazy(() => import('./Foodmart360.jsx'));
 
 const SAFE_PERIOD_REQUEST_TABS = new Set([
   'suppliers',
@@ -154,7 +155,7 @@ function App() {
   useEffect(() => {
     if (activeTab === 'imported_products' || activeTab === 'waybills' || activeTab === 'cashflow' || activeTab === 'insights' || activeTab === 'debt_plan' || activeTab === 'vat_audit') return undefined;
     let active = true;
-    const requestTab = activeTab === 'pnl' ? 'pnl_summary' : activeTab === 'analytics' ? 'suppliers' : activeTab === 'store_compare' ? 'retail_sales' : activeTab;
+    const requestTab = activeTab === 'pnl' ? 'pnl_summary' : activeTab === 'analytics' ? 'suppliers' : activeTab === 'store_compare' ? 'retail_sales' : activeTab === 'foodmart_360' ? 'suppliers' : activeTab;
     const params = new URLSearchParams({ tab: requestTab });
     appendCanonicalPeriodParams(params, requestTab);
     setTimeout(() => {
@@ -337,7 +338,7 @@ function App() {
     );
   };
 
-  const expectedTab = activeTab === 'pnl' ? 'pnl_summary' : activeTab === 'cashflow' ? 'cashflow_summary' : activeTab === 'analytics' ? 'suppliers' : activeTab === 'store_compare' ? 'retail_sales' : activeTab;
+  const expectedTab = activeTab === 'pnl' ? 'pnl_summary' : activeTab === 'cashflow' ? 'cashflow_summary' : activeTab === 'analytics' ? 'suppliers' : activeTab === 'store_compare' ? 'retail_sales' : activeTab === 'foodmart_360' ? 'suppliers' : activeTab;
   const currentResponseMeta = activeTab === 'imported_products'
     ? importedProductsResponse?.response_meta ?? null
     : data.response_meta?.tab === expectedTab
@@ -558,6 +559,10 @@ function App() {
         ) : activeTab === 'duplicate_products' ? (
           <Suspense fallback={tabSuspenseFallback}>
             <DuplicateProducts duplicateProducts={data.duplicate_products} />
+          </Suspense>
+        ) : activeTab === 'foodmart_360' ? (
+          <Suspense fallback={tabSuspenseFallback}>
+            <Foodmart360 data={data} />
           </Suspense>
         ) : null}
       </div>
