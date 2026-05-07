@@ -1,12 +1,104 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-07 ღამე #2 — **ხელის გადახდის ზედმეტობა ცხადად ისახება უარყოფით ვალად + ბრაუზერის localStorage გაუქმდა**. owner-მა ცადა ჯიდიაიზე 100,000 ₾ — modal & ცხრილი წითლად −43,212 ₾ ჩანს. 1 commit (`87b1bfe`) ლოკალურად. სულ 10 commit push-ს ელოდება.
+> **განახლდა**: 2026-05-07 დღე #3 — **rs.ge ფაქტურის CSV parser ცოცხალია** (44 ტესტი ✓), **5-ფაილიანი live overlay refactor** ცხრილებისთვის, **Telegram bot service-ად ავტო-სტარტი** (NSSM). სულ **6 commit push-ნული** origin/main-ზე ამ session-ში. Phase 1 (Foodmart 360°) ღია — pipeline + UI შემდეგ session-ში.
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-07 ღამე #2) — Negative debt parity (overpayments visible across modal, table, all analyses)
+## 0. ბოლო session-ის შედეგი (2026-05-07 დღე #3) — rs.ge invoice parser + live overlay + Telegram autostart
+
+🎉 **6 commit push-ნული** ერთ session-ში: live overlay (3 commits), Telegram autostart, რეპო-რეფაქტორი (3 commits ერთად), invoice parser. ყველაფერი origin/main-ზე გავიდა.
+
+| საკითხი | სტატუსი | SHA |
+|---|---|---|
+| **Live retry + stale fallback** (orphan/duplicate sections) | ✅ | `a941852` |
+| **Supplier archive entry + cloud preview commit** (3 ფაილი) | ✅ | `a07c0d1` `5305a97` |
+| **Negative debt highlight in tables** (`Math.abs(debt) >= 1`) | ✅ | `cf509f1` |
+| **Telegram bot NSSM autostart** (install_telegram_bot_service.bat) | ✅ | `a9ddfe3` |
+| **Live manual-payment overlay across tables** (5 ფაილი) | ✅ | `d380a89` |
+| **rs.ge invoice CSV parser + 44 tests + Phase 1 preview** | ✅ | `8368881` |
+
+### Headline — owner verification (2026-05-07 დღე #3)
+
+| ფაქტი | მნიშვნელობა |
+|---|---|
+| Modal-ში ჩაწერილი ხელის გადახდა აისახება ცხრილშიც | ✅ ცოცხლად, pipeline regen-ის გარეშე |
+| ცხრილის row-class უარყოფით ვალს ხვდება | ✅ Suppliers + WorkingCapital (CSS აპლიცირდება) |
+| Telegram bot ავტომატურად ეშვება boot-ზე | ✅ NSSM service `FinancialDashboardTelegramBot` რეგისტრირდება |
+| ფუდმარტი 360°-ის reconciliation gap | **109,308 ₾** (ფაქტურა 163K vs aging 53K) — Phase 1-ის მთავარი proof case |
+| rs.ge SOAP `chek_in` invoice service-ზე | ❌ `false / sui=-3` — sub-user-ს ნებართვა აკლია (UI grant საჭიროა) |
+
+### Architectural decisions taken (locked, do-not-relitigate)
+
+1. **Live overlay map keyed by tax_id** — App.jsx აყენებს `liveJournalByTaxId`, ამოყრის pipeline-ში უკვე ცნობილ ID-ებს (supplier_payment_lines) + deletedManualPaymentIds-ში მონიშნულებს, ცხრილში გადასცემს. Modal იყენებს თავის ლოკალურ overlay-ს (per-supplier fetch) — duplicated მცირედ, მაგრამ მოდალის უკვე-მყოფი ლოგიკა არ შევარყიე.
+2. **`onJournalChange` callback ჯაჭვი** — Modal POST/DELETE-ის შემდეგ App-ის `journalRefreshTick` უხდება, App refetch-ი ცოცხალ overlay-ს. ყველა ცხრილი ერთიანდება ვიზუალურად.
+3. **`mergeSupplier(sup, localPayments, livePending=0)` ხელმოწერა** — backward-compat (Analytics უცვლელად მუშაობს, livePending default=0). Math.max(0,...) clamp მოშლილია — უარყოფითი ვალი legitimate.
+4. **Telegram service mirrors Backend's NSSM pattern** — იგივე python venv (`C:\financial-dashboard\venv\Scripts\python.exe`), იგივე log rotation (10MB). Description ASCII მხოლოდ — em-dash ბაზით bat-ის encoding-ს არღვევს.
+5. **rs_invoice_csv parser is pure** — CSV-მდე ჩაკეტილი, არანაირი pipeline dependency. 16 malformed row (13 amount + 3 date) skipped+logged, აცერაობა → silent drop არ ხდება.
+6. **Phase 1 scope = ფუდმარტი + parser only** — pipeline integration + UI deferred-ია შემდეგ session-ზე (preview .md-ში სრული spec).
+
+### Open / next session — Phase 1 დასრულება
+
+🔴 **Task #3 — Pipeline integration**: `generate_dashboard_data.py` + `dashboard_pipeline/api_contracts.py` უნდა აშენებდეს:
+- `data["supplier_invoices"]` = `{[tax_id]: [invoice_dict]}`
+- `data["supplier_invoices_summary"]` = `{[tax_id]: {invoice_count, total_amount, total_vat, status_counts, last_invoice_date}}`
+- `data["our_seller_invoices"]` = list (54 unique IDs)
+- `data["invoice_waybill_match"]` = foodmart-only Phase 1; სხვა supplier-ები Phase 2-ში
+- + 3 pipeline-level tests (`tests/test_supplier_invoices_pipeline.py`)
+
+🔴 **Task #4 — SupplierModal invoice section**: `rs-dashboard/src/SupplierModal.jsx` ახალი collapsible section „📋 ფაქტურები (rs.ge)" — invoice table per supplier with status chips + footer KPIs (count/total/VAT/gap-vs-aging).
+
+🔴 **Task #5 — Foodmart 360° page**: `rs-dashboard/src/Foodmart360.jsx` 4 cards + 109K gap drill-down + monthly timeline. Wire as new tab in `App.jsx` + `DashboardTabs.jsx`.
+
+📋 **სრული spec** — `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_INVOICES_PHASE1_FOODMART_PREVIEW.md` (857-line preview, all column shapes, test list, file list, risks documented). შემდეგი session წაიკითხავს ამას + დაიწყებს Task #3-ით.
+
+🟡 **Phase 2-3-4 (separate sessions)** — preview-ში outline-ია:
+- Phase 2: gap analysis ყველა 260 supplier-ზე
+- Phase 3: VAT input-side reconciliation (extends `vat_reconciliation.py`)
+- Phase 4: rs.ge SOAP automation (blocked on sub-user permission grant)
+
+🟡 **rs.ge sub-user permission (owner-side, out-of-band)**: rs.ge UI-ში `dashboard_api` sub-user-ს „ანგარიშფაქტურა" section უნდა დაემატოს. დღევანდელ session-ში owner-მა ცადა ეს, ვერ ნახა menu — გადაიდო. Phase 1-3 ეშვება localCSV-ზე, ამის გარეშე. Phase 4 შემდეგ.
+
+🟡 **Pre-existing items უცვლელი** — 13 ძველი test failure (test_expense_categories_incremental.py + test_foodmart_cashback_incremental.py); Tooltip layer; pos_income field rename. ცალკე session-ები.
+
+⏸ **Mini PC** — hardware-ის ყიდვამდე გადადებული (owner cloud უარი 2026-05-07).
+
+### Live findings (2026-05-07 დღე #3)
+
+- **109,308 ₾ gap ფუდმარტზე** — invoice CSV ამბობს 163,082 ₾ ჩვენ ვუყიდით ფუდმარტს, supplier_aging კი მხოლოდ 53,774 ₾. წყარო: `total_effective` მოდის waybill `effective_amount`-დან (`api_contracts.py:1859`), არა invoice-დან. ეს არ არის bug — სავარაუდო მიზეზები: services without waybills, cancelled waybills with active invoices, mid-period cutoffs, returns. Phase 1-ის drill-down გვიჩვენებს რომელია.
+- **241 unique supplier TIN buyer-CSV-ში** vs preview-ში 260 — ეს განსხვავებაა TIN-დონეზე dedup vs raw `გამყიდველი` text dedup. 260 unique seller-name strings, 241 unique TINs (ზოგიერთი TIN ორი variant სახელით). Production-ში TIN-keyed.
+- **rs.ge invoice service endpoint დადასტურდა**: `webserv.rs.ge/specinvoices/SpecInvoicesService.asmx` (107KB WSDL, 45+ მეთოდი). Right method = `get_buyer_invoices_n`. Memory updated.
+- **Telegram bot install** — პირველი ცდა `pause`-ის გამო ფეილი დარჩა → log-ი არ წერდა → მეორე ცდა log-ით წარმატებული. SERVICE_AUTO_START აქტიური, bot connected as `@ioli_market_ai_bot`.
+- **Foodmart cross-direction relationship** — ფუდმარტი ერთდროულად ჩვენი მომწოდებელი (60 invoice / 163K) **და** ჩვენი მყიდველი (46 invoice / 509K + 335K TBC cashback). ვალი ჩვენგან მათ 53,774 ₾, ჩვენთან მათგან sub-payment ~174K (508K-335K). Asymmetric, კონცეფტუალურად სწორი — Phase 1-ის 360° view ცხადად აჩვენებს.
+
+### Verification commands (next session)
+
+```powershell
+# Read the preview spec first (full Phase 1 scope):
+# HANDOFF_ARCHIVE/PREVIEWS/SPRINT_INVOICES_PHASE1_FOODMART_PREVIEW.md
+
+# Tests passing on parser:
+cd /c/financial-dashboard
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -m pytest tests/test_rs_invoice_csv_parser.py -v
+# Expected: 44 passed
+
+# Quick smoke of parser counts:
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
+from dashboard_pipeline.rs_invoice_csv import parse_buyer_invoices
+df, s = parse_buyer_invoices('Financial_Analysis/რს ფაქტურები/ფაქტურები მყიდველი.csv')
+print(f'valid={s.rows_valid}, skipped={s.rows_skipped}')
+# Expected: valid=7402, skipped=16
+"
+
+# Telegram bot service status:
+sc query FinancialDashboardTelegramBot
+# Expected: STATE: 4 RUNNING
+```
+
+---
+
+## 0a. წინა session-ის შედეგი (2026-05-07 ღამე #2) — Negative debt parity (overpayments visible across modal, table, all analyses)
 
 🎉 **1 commit ლოკალურად** (`87b1bfe`). ცხადი ფესვი: ხელით გადახდილი ფული ბანკის გადახდას უტოლდება — ზედმეტად გადახდისას ვალი უარყოფითად (წითლად) გამოჩნდება ყველგან, არა მხოლოდ ბანერში. ბონუსად — ბრაუზერის localStorage-ი ხელის გადახდებისთვის სრულად გაუქმდა (owner-ის სიტყვა: „ეს არ არის ის ფაილი რომელიც ბრაუზერი ინახავდეს").
 
