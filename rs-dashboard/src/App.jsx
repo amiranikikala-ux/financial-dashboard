@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import './index.css';
 import { STORAGE_KEY } from './financeMerge.js';
 import DashboardTabs from './components/DashboardTabs.jsx';
@@ -79,6 +79,8 @@ function App() {
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [localPayments, setLocalPayments] = useState({});
   const [deletedManualPaymentIds, setDeletedManualPaymentIds] = useState(() => new Set());
+  const [liveJournalAll, setLiveJournalAll] = useState([]);
+  const [journalRefreshTick, setJournalRefreshTick] = useState(0);
   const [importedProductsResponse, setImportedProductsResponse] = useState(null);
   const [importedProductsLoading, setImportedProductsLoading] = useState(false);
   const [importedProductsError, setImportedProductsError] = useState(null);
@@ -287,7 +289,47 @@ function App() {
       next.add(id);
       return next;
     });
+    setJournalRefreshTick((t) => t + 1);
   }, []);
+
+  const handleJournalChange = useCallback(() => {
+    setJournalRefreshTick((t) => t + 1);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/manual-payments')
+      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+      .then((body) => {
+        if (cancelled) return;
+        const entries = Array.isArray(body?.entries) ? body.entries : [];
+        setLiveJournalAll(entries);
+      })
+      .catch(() => {
+        if (!cancelled) setLiveJournalAll([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey, journalRefreshTick]);
+
+  const liveJournalByTaxId = useMemo(() => {
+    const knownIds = new Set();
+    const lines = data?.supplier_payment_lines || {};
+    for (const tid in lines) {
+      for (const p of lines[tid] || []) {
+        if (p?.id) knownIds.add(p.id);
+      }
+    }
+    const map = {};
+    for (const e of liveJournalAll) {
+      if (!e?.tax_id) continue;
+      if (e.id && knownIds.has(e.id)) continue;
+      if (deletedManualPaymentIds?.has(e.id)) continue;
+      map[e.tax_id] = (map[e.tax_id] || 0) + (Number(e.amount) || 0);
+    }
+    return map;
+  }, [liveJournalAll, data, deletedManualPaymentIds]);
 
   const formatNumber = (num) => {
     return new Intl.NumberFormat('ka-GE', { style: 'currency', currency: 'GEL', maximumFractionDigits: 0 }).format(
@@ -393,6 +435,7 @@ function App() {
             <Suppliers
               suppliers={data.suppliers}
               localPayments={localPayments}
+              liveJournalByTaxId={liveJournalByTaxId}
               meta={currentMeta}
               persistLocalPayments={persistLocalPayments}
               formatNumber={formatNumber}
@@ -437,6 +480,7 @@ function App() {
               apMonthlyTrend={apMonthlyTrend}
               paymentScopeSummary={paymentScopeSummary}
               truthBoundarySummary={truthBoundarySummary}
+              liveJournalByTaxId={liveJournalByTaxId}
               onSupplierClick={setSelectedSupplier}
             />
           </Suspense>
@@ -534,6 +578,7 @@ function App() {
             onClose={() => setSelectedSupplier(null)}
             deletedManualPaymentIds={deletedManualPaymentIds}
             onDeleteManualPayment={handleManualPaymentDelete}
+            onJournalChange={handleJournalChange}
           />
         </Suspense>
       )}

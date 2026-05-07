@@ -65,6 +65,7 @@ function orgGradient(org) {
 export default function Suppliers({
   suppliers,
   localPayments,
+  liveJournalByTaxId,
   meta,
   persistLocalPayments,
   formatNumber,
@@ -114,9 +115,11 @@ export default function Suppliers({
   };
 
   const getDisplay = useCallback((sup) => {
-    const m = mergeSupplier(sup, localPayments);
+    const tid = extractTaxId(sup['ორგანიზაცია']);
+    const livePending = tid ? Number(liveJournalByTaxId?.[tid]) || 0 : 0;
+    const m = mergeSupplier(sup, localPayments, livePending);
     return {
-      tid: extractTaxId(sup['ორგანიზაცია']),
+      tid,
       extra: m.extra,
       paid: m.paid,
       debt: m.debt,
@@ -126,7 +129,7 @@ export default function Suppliers({
       paymentScope: sup.payment_scope || 'unpaid_or_unmatched',
       paymentScopeNote: sup.payment_scope_note || '',
     };
-  }, [localPayments]);
+  }, [localPayments, liveJournalByTaxId]);
 
   const nameNeedle = searchName.trim().toLowerCase();
   const filteredSuppliers = useMemo(() => {

@@ -272,6 +272,7 @@ export default function SupplierModal({
   onClose,
   deletedManualPaymentIds,
   onDeleteManualPayment,
+  onJournalChange,
 }) {
   const [deletingPaymentIds, setDeletingPaymentIds] = useState(() => new Set());
   const [paymentDeleteError, setPaymentDeleteError] = useState('');
@@ -711,6 +712,7 @@ export default function SupplierModal({
     setRecordedFlash(true);
     setTimeout(() => setRecordedFlash(false), 1400);
     setJournalRefreshTick((t) => t + 1);
+    if (typeof onJournalChange === 'function') onJournalChange();
   };
 
   const handleClearLocal = () => {

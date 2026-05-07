@@ -161,6 +161,7 @@ export default function WorkingCapital({
   apMonthlyTrend,
   paymentScopeSummary,
   truthBoundarySummary,
+  liveJournalByTaxId,
   onSupplierClick,
 }) {
   const aging = useMemo(
@@ -547,9 +548,10 @@ export default function WorkingCapital({
           <tbody>
             {sorted.map((r, idx) => {
               const objColor = OBJECT_COLORS[r.object] || '#8899aa';
-              const debt = Number(r.total_debt) || 0;
+              const livePending = Number(liveJournalByTaxId?.[r.tax_id]) || 0;
+              const debt = (Number(r.total_debt) || 0) - livePending;
               const strictPaid = Number(r.strict_bank_paid) || 0;
-              const manualPaid = Number(r.manual_paid) || 0;
+              const manualPaid = (Number(r.manual_paid) || 0) + livePending;
               const scopeMeta = getPaymentScopeMeta(r.payment_scope);
               const truthMeta = getOfficialNameSourceMeta(r.official_name_truth_source);
               const truthSummary = compactText(r.supplier_truth_summary, 92);
@@ -586,7 +588,7 @@ export default function WorkingCapital({
                   <td className="amount-neutral">{fmt(r.total_effective)}</td>
                   <td className={amountClass(strictPaid)}>{fmt(strictPaid)}</td>
                   <td className={amountClass(manualPaid)}>{fmt(manualPaid)}</td>
-                  <td className="amount-positive">{fmt(r.total_paid)}</td>
+                  <td className="amount-positive">{fmt((Number(r.total_paid) || 0) + livePending)}</td>
                   <td className={Math.abs(debt) >= 1 ? 'amount-negative' : 'amount-neutral'}>
                     {fmt(debt)}
                   </td>

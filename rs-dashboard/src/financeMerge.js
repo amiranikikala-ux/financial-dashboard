@@ -6,14 +6,15 @@ export function extractTaxId(org) {
   return m ? m[1] : null;
 }
 
-export function mergeSupplier(sup, localPayments) {
+export function mergeSupplier(sup, localPayments, livePending = 0) {
   const tid = extractTaxId(sup['ორგანიზაცია']);
-  const extra = tid ? Number(localPayments[tid]) || 0 : 0;
+  const browserExtra = tid ? Number(localPayments[tid]) || 0 : 0;
+  const extra = browserExtra + livePending;
   const te = Number(sup.total_effective) || 0;
   const tp0 = Number(sup.total_paid) || 0;
   const paid = tp0 + extra;
   const debtFile = Number(sup.total_debt) || 0;
-  const debt = extra > 0 ? Math.max(0, te - paid) : debtFile;
+  const debt = debtFile - extra;
   const bank = Number(sup.bank_paid) || 0;
   const manual = Number(sup.manual_paid) || 0;
   /** CSV (manual_payments) + ბრაუზერში ჩაწერილი — სვეტი „ნაღდით გადახდა“ */
@@ -31,7 +32,7 @@ export function mergeSupplier(sup, localPayments) {
     manual,
     manualTotal,
     extra,
-    browserExtra: extra,
+    browserExtra,
   };
 }
 
