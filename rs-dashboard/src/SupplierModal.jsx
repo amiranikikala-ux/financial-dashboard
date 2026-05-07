@@ -651,7 +651,7 @@ export default function SupplierModal({
   }, [taxId, paymentLines, liveJournalEntries, deletedManualPaymentIds]);
   const pendingPaidForThis = localPaidForThis + livePendingJournalTotal;
   const totalPaidIncludingLocal = paid + pendingPaidForThis;
-  const debtAfterLocal = Math.max(0, debt - pendingPaidForThis);
+  const debtAfterLocal = debt - pendingPaidForThis;
   const paymentScopeRaw =
     String(supplier.payment_scope || aging?.payment_scope || '').trim() || 'unpaid_or_unmatched';
   const paymentScopeMeta = getPaymentScopeMeta(paymentScopeRaw);

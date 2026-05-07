@@ -282,7 +282,7 @@ def build_supplier_aging(suppliers_data, waybills_data_or_df):
         out = []
         for s in suppliers_data:
             debt = float(s.get("total_debt") or 0)
-            if debt <= 0:
+            if abs(debt) < 0.01:
                 continue
             bucket = "180+"
             summary[bucket]["count"] += 1
@@ -370,7 +370,7 @@ def build_supplier_aging(suppliers_data, waybills_data_or_df):
     suppliers_out = []
     for s in suppliers_data:
         debt = float(s.get("total_debt") or 0)
-        if debt <= 0:
+        if abs(debt) < 0.01:
             continue
 
         org_name = str(s.get("ორგანიზაცია") or "")

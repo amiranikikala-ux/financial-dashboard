@@ -263,13 +263,7 @@ function App() {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object') {
-          setTimeout(() => setLocalPayments(parsed), 0);
-        }
-      }
+      localStorage.removeItem(STORAGE_KEY);
     } catch {
       /* ignore */
     }
@@ -277,11 +271,6 @@ function App() {
 
   const persistLocalPayments = useCallback((next) => {
     setLocalPayments(next);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    } catch {
-      /* ignore */
-    }
   }, []);
 
   const handleManualPaymentDelete = useCallback(async (id) => {
