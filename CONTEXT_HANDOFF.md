@@ -1,12 +1,75 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-07 ღამე — **MY_BUSINESS.md AI-ში ჩაშენდა + ხელის გადახდების ცოცხალი ჟურნალი** (POST/DELETE/GET endpoints + UI 🗑 button + live overlay). 7 commit ლოკალურად, push pending. ღია — supplier-ზე non-zero debt-ით KPI verification, supplier_archive.json commit, თუ Telegram bot service.
+> **განახლდა**: 2026-05-07 ღამე #2 — **ხელის გადახდის ზედმეტობა ცხადად ისახება უარყოფით ვალად + ბრაუზერის localStorage გაუქმდა**. owner-მა ცადა ჯიდიაიზე 100,000 ₾ — modal & ცხრილი წითლად −43,212 ₾ ჩანს. 1 commit (`87b1bfe`) ლოკალურად. სულ 10 commit push-ს ელოდება.
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-07 ღამე) — AI ↔ MY_BUSINESS.md wire-up + Manual payments journal end-to-end
+## 0. ბოლო session-ის შედეგი (2026-05-07 ღამე #2) — Negative debt parity (overpayments visible across modal, table, all analyses)
+
+🎉 **1 commit ლოკალურად** (`87b1bfe`). ცხადი ფესვი: ხელით გადახდილი ფული ბანკის გადახდას უტოლდება — ზედმეტად გადახდისას ვალი უარყოფითად (წითლად) გამოჩნდება ყველგან, არა მხოლოდ ბანერში. ბონუსად — ბრაუზერის localStorage-ი ხელის გადახდებისთვის სრულად გაუქმდა (owner-ის სიტყვა: „ეს არ არის ის ფაილი რომელიც ბრაუზერი ინახავდეს").
+
+| საკითხი | სტატუსი | SHA |
+|---|---|---|
+| **Modal — `debtAfterLocal` clamp მოშლა** (1 line, `SupplierModal.jsx:654`) | ✅ | `87b1bfe` |
+| **Browser localStorage cleanup** (App.jsx-ში removeItem on load + persistLocalPayments-ში setItem წაშლა) | ✅ | `87b1bfe` |
+| **Backend filter `debt <= 0` → `abs(debt) < 0.01`** (analytics_builders.py 285+373) | ✅ | `87b1bfe` |
+| Pipeline regen 2-ჯერ (ცარიელი localStorage + 100,000 ₾ journal-ში) | ✅ | data.json |
+
+### Headline — owner-ის verification (2026-05-07 04:42)
+
+ჯიდიაი (ID 406181616) ცადა — დაამატა 100,000 ₾ ხელით:
+
+| ხედი | ვალი ჩვენება |
+|---|---|
+| Modal („დარჩენილი ვალი") | **−GEL 43,212** წითლად ✅ |
+| ცხრილი sup row („ვალი" სვეტი) | pipeline regen-ის შემდეგ წითლად უარყოფითი ✅ |
+| Hint („+GEL 100,000 ხელის ჟურნალიდან") | ✅ ცხადია modal-ში |
+
+### Architectural decisions taken (locked, do-not-relitigate)
+
+1. **localStorage გაუქმდა ხელის გადახდისთვის სრულად** — `rs_dashboard_local_payments` key გვერდის ყოველ ჩატვირთვაზე იშლება. POST წარუმატებლობაზე in-memory state ცვლილდება მხოლოდ ერთი სესიის ფარგლებში; refresh-ზე ქრება. ერთადერთი სანდო წყარო — სერვერზე `manual_payments_journal.csv` + ისტორიული `manual_payments.csv`. owner-ის ცხადი ბრძანება: „აღარ მინდა ბრაუზერში ინახავდეს".
+2. **უარყოფითი ვალი = legitimate state** (ზედმეტად გადახდა). იყო `Math.max(0, ...)` clamp მოდალში + `if debt <= 0: continue` filter backend-ში — ორივე მოშლილია. ნულოვანი ვალი ისევ ფარულია (`abs(debt) < 0.01`).
+3. **`Financial_Analysis/manual_payments.csv` ხელუხლებლად დარჩა** — owner-ის სიტყვა: „ამდენი წლის მანძილზე ხელზეც ვიხდიდი ... ჯამად მაქვს ჩაწერილი". 313,922 ₾ ჯიდიაიზე legacy entry — შეიძლება სწორი იყოს, აღდგენილია 2026-05-02 backup-დან. ცალცალკე საკითხი, არ უნდა შევეხოთ თვითნებურად.
+
+### Open / next session
+
+- 🔴 **9 + 1 = 10 commit push origin/main-ზე** — წინა 9 + ახალი `87b1bfe`. User-side action.
+- 🟡 **`Financial_Analysis/manual_payments_journal.csv` uncommitted** — owner-ის 6 ცდის ჩანაწერი (5 deleted 100 ₾ + 1 active 100,000 ₾ ჯიდიაიზე). ცალკე commit.
+- 🟡 **Pre-existing uncommitted ცვლილებები (4 ფაილი)** — `generate_dashboard_data.py` (live-DB retry+stale fallback), `DuplicateProducts.jsx` + `OrphanProducts.jsx` (stale banner), `Financial_Analysis/supplier_archive.json`. სხვა feature-ის ნამუშევარია, არ შევეხე ამ session-ში. owner-ი გადაწყვეტს როდის და როგორ commit-ი.
+- 🟡 **Negative debt CSS styling** — `Suppliers.jsx:354/459` და `WorkingCapital.jsx:590` ჯერ კიდევ `> 0` შემოწმებას იყენებენ `is-debt`/`amount-negative` class-ისთვის. უარყოფითი ვალი ვერ ღებულობს ფერს ცხრილში (CSS-ის დონეზე). რიცხვი ისახება, ფერი — შემდეგ session.
+- 🟡 **`supplier_archive.json` uncommitted** (წინა session-ის ცდა) + Telegram bot Windows service + 13 pre-existing test failures + Tooltip layer + `pos_income` field rename — წინა session-ის open list, უცვლელი.
+- ⏸ **Mini PC დაყენება** — owner-მა cloud უარყო. გადადებულია hardware-ის ყიდვამდე.
+
+### Live findings (2026-05-07 ღამე #2)
+
+- **ჯიდიაი localStorage-ში 73,072 ₾** — owner-ის ხელით ჩაწერილი ისტორიული ნაღდი გადახდები ცხოვრობდა ბრაუზერში; სერვერი ვერ ხედავდა → ცრუ ცხრილი (გავარკვიეთ). გავასუფთავე removeItem-ით.
+- **`manual_payments.csv` 313,922 ₾ ჯიდიაიზე** — owner-ის ცხადი დადასტურება: „წლების ზე ხელზეც ვიხდიდი, ჯამად მაქვს ჩაწერილი". არ უნდა შევეხოთ.
+- **227 supplier_aging row** (პირველი regen-ის შემდეგ) — `abs(debt) < 0.01` filter-ით ნულოვანი ფარულია, უარყოფითი + დადებითი ჩანს. ჯიდიაიზე `total_debt` დადებითი (56,787) იყო პირველი regen-ისას — journal-ის 100,000 ₾ მეორე regen-ში გადავიდა negative-ში.
+- **Cosmetic gap** — `Suppliers.jsx`-ის `hasDebt = d.debt > 0` და CSS classes ჯერ უარყოფითს ვერ ხვდებიან. რიცხვი წითელია (`amount-negative` ცხრილში backend ცხადად სხვა className-ით ხდება?). owner-ის ფოტოზე −43,212 წითლადაა — კარგად მუშაობს უმეტესწილად, მაგრამ `is-debt` row-class-ი არ ერგება.
+
+### Verification commands (next session)
+
+```powershell
+# Hard refresh ბრაუზერში: Ctrl+Shift+R
+# გახსე ჯიდიაი (406181616) → ცხრილში "ვალი" −43,213 ₾ წითლად, modal-ში −43,212 წითლად
+# დაამატე კიდევ 50,000 ₾ ხელით → KPI უნდა გადავიდეს −93,213-ზე
+# გახსე ფუდმარტი (53,774 ₾ ვალი, debt>0) → დაამატე 60,000 ₾ → modal -6,226 წითლად
+```
+
+```bash
+# Pipeline regen (after journal/csv data changes):
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" generate_dashboard_data.py
+
+# Tests (negative debt regression check):
+cd /c/financial-dashboard
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -m pytest tests/test_ai_debt_plan.py
+```
+
+---
+
+## 0a. წინა session-ის შედეგი (2026-05-07 ღამე) — AI ↔ MY_BUSINESS.md wire-up + Manual payments journal end-to-end
 
 🎉 **7 commit ლოკალურად (ჯერ origin-ზე არ push-ნულა).** წინა session-ში ღია იყო AI wire-up — ახლა ცოცხლადაა. გარდა ამისა, owner-მა ცხადი ფესვიანი პრობლემა აღმოაჩინა: ხელით გადახდილი ფული ბრაუზერის localStorage-ში „ცხოვრობდა", AI ვერ ხედავდა (72,972 ₾ ჯიდიაიზე → ცრუ ვალი 56,787 ₾). ამის გადასაჭრელად ცოცხალი ჟურნალი ჩავაშენე — backend + pipeline + UI.
 
