@@ -1,12 +1,101 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-07 დღე #4 — **Phase 1 დასრულდა (Foodmart 360°)**. parser გადავიდა XLS-ზე (canonical, აღადგინა 8 დაკარგული ფაქტურა — 1,982 ₾). Pipeline → data.json → SupplierModal სექცია → ცალკე გვერდი ცოცხალი. **2 commit ლოკალურად** (`73c7ca8` `e3bc859`) — origin-ზე ჯერ არ push-ნულა.
+> **განახლდა**: 2026-05-08 ღამე — **Foodmart 360° გადანდენდა + bilateral netting + manual journal fix + ანალიზიდან მოხსნა**. Foodmart 360° გვერდი გაცილებით ცხადია (წმინდა მოგება + მისაცემი ბარათები + reconciliation table). ჯიდიაი + ფუდმარტი ცხრილში სწორად ჩანს. ახალი 🚫 ღილაკი ნებისმიერ მომწოდებელზე — ანალიზიდან მოხსნა მიზეზთან ერთად. **5 commit ლოკალურად** (`c62a588` gitignore, `5783fee` manual-payments fix, `0c5c522` bilateral + exclude, `5458740` foodmart-360 UI, `5f11dc4` data) — origin-ზე ჯერ არ push-ნულა (ძველი `73c7ca8` `e3bc859` `d4d525b` ასევე არ გავიდა).
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-07 დღე #4) — Phase 1 invoices end-to-end (parser → pipeline → modal → 360° page)
+## 0. ბოლო session-ის შედეგი (2026-05-08 ღამე) — Foodmart 360° წმინდა მოგება + bilateral netting + manual journal + ანალიზიდან მოხსნა
+
+🎉 **6 ცვლილების სერია 1 სესიაში**: 4 ახალი მოდული + 2 frontend-ი + 16 ახალი ტესტი (ყველა მწვანე) + 4 ახალი მეხსიერების ფაილი. **5 commit ლოკალურად 2026-05-09 დილას** (`c62a588` gitignore + `5783fee` manual-payments fix + `0c5c522` bilateral + exclude + `5458740` foodmart-360 UI + `5f11dc4` data). origin-ზე ჯერ არ push-ნულა.
+
+| საკითხი | სტატუსი | ფაილი |
+|---|---|---|
+| **Foodmart 360° — 5 UI გაუმჯობესება** (წმინდა მოგება ბარათი, მისაცემი ბარათი, monthly reconciliation cell, საქონელი/მომსახურება გაყოფა, aging ბარათი მოხსნილი) | ✅ | `rs-dashboard/src/Foodmart360.jsx` |
+| **Bilateral netting** (ფუდმარტი = კლიენტიც + მომწოდებელიც: ფაქტურები ერთმანეთს იჭრის, total_debt → 0 ავტომატ) | ✅ | `dashboard_pipeline/bilateral_netting.py` (ახალი) + 7 ტესტი |
+| **Manual journal fix** (`load_manual_payments()` არ კითხულობდა `manual_payments_journal.csv`-ის active entries — ჯიდიაი 56,788 ვალით ჩანდა, რეალურად 0) | ✅ | `dashboard_pipeline/manual_payments.py` |
+| **Excluded from analysis flag** (🚫 ღილაკი ნებისმიერ მომწოდებელზე — მიზეზი + total_debt=0; ცალკე "archive"-ისგან) | ✅ | `dashboard_pipeline/excluded_from_analysis.py` (ახალი) + 9 ტესტი + `supplier_archive.py` schema v2 |
+| **Suppliers toolbar — სულ ვალი ჯამი** (რამდენ მომწოდებელს აქვს ღია ვალი) | ✅ | `rs-dashboard/src/Suppliers.jsx` |
+| **CSS bilateral_netting + excluded payment_scope** | ✅ | (server.py + api_contracts პასუხებში) |
+
+### Headline — owner verification (2026-05-08)
+
+| ფაქტი | მნიშვნელობა |
+|---|---|
+| ფუდმარტის წმინდა მოგება (4 წელი) | **+399,265 ₾** (508,573 შემოსავალი − 109,308 მომსახურების ხარჯი) |
+| ფუდმარტის მისაცემი ჩვენთვის | **10,289 ₾** (508K − 163K − 335K cashback) |
+| ფუდმარტი ცხრილში | **0 ვალი** (bilateral_netting ავტომატ) |
+| ჯიდიაი ცხრილში (manual journal fix-ის შემდეგ) | **0 ვალი** (manual_paid 313K → 370K) |
+| Foodmart waybills cancelled (24 ცალი, 22,864 ₾) | ❌ ფაქტურის გარეშე — ფული არ გადახდილა, დაბრუნება საჭირო არ არის |
+| Monthly reconciliation accuracy | ✅ 4/4 ბოლო თვე ფორმულას ემთხვევა (cashback = ჩვენი ფაქტურა − მათი ფაქტურა) |
+
+### Architectural decisions taken (locked, do-not-relitigate)
+
+1. **საქონელი ≠ ხარჯი**: ფუდმარტის 163K ფაქტურა ორად გაიყოფა — 53K საქონელი (inventory, არა PnL ხარჯი) + 109K მომსახურება (რეალური ხარჯი). Owner ცხადად მითითა „ზედნადებს რატომ თვლი ხარჯად" 2026-05-08. memory: `project_foodmart_pnl_logic.md`. ეს ლოგიკა გენერალიზდება ყველა მომწოდებელზე.
+2. **Bilateral netting — generic mechanism**: `BILATERAL_SUPPLIERS = {"404460187": "tbc_foodmart_cashback"}`. ახალი bilateral supplier (იშვიათი) — დაემატოს კონფიგი, არა კოდი. Logic: net = our_inv - their_inv - cashback; if ≥ 0 → debt=0; else debt = min(total_effective, |net|).
+3. **Excluded from analysis vs archived — ორი დამოუკიდებელი ფლაგი**:
+   - 📥 Archive: მხოლოდ ცხრილიდან მალავს, ციფრები KPI-ში ჩანს
+   - 🚫 Excluded: total_debt=0, KPI ჯამიდან გადის, მიზეზი სავალდებულო
+   - ერთი მომწოდებელი შეიძლება ორივე იყოს — ფლაგები ცალკე
+4. **`load_manual_payments()` ერთიანი წყარო**: ახლა ორივე ფაილს ერთად კითხულობს — `manual_payments.csv` (legacy) + `manual_payments_journal.csv` (active entries). მოწოდების ერთობლიობა per tax_id.
+5. **`supplier_archive.json` schema v2** — backward-compat v1: ერთ entry-ში `archived_at` + `excluded_from_analysis` + `excluded_at` + `exclusion_reason` + `note`. v1 entries auto-load.
+6. **Foodmart 360° = primary view for foodmart**: aging ბარათი მოხსნილია (ცდენაში შემყვანი იყო — bilateral context-ში 53K-ის ვალი არ არის). ფორმულის table-ი ცხადია monthly.
+
+### Open / next session
+
+- 🔴 **8 commit-ი origin/main-ზე push-ის გარეშე** — `73c7ca8` `e3bc859` `d4d525b` (2026-05-07) + `c62a588` `5783fee` `0c5c522` `5458740` `5f11dc4` (2026-05-09 დილას). owner action: review + push.
+- 🟡 **Service restart-ის history** — owner-მა გადატვირთა admin-ად 2026-05-08 ღამეს ახალი `/api/suppliers/archive` endpoint-ისთვის (excluded_from_analysis ფლაგი ცოცხალია). მომავალი server.py ცვლილება — admin-ს კვლავ გასჭირდება.
+- 🟡 **APScheduler race risk** — pipeline-ი 60წთ-ში ერთხელ თვითონ მუშაობს. ცოცხალი code edit-ის შემდეგ ფონზე გაუშვებული pipeline შეიძლება ძველ მონაცემს დაწეროს. mitigation: შემდეგ commit-ში გადავსინჯო რომ პროცესი ახალ კოდს კითხულობს. (ჯიდიაი 2026-05-08 ღამეს ცოტა ხნით „დაუბრუნდა" ძველ ვალში — ფონური pipeline-ის გამო, ხელახალი run-ის შემდეგ გასწორდა.)
+- 🟡 **Phase 2 — all-suppliers gap analysis** — `invoice_waybill_match` ყველა 260 supplier-ზე გავრცელდეს. ცალკე session.
+- 🟡 **Phase 3 — VAT input-side reconciliation** — extends `dashboard_pipeline/vat_reconciliation.py` to include input VAT (purchases).
+- 🟡 **Phase 4 — rs.ge SOAP automation** — blocked on rs.ge UI permission grant for `dashboard_api` sub-user.
+- 🟡 **rs.ge support email — `pi-support@rs.ge` does not exist** (550 SMTP error 2026-05-08). Owner self-investigates — alt: ცხელი ხაზი 2 299 299, web chat.
+- 🟡 **Pre-existing items უცვლელი** — 13 ძველი test failure (test_expense_categories_incremental + test_foodmart_cashback_incremental); Tooltip layer; pos_income field rename.
+- ⏸ **Mini PC** — owner cloud უარი, hardware-ის ყიდვამდე გადადებული.
+
+### Live findings (2026-05-08)
+
+- **24 cancelled foodmart waybills, ALL with ა/ფ ID = 0** — 22,864 ₾ jamia. Cancelled before invoicing — no money flow, no refund needed. პატერნი: 2-3 ზედნადები ერთ დღეს გააქტიურდა, 1-3 დღეში გაუქმდა (ცარიელი ცდები). რეალური ფინანსური ეფექტი = 0.
+- **Monthly netting ფორმულა ცხადად მუშაობს**: (ჩვენი ფაქტურა) − (ფუდმარტის ფაქტურა) = (TBC cashback შემდეგი თვის დასაწყისში). 4/4 ბოლო თვე ემთხვევა exact-ად.
+  - 2025-12: 10,991 − 4,331 = 6,660 → 2026-01-05 cashback 6,660.65 ✅
+  - 2026-01: 15,325 − 3,738 = 11,587 → 2026-02-02 cashback 11,586.89 ✅
+  - 2026-03: 8,639 − 3,033 = 5,606 → 2026-04-02 cashback 5,605.67 ✅
+  - 2026-04: 10,723 − 3,423 = 7,300 → 2026-05-04 cashback 7,300.23 ✅
+- **2026-02 anomaly**: 12,014 ₾ "extra" cashback (no Feb invoice from us) — სავარაუდოდ ძველი ვალის დაფარვა. ეს ციფრმა მისაცემი 22K-დან 10K-მდე ჩამოიყვანა.
+- **Manual journal write/read mismatch was REAL bug**: `manual_payments_journal.csv`-ის 1 active entry (56,788 ₾ ჯიდიაი 2026-05-07) backend-ში არ ცნობდა ცხრილის ჯამისთვის. fix landed in `manual_payments.py::load_manual_payments`. რეალური impact: ჯიდიაი 56,787 → 0 ვალი.
+
+### Memory updates (2026-05-08)
+
+- `feedback_terminology_misacemi.md` — owner uses „მისაცემი" not „გვმართებს" (correction)
+- `feedback_proactive_verification.md` — extended: when Claude states verification done, no need to re-ask permission
+- `project_foodmart_pnl_logic.md` — goods (waybill) = inventory, services (no waybill) = expense; generalizes to all suppliers
+
+### Verification commands (next session)
+
+```powershell
+# All new tests:
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -m pytest tests/test_bilateral_netting.py tests/test_excluded_from_analysis.py tests/test_manual_payments_journal.py tests/test_manual_payments_journal_pipeline.py -v
+# Expected: 24 passed (7 bilateral + 9 excluded + 4 journal + 4 pipeline)
+
+# Verify ჯიდიაი + ფუდმარტი show 0 debt (live API):
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
+import urllib.request, json
+api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=suppliers', timeout=20).read())
+for tin, name in [('406181616','ჯიდიაი'), ('404460187','ფუდმარტი')]:
+    s = next((x for x in api['suppliers'] if tin in str(x.get('ორგანიზაცია',''))), None)
+    if s:
+        print(f'{name}: total_debt={s[\"total_debt\"]:.2f}, total_paid={s[\"total_paid\"]:.2f}, payment_scope={s.get(\"payment_scope\")}')
+"
+# Expected: ჯიდიაი: total_debt=-0.25, ფუდმარტი: total_debt=0.00
+
+# Verify Foodmart 360° rebuild:
+ls 'C:\financial-dashboard\rs-dashboard\dist\assets\Foodmart360-*.js'
+```
+
+---
+
+## 0a. წინა session-ის შედეგი (2026-05-07 დღე #4) — Phase 1 invoices end-to-end (parser → pipeline → modal → 360° page)
 
 🎉 **2 commit ლოკალურად** (`73c7ca8` Phase 1 wiring + `e3bc859` Foodmart 360° tab). origin-ზე **არ** push-ნულა — owner-ის მიერ. 53 ტესტი მწვანე (47 parser + 6 pipeline integration).
 
