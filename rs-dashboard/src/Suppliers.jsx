@@ -80,12 +80,20 @@ export default function Suppliers({
   const [archiveOverrides, setArchiveOverrides] = useState({});
   const [pendingArchiveTid, setPendingArchiveTid] = useState(null);
   const [archiveError, setArchiveError] = useState(null);
+  const [excludeOverrides, setExcludeOverrides] = useState({});
+  const [pendingExcludeTid, setPendingExcludeTid] = useState(null);
 
   const isArchived = useCallback((sup) => {
     const tid = extractTaxId(sup['ორგანიზაცია']);
     if (tid && tid in archiveOverrides) return archiveOverrides[tid];
     return Boolean(sup.archived);
   }, [archiveOverrides]);
+
+  const isExcluded = useCallback((sup) => {
+    const tid = extractTaxId(sup['ორგანიზაცია']);
+    if (tid && tid in excludeOverrides) return Boolean(excludeOverrides[tid]);
+    return Boolean(sup.excluded_from_analysis);
+  }, [excludeOverrides]);
 
   const handleToggleArchive = useCallback(async (sup, becomeArchived) => {
     const tid = extractTaxId(sup['ორგანიზაცია']);
@@ -109,6 +117,45 @@ export default function Suppliers({
     }
   }, []);
 
+  const handleToggleExclude = useCallback(async (sup, becomeExcluded) => {
+    const tid = extractTaxId(sup['ორგანიზაცია']);
+    if (!tid) {
+      setArchiveError('ამ ფირმას საიდენტიფიკაციო ნომერი არ აქვს — ანალიზიდან მოხსნა ვერ ჩაიწერა.');
+      return;
+    }
+    let reason = null;
+    if (becomeExcluded) {
+      reason = window.prompt(
+        'რატომ ხდება ანალიზიდან მოხსნა?\nმაგ. „ზედნადებები გასაუქმებელია — გადახდა არ მოხდება"',
+        sup.exclusion_reason || '',
+      );
+      if (reason === null) return;
+      reason = String(reason).trim();
+      if (!reason) {
+        setArchiveError('მიზეზი სავალდებულოა.');
+        return;
+      }
+    }
+    setPendingExcludeTid(tid);
+    setArchiveError(null);
+    try {
+      await fetchApiJson('/api/suppliers/archive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tax_id: tid,
+          excluded_from_analysis: becomeExcluded,
+          ...(reason ? { exclusion_reason: reason } : {}),
+        }),
+      });
+      setExcludeOverrides((prev) => ({ ...prev, [tid]: becomeExcluded }));
+    } catch (err) {
+      setArchiveError(`ვერ შეინახა: ${err?.message || err}`);
+    } finally {
+      setPendingExcludeTid(null);
+    }
+  }, []);
+
   const parseMoney = (raw) => {
     const n = parseFloat(String(raw || '').replace(/\s/g, '').replace(',', '.'));
     return Number.isNaN(n) ? 0 : Math.max(0, n);
@@ -118,18 +165,22 @@ export default function Suppliers({
     const tid = extractTaxId(sup['ორგანიზაცია']);
     const livePending = tid ? Number(liveJournalByTaxId?.[tid]) || 0 : 0;
     const m = mergeSupplier(sup, localPayments, livePending);
+    const excludedLocal = tid && tid in excludeOverrides
+      ? Boolean(excludeOverrides[tid])
+      : Boolean(sup.excluded_from_analysis);
     return {
       tid,
       extra: m.extra,
-      paid: m.paid,
-      debt: m.debt,
+      paid: excludedLocal ? Number(sup.total_effective) || m.paid : m.paid,
+      debt: excludedLocal ? 0 : m.debt,
       tp0: m.paidBase,
       strictBankPaid: m.bank,
       manualTotal: m.manualTotal,
-      paymentScope: sup.payment_scope || 'unpaid_or_unmatched',
+      paymentScope: excludedLocal ? 'excluded_from_analysis' : (sup.payment_scope || 'unpaid_or_unmatched'),
       paymentScopeNote: sup.payment_scope_note || '',
+      excluded: excludedLocal,
     };
-  }, [localPayments, liveJournalByTaxId]);
+  }, [localPayments, liveJournalByTaxId, excludeOverrides]);
 
   const nameNeedle = searchName.trim().toLowerCase();
   const filteredSuppliers = useMemo(() => {
@@ -164,6 +215,16 @@ export default function Suppliers({
   const nonRsTotalBank = useMemo(
     () => nonRsRows.reduce((sum, sup) => sum + (Number(getDisplay(sup).strictBankPaid) || 0), 0),
     [nonRsRows, getDisplay],
+  );
+
+  const totalRealDebt = useMemo(
+    () => realSuppliers.reduce((sum, sup) => sum + (Number(getDisplay(sup).debt) || 0), 0),
+    [realSuppliers, getDisplay],
+  );
+
+  const suppliersWithDebt = useMemo(
+    () => realSuppliers.filter((sup) => Math.abs(Number(getDisplay(sup).debt) || 0) >= 1).length,
+    [realSuppliers, getDisplay],
   );
 
   const payVal = parseMoney(payAmount);
@@ -270,6 +331,18 @@ export default function Suppliers({
             {realSuppliers.length}
           </span>
           <span className="sup-toolbar-period">{periodLabel}</span>
+          <span
+            className="sup-toolbar-period"
+            title={`${suppliersWithDebt} მომწოდებელს აქვს ღია ვალი`}
+            style={{
+              background: totalRealDebt > 0 ? '#451a03' : '#064e3b',
+              color: totalRealDebt > 0 ? '#fcd34d' : '#6ee7b7',
+              border: `1px solid ${totalRealDebt > 0 ? '#f59e0b' : '#10b981'}`,
+              fontWeight: 600,
+            }}
+          >
+            სულ ვალი: {formatNumber(totalRealDebt)} ₾ ({suppliersWithDebt})
+          </span>
         </div>
 
         <div className="sup-toolbar-search">
@@ -498,6 +571,23 @@ export default function Suppliers({
                       }}
                     >
                       📥
+                    </button>
+                    <button
+                      type="button"
+                      className="sup-archive-btn"
+                      title={
+                        isExcluded(sup)
+                          ? `ანალიზიდან მოხსნილია — ${sup.exclusion_reason || ''}\n(ხელახლა ჩასართავად დააწექი)`
+                          : 'ანალიზიდან მოხსნა (ციფრი ნულდება — გადახდა არ მოხდება)'
+                      }
+                      disabled={pendingExcludeTid === d.tid}
+                      style={isExcluded(sup) ? { background: '#7f1d1d', color: '#fca5a5' } : undefined}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleExclude(sup, !isExcluded(sup));
+                      }}
+                    >
+                      {isExcluded(sup) ? '↩️🚫' : '🚫'}
                     </button>
                   </td>
                   <td className="sup-td-num">{sup.waybills_count}</td>

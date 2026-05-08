@@ -2035,6 +2035,29 @@ def run():
     except Exception as exc:
         logger.warning("supplier_invoices: ვერ ჩაიდო data.json-ში: %s", exc)
 
+    # ----- ორმხრივი კომპენსაცია (foodmart-style bilateral suppliers) -----
+    # მომწოდებელი რომელიც ჩვენი კლიენტიც არის: ფაქტურები ჯვარედინად კვეთს
+    # ერთმანეთს, გადახდა cashback-ით ხდება, არა პირდაპირი გადარიცხვით.
+    # ვაცხადებთ მათ ვალის სტატუსს ცხრილში automatic-ად — manual journal არ
+    # არის საჭირო. Must run AFTER supplier_invoices_section so all bilateral
+    # inputs (our_seller_invoices, supplier_invoices) are in `data`.
+    try:
+        from dashboard_pipeline.bilateral_netting import apply_bilateral_netting
+        apply_bilateral_netting(data)
+    except Exception as exc:
+        logger.warning("bilateral_netting: ვერ ჩაიდო data.json-ში: %s", exc)
+
+    # ----- ანალიზიდან მოხსნა (user-flagged exclusion) -----
+    # მომხმარებელმა გადაწყვიტა, რომ მომწოდებლის ფაქტურები გასაუქმებელია,
+    # ან გადახდა არ მოხდება, ანალიზიდან ხელით უნდა მოიხსნას. ეს ფლაგი
+    # supplier_archive.json-შია (excluded_from_analysis=true). pipeline-ი
+    # აყენებს total_debt=0-ს და ცხადად აღნიშნავს მიზეზს.
+    try:
+        from dashboard_pipeline.excluded_from_analysis import apply_excluded_from_analysis
+        apply_excluded_from_analysis(data)
+    except Exception as exc:
+        logger.warning("excluded_from_analysis: ვერ ჩაიდო data.json-ში: %s", exc)
+
     _write_outputs(data, script_dir, inc)
 
 if __name__ == "__main__":

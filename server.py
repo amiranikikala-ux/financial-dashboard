@@ -1019,13 +1019,15 @@ _supplier_archive_lock = Lock()
 @app.post("/api/suppliers/archive")
 @limiter.limit("60/minute")
 async def post_supplier_archive(request: Request, payload: dict = Body(...)):
-    """Toggle the user's "archived" flag on a single supplier.
+    """Update the user's archive / exclusion flags on a single supplier.
 
-    Body:
+    Body (all flag fields optional — only the fields you pass are changed):
         {
-            "tax_id":   "200000000",   (required)
-            "archived": true,          (required boolean)
-            "note":     "..."          (optional)
+            "tax_id":                 "200000000",   (required)
+            "archived":               true,          (optional bool — back-compat)
+            "note":                   "...",         (optional string)
+            "excluded_from_analysis": true,          (optional bool — exclude from totals)
+            "exclusion_reason":       "..."          (required string when excluded=true)
         }
     """
     if not isinstance(payload, dict):
@@ -1034,13 +1036,29 @@ async def post_supplier_archive(request: Request, payload: dict = Body(...)):
     tax_id = payload.get("tax_id")
     archived_raw = payload.get("archived")
     note = payload.get("note")
+    excluded_raw = payload.get("excluded_from_analysis")
+    exclusion_reason = payload.get("exclusion_reason")
 
     if not isinstance(tax_id, str) or not tax_id.strip():
         raise HTTPException(status_code=400, detail="`tax_id` (string) is required.")
-    if not isinstance(archived_raw, bool):
-        raise HTTPException(status_code=400, detail="`archived` (boolean) is required.")
+    if archived_raw is not None and not isinstance(archived_raw, bool):
+        raise HTTPException(status_code=400, detail="`archived` must be a boolean when provided.")
     if note is not None and not isinstance(note, str):
         raise HTTPException(status_code=400, detail="`note` must be a string when provided.")
+    if excluded_raw is not None and not isinstance(excluded_raw, bool):
+        raise HTTPException(status_code=400, detail="`excluded_from_analysis` must be a boolean when provided.")
+    if exclusion_reason is not None and not isinstance(exclusion_reason, str):
+        raise HTTPException(status_code=400, detail="`exclusion_reason` must be a string when provided.")
+    if excluded_raw is True and not (exclusion_reason and exclusion_reason.strip()):
+        raise HTTPException(
+            status_code=400,
+            detail="`exclusion_reason` is required when excluded_from_analysis=true.",
+        )
+    if archived_raw is None and excluded_raw is None:
+        raise HTTPException(
+            status_code=400,
+            detail="At least one of `archived` / `excluded_from_analysis` must be provided.",
+        )
 
     with _supplier_archive_lock:
         try:
@@ -1048,21 +1066,32 @@ async def post_supplier_archive(request: Request, payload: dict = Body(...)):
                 tax_id=tax_id.strip(),
                 archived=archived_raw,
                 note=note,
+                excluded_from_analysis=excluded_raw,
+                exclusion_reason=exclusion_reason,
             )
         except OSError as exc:
             logger.error("supplier archive write failed: %s", exc)
             raise HTTPException(status_code=500, detail=f"ფაილის ჩაწერა ვერ მოხერხდა: {exc}")
 
+    archived_count = sum(1 for e in new_map.values() if e.get("archived_at"))
+    excluded_count = sum(1 for e in new_map.values() if e.get("excluded_from_analysis"))
+    entry = new_map.get(tax_id.strip()) or {}
     logger.info(
-        "supplier archive %s: %s (total archived=%d)",
-        "archived" if archived_raw else "restored",
-        tax_id.strip(), len(new_map),
+        "supplier archive update: tax_id=%s archived=%s excluded=%s (totals: archived=%d excluded=%d)",
+        tax_id.strip(),
+        bool(entry.get("archived_at")),
+        bool(entry.get("excluded_from_analysis")),
+        archived_count,
+        excluded_count,
     )
     return {
         "success": True,
         "tax_id": tax_id.strip(),
-        "archived": archived_raw,
-        "archived_count_total": len(new_map),
+        "archived": bool(entry.get("archived_at")),
+        "excluded_from_analysis": bool(entry.get("excluded_from_analysis")),
+        "exclusion_reason": entry.get("exclusion_reason"),
+        "archived_count_total": archived_count,
+        "excluded_count_total": excluded_count,
     }
 
 

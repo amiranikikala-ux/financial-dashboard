@@ -1,27 +1,39 @@
-"""User-archived suppliers (persistent across pipeline runs).
+"""User-archived / excluded suppliers (persistent across pipeline runs).
 
-The user marks a supplier as „დაარქივებული" when they want it removed
-from the active suppliers table (e.g. one-off material/service vendors).
-Archiving is a display-only flag — payment data still flows through
-KPIs, totals, and concentration analytics unchanged.
+Two orthogonal user flags per supplier:
+
+1. **archived** — display-only flag. Hidden from the main supplier table
+   but KPIs/totals/concentration analytics still include it.
+2. **excluded_from_analysis** — pipeline-level filter. Sets total_debt=0
+   for that supplier in aggregations (e.g. soon-to-be-cancelled waybills
+   that the user accidentally accepted; payment will never happen, so
+   counting them as debt distorts every analysis).
 
 Storage: ``Financial_Analysis/supplier_archive.json``. Key = tax_id.
+Backward-compatible with version 1 — additional fields are optional.
 
-File schema:
+File schema (version 2):
 
     {
-      "version": 1,
+      "version": 2,
       "archived": {
         "<tax_id>": {
-          "archived_at": "2026-05-06T22:00:00",
-          "note": null
+          "archived_at": "2026-05-06T22:00:00" | null,
+          "note": null,
+          "excluded_from_analysis": false,
+          "excluded_at": null,
+          "exclusion_reason": null
         },
         ...
       }
     }
 
-Atomic write (write-tmp + rename); the API endpoint serializes calls
-with a lock at the caller.
+Notes:
+- An entry exists if the user has set ANY flag on this supplier.
+- ``archived_at == null`` + ``excluded_from_analysis == true`` means the
+  user excluded but did not archive (rare case, supported).
+- Atomic write (write-tmp + rename); API endpoint serializes calls
+  with a lock at the caller.
 """
 
 from __future__ import annotations
@@ -71,31 +83,93 @@ def is_archived(
 ) -> bool:
     if cache is None:
         cache = load(financial_analysis_dir)
-    return str(tax_id) in cache
+    entry = cache.get(str(tax_id))
+    if not entry:
+        return False
+    return bool(entry.get("archived_at"))
+
+
+def is_excluded_from_analysis(
+    tax_id: str,
+    cache: dict[str, dict] | None = None,
+    financial_analysis_dir: Path | None = None,
+) -> bool:
+    if cache is None:
+        cache = load(financial_analysis_dir)
+    entry = cache.get(str(tax_id))
+    if not entry:
+        return False
+    return bool(entry.get("excluded_from_analysis"))
+
+
+def excluded_entries(
+    cache: dict[str, dict] | None = None,
+    financial_analysis_dir: Path | None = None,
+) -> dict[str, dict]:
+    """Return only entries with excluded_from_analysis=True (with reason)."""
+    if cache is None:
+        cache = load(financial_analysis_dir)
+    return {
+        tid: dict(entry)
+        for tid, entry in cache.items()
+        if entry.get("excluded_from_analysis")
+    }
+
+
+def _now_iso() -> str:
+    return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
 
 def set_status(
     tax_id: str,
-    archived: bool,
+    archived: bool | None = None,
     note: str | None = None,
+    excluded_from_analysis: bool | None = None,
+    exclusion_reason: str | None = None,
     financial_analysis_dir: Path | None = None,
 ) -> dict[str, dict]:
-    """Toggle archived flag for one supplier. Returns the new full archived map."""
+    """Update flags for one supplier. Any flag passed as None is left unchanged.
+
+    Removing the entry entirely happens only when both archived=False and
+    excluded_from_analysis=False (or were already False). Returns the new
+    full map.
+    """
     path = _path(financial_analysis_dir)
     current = load(financial_analysis_dir)
     key = str(tax_id).strip()
     if not key:
         raise ValueError("tax_id must not be empty")
 
-    if archived:
-        current[key] = {
-            "archived_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
-            "note": note,
-        }
-    else:
-        current.pop(key, None)
+    entry = dict(current.get(key) or {})
 
-    payload = {"version": 1, "archived": current}
+    if archived is True:
+        entry["archived_at"] = _now_iso()
+        if note is not None:
+            entry["note"] = note
+    elif archived is False:
+        entry["archived_at"] = None
+        if note is not None:
+            entry["note"] = note
+
+    if excluded_from_analysis is True:
+        entry["excluded_from_analysis"] = True
+        entry["excluded_at"] = _now_iso()
+        if exclusion_reason is not None:
+            entry["exclusion_reason"] = exclusion_reason
+    elif excluded_from_analysis is False:
+        entry["excluded_from_analysis"] = False
+        entry["excluded_at"] = None
+        if exclusion_reason is not None:
+            entry["exclusion_reason"] = exclusion_reason
+
+    has_archive = bool(entry.get("archived_at"))
+    has_exclusion = bool(entry.get("excluded_from_analysis"))
+    if not has_archive and not has_exclusion:
+        current.pop(key, None)
+    else:
+        current[key] = entry
+
+    payload = {"version": 2, "archived": current}
 
     path.parent.mkdir(exist_ok=True)
     fd, tmp_path = tempfile.mkstemp(
