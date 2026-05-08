@@ -1,12 +1,105 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-08 დღე — **Phase 2 რეკონცილიაცია გვერდი ცოცხალია + ფაქტურის სტატუსის ბაგი გასწორდა**. ⚖️ რეკონცილიაცია ჩანართი 270 მომწოდებელზე ფაქტურა vs ZED შედარებით; click-to-expand თვეების breakdown. ბაგი: rs.ge რეესტრი ცარიელად ჩამოთვლის ფაქტურის ყველა სტატუსს (პირველადი + კორექტირებული + დადასტურებული) — ფილტრმა შეცვალა ცრუ-სხვაობა 1.16M → 23K. **9 commit წინა session-დან push-ი + ახალი 2 commit** (`44ec6f0` total_amount_real fix, `1cda673` Phase 2 feature) — origin-ზე გავიდა.
+> **განახლდა**: 2026-05-08 ღამე — **მომწოდებლების გვერდის სრული აუდიტი + 12 finding ფიქსი + ხელით გადახდების სუფთა გადაწერა**. 9-ნაბიჯიანი source→formula→UI ვერიფიკაცია, ყველა ციფრი dabaduli RS+TBC+BOG cache-ში. 12/12 finding დახურული (1 false-alarm). 8 commit origin-ზე. ხელით გადახდები გასუფთავდა (386K წაიშალა owner-ის მოთხოვნით) — ხელახლა შესაყვანია UI-ით. ⏳ **დამოუკიდებელი ცოცხალი ცვლილება**: pipeline მუშაობს store-column-ისთვის (waybill მაღაზია detection დაემატა), დასრულების მერე ELIZI/ჯიდიაი/etc ცხრილში ჩანს „დვაბზუ/ოზურგეთი/თბილისი".
 >
-> Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
+> Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`. სრული აუდიტი → `HANDOFF_ARCHIVE/SUPPLIERS_AUDIT_2026-05-08.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-08 დღე) — Phase 2 რეკონცილიაცია + rs.ge ფაქტურის სტატუსის ბაგი გასწორდა
+## 0. ბოლო session-ის შედეგი (2026-05-08 ღამე) — Suppliers აუდიტი + 12 finding ფიქსი + manual payments გასუფთავდა
+
+🎉 **8 commit origin/main-ზე** (`6c5fbe0..0697c0a`). სრული 9-ნაბიჯიანი audit-ი არქივში, ყველა ცარიელი slot დაიხურა. Manual payments სრული reset მოხდა — owner ხელახლა შემოიყვანს UI-ით.
+
+| ცვლილება | commit | სტატუსი |
+|---|---|---|
+| Group 1 — labels + KPI subtitle + archive flag | `6c5fbe0` | ✅ |
+| Suppliers audit log (9 ნაბიჯი + open work index) | `516ad5b` | ✅ |
+| Group 3 — Excel labels + savings filter + bank scheduler | `64b7232` | ✅ |
+| bank_orphan_total_ge breakdown clarification | `62c1371` | ✅ |
+| Waybill store column + always-on payment breakdown | `3b994fe` | ✅ |
+| Manual payments cleared (9 entries → 0, backups) | `e81d9dd` | ✅ |
+| SupplierModal undated filter chip | `d0405e5` | ✅ |
+| Pipeline fix — pass object_mapping | `0697c0a` | ✅ |
+
+### Headline — Suppliers page audit (2026-05-08 დღე-ღამე)
+
+| ფაქტი | მნიშვნელობა |
+|---|---|
+| ცხრილის ციფრები — წყაროდან ვერიფიცირდა | ✅ ყველა (ZED + bank + manual) 0.01 ₾-მდე |
+| HHI 571.6 / Top-N-N-share / leverage | ✅ მათემატიკა 100% |
+| Bilateral netting (ფუდმარტი) | ✅ 10,289 ₾ მისაცემი — ემთხვევა owner-ის expected |
+| 248K orphan — ცრუ ალარმი | ✅ რეალურად იჯარა + შიდა, უკვე ხარჯში ფიგურირებენ |
+| 4 payment_scope label-ი | ✅ ჯიდიაი/ფუდმარტი/სევენთისევენ ქართული tooltip |
+| KPI 4 split (გვმართებთ + ზედმეტი ცალ-ცალკე) | ✅ ცხადი breakdown |
+| Archive runtime refresh (📥/🚫 ცოცხალი) | ✅ static artifact bypass გასწორდა |
+| ჯიდიაი/ELIZI/ინტერნეიშნლ Top-კანდიდატებიდან გავიდა | ✅ PROTECTED ფილტრი (სიგარეტი) |
+| BOG+rs.ge auto-refresh (60 წთ) | ✅ TBC ცალკე (DigiPass OTP) |
+| TrustBanner 3-cards always | ✅ ცარიელი ნაღდი ცხადად ჩანს „GEL 0" |
+
+### Manual payments reset (owner request)
+
+- **წაიშალა**: 386,241 ₾ (8 ფირმა) — 2 legacy CSV (ELIZI 13K + ჯიდიაი 314K, აღდგენილი 2026-05-02 browser-დან, თარიღის გარეშე) + 7 active journal entries
+- **Backup**: `Financial_Analysis/_backups/manual_payments_20260508_205435.csv` + `manual_payments_journal_20260508_205435.csv` (gitignored)
+- **KPI ცვლილება**: გვმართებთ 425K → 811K (180 ფირმა); ჯიდიაი -1,980 → +372,690 (ცარიელი slot მოლოდინი)
+- **Owner action**: რეალური ნაღდი გადახდები ხელახლა შეიყვანოს UI-დან („ჩაწერა" ღილაკი ფირმის ბარათზე) — თარიღი + ID ავტომატურად ჩაიწერება, მოდალში ცხადად ჩანს
+
+### Architectural decisions taken (locked, do-not-relitigate)
+
+1. **PROTECTED cigarette importers ამოსაგდები Top-კანდიდატებიდან**: ELIZI / ჯიდიაი / ინტერნეიშნლ — სიგარეტი, ფიქსირებული ფასი, savings=0 by design. `supplier_brief.py` over-sample 2× → 4× რომ filter-ის შემდეგ top_n actionable დარჩეს.
+2. **bank_refresh ორ-ფაზიანი schedule**: BOG + rs.ge ავტომატური 60 წთ-ში (no OTP) → `refresh_bog_and_rsge_only()`. TBC ცალკე ხელით ღილაკით (DigiPass OTP-ის გამო). nonce=None → auto-mode, nonce=str → full mode.
+3. **Static artifact bypass — runtime annotate**: `refresh_archive_runtime_flags()` re-applies archive.json flags (archived + excluded_from_analysis + reason) per request, ისე რომ pipeline regen-ი არ უნდა ელოდო. Idempotent mutation.
+4. **_annotate_archive_flag use archived_at not key presence**: excluded-only suppliers (no archived_at) აღარ ცრუდ archive-ში წავა.
+5. **TrustBanner ყოველთვის 3 cards**: bank/manual/total — ცარიელი manual ცხადად „GEL 0" აჩვენო. ერთბარათიანი collapse owner-ისთვის ცრუ ალარმი იყო.
+6. **Manual payments single-source**: legacy CSV deprecated (browser-recovery-only); active journal CSV ერთადერთი UI-managed წყარო (date + UUID + delete). Owner re-enters via UI.
+7. **bank_orphan breakdown**: rent_landlords_ge / internal_transfer_ge / unclassified_ge buckets so the 164K "orphan" alarm doesn't lump categorized rent in with truly missing data. LANDLORD_TAX_IDS derived from PARTNER_IBAN_TO_RS_TAX_ID values (single source).
+
+### Open / next session
+
+- 🟡 **Pipeline ცოცხლად მუშაობს** (started ~17:55 UTC) — დასრულდება დაახ. 18:13 UTC. ცხრილში „მაღაზია" სვეტი ჩაიწერება (დვაბზუ/ოზურგეთი/თბილისი). Owner verification: F5 ბრაუზერში → ფირმა → „ზედნადებები" → store badge.
+- 🟡 **Owner ხელახლა შეიყვანს ნაღდ გადახდებს** — UI „ჩაწერა" ღილაკით თითო ფირმაზე. ჯიდიაი ცხრილში ახლა 372K გვმართებს (ცარიელი slot ცდის) — სიმართლე როცა owner ნამდვილ ნაღდი გადახდებს დააფიქსირებს.
+- 🟡 **Pre-existing test failures უცვლელი** — 13 ძველი failure (test_expense_categories_incremental + test_foodmart_cashback_incremental); არც ერთი ჩემი ცვლილებით არ მომდინარეობს.
+- 🟡 **Phase 3 — VAT input-side reconciliation** (Master Plan §18) — ცალკე session.
+- 🟡 **Phase 4 — rs.ge SOAP automation for invoices** — blocked on rs.ge UI permission grant.
+- ⏸ **Mini PC** — owner cloud უარი, hardware-ის ყიდვამდე გადადებული.
+
+### Live findings (2026-05-08 ღამე — Suppliers audit)
+
+- **#11 (248K orphan) აღმოჩნდა false-alarm**: 3 landlord (164K) უკვე "იჯარა / ქირა" ხარჯ-კატეგორიაში ფიგურირებს (TBC 42K + BOG 125K = 167K, slight超 ცნობილი). 1 own (84K) შიდა გადარიცხვა, ხარჯში არც ფიგურირებს.
+- **Manual payment legacy entries უთარიღო**: ELIZI + ჯიდიაი ჩანაწერები 2026-05-02 browser-recovery-დან, თარიღი ცარიელი → SupplierModal month-filter-ი მათ ვერ ხედავდა → owner ვერ წაშლიდა. Owner-ის გადაწყვეტილება: ყველაფერი წაიშალოს, UI-ით ხელახლა შემოვიდეს.
+- **სევენთისევენი both-flag bug**: archive.json ჰქონდა `excluded_at` only, მაგრამ API ცრუდ `archived=true` იძლეოდა (key-presence vs archived_at semantics). გასწორდა `_annotate_archive_flag`-ში.
+- **TrustBanner card collapse**: `hasManualPayments=false` → 3 ბარათი 1-ად შეიკრა → owner-ი „აქ სად გაქრა ჩემი ნაღდი ფული?". გასწორდა — ყოველთვის 3 cards.
+
+### Verification commands (next session)
+
+```powershell
+# All audit-related tests:
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -m pytest tests/ -k "supplier or bank or expense or excluded or archive" -q
+# Expected: 168+ passed (pre-existing test_expense_categories_incremental + test_foodmart_cashback_incremental failures unrelated)
+
+# Verify store column in waybill lines:
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
+import json, urllib.request
+api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=suppliers', timeout=30).read())
+wl = (api['supplier_waybill_lines'] or {}).get('204920381') or []
+print(f'ELIZI waybills: {len(wl)}')
+print(f'has store field? {\"store\" in (wl[0] if wl else {})}')
+print(f'sample: {wl[0] if wl else {}}')
+"
+# Expected: 'store' key present, value like 'თბილისი' / 'დვაბზუ' / 'ოზურგეთი'
+
+# Verify manual payments cleared:
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
+import json, urllib.request
+api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=suppliers', timeout=30).read())
+manual_total = sum(float(s.get('manual_paid') or 0) for s in api['suppliers'])
+print(f'Total manual_paid across all suppliers: {manual_total:,.2f} ₾')
+"
+# Expected: 0.00 (until owner re-enters via UI)
+```
+
+---
+
+## 0a. წინა session-ის შედეგი (2026-05-08 დღე) — Phase 2 რეკონცილიაცია + rs.ge ფაქტურის სტატუსის ბაგი გასწორდა
 
 🎉 **2 commit origin/main-ზე** (`44ec6f0` fix + `1cda673` Phase 2). ასევე წინა session-ის 9 commit გავიდა origin-ზე ამავე session-ში (პირველი ნაბიჯი — push-ი). 11 ახალი ტესტი (ყველა მწვანე, სულ 80 ტესტი)·
 
