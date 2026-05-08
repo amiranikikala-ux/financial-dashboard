@@ -271,6 +271,13 @@ PARTNER_IBAN_TO_RS_TAX_ID = {
     "GE81BG0000000890516000": "33001023234",
 }
 
+# Landlord tax_ids (physical persons) — payments to these tax_ids are
+# rent/იჯარა, NOT supplier debts. Used to break down `bank_orphan` so the
+# orphan alarm doesn't double-count payments that are already classified
+# under the "იჯარა / ქირა" expense category. Derived from the IBAN map
+# above (the values are the canonical landlord tax_ids).
+LANDLORD_TAX_IDS = frozenset(PARTNER_IBAN_TO_RS_TAX_ID.values())
+
 RECON_MATCH_STATUSES = {
     "matched_exact_id",
     "matched_exact_iban",

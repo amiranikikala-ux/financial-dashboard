@@ -30,6 +30,7 @@ from backend_paths import (
 # ---------------------------------------------------------------------------
 from dashboard_pipeline.constants import (
     OWN_TAX_ID,
+    LANDLORD_TAX_IDS,
     SAMURNEO_LEDGER_CLASS_KA,
     SAMURNEO_LABEL_KA,
     SAMURNEO_ACCOUNTING_NOTE_KA,
@@ -1083,9 +1084,35 @@ def _process_rs_suppliers(df, agg_df, rs_files, supplier_registry_cfg, script_di
     rs_ids = set(agg_df['supplier_id'].dropna().astype(str))
     paid_mapped_to_rs = sum(bank_payments.get(sid, 0.0) for sid in rs_ids)
     bank_orphan = sum(amt for pid, amt in bank_payments.items() if pid not in rs_ids)
+    # bank_orphan = "ბანკში გადახდა, RS-ში არაა მომწოდებლად". უმეტესობა
+    # უკვე სხვაგან გათვალისწინებულია (იჯარა → tbc/bog_expenses, შიდა
+    # გადარიცხვა → ფილტრში). breakdown გვეხმარება ცრუ-ალარმის ამოცნობაში.
+    bank_orphan_rent = sum(
+        amt for pid, amt in bank_payments.items()
+        if pid not in rs_ids and pid in LANDLORD_TAX_IDS
+    )
+    bank_orphan_internal = sum(
+        amt for pid, amt in bank_payments.items()
+        if pid not in rs_ids and pid == OWN_TAX_ID
+    )
+    bank_orphan_unclassified = sum(
+        amt for pid, amt in bank_payments.items()
+        if pid not in rs_ids
+        and pid not in LANDLORD_TAX_IDS
+        and pid != OWN_TAX_ID
+    )
+    bank_orphan_breakdown = {
+        "rent_landlords_ge": float(bank_orphan_rent),
+        "internal_transfer_ge": float(bank_orphan_internal),
+        "unclassified_ge": float(bank_orphan_unclassified),
+    }
     logger.info(
-        "Reconciliation: RS მომწოდებლებზე მიბმული: %s ₾ | ბანკშია მაგრამ RS სიაში არაა: %s ₾",
+        "Reconciliation: RS-ზე მიბმული: %s ₾ | RS-ის გარეშე: %s ₾ "
+        "(იჯარა %s ₾, შიდა %s ₾, ცარიელი %s ₾)",
         f"{paid_mapped_to_rs:,.2f}", f"{bank_orphan:,.2f}",
+        f"{bank_orphan_rent:,.2f}",
+        f"{bank_orphan_internal:,.2f}",
+        f"{bank_orphan_unclassified:,.2f}",
     )
 
     # RS ზედნადებში არ არსებული, მაგრამ manual_payments.csv-ში ან ბანკში (ორფანი) არის
@@ -1246,6 +1273,7 @@ def _process_rs_suppliers(df, agg_df, rs_files, supplier_registry_cfg, script_di
         "bank_unmatched_analysis": bank_unmatched_analysis,
         "bank_unmatched_sum": bank_unmatched_sum,
         "bank_orphan": bank_orphan,
+        "bank_orphan_breakdown": bank_orphan_breakdown,
         "extra_supplier_count": extra_supplier_count,
         "manual_grand": manual_grand,
         "manual_only": manual_only,
@@ -1551,6 +1579,11 @@ def run():
                 "manual_payments_rows_with_amount": 0,
                 "suppliers_only_journal_or_bank": 0,
                 "bank_orphan_total_ge": 0.0,
+                "bank_orphan_breakdown": {
+                    "rent_landlords_ge": 0.0,
+                    "internal_transfer_ge": 0.0,
+                    "unclassified_ge": 0.0,
+                },
                 "bank_unmatched_total_ge": 0.0,
                 "bank_unmatched_line_count": 0,
                 "bank_unmatched_categorized_total_ge": 0.0,
@@ -1631,6 +1664,11 @@ def run():
                 "suppliers_only_journal_or_bank": extra_supplier_count,
                 "iban_taxid_conflicts": iban_conflicts,
                 "bank_orphan_total_ge": float(bank_orphan),
+                "bank_orphan_breakdown": rs_result.get("bank_orphan_breakdown") or {
+                    "rent_landlords_ge": 0.0,
+                    "internal_transfer_ge": 0.0,
+                    "unclassified_ge": 0.0,
+                },
                 "bank_unmatched_total_ge": float(bank_unmatched_sum),
                 "bank_unmatched_line_count": int(
                     (bank_reconciliation_audit.get("ambiguous_rows") or 0)
