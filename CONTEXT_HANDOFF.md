@@ -1,12 +1,114 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-08 ღამე — **Foodmart 360° გადანდენდა + bilateral netting + manual journal fix + ანალიზიდან მოხსნა**. Foodmart 360° გვერდი გაცილებით ცხადია (წმინდა მოგება + მისაცემი ბარათები + reconciliation table). ჯიდიაი + ფუდმარტი ცხრილში სწორად ჩანს. ახალი 🚫 ღილაკი ნებისმიერ მომწოდებელზე — ანალიზიდან მოხსნა მიზეზთან ერთად. **5 commit ლოკალურად** (`c62a588` gitignore, `5783fee` manual-payments fix, `0c5c522` bilateral + exclude, `5458740` foodmart-360 UI, `5f11dc4` data) — origin-ზე ჯერ არ push-ნულა (ძველი `73c7ca8` `e3bc859` `d4d525b` ასევე არ გავიდა).
+> **განახლდა**: 2026-05-08 დღე — **Phase 2 რეკონცილიაცია გვერდი ცოცხალია + ფაქტურის სტატუსის ბაგი გასწორდა**. ⚖️ რეკონცილიაცია ჩანართი 270 მომწოდებელზე ფაქტურა vs ZED შედარებით; click-to-expand თვეების breakdown. ბაგი: rs.ge რეესტრი ცარიელად ჩამოთვლის ფაქტურის ყველა სტატუსს (პირველადი + კორექტირებული + დადასტურებული) — ფილტრმა შეცვალა ცრუ-სხვაობა 1.16M → 23K. **9 commit წინა session-დან push-ი + ახალი 2 commit** (`44ec6f0` total_amount_real fix, `1cda673` Phase 2 feature) — origin-ზე გავიდა.
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-08 ღამე) — Foodmart 360° წმინდა მოგება + bilateral netting + manual journal + ანალიზიდან მოხსნა
+## 0. ბოლო session-ის შედეგი (2026-05-08 დღე) — Phase 2 რეკონცილიაცია + rs.ge ფაქტურის სტატუსის ბაგი გასწორდა
+
+🎉 **2 commit origin/main-ზე** (`44ec6f0` fix + `1cda673` Phase 2). ასევე წინა session-ის 9 commit გავიდა origin-ზე ამავე session-ში (პირველი ნაბიჯი — push-ი). 11 ახალი ტესტი (ყველა მწვანე, სულ 80 ტესტი)·
+
+| საკითხი | სტატუსი | ფაილი |
+|---|---|---|
+| **9 commit-ი origin-ზე გავიდა** (წინა session-ის Foodmart 360° + bilateral + excluded + data + handoff) | ✅ | `9960b30..c162b56` |
+| **bug fix: rs.ge ფაქტურის სტატუსის ფილტრი** (REAL_INVOICE_STATUSES = დადასტურებული + დასადასტურებელი; total_amount_real ახალი ველი) | ✅ | `dashboard_pipeline/supplier_invoices_section.py` |
+| **Phase 2 — რეკონცილიაცია მოდული** (per-supplier gap, classification, summary) + 11 ტესტი | ✅ | `dashboard_pipeline/supplier_reconciliation.py` (ახალი) |
+| **Phase 2 — UI გვერდი** (KPI cards, ფილტრები, click-to-expand თვეების breakdown, ძებნა) | ✅ | `rs-dashboard/src/Reconciliation.jsx` (ახალი) |
+| **api_contracts wiring** (TAB_ALLOWLIST + STATIC_RESPONSE_TABS + TAB_RESPONSE_META + supplier_reconciliation in suppliers response) | ✅ | `dashboard_pipeline/api_contracts.py` |
+| **App.jsx + tabConfig.js** — ⚖️ რეკონცილიაცია ჩანართი ფინანსები მენიუში | ✅ | `rs-dashboard/src/{App.jsx, tabConfig.js}` |
+| **`.gitignore` დამატება — `Financial_Analysis/რს ფაქტურები/`** (rs.ge invoice exports — owner data) | ✅ | წინა commit `c62a588` |
+
+### Headline — owner verification (2026-05-08 დღე)
+
+| ფაქტი | მნიშვნელობა |
+|---|---|
+| ლაქტალისი ფაქტურა (raw all-status) | 218,255 ₾ (4× ZED-ზე — ცრუ-ვალი) |
+| ლაქტალისი ფაქტურა (დადასტურებული + დასადასტურებელი) | **55,277 ₾** ✅ ემთხვევა ZED-ს |
+| ლაქტალისი ZED net (waybill data) | 54,520 ₾ |
+| ლაქტალისი strict bank-paid | 55,330 ₾ (overpaid 370 ₾) |
+| **სრული ცრუ-სხვაობა (270 მომწოდებელი)** | **1,168,430 ₾ → 22,941 ₾** (50× გაუმჯობესება) |
+| რეკონცილიაცია — ემთხვევა | 188 (was 140) |
+| რეკონცილიაცია — წითელი ფაქტურა > ZED | 29 (was 93) |
+| რეკონცილიაცია — ლურჯი ZED > ფაქტურა | 53 (was 37) |
+| ფუდმარტი — ყველა 60 ფაქტურა „დადასტურებული" | ცვლილება არაა (real = all = 163,082 ₾) |
+
+### Architectural decisions taken (locked, do-not-relitigate)
+
+1. **rs.ge ფაქტურის სტატუსის სემანტიკა** (verified ლაქტალისი 166-row case):
+   - `დადასტურებული` — final, settled (real)
+   - `დასადასტურებელი` — most-recent, awaiting buyer confirmation (real)
+   - `პირველადი` — supplier-side draft, not finalized (NOT real)
+   - `კორექტირებული` — superseded version replaced by a correction (NOT real)
+   - `გაუქმებული` — cancelled (NOT real)
+   - **`REAL_INVOICE_STATUSES = {დადასტურებული, დასადასტურებელი}`**.
+2. **`total_amount` legacy preserved** — backward-compat for any consumer not yet aware of status pollution. **`total_amount_real` ახალი**, რეკონცილიაცია/working_capital ამას იყენებს.
+3. **rs.ge buyer registry XLS truncates ZED list** to first 4 + " ..." marker — CSV (`ფაქტურები მყიდველი.csv`) has full list. Currently parser uses XLS (`ფაქტურები მყიდველი რეესტრი.xls`) for invoice records but waybill linkage is broken-list. **Phase 1's `invoice_waybill_match` mostly affected at drill-down level**; aggregate gap calc is unaffected because supplier_waybill_lines is independent.
+4. **Phase 2 routing — Foodmart-360 pattern** (no SPECIAL_TAB_BUILDERS entry needed): App.jsx maps `reconciliation` → `suppliers` fetch; `supplier_reconciliation` field is added to `_build_suppliers_response` output. Dedicated `/api/data?tab=supplier_reconciliation` also works (in TAB_ALLOWLIST + STATIC_RESPONSE_TABS) — used for direct API access.
+5. **Reconciliation classification** — match: |gap| < 100 ₾; over_invoice: gap ≥ +100 (invoice exceeds ZED); over_waybill: gap ≤ −100 (ZED exceeds invoice). 100 ₾ threshold = owner choice.
+6. **Click-to-expand monthly breakdown** — frontend computes from `supplier_invoices` + `supplier_waybill_lines` (already in suppliers response); no extra backend round-trip.
+
+### Open / next session
+
+- 🟢 **0 commit ლოკალურად** — origin-ზე სრულ თანხვედრაშია 2026-05-08 დღეს.
+- 🟢 **Service restarted by owner 2026-05-08 დღეს** — new tab + endpoint live; static artifacts regenerated.
+- 🟡 **Top 5 reconciliation flags დარჩა გადასამოწმებელი:**
+   1. ფუდმარტი 109K — real services on invoice (known, will stay flagged forever; consider whitelist via excluded_from_analysis or "expected services" list)
+   2. ჯიდიაი -49K — ZED exceeds invoice (waybills awaiting invoice)
+   3. ზვიად თენიეშვილი 36K — landlord rent invoice without ZED (normal — services have no waybill); not in suppliers table
+   4. ჯეო ფუდთაიმი (ჩვენი ფირმა) -34K — internal transfer between own stores
+   5. შპს დიდანი 12K — services without waybill
+- 🟡 **Phase 3 — VAT input-side reconciliation** — extends `dashboard_pipeline/vat_reconciliation.py` to include input VAT (purchases). Cross-check vs bookkeeper's declaration. Red badge if >1% divergence.
+- 🟡 **Phase 4 — rs.ge SOAP automation for invoices** — blocked on rs.ge UI permission grant for `dashboard_api` sub-user. Endpoint exists at `webserv.rs.ge/specinvoices/` (403 without auth, exact .asmx path TBD). WayBillService SOAP works (services.rs.ge/WayBillService).
+- 🟡 **APScheduler race risk** — pipeline-ი 60წთ-ში თვითონ მუშაობს. ცოცხალი code edit-ის შემდეგ ფონური pipeline ძველ მონაცემს ჩაწერს. mitigation: commit-ის შემდეგ static artifacts ხელით regenerate ან service restart.
+- 🟡 **rs.ge buyer waybills field truncation in invoices** — XLS shows first 4 + "...", CSV (ფაქტურები მყიდველი.csv) has full list. Phase 1's `invoice_waybill_match` (foodmart-only) is misaligned; if drill-down per-invoice ZED list is needed, switch parser to CSV. Aggregate Phase 2 gap calc not affected.
+- 🟡 **Pre-existing items უცვლელი** — 13 ძველი test failure (test_expense_categories_incremental + test_foodmart_cashback_incremental); Tooltip layer; pos_income field rename.
+- ⏸ **Mini PC** — owner cloud უარი, hardware-ის ყიდვამდე გადადებული.
+
+### Live findings (2026-05-08 დღე — Laktalis case study)
+
+- **ლაქტალისი status mix:** 53 დადასტურებული + 1 დასადასტურებელი + 72 კორექტირებული + 40 პირველადი = 166 invoices. Sum of real (54): **55,277 ₾**. ემთხვევა ZED (54,520) + bank-paid (55,330).
+- **ფაქტურა per-product price = ZED per-product price** — 2.79 vs 2.80 ₾ for სანტე მაწონი 3.2% 400 გ. (ratio 1.00). სხვაობა მთლიანად რაოდენობაზეა — და რაოდენობაც წყდება სტატუსის ფილტრით.
+- **rs.ge waybill SOAP works** (services.rs.ge/WayBillService verified). **rs.ge invoice SOAP** endpoint at webserv.rs.ge/specinvoices/ (403 without auth, exact .asmx path unknown). Sub-user `dashboard_api:400333858` lacks ანგარიშფაქტურა permission per 2026-05-07 attempt — owner UI grant pending.
+- **ლაქტალისი 166 invoices reference 510 unique ZEDs total but 1,994 ZED-invoice references** (avg 3.91 references per ZED) — explained the 4× ratio before status filter; now confirmed-only invoices reference each ZED ~1× as expected.
+- **Owner-provided rs.ge CSV** (`ფაქტურები მყიდველი.csv`) was the breakthrough — XLS registry truncates ZED list at 4 entries with " ..." marker, but CSV has full list (28 ZED for invoice 348994969 vs 4 visible in XLS).
+
+### Memory updates (2026-05-08 დღე)
+
+- (none new — this session leveraged existing memories. Future memory candidate: `project_rsge_invoice_status_semantics.md` documenting the REAL_INVOICE_STATUSES rule.)
+
+### Verification commands (next session)
+
+```powershell
+# All Phase 2 tests:
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -m pytest tests/test_supplier_reconciliation.py tests/test_supplier_invoices_pipeline.py tests/test_rs_invoice_csv_parser.py -v
+# Expected: 80 passed (11 new + 6 pipeline + 47 parser + 16 fixture)
+
+# Verify reconciliation API:
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
+import urllib.request, json
+api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=supplier_reconciliation', timeout=30).read())
+s = api['supplier_reconciliation']['summary']
+print(f'Total gap: {s[\"total_gap_ge\"]:,.0f} ₾ (expected ~23K)')
+print(f'Match: {s[\"match_count\"]}, over_invoice: {s[\"over_invoice_count\"]}, over_waybill: {s[\"over_waybill_count\"]}')
+"
+# Expected: ~23,000 gap; 188 match, 29 over_invoice, 53 over_waybill
+
+# Verify Laktalis fixed:
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
+import urllib.request, json
+api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=suppliers', timeout=30).read())
+lak = api['supplier_invoices_summary']['404898973']
+print(f'ლაქტალისი — total_amount: {lak[\"total_amount\"]:,.2f}, total_amount_real: {lak[\"total_amount_real\"]:,.2f}')
+print(f'  status_counts: {lak[\"status_counts\"]}')
+"
+# Expected: total_amount=218,255.25, total_amount_real=55,277.29
+```
+
+---
+
+## 0a. წინა session-ის შედეგი (2026-05-08 ღამე) — Foodmart 360° წმინდა მოგება + bilateral netting + manual journal + ანალიზიდან მოხსნა
 
 🎉 **6 ცვლილების სერია 1 სესიაში**: 4 ახალი მოდული + 2 frontend-ი + 16 ახალი ტესტი (ყველა მწვანე) + 4 ახალი მეხსიერების ფაილი. **5 commit ლოკალურად 2026-05-09 დილას** (`c62a588` gitignore + `5783fee` manual-payments fix + `0c5c522` bilateral + exclude + `5458740` foodmart-360 UI + `5f11dc4` data). origin-ზე ჯერ არ push-ნულა.
 
