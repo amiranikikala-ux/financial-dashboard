@@ -1012,6 +1012,7 @@ export default function SupplierModal({
                     <th style={{ padding: '6px 8px', borderBottom: '1px solid #334155' }}>თარიღი</th>
                     <th style={{ padding: '6px 8px', borderBottom: '1px solid #334155' }}>ზედნადების №</th>
                     <th style={{ padding: '6px 8px', borderBottom: '1px solid #334155', textAlign: 'right' }}>თანხა</th>
+                    <th style={{ padding: '6px 8px', borderBottom: '1px solid #334155' }}>მაღაზია</th>
                     <th style={{ padding: '6px 8px', borderBottom: '1px solid #334155' }}>ტიპი</th>
                     <th style={{ padding: '6px 8px', borderBottom: '1px solid #334155' }}>სტატუსი</th>
                   </tr>
@@ -1027,6 +1028,17 @@ export default function SupplierModal({
                       }}>
                         {w.is_return ? '−' : ''}{fmtPrecise(w.amount)}
                       </td>
+                      <td
+                        style={{ padding: '6px 8px', color: '#cbd5e1', whiteSpace: 'nowrap' }}
+                        title={w.delivery_location || ''}
+                      >
+                        {w.store ? (
+                          <span style={{
+                            fontSize: 11, padding: '2px 6px', borderRadius: 4,
+                            background: '#1e293b', color: '#a5b4fc', border: '1px solid #334155',
+                          }}>{w.store}</span>
+                        ) : <span style={{ color: '#475569', fontSize: 11 }}>—</span>}
+                      </td>
                       <td style={{ padding: '6px 8px', color: '#cbd5e1' }}>
                         {w.is_return ? (
                           <span style={{
@@ -1040,7 +1052,7 @@ export default function SupplierModal({
                   ))}
                   {filteredWaybills.length === 0 && (
                     <tr>
-                      <td colSpan="5" style={{ padding: 14, textAlign: 'center', color: '#94a3b8', fontStyle: 'italic' }}>
+                      <td colSpan="6" style={{ padding: 14, textAlign: 'center', color: '#94a3b8', fontStyle: 'italic' }}>
                         ამ თვეში ზედნადები არ არის.
                       </td>
                     </tr>

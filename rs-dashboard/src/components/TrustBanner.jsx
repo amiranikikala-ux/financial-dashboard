@@ -106,9 +106,12 @@ export default function TrustBanner({
   );
   const manualCardAmount = allPaymentSplitCards.find((c) => c.key === 'manual')?.amount || 0;
   const hasManualPayments = manualCardAmount > 0;
-  const paymentSplitCards = hasManualPayments
-    ? allPaymentSplitCards
-    : allPaymentSplitCards.filter((c) => c.key === 'combined');
+  // ყოველთვის 3 ბარათი ვაჩვენოთ — ბანკი / ნაღდი / სულ — რათა owner-მა
+  // ცხადად დაინახოს რომ ნაღდი ცარიელია (0 ₾) როცა ცარიელია, და ცხადად
+  // დაინახოს breakdown როცა ნაღდი ფიქსირდება. ერთ-ბარათიანი ხედვა
+  // (მხოლოდ „სულ გადახდილი") owner-ისთვის ცრუ ალარმს ქმნიდა — „აქ სად
+  // გაქრა ჩემი ნაღდი ფული?".
+  const paymentSplitCards = allPaymentSplitCards;
   const showWaybillPartial = responseMeta.tab === 'waybills' && Boolean(waybillsSummary?.has_more);
 
   return (
@@ -119,16 +122,16 @@ export default function TrustBanner({
           <span className="trust-banner-scope">
             {toGeorgian(responseMeta.scope_ka) || 'დამხმარე ანალიტიკური ხედვა.'}
           </span>
-          {showPaymentScope && hasManualPayments ? (
+          {showPaymentScope ? (
             <span className="trust-banner-hint">
-              ბანკი და ნაღდი ცალ-ცალკე ჩანს
+              ბანკი და ნაღდი ცალ-ცალკე
             </span>
           ) : null}
         </div>
       </div>
 
       {showPaymentScope ? (
-        <div className={`trust-banner-stats ${hasManualPayments ? '' : 'trust-banner-stats--single'}`}>
+        <div className="trust-banner-stats">
           {paymentSplitCards.map((card) => (
             <div key={card.key} className={`trust-stat trust-stat--${card.modifier}`}>
               <div className="trust-stat-head">
@@ -143,7 +146,6 @@ export default function TrustBanner({
               ) : null}
               <div className="trust-stat-sub">
                 {card.supplierCount} მომწოდებელი
-                {!hasManualPayments && card.key === 'combined' ? ' · ბანკით 100%' : ''}
               </div>
             </div>
           ))}

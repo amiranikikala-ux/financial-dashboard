@@ -1254,14 +1254,17 @@ def _process_rs_suppliers(df, agg_df, rs_files, supplier_registry_cfg, script_di
         'თანხა': 'nominal_amount',
         'სტატუსი': 'status',
         'ტიპი': 'type',
-        'ეფექტური თანხა': 'effective_amount'
+        'ეფექტური თანხა': 'effective_amount',
+        'მიწოდების ადგილი': 'delivery_location',
     }
-    
+
     waybills_df = df[[c for c in safe_cols.keys() if c in df.columns]].rename(columns=safe_cols)
     waybills_df = waybills_df.fillna("N/A")
 
     waybills_data = waybills_df.to_dict(orient='records')
-    supplier_waybill_lines = _build_supplier_waybill_lines(waybills_data)
+    supplier_waybill_lines = _build_supplier_waybill_lines(
+        waybills_data, object_mapping=object_mapping
+    )
 
     manual_grand = float(sum(manual_only.values()))
     return {
@@ -1283,7 +1286,7 @@ def _process_rs_suppliers(df, agg_df, rs_files, supplier_registry_cfg, script_di
     }
 
 
-def _build_supplier_waybill_lines(waybills_data):
+def _build_supplier_waybill_lines(waybills_data, object_mapping=None):
     """Index waybills by supplier tax_id for the SupplierModal "ზედნადებები"
     panel. Drops cancelled (გაუქმებული) entries — keeps active + completed +
     return-type rows so the user sees the full live picture per supplier."""
@@ -1304,6 +1307,13 @@ def _build_supplier_waybill_lines(waybills_data):
         except (TypeError, ValueError):
             amount = 0.0
         wb_type = str(row.get("type") or "").strip()
+        delivery = str(row.get("delivery_location") or "").strip()
+        store = detect_object(
+            "rs_waybill",
+            text=delivery,
+            object_mapping=object_mapping,
+            rs_location=delivery,
+        ) if delivery and delivery != "N/A" else ""
         by_tid.setdefault(tid, []).append({
             "date": date_str,
             "waybill_number": str(row.get("waybill_number") or ""),
@@ -1311,6 +1321,8 @@ def _build_supplier_waybill_lines(waybills_data):
             "status": status,
             "type": wb_type,
             "is_return": "დაბრუნება" in wb_type,
+            "store": store,
+            "delivery_location": delivery if delivery != "N/A" else "",
         })
     for tid, lines in by_tid.items():
         lines.sort(key=lambda r: r.get("date") or "", reverse=True)
