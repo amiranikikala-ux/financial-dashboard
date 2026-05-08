@@ -490,12 +490,20 @@ export default function SupplierModal({
     return Array.from(months).sort().reverse();
   }, [supplierPayments]);
 
-  const effectivePaymentsMonth = paymentsMonthFilter === '__all__'
-    ? ''
+  const undatedPaymentsCount = useMemo(
+    () => supplierPayments.filter((p) => !String(p?.date || '').trim()).length,
+    [supplierPayments],
+  );
+
+  const effectivePaymentsMonth = paymentsMonthFilter === '__all__' || paymentsMonthFilter === '__undated__'
+    ? paymentsMonthFilter
     : (paymentsMonthFilter || paymentMonths[0] || '');
 
   const filteredPayments = useMemo(() => {
-    if (!effectivePaymentsMonth) return supplierPayments;
+    if (effectivePaymentsMonth === '__all__' || !effectivePaymentsMonth) return supplierPayments;
+    if (effectivePaymentsMonth === '__undated__') {
+      return supplierPayments.filter((p) => !String(p?.date || '').trim());
+    }
     return supplierPayments.filter((p) => String(p?.date || '').startsWith(effectivePaymentsMonth));
   }, [supplierPayments, effectivePaymentsMonth]);
 
@@ -861,6 +869,22 @@ export default function SupplierModal({
                 >
                   ყველა თვე
                 </button>
+                {undatedPaymentsCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setPaymentsMonthFilter('__undated__')}
+                    title="ჩანაწერები თარიღის გარეშე — ჩვეულებრივ legacy CSV-დან აღდგენილი"
+                    style={{
+                      background: paymentsMonthFilter === '__undated__' ? '#f59e0b' : '#1e293b',
+                      color: paymentsMonthFilter === '__undated__' ? '#0f172a' : '#fcd34d',
+                      border: `1px solid ${paymentsMonthFilter === '__undated__' ? '#f59e0b' : '#92400e'}`,
+                      borderRadius: 6, padding: '4px 10px', fontSize: 13,
+                      cursor: 'pointer', fontWeight: paymentsMonthFilter === '__undated__' ? 600 : 400,
+                    }}
+                  >
+                    📅 თარიღის გარეშე ({undatedPaymentsCount})
+                  </button>
+                )}
               </div>
               <span style={{ flex: 1 }} />
               <span style={{ fontSize: 13, color: '#94a3b8' }}>
