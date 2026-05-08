@@ -64,6 +64,8 @@ Financial_Analysis/გაყიდული პროდუქტები ს�
 Financial_Analysis/გაყიდული პროდუქტები სოფ დვაბზუ/
 # Imported products CSVs (RS.ge waybill data, sensitive supplier/price info)
 Financial_Analysis/შემოტანილი პროდუქცია/
+# rs.ge invoice exports (CSV/XLS — regenerated from rs.ge, owner's source data)
+Financial_Analysis/რს ფაქტურები/
 # MegaPlus daily backups (PLUS_*.zip — large, machine-local, regenerated each backup cycle)
 Financial_Analysis/მეგაპლიუსის არქიტექტურა/
 
