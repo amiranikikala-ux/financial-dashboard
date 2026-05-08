@@ -12,8 +12,11 @@ const SUPPLIER_SORT_OPTIONS = [
 const PAYMENT_SCOPE_LABEL_KA = {
   strict_bank_only: 'ბანკით დადასტურებული',
   manual_only: 'მხოლოდ ნაღდით / ჟურნალით',
-  strict_and_manual: 'ბანკით + ჟურნალით',
+  strict_bank_plus_manual: 'ბანკით + ნაღდით',
   unpaid_or_unmatched: 'გადაუხდელი / დაუდგენელი',
+  bilateral_netted: 'ფაქტურით კომპენსირებული',
+  excluded_from_analysis: 'ანალიზიდან მოხსნილი',
+  negative_adjustment: 'უარყოფითი კორექცია',
 };
 
 function scopeLabel(scope) {
@@ -217,15 +220,23 @@ export default function Suppliers({
     [nonRsRows, getDisplay],
   );
 
-  const totalRealDebt = useMemo(
-    () => realSuppliers.reduce((sum, sup) => sum + (Number(getDisplay(sup).debt) || 0), 0),
-    [realSuppliers, getDisplay],
-  );
-
-  const suppliersWithDebt = useMemo(
-    () => realSuppliers.filter((sup) => Math.abs(Number(getDisplay(sup).debt) || 0) >= 1).length,
-    [realSuppliers, getDisplay],
-  );
+  const debtSplit = useMemo(() => {
+    let weOweTotal = 0;
+    let weOweCount = 0;
+    let overpaidTotal = 0;
+    let overpaidCount = 0;
+    for (const sup of realSuppliers) {
+      const debt = Number(getDisplay(sup).debt) || 0;
+      if (debt >= 1) {
+        weOweTotal += debt;
+        weOweCount += 1;
+      } else if (debt <= -1) {
+        overpaidTotal += -debt;
+        overpaidCount += 1;
+      }
+    }
+    return { weOweTotal, weOweCount, overpaidTotal, overpaidCount };
+  }, [realSuppliers, getDisplay]);
 
   const payVal = parseMoney(payAmount);
   const showCashColumn = useMemo(
@@ -333,16 +344,30 @@ export default function Suppliers({
           <span className="sup-toolbar-period">{periodLabel}</span>
           <span
             className="sup-toolbar-period"
-            title={`${suppliersWithDebt} მომწოდებელს აქვს ღია ვალი`}
+            title={`${debtSplit.weOweCount} მომწოდებელს ვერ გადავუხადეთ`}
             style={{
-              background: totalRealDebt > 0 ? '#451a03' : '#064e3b',
-              color: totalRealDebt > 0 ? '#fcd34d' : '#6ee7b7',
-              border: `1px solid ${totalRealDebt > 0 ? '#f59e0b' : '#10b981'}`,
+              background: '#451a03',
+              color: '#fcd34d',
+              border: '1px solid #f59e0b',
               fontWeight: 600,
             }}
           >
-            სულ ვალი: {formatNumber(totalRealDebt)} ₾ ({suppliersWithDebt})
+            გვმართებთ: {formatNumber(debtSplit.weOweTotal)} ₾ ({debtSplit.weOweCount})
           </span>
+          {debtSplit.overpaidCount > 0 ? (
+            <span
+              className="sup-toolbar-period"
+              title={`${debtSplit.overpaidCount} მომწოდებელთან ზედმეტი გადავიხადეთ — შესამოწმებელია`}
+              style={{
+                background: '#1e1b4b',
+                color: '#a5b4fc',
+                border: '1px solid #6366f1',
+                fontWeight: 600,
+              }}
+            >
+              ზედმეტი გადახდილი: {formatNumber(debtSplit.overpaidTotal)} ₾ ({debtSplit.overpaidCount})
+            </span>
+          ) : null}
         </div>
 
         <div className="sup-toolbar-search">
@@ -608,7 +633,22 @@ export default function Suppliers({
                   {showCashColumn && (
                     <td className="sup-td-num sup-num-cash">{formatNumber(d.manualTotal ?? 0)}</td>
                   )}
-                  <td className="sup-td-num sup-num-total">{formatNumber(d.paid)}</td>
+                  <td
+                    className="sup-td-num sup-num-total"
+                    title={d.paymentScope === 'bilateral_netted'
+                      ? 'ფაქტურით კომპენსირებული — არა რეალური გადახდა'
+                      : undefined}
+                  >
+                    {formatNumber(d.paid)}
+                    {d.paymentScope === 'bilateral_netted' ? (
+                      <span
+                        className="sup-num-bilateral-pill"
+                        aria-label="bilateral netting"
+                      >
+                        ⇄
+                      </span>
+                    ) : null}
+                  </td>
                   <td className={`sup-td-num sup-td-debt ${hasDebt ? 'is-on' : ''}`}>
                     {formatNumber(d.debt)}
                   </td>
@@ -635,7 +675,7 @@ export default function Suppliers({
       {archivedSuppliers.length > 0 ? (
         <CollapsibleSection
           title={`📦 არქივი (${archivedSuppliers.length})`}
-          subtitle="დაარქივებული ფირმები — მთავარ ცხრილში არ ჩანან, მაგრამ თანხები იჯამება ჩვეულებრივ. დაბრუნებისთვის — ↩"
+          subtitle="დაარქივებული ფირმები — მთავარი ცხრილიდან და ვალის ჯამიდან გამოკლდება. დაბრუნებისთვის — ↩"
           defaultOpen={false}
         >
           <div className="non-rs-list">

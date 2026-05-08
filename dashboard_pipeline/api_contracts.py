@@ -2043,7 +2043,24 @@ def _annotate_archive_flag(suppliers):
         return suppliers
     for sup in suppliers:
         tid = _extract_tax_id_from_org(sup.get("ორგანიზაცია"))
-        sup["archived"] = bool(tid and tid in archived_map)
+        entry = archived_map.get(tid) if tid else None
+        sup["archived"] = bool(entry and entry.get("archived_at"))
+    return suppliers
+
+
+def refresh_archive_runtime_flags(suppliers):
+    """Re-apply live archive.json flags (archived + excluded_from_analysis)
+    to a possibly-cached suppliers list. Used by the static-artifact
+    serving path so 📥 / 🚫 button presses are visible without waiting
+    for the next pipeline regeneration."""
+    archived_map = _load_supplier_archive()
+    for sup in suppliers:
+        tid = _extract_tax_id_from_org(sup.get("ორგანიზაცია"))
+        entry = archived_map.get(tid) if tid else None
+        sup["archived"] = bool(entry and entry.get("archived_at"))
+        sup["excluded_from_analysis"] = bool(entry and entry.get("excluded_from_analysis"))
+        if entry and entry.get("exclusion_reason"):
+            sup["exclusion_reason"] = entry["exclusion_reason"]
     return suppliers
 
 

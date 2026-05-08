@@ -360,7 +360,18 @@ def get_tab_payload(
 
     if not has_dynamic_inputs and tab in STATIC_RESPONSE_TABS:
         try:
-            return load_artifact(tab)
+            artifact = load_artifact(tab)
+            # archive.json changes between pipeline regenerations are NOT in
+            # the static artifact, so re-apply runtime flags (archived +
+            # excluded_from_analysis) per request. Mutation is idempotent.
+            # Owner-facing impact: 📥 / 🚫 button presses reflect immediately,
+            # not after the next pipeline run.
+            if tab == "suppliers" and isinstance(artifact, dict):
+                from dashboard_pipeline.api_contracts import refresh_archive_runtime_flags
+                sups = artifact.get("suppliers")
+                if isinstance(sups, list):
+                    refresh_archive_runtime_flags(sups)
+            return artifact
         except Exception as exc:
             logger.warning("Static artifact fallback for %s: %s", tab, exc)
 

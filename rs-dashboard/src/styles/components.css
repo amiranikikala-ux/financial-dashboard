@@ -3725,6 +3725,16 @@
   position: relative;
 }
 
+.sup-num-bilateral-pill {
+  display: inline-block;
+  margin-left: 0.45rem;
+  padding: 0 4px;
+  color: #c084fc;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: help;
+}
+
 .sup-num-return-pill {
   display: inline-block;
   margin-left: 0.45rem;
@@ -3766,7 +3776,7 @@
               0 0 6px rgba(251, 191, 36, 0.45);
 }
 
-.sup-row-dot--strict_and_manual {
+.sup-row-dot--strict_bank_plus_manual {
   background: #a5b4fc;
   box-shadow: 0 0 0 1px rgba(165, 180, 252, 0.32),
               0 0 6px rgba(165, 180, 252, 0.45);
@@ -3775,6 +3785,24 @@
 .sup-row-dot--unpaid_or_unmatched {
   background: rgba(148, 163, 184, 0.55);
   box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.22);
+}
+
+.sup-row-dot--bilateral_netted {
+  background: #c084fc;
+  box-shadow: 0 0 0 1px rgba(192, 132, 252, 0.32),
+              0 0 6px rgba(192, 132, 252, 0.45);
+}
+
+.sup-row-dot--excluded_from_analysis {
+  background: #f87171;
+  box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.32),
+              0 0 6px rgba(248, 113, 113, 0.45);
+}
+
+.sup-row-dot--negative_adjustment {
+  background: #fb923c;
+  box-shadow: 0 0 0 1px rgba(251, 146, 60, 0.32),
+              0 0 6px rgba(251, 146, 60, 0.45);
 }
 
 .sup-table tbody tr.sup-row:hover .sup-row-dot {
