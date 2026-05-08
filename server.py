@@ -77,6 +77,9 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
 # Pipeline scheduler state
 # ---------------------------------------------------------------------------
 SCHEDULE_INTERVAL_MIN = int(os.environ.get("DASHBOARD_REFRESH_MINUTES", "60"))
+# How often to auto-fetch BOG + rs.ge into the parquet caches (TBC stays
+# manual because it requires a DigiPass OTP). 0 disables.
+BANK_REFRESH_INTERVAL_MIN = int(os.environ.get("BANK_REFRESH_MINUTES", "60"))
 
 _pipeline_lock = Lock()
 _pipeline_status = {
@@ -167,25 +170,44 @@ def _run_pipeline():
 
 
 def _schedule_pipeline_job():
-    """Start APScheduler for periodic pipeline regeneration."""
-    if SCHEDULE_INTERVAL_MIN <= 0:
-        logger.info("Scheduled refresh disabled (DASHBOARD_REFRESH_MINUTES=0)")
+    """Start APScheduler for periodic pipeline regeneration AND auto bank
+    refresh (BOG + rs.ge only — TBC needs an owner-supplied OTP)."""
+    if SCHEDULE_INTERVAL_MIN <= 0 and BANK_REFRESH_INTERVAL_MIN <= 0:
+        logger.info(
+            "All schedulers disabled (DASHBOARD_REFRESH_MINUTES=0, "
+            "BANK_REFRESH_MINUTES=0)"
+        )
         return None
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
         scheduler = BackgroundScheduler(daemon=True)
-        scheduler.add_job(
-            _run_pipeline,
-            "interval",
-            minutes=SCHEDULE_INTERVAL_MIN,
-            id="pipeline_refresh",
-            max_instances=1,
-            misfire_grace_time=60,
-        )
+        if SCHEDULE_INTERVAL_MIN > 0:
+            scheduler.add_job(
+                _run_pipeline,
+                "interval",
+                minutes=SCHEDULE_INTERVAL_MIN,
+                id="pipeline_refresh",
+                max_instances=1,
+                misfire_grace_time=60,
+            )
+            logger.info(
+                "Scheduled pipeline refresh every %d min", SCHEDULE_INTERVAL_MIN
+            )
+        if BANK_REFRESH_INTERVAL_MIN > 0:
+            scheduler.add_job(
+                lambda: _run_bank_refresh(nonce=None),
+                "interval",
+                minutes=BANK_REFRESH_INTERVAL_MIN,
+                id="bank_refresh_auto",
+                max_instances=1,
+                misfire_grace_time=300,
+            )
+            logger.info(
+                "Scheduled bank refresh (BOG + rs.ge) every %d min — "
+                "TBC stays manual",
+                BANK_REFRESH_INTERVAL_MIN,
+            )
         scheduler.start()
-        logger.info(
-            "Scheduled pipeline refresh every %d min", SCHEDULE_INTERVAL_MIN
-        )
         return scheduler
     except ImportError:
         logger.warning("apscheduler not installed — scheduled refresh disabled")
@@ -473,15 +495,22 @@ async def trigger_refresh(request: Request):
 # ---------------------------------------------------------------------------
 
 
-def _run_bank_refresh(nonce: str) -> None:
+def _run_bank_refresh(nonce: str | None) -> None:
     """Thread target: call the bank orchestrator, then kick a pipeline regen.
 
-    The orchestrator owns its own concurrency (BOG + rs.ge in parallel,
-    then TBC). After it returns, we trigger `_run_pipeline` so the
-    refreshed parquet caches actually flow into `data.json`. The pipeline
-    lock makes this race-safe vs the global `/api/refresh` button.
+    When ``nonce`` is provided, runs the full BOG + rs.ge + TBC orchestrator
+    (TBC consumes the OTP). When ``nonce`` is None, runs BOG + rs.ge only —
+    used by the auto-scheduler since TBC's DigiPass code can't be obtained
+    without owner action.
+
+    After the API fetch, we trigger `_run_pipeline` so the refreshed parquet
+    caches actually flow into `data.json`. The pipeline lock makes this
+    race-safe vs the global `/api/refresh` button.
     """
-    from dashboard_pipeline.bank_refresh import refresh_all_banks
+    from dashboard_pipeline.bank_refresh import (
+        refresh_all_banks,
+        refresh_bog_and_rsge_only,
+    )
 
     if not _bank_refresh_lock.acquire(blocking=False):
         logger.info("Bank refresh already running, skipping")
@@ -490,23 +519,29 @@ def _run_bank_refresh(nonce: str) -> None:
         _bank_refresh_status["state"] = "running"
         _bank_refresh_status["started_at"] = datetime.now(timezone.utc).isoformat()
         _bank_refresh_status["last_error"] = None
-        logger.info("Bank refresh started")
-
-        result = refresh_all_banks(nonce)
+        if nonce is None:
+            logger.info("Bank refresh started (auto: BOG + rs.ge, TBC skipped)")
+            result = refresh_bog_and_rsge_only()
+        else:
+            logger.info("Bank refresh started (manual: BOG + rs.ge + TBC)")
+            result = refresh_all_banks(nonce)
 
         _bank_refresh_status["last_result"] = result
         _bank_refresh_status["completed_at"] = datetime.now(timezone.utc).isoformat()
         _bank_refresh_status["runs_total"] += 1
 
         any_ok = any(result[k]["ok"] for k in ("bog", "rsge", "tbc"))
-        all_ok = all(result[k]["ok"] for k in ("bog", "rsge", "tbc"))
+        # In auto-mode (nonce=None) TBC is intentionally skipped — don't
+        # treat that as a failure.
+        check_keys = ("bog", "rsge") if nonce is None else ("bog", "rsge", "tbc")
+        all_ok = all(result[k]["ok"] for k in check_keys)
         if all_ok:
             _bank_refresh_status["state"] = "idle"
         else:
             _bank_refresh_status["state"] = "error"
             failures = [
                 f"{k}={result[k].get('error', 'failed')}"
-                for k in ("bog", "rsge", "tbc")
+                for k in check_keys
                 if not result[k]["ok"]
             ]
             _bank_refresh_status["last_error"] = "; ".join(failures)[:500]

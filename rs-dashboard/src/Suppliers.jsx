@@ -296,16 +296,40 @@ export default function Suppliers({
     if (!filteredSuppliers.length) return;
     const rows = filteredSuppliers.map((sup) => {
       const d = getDisplay(sup);
+      const arch = isArchived(sup);
+      const exc = isExcluded(sup);
+      let status = 'მთავარი';
+      let note = '';
+      if (arch && exc) {
+        status = 'არქივი + ანალიზიდან მოხსნილი';
+        note = sup.exclusion_reason || '';
+      } else if (arch) {
+        status = 'არქივი';
+      } else if (exc) {
+        status = 'ანალიზიდან მოხსნილი';
+        note = sup.exclusion_reason || '';
+      } else if (d.paymentScope === 'bilateral_netted') {
+        status = 'ფაქტურით კომპენსირებული';
+        note = 'ბანკი=0, ნაღდი=0 — ფაქტურით ჩათვლა (cashback)';
+      }
+      // For excluded suppliers, show the actual cash flow (bank+manual=0),
+      // not the forced override that drives debt to 0 — accountant needs
+      // truth about money movement.
+      const realPaid = exc
+        ? (Number(d.strictBankPaid) || 0) + (Number(d.manualTotal) || 0)
+        : d.paid;
       return {
+        სტატუსი: status,
         ორგანიზაცია: sup['ორგანიზაცია'],
         რაოდენობა: sup.waybills_count,
         ნომინალური: Number(sup.total_nominal) || 0,
         'რეალური ჯამი': Number(sup.total_effective) || 0,
-        'strict ბანკით გადახდა': d.strictBankPaid ?? 0,
+        'ბანკით გადახდა': d.strictBankPaid ?? 0,
         'ნაღდით გადახდა': d.manualTotal ?? 0,
-        'სულ გადახდილი': d.paid,
+        'სულ გადახდილი': realPaid,
         დავალიანება: d.debt,
-        'გადახდის scope': d.paymentScope,
+        'გადახდის ტიპი': d.paymentScope,
+        შენიშვნა: note,
       };
     });
     const XLSX = await loadXlsxModule();
@@ -416,7 +440,7 @@ export default function Suppliers({
             className="sup-toolbar-action"
             disabled={filteredSuppliers.length === 0}
             onClick={handleDownloadSuppliersExcel}
-            title="ცხრილის Excel-ად ჩამოტვირთვა (ძებნა თუ ცარიელია — ყველა)"
+            title="ყველა ფირმის Excel-ად ჩამოტვირთვა (სტატუსით — მთავარი / არქივი / მოხსნილი / კომპენსირებული)"
           >
             <DownloadIcon />
             <span>Excel</span>

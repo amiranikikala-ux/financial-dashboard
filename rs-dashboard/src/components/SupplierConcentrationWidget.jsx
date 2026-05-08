@@ -106,8 +106,14 @@ export default function SupplierConcentrationWidget({ payload }) {
         <div style={{ fontSize: 14, fontWeight: 700 }}>
           ⚠️ მომწოდებლების კონცენტრაცია
         </div>
-        <div style={{ fontSize: 11, color: '#94a3b8' }}>
+        <div
+          style={{ fontSize: 11, color: '#94a3b8' }}
+          title="HHI / Top-N გათვლა მოიცავს ყველა მომწოდებელს — archive/მოხსნილსაც"
+        >
           {totalSuppliers} მომწოდებელი · სულ {fmt(totalSpend)}
+          <span style={{ marginLeft: 6, fontSize: 10, color: '#64748b' }}>
+            (archive/მოხსნილი ჩათვლით)
+          </span>
         </div>
       </div>
 

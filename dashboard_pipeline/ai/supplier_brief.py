@@ -149,6 +149,10 @@ import unicodedata
 from datetime import date, datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from dashboard_pipeline.supplier_profitability import (
+    SUPPLIER_PROFITABILITY_PROTECTED_TAX_IDS,
+)
+
 
 logger = logging.getLogger(__name__)
 
@@ -1077,9 +1081,19 @@ def _build_portfolio_report(
     top_candidates: List[Dict[str, Any]] = []
     aggregate_savings = 0.0
 
-    for idx, row in enumerate(ranked[: top_n * 2]):  # over-sample, then rank
+    # Over-sample more aggressively because protected suppliers (regulated
+    # categories like cigarettes) get filtered out — we still want top_n
+    # actionable candidates left after the filter.
+    for idx, row in enumerate(ranked[: top_n * 4]):
         org = _safe_str(row.get("ორგანიზაცია"))
         tid = _extract_tax_id(org)
+        # Cigarettes (Parliament / Marlboro / Camel etc.) have legally
+        # regulated retail prices — there's no negotiation play available,
+        # so they should never appear in the "Top-N negotiation candidates"
+        # ranking. They still contribute to HHI / Top-N concentration share
+        # (computed earlier) since those are pure-spend signals.
+        if tid and tid in SUPPLIER_PROFITABILITY_PROTECTED_TAX_IDS:
+            continue
         imported_entry = _find_imported_supplier_entry(
             imported_suppliers, tax_id=tid, resolved_name=org
         )

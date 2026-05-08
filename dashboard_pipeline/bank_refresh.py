@@ -253,6 +253,68 @@ def refresh_all_banks(
     }
 
 
+def refresh_bog_and_rsge_only(
+    *,
+    today: date | None = None,
+    bog_runner: Callable[..., Any] = _default_bog_runner,
+    rsge_runner: Callable[..., Any] = _default_rsge_runner,
+    state_path: Path | None = None,
+) -> dict[str, Any]:
+    """Refresh BOG + rs.ge caches without an OTP.
+
+    TBC requires a 9-digit DigiPass OTP that only the owner can supply,
+    so the auto-scheduler can keep BOG + rs.ge fresh every cycle while
+    TBC stays a manual button click. Output schema mirrors
+    ``refresh_all_banks`` for caller reuse — TBC slot is an explicit
+    ``skipped`` placeholder.
+    """
+    today = today or date.today()
+    sf = state_path or STATE_FILE
+    state = _read_state_at(sf)
+
+    bog_start, bog_end = _bank_window(state, "bog", today, BOG_OVERLAP_DAYS)
+    rsge_start, rsge_end = _rsge_window(today)
+
+    started_at = datetime.now(timezone.utc).isoformat()
+
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        bog_fut = ex.submit(_run_one, "bog", bog_runner, bog_start, bog_end)
+        rsge_fut = ex.submit(_run_one, "rsge", rsge_runner, rsge_start, rsge_end)
+        bog_result = bog_fut.result()
+        rsge_result = rsge_fut.result()
+
+    tbc_result = {
+        "ok": False,
+        "error": "skipped — auto-refresh does not consume OTP; TBC stays manual",
+        "added_total": 0,
+        "updated_total": 0,
+        "duration_s": 0.0,
+        "skipped": True,
+    }
+
+    # Persist windows we actually ran (TBC unchanged).
+    tbc_window = _bank_window(state, "tbc", today, TBC_OVERLAP_DAYS)
+    _persist_state(
+        sf,
+        state,
+        bog_result=bog_result,
+        bog_window=(bog_start, bog_end),
+        rsge_result=rsge_result,
+        rsge_window=(rsge_start, rsge_end),
+        tbc_result=tbc_result,
+        tbc_window=tbc_window,
+    )
+
+    return {
+        "started_at": started_at,
+        "ended_at": datetime.now(timezone.utc).isoformat(),
+        "today": today.isoformat(),
+        "bog": bog_result,
+        "rsge": rsge_result,
+        "tbc": tbc_result,
+    }
+
+
 # ---------------------------------------------------------------------------
 # State helpers (parameterized so tests can inject a tmp_path)
 # ---------------------------------------------------------------------------
