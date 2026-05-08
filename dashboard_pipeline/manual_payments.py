@@ -309,11 +309,23 @@ def sync_manual_payments_journal(rs_files):
 
 def load_manual_payments():
     """
-    ნაღდი / სხვა არხი — იკითხება manual_payments.csv (ჟურნალის ყველა ხაზიდან amount>0 ჯამდება ID-ზე).
+    ნაღდი / სხვა არხი (ერთიანი ჯამი per-tax-id):
+    1) manual_payments.csv (legacy, ჯამდება amount>0 ID-ზე)
+    2) manual_payments_journal.csv (event-based, ღია (არა-deleted) entries იმატება)
     """
+    from dashboard_pipeline import manual_payments_journal as _journal
     path = manual_payments_csv_path()
     full = read_manual_journal_full(path)
-    return {tid: v["amount"] for tid, v in full.items() if v.get("amount", 0) > 0}
+    out = {tid: v["amount"] for tid, v in full.items() if v.get("amount", 0) > 0}
+    for entry in _journal.read_active_entries():
+        tid = str(entry.get("tax_id") or "").strip()
+        if not tid:
+            continue
+        amt = float(entry.get("amount") or 0)
+        if amt <= 0:
+            continue
+        out[tid] = out.get(tid, 0.0) + amt
+    return out
 
 
 def load_manual_payment_rows():
