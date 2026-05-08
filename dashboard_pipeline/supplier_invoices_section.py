@@ -32,6 +32,20 @@ BUYER_XLS_REL = "Financial_Analysis/რს ფაქტურები/ფაქ
 BUYER_CSV_REL = "Financial_Analysis/რს ფაქტურები/ფაქტურები მყიდველი.csv"
 SELLER_CSV_REL = "Financial_Analysis/რს ფაქტურები/ფაქტურები გამყიდველი.csv"
 
+# rs.ge buyer-registry status semantics (verified 2026-05-08 against ლაქტალისი
+# 166-invoice case: confirmed-only sum ≈ ZED total ≈ bank-paid total, while
+# raw all-status sum is ~4× that):
+#   დადასტურებული    — final, settled invoice (counts as real)
+#   დასადასტურებელი  — most-recent invoice awaiting buyer confirmation (real)
+#   პირველადი         — supplier-side draft, not yet finalized (NOT real)
+#   კორექტირებული    — superseded version that was replaced by a correction
+#                       (NOT real — its replacement appears as დადასტურებული)
+#   გაუქმებული       — cancelled (NOT real)
+# `total_amount` keeps the legacy all-status sum for backward compat; the new
+# `total_amount_real` field is what the reconciliation tab + working-capital
+# views should compare against ZED / bank payments.
+REAL_INVOICE_STATUSES = frozenset({"დადასტურებული", "დასადასტურებელი"})
+
 
 def _iso_or_none(value) -> str | None:
     if value is None:
@@ -97,15 +111,21 @@ def _seller_row_to_dict(row) -> dict[str, Any]:
 
 def _build_summary(invoices: list[dict[str, Any]]) -> dict[str, Any]:
     status_counts: dict[str, int] = {}
+    real_invoices: list[dict[str, Any]] = []
     for inv in invoices:
         st = inv.get("status") or ""
         status_counts[st] = status_counts.get(st, 0) + 1
+        if st in REAL_INVOICE_STATUSES:
+            real_invoices.append(inv)
     iso_dates = [inv["date_issued"] for inv in invoices if inv.get("date_issued")]
     last_date = max(iso_dates) if iso_dates else None
     return {
         "invoice_count": len(invoices),
         "total_amount": round(sum(inv["amount"] for inv in invoices), 2),
         "total_vat": round(sum(inv["vat"] for inv in invoices), 2),
+        "real_invoice_count": len(real_invoices),
+        "total_amount_real": round(sum(inv["amount"] for inv in real_invoices), 2),
+        "total_vat_real": round(sum(inv["vat"] for inv in real_invoices), 2),
         "status_counts": status_counts,
         "last_invoice_date": last_date,
     }
