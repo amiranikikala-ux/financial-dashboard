@@ -937,7 +937,7 @@ def _audit_iban_taxid_conflicts(script_dir):
     return summary_rows
 
 
-def _process_rs_suppliers(df, agg_df, rs_files, supplier_registry_cfg, script_dir):
+def _process_rs_suppliers(df, agg_df, rs_files, supplier_registry_cfg, script_dir, object_mapping=None):
     """Bank reconciliation, supplier enrichment, aging, waybills, and excel writes.
 
     Returns dict with all supplier/bank results needed for data dict assembly.
@@ -1617,7 +1617,8 @@ def run():
         }
     else:
         rs_result = _process_rs_suppliers(
-            df, agg_df, rs_files, supplier_registry_cfg, script_dir
+            df, agg_df, rs_files, supplier_registry_cfg, script_dir,
+            object_mapping=object_mapping,
         )
         suppliers_data = rs_result["suppliers_data"]
         waybills_data = rs_result["waybills_data"]
