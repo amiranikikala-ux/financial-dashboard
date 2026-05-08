@@ -2058,6 +2058,18 @@ def run():
     except Exception as exc:
         logger.warning("excluded_from_analysis: ვერ ჩაიდო data.json-ში: %s", exc)
 
+    # ----- ფაქტურა ↔ ზედნადები რეკონცილიაცია (Phase 2 — all suppliers) -----
+    # Phase 1 invoice_waybill_match იყო მხოლოდ ფუდმარტისთვის. Phase 2-ში
+    # ყველა მომწოდებლისთვის ვამოწმებთ ფაქტურის ჯამს ზედნადებების ჯამთან,
+    # ვათიქებთ ცხრილს per-TID gap-ით + სტატუსით (match / over_invoice /
+    # over_waybill). Source-ი — supplier_invoices_summary +
+    # supplier_waybill_lines, ორივე უკვე data-ში მომზადდა.
+    try:
+        from dashboard_pipeline.supplier_reconciliation import apply_supplier_reconciliation
+        apply_supplier_reconciliation(data)
+    except Exception as exc:
+        logger.warning("supplier_reconciliation: ვერ ჩაიდო data.json-ში: %s", exc)
+
     _write_outputs(data, script_dir, inc)
 
 if __name__ == "__main__":

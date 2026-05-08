@@ -32,6 +32,7 @@ export const TAB_GROUPS = [
       { id: 'ratios', label: '📐 კოეფ.' },
       { id: 'debt_plan', label: '📋 ვალების გეგმა' },
       { id: 'foodmart_360', label: '🎯 ფუდმარტი 360°' },
+      { id: 'reconciliation', label: '⚖️ რეკონცილიაცია' },
     ],
   },
   {

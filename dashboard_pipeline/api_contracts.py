@@ -59,6 +59,7 @@ FIELD_DEFAULTS = {
     "supplier_concentration": {},
     "category_anomalies": {},
     "waybill_reconciliation": {},
+    "supplier_reconciliation": {"rows": [], "summary": {}},
     "orphan_products": {},
     "duplicate_products": {},
     "supplier_payment_lines": {},
@@ -105,6 +106,7 @@ TAB_ALLOWLIST = {
     "supplier_concentration": ["supplier_concentration"],
     "category_anomalies": ["category_anomalies"],
     "waybill_reconciliation": ["waybill_reconciliation"],
+    "supplier_reconciliation": ["supplier_reconciliation"],
     "orphan_products": ["orphan_products"],
     "duplicate_products": ["duplicate_products"],
     "executive_export": [
@@ -333,6 +335,24 @@ TAB_RESPONSE_META = {
             "Spot-check: 5/5 random rows verified in source 2026-05-02.",
         ],
     },
+    "supplier_reconciliation": {
+        "trust_label": "derived",
+        "trust_badge_ka": "ფაქტურა ↔ ზედნადები",
+        "scope_ka": (
+            "Per-supplier comparison of rs.ge invoice totals against "
+            "rs.ge waybill totals (returns already netted via negative "
+            "amounts). Flags suppliers whose absolute gap ≥ 100 ₾ as "
+            "either over_invoice (invoice exceeds waybills) or "
+            "over_waybill (waybills exceed invoices)."
+        ),
+        "notes_ka": [
+            "Source: supplier_invoices_summary + supplier_waybill_lines.",
+            "Gap interpretation is supplier-specific — services-on-invoice, "
+            "delayed waybills, or wholesale-vs-list-price patterns can all "
+            "produce non-zero gaps; UI table is a starting point for owner "
+            "review, not an automatic anomaly verdict.",
+        ],
+    },
 }
 
 STATIC_RESPONSE_TABS = {
@@ -356,6 +376,7 @@ STATIC_RESPONSE_TABS = {
     "supplier_concentration",
     "category_anomalies",
     "waybill_reconciliation",
+    "supplier_reconciliation",
     "orphan_products",
     "duplicate_products",
 }
@@ -2051,6 +2072,9 @@ def _build_suppliers_response(cache, period_filter=None, **_kwargs):
     tbc_foodmart_cashback = cache.get(
         "tbc_foodmart_cashback", FIELD_DEFAULTS["tbc_foodmart_cashback"]
     )
+    supplier_reconciliation = cache.get(
+        "supplier_reconciliation", FIELD_DEFAULTS["supplier_reconciliation"]
+    )
     if not bool((period_filter or {}).get("applied")):
         return {
             "suppliers": _annotate_archive_flag(
@@ -2064,6 +2088,7 @@ def _build_suppliers_response(cache, period_filter=None, **_kwargs):
             "supplier_invoices_meta": supplier_invoices_meta,
             "our_seller_invoices": our_seller_invoices,
             "tbc_foodmart_cashback": tbc_foodmart_cashback,
+            "supplier_reconciliation": supplier_reconciliation,
         }
     recomputed = _recompute_suppliers_response(cache, period_filter)
     recomputed["suppliers"] = _annotate_archive_flag(
@@ -2077,6 +2102,7 @@ def _build_suppliers_response(cache, period_filter=None, **_kwargs):
     recomputed["supplier_invoices_meta"] = supplier_invoices_meta
     recomputed["our_seller_invoices"] = our_seller_invoices
     recomputed["tbc_foodmart_cashback"] = tbc_foodmart_cashback
+    recomputed["supplier_reconciliation"] = supplier_reconciliation
     return recomputed
 
 
