@@ -1,12 +1,278 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-08 ღამე — **მომწოდებლების გვერდის სრული აუდიტი + 12 finding ფიქსი + ხელით გადახდების სუფთა გადაწერა**. 9-ნაბიჯიანი source→formula→UI ვერიფიკაცია, ყველა ციფრი dabaduli RS+TBC+BOG cache-ში. 12/12 finding დახურული (1 false-alarm). 8 commit origin-ზე. ხელით გადახდები გასუფთავდა (386K წაიშალა owner-ის მოთხოვნით) — ხელახლა შესაყვანია UI-ით. ⏳ **დამოუკიდებელი ცოცხალი ცვლილება**: pipeline მუშაობს store-column-ისთვის (waybill მაღაზია detection დაემატა), დასრულების მერე ELIZI/ჯიდიაი/etc ცხრილში ჩანს „დვაბზუ/ოზურგეთი/თბილისი".
+> **განახლდა**: 2026-05-09 (evening) — **Waybills page full analytics overhaul (4 phases + 3 advanced features)** — backend `_build_waybills_response` enriched with 6 filters + ~30 new aggregations (KPIs, charts, supplier analytics, anomaly, calendar heatmap, duplicates, month benchmark). Frontend Waybills.jsx rewritten — KPI cards, recharts visualisations, GitHub-style calendar heatmap, collapsed detail table with year/month/day filters defaulting to current month, info-tooltips on every title (28 explanations). 3 commits on origin/main. Morning's Coca-Cola pipeline fix + Algani service-supplier debt now also committed (was uncommitted from earlier session).
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`. სრული აუდიტი → `HANDOFF_ARCHIVE/SUPPLIERS_AUDIT_2026-05-08.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-08 ღამე) — Suppliers აუდიტი + 12 finding ფიქსი + manual payments გასუფთავდა
+## 0. ბოლო session-ის შედეგი (2026-05-09 evening) — Waybills page full analytics overhaul
+
+### Headline (evening — 2026-05-09)
+
+**3 commits on origin/main:**
+| commit | რა მოიცავს |
+|---|---|
+| `1aeebd6` | feat(pipeline): registry override + service-supplier debt + waybill store/is_return enrichment |
+| `d3094dd` | feat(waybills): full analytics overhaul — filters, KPIs, charts, anomaly + risk |
+| `4c92b94` | data(suppliers): owner cash payments via UI + archive flag changes |
+
+### Waybills overhaul scope
+
+**6 filter params (server.py + api_contracts.py):** store, status_filter, type_filter, amount_min, amount_max, returns_only — pluss the existing q / sort / period.
+
+**~30 new aggregations in `_build_waybills_response`:**
+- KPI extras: avg/median/max/min, return_count + amount + pct, daily_avg_count + amount, active_suppliers_count, new_suppliers_count, prev_period_total, velocity_pct, date_min/max/day_span
+- Time charts: monthly_trend (with 3-month moving avg), yearly_comparison (12 month rows × N year cols), quarterly_trend, day_of_week (7 buckets), store_monthly stacked
+- Store/type breakdowns
+- Supplier analytics: top_suppliers (10), pareto cumulative, hhi + classification, supplier_count_for_80pct, new_suppliers_monthly, silent_suppliers (>90 days), supplier_reliability (top 20 with score)
+- Quality trends: monthly cancel_pct + return_pct
+- Anomaly: top_largest_waybills (top 10, returns excluded), spike_alerts (last complete month vs prior avg, 2x threshold)
+- Advanced: calendar_heatmap (365 days), duplicate_candidates (same supplier+date+amount), month_benchmark (z-score, rank, percentile, verdict)
+
+**Frontend (Waybills.jsx):**
+- 9 KPI cards in unified grid (auto-shrinking values, accent bars)
+- recharts visualisations: monthly trend (dual axis), yearly overlay, quarterly bars, day-of-week heatmap-bar, store pie, store stacked area, top-10 horizontal bar, Pareto cumulative line, new-suppliers monthly bar, status pie, type pie, cancellation/return % trend
+- Tables: silent suppliers, reliability, top-10 largest, spike alerts, duplicates
+- Custom CalendarHeatmap (53×7 grid, color intensity by daily count)
+- Month benchmark KPI panel
+- Detailed waybill table now collapsed by default with year/month/day/search filters defaulting to current month
+- InfoTip component on every title (28 Georgian explanations) — hover ⓘ → description
+
+### Manual data updates today
+
+- 14,065 ₾ cash payment to 3G-Georgian Global Group (400029036) — entered via UI
+- Re-entries after 2026-05-08 manual_payments reset (multiple suppliers)
+- Owner decision on Tamar Gogmachadze → Kakha Avjishvili 2,408 ₾ overpayment transfer: deferred to official accounting (not changing dashboard)
+
+### Open / next session
+
+- 🟡 **Pipeline regen running in background** (kicked off after evening commits) — bakes store + is_return into data.json so request-time fallback isn't needed.
+- 🔴 **Lela-ს პასუხს ველოდები** (Foodmart cashback breakdown) — formula 90% incomplete, blocked.
+- 🟡 **Future Gmail filters** — IMAP can't auto-filter; need Gmail API + OAuth (15-30 min one-time setup) or 60-min cron labelling script. Owner decides.
+- 🟡 **Owner manual cash payments** — continues entering via UI as needed.
+- 🟡 **Pre-existing test failures unchanged** (test_expense_categories_incremental + test_foodmart_cashback_incremental).
+- 🟡 **Phase 3 — VAT input-side reconciliation** (Master Plan §18) — separate session.
+- 🟡 **Phase 4 — rs.ge SOAP automation** — blocked on rs.ge UI permission grant.
+- ⏸ **Mini PC** — owner cloud refused, deferred until hardware bought.
+
+### Verification commands (next session)
+
+```powershell
+# Verify Waybills API returns all new analytics fields:
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
+import urllib.request, json
+api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=waybills', timeout=30).read())
+s = api['waybills_summary']
+expected = ['avg_amount', 'median_amount', 'return_pct', 'top_suppliers', 'pareto', 'hhi',
+            'monthly_trend', 'yearly_comparison', 'quarterly_trend', 'day_of_week',
+            'store_monthly', 'silent_suppliers', 'supplier_reliability', 'quality_trends',
+            'top_largest_waybills', 'spike_alerts', 'calendar_heatmap',
+            'duplicate_candidates', 'month_benchmark']
+missing = [k for k in expected if k not in s]
+print(f'Missing fields: {missing or \"none — all wired\"}')
+print(f'Total waybills: {s[\"total_count\"]}')
+print(f'HHI: {s[\"hhi\"]} ({s[\"hhi_class\"]})')
+print(f'Spike alerts: {len(s[\"spike_alerts\"])}')
+print(f'Duplicates: {len(s[\"duplicate_candidates\"])}')
+"
+
+# Check store filter:
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
+import urllib.request, json, urllib.parse
+url = 'http://localhost:8000/api/data?tab=waybills&store=' + urllib.parse.quote('დვაბზუ')
+api = json.loads(urllib.request.urlopen(url, timeout=30).read())
+print(f'დვაბზუ rows: {api[\"waybills_summary\"][\"total_count\"]}')
+# expect ~5,038
+"
+```
+
+---
+
+## 0a. წინა session-ის შედეგი (2026-05-09 afternoon) — Coca-Cola pipeline fix + Cashback backtest + Lela email
+
+### Headline (afternoon work — 2026-05-09)
+
+| ცვლილება | სტატუსი |
+|---|---|
+| **Coca-Cola pipeline fix** — დილის JSON override pipeline-ი არ წაიკითხა. Fix: `generate_dashboard_data.py::_read_and_parse_rs` ახლა იღებს `supplier_registry_cfg`-ს. რეგისტრის `official_name` override-ი წერს `canonical_names_by_tax_id` map-ს longest-name heuristic-ის შემდეგ. parquet cache-ში 106-ვე ხაზი ჰქონდა „შპს დისტრიბუცია 2024" — registry override-მა გადაფარა. ცოცხალში ვერიფიცირდა (`(246954176) შპს კოკა-კოლა დისტრიბუცია`). | ✅ pipeline regenerated, API returns correct name. **UNCOMMITTED.** |
+| **Foodmart cashback backtest** — 4 თვე (2025-12, 2026-01..03). ლელას ცხრილებიდან რეიტი × Megaplus per-barcode per-period qty = expected cashback. შედეგი: ცხრილით აიხსნება მხოლოდ ~10%. **დანარჩენი 90% გაურკვეველია**. ბანკის ფაქტი = ერთიანი „მომსახურების ღირებულება", ნავარაუდევია რომ შეიცავს თარო/ბრუნვა/ხელშეკრულება-კომპონენტებს. | 🟡 backtest done, formula incomplete |
+| **Gmail SMTP send** — App Password მუშაობს როგორც წაკითხვისთვის, ისე გაგზავნისთვის (smtp.gmail.com:587 + STARTTLS). | ✅ ვერიფიცირდა |
+| **Lela-ს გავუგზავნე წერილი** — `l.qapianidze@foodmart.ge` + `office@foodmart.ge` cc-ში. სათაური: „ანაზღაურების სრული ფურცელი — შპს ჯეო ფუდთაიმი". თხოვნა: ბოლო 4 თვის breakdown + სპარის ხელშეკრულებით მომწოდებლების სია. | ✅ გაიგზავნა, პასუხს ველოდები |
+
+### Backtest შედეგი (4 თვე)
+
+| თვე | ცხრილით expected | ბანკი actual | სხვაობა |
+|---|---|---|---|
+| 2025-12 | 1,137 ₾ | 8,072 ₾ | -86% |
+| 2026-01 | 600 ₾ | 6,661 ₾ | -91% |
+| 2026-02 | 450 ₾ | 11,587 ₾ | -96% |
+| 2026-03 | 702 ₾ | 8,571 ₾ | -92% |
+
+**Verified facts:**
+- ბარკოდი ემთხვევა Megaplus-ს (95% overlap, 2057/2166)
+- ცხრილის სვეტები სწორ ადგილზეა (rate column 100% filled)
+- ფორმულა მექანიკურად მუშაობს — qty × rate calculation correct
+- წყარო: ლელას 4 ცხრილი + 2 SQL DB (MEGAPLUS_1329 დვაბზუ + MEGAPLUS_1301 ოზურგეთი)
+
+**Open hypothesis:** ბანკის ფაქტი ბუნდელი მონეთრი = სააქციო (10%) + თარო (?%) + ბრუნვა (?%) + non-Spar მომწოდებლები (?%). ჩვენ ვიცით მხოლოდ პირველი — ლელას წერილით ველოდები დანარჩენ კომპონენტებს.
+
+### დილის შედეგები (2026-05-09 morning) — Coca-Cola fix v1 + Algani + Gmail integration + 90,616 ფოსტა label-ებად
+
+| ცვლილება | სტატუსი |
+|---|---|
+| **Coca-Cola სახელის fix v1** — registry override `246954176` → „შპს კოკა-კოლა დისტრიბუცია" (alphabetical alias-fallback ცრუდ ირჩევდა „შპს დისტრიბუცია 2024" — 1 invoice typo-დან) | ⚠️ JSON override დარჩა, pipeline-მა არ წაიკითხა. **საღამოს fix-ში დასრულდა.** |
+| **Algani სერვის-მომწოდებელი** — ახალი module `service_supplier_debt.py` + config `service_suppliers.json`. ფორმულა: `total_debt = invoice_total_real - total_paid` ცვლის default-ს (`waybill - paid`). Algani: −4,634 ₾ (ცრუ მინუსი) → +206 ₾ ✅ | ✅ pipeline-ში ჩართული |
+| **Gmail App Password integration** — IMAP via `.env.local` (gitignored), ცოცხალი ფოსტის წაკითხვა + attachment download | ✅ რეალურ მონაცემზე ვერიფიცირდა |
+| **90,616 ფოსტა label-ებად** — ფუდმარტი (4 sub-label), ბანკები (BOG 82,091 + TBC 345), ჩვენი (GitHub/Anthropic/Stripe/Google/Apple/MS/Dev), სახელმწიფო, კრედიტი, სარეკლამო (4,306) | ✅ Inbox სუფთაა, ჭდე ემატება მხოლოდ |
+
+### Foodmart = Spar Georgia (clarified)
+
+- Owner-მა „სპარისგან აქციები" თქვა, მაგრამ ფაილებს Foodmart-ი აგზავნის. ფაილის ცხადი სათაური: **„აქცია შენთვის შერჩეული სპარი + ფრენჩაიზები - დირექტორებისთვის"**.
+- ე.ი. **Foodmart Georgia ოპერირებს Spar ბრენდს** (franchise operator). Owner ფრანჩაიზია.
+- Foodmart-ის ფოსტებში 4 ცოცხალი მუდმივი წყარო:
+
+| გამომგზავნი | რას უგზავნის | სიხშირე |
+|---|---|---|
+| Salome Modebadze (s.modebadze@foodmart.ge) | „აქცია" — კვირეული რეიტ-ბარათი (per-product per-supplier) | კვირაში 1+ |
+| Bacho Skamkochaishvili (b.skamkochaishvili@foodmart.ge) | „ფასის ცვლილება" | რეგულარულად |
+| Lela Qapianidze (l.qapianidze@foodmart.ge) | **„X თვის სააქციო ანაზღაურება"** — ყოველთვიური cashback rate template | თვეში 1 |
+| Maka Alimbarashvili (m.alimbarashvili@foodmart.ge) | ვადაგასული, ჩამოწერა, ჰოსტესები | რეგულარულად |
+
+### Foodmart promo + cashback file structures (verified on real samples)
+
+**A) კვირეული აქცია** — `Financial_Analysis/_samples/აქცია შენთვის შერჩეული სპარი + ფრენჩაიზები - დირექტორებისთვის.xlsx` (15KB, 19 rows × 30 cols):
+
+```
+დაწყება, დასრულება, აქციის ტიპი, ადგილობრივი/იმპორტი, ფორმატი,
+I დონე, II დონე, III დონე, ბრენდი, მომწოდებელი,
+შტრიხკოდი, ID კოდი, დასახელება,
+შესასყიდი, სააქციო შესასყიდი, რეგულარი გასაყიდი ფასი, სააქციო გასაყიდი,
+რეგულარი კომერციული მარჟა, აქციის კომერციული მარჟა,
+მომხმარებლის თაროზე %, მომხმარებლის ფასდაკლება,
+ასანაზღაურებელი თანხა, ანაზღაურების ფორმა,
+სააქციო ფასის ცვლილების თარიღი, სააქციო ჭარბი ნაშთის დაბრუნება,
+მომარაგება, სტატუსი, კომენტარი
+```
+
+**B) ყოველთვიური ანაზღაურება** — `Financial_Analysis/_samples/Promo compensation template_03-2026.xlsx` (529KB, 3,326 rows × 20 cols, header row=2):
+
+```
+დაწყება, დასრულება, აქციის ტიპი, მომწოდებელი, ბარკოდი, ID კოდი, არტიკული, დასახელება,
+შესასყიდი ფასი, სააქციო შესასყიდი ფასი, სააქციო გასაყდი ფასი,
+ერთეულზე ასანაზღაურებელი თანხა_მომწოდებელი,
+ერთეულზე ასანაზღაურებელი თანხა_ფუდმარტი,
+ერთეულზე ასანაზღაურებელი თანხა_ჯამი,
+მარჟა, ფაქტურა, C. Manager, კომენტარი,
+გაყიდული რაოდნეობა, ასანაზღაურებელი თანხა
+```
+
+**კრიტიკული ფაქტი — cashback file არის TEMPLATE/RATE-CARD, არა საბოლოო თანხა**:
+- 2,343 row-ზე per_unit_rate მითითებულია (მაგ. 0.07 ₾ კრეკერზე)
+- 0 row-ზე გაყიდული რაოდენობა შევსებული — Foodmart თვითონ ავსებს როცა ფაქტურას წერს
+- 111 უნიკალური მომწოდებელი მარტ 2026-ში
+- კომენტარი ცხადყოფს ლოგიკას: „ფაქტურა იწერება სააქციო პერიოდში გაყიდულიდან" (1,068 row), „ანგარიშფაქტურა არ იწერება" (229)
+
+### Architectural insight — ჩვენ თვითონ შეგვიძლია გავთვალოთ მოლოდინი ქეშბექი
+
+Foodmart-ი მოგვცემს per-product per-period rate-ებს. ჩვენ Megaplus-ში გვაქვს per-barcode per-day გაყიდული რაოდენობა. Join → expected_cashback per-supplier per-month. შემდგომ Foodmart-ის რეალურ ფაქტურას შევადარებთ → flag თუ სხვაობა > 5%.
+
+ეს ცოცხალი work-ი = ახალი feature, ცალკე session-ი (Phase X — TBD).
+
+### Gmail label hierarchy (created 2026-05-09)
+
+```
+ფუდმარტი (2,567 ფოსტა - ყველა @foodmart.ge)
+├── აქციები (61 - Salome Modebadze)
+├── ფასის ცვლილება (200 - Bacho Skamkochaishvili)
+├── ანაზღაურება (4 - Lela Qapianidze)
+└── ვადაგასული (329 - Maka Alimbarashvili)
+
+ბანკები
+├── BOG (82,091 - bog.ge + e.bog.ge)
+└── TBC (345 - tbc.ge + tbcbank.com.ge + newsletter.tbccapital.ge)
+
+ჩვენი
+├── GitHub (21)
+├── Anthropic (3)
+├── Stripe (9)
+├── Google (170)
+├── Apple (160)
+├── Microsoft (24)
+└── Dev tools (87 - cursor.com, daily.dev, onedrive, lenovo)
+
+სახელმწიფო/რს.ge (20)
+კრედიტი (219 - mycreditinfo.ge)
+სარეკლამო (4,306 - binance/casino/social/etc)
+```
+
+### Open / next session (afternoon snapshot — superseded by evening session)
+
+(Coca-Cola fix now committed in `1aeebd6`. See evening section above for current state.)
+
+### Files created/modified today (uncommitted)
+
+**დილის (2026-05-09 morning):**
+- `Financial_Analysis/supplier_matching_registry.json` — Coca-Cola override დამატებული
+- `Financial_Analysis/service_suppliers.json` — ახალი (Algani only)
+- `dashboard_pipeline/service_supplier_debt.py` — ახალი module
+- `generate_dashboard_data.py` — wired in service_supplier_debt step
+- `.env.local` — Gmail credentials (gitignored)
+
+**საღამოს (2026-05-09 afternoon):**
+- `generate_dashboard_data.py` — `_read_and_parse_rs` ახალი param `supplier_registry_cfg` + canonical override block (lines ~1332, ~1428-1444, ~1560)
+- `_scratch_dogfood_cashback_backtest.py` — ახალი backtest script (gitignored pattern)
+- `Financial_Analysis/_samples/lela_cashback/` — 4 თვის ცხრილი ჩამოწერილი (Lela emails IDs 170605, 176686, 179131, 179612)
+- `Financial_Analysis/_samples/franchisor_files/` — 3 historical xlsx (Spar Georgia 2022-2023)
+- `Financial_Analysis/_samples/wurwu_attachments/` — Giorgi Wurwu RAR + docx
+- `Financial_Analysis/_samples/cashback_backtest_summary.json` — backtest output (4 თვე, expected vs actual)
+
+### Memory updates (2026-05-09)
+
+- `project_foodmart_spar_relationship.md` — Foodmart Georgia ოპერირებს Spar-ს, owner ფრანჩაიზია
+- `project_gmail_imap_setup.md` — App Password .env.local-ში, IMAP working, future filters need Gmail API
+- `project_foodmart_cashback_template.md` — monthly rate-card structure (template, not final amount)
+- `project_foodmart_cashback_backtest_2026-05-09.md` — backtest 4 თვე: ცხრილით აიხსნება ~10%, formula incomplete
+- `feedback_pipeline_registry_override.md` — JSON registry override-ი ცალკე საკმარისი არ არის; canonicalize/transform layer-მა აშკარად უნდა წაიკითხოს registry; verify in-memory before commit
+
+### Verification commands (next session)
+
+```powershell
+# Check Coca-Cola fix:
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
+import urllib.request, json
+api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=suppliers', timeout=30).read())
+for s in api['suppliers']:
+    if '246954176' in (s.get('ორგანიზაცია') or ''):
+        print(s['ორგანიზაცია'])  # expect: '(246954176) შპს კოკა-კოლა დისტრიბუცია'
+        break
+"
+
+# Check Algani service mode:
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
+import urllib.request, json
+api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=suppliers', timeout=30).read())
+for s in api['suppliers']:
+    if '202246097' in (s.get('ორგანიზაცია') or ''):
+        print(f'total_effective: {s[\"total_effective\"]}, total_debt: {s[\"total_debt\"]}, is_service: {s.get(\"is_service_supplier\")}')
+        # expect: total_effective ~4940, total_debt ~206, is_service_supplier True
+        break
+"
+
+# Check Gmail still works:
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
+import imaplib
+creds = dict(line.strip().split('=',1) for line in open(r'C:\financial-dashboard\.env.local',encoding='utf-8') if '=' in line)
+imap = imaplib.IMAP4_SSL('imap.gmail.com', 993)
+imap.login(creds['GMAIL_ADDRESS'], creds['GMAIL_APP_PASSWORD'])
+imap.select('INBOX'); status, data = imap.search(None, 'ALL'); print('INBOX msgs:', len(data[0].split()))
+imap.logout()
+"
+```
+
+---
+
+## 0a. წინა session-ის შედეგი (2026-05-08 ღამე) — Suppliers აუდიტი + 12 finding ფიქსი + manual payments გასუფთავდა
 
 🎉 **8 commit origin/main-ზე** (`6c5fbe0..0697c0a`). სრული 9-ნაბიჯიანი audit-ი არქივში, ყველა ცარიელი slot დაიხურა. Manual payments სრული reset მოხდა — owner ხელახლა შემოიყვანს UI-ით.
 
