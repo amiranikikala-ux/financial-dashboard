@@ -927,6 +927,7 @@ export default function RetailSales({ retailSales, responseMeta }) {
                     <tr>
                       <th>პროდუქტი</th>
                       <th>კატეგორია</th>
+                      <th>მაღაზია</th>
                       <th>lifetime შემოს.</th>
                       <th>lifetime რაოდ.</th>
                       <th>ბოლო გაყიდვა</th>
@@ -934,20 +935,35 @@ export default function RetailSales({ retailSales, responseMeta }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {asArray(slowMovers.top_90_plus).map((p) => (
-                      <tr key={`slow90-${p.product_code || p.product_name}`}>
-                        <td>{p.product_name || 'უცნობი'}</td>
-                        <td style={{ fontSize: 12, color: '#94a3b8' }}>{p.category || '—'}</td>
-                        <td className="amount-positive">{fmtMoney(p.revenue_ge)}</td>
-                        <td>{fmtNum(p.total_quantity)}</td>
-                        <td>{p.last_sale_date || '—'}</td>
-                        <td>
-                          <span style={{ padding: '1px 6px', borderRadius: 4, fontSize: 11, background: '#7f1d1d', color: '#fca5a5' }}>
-                            {p.days_since_sale} დღე
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                    {asArray(slowMovers.top_90_plus).map((p) => {
+                      const bd = p.store_breakdown || {};
+                      const stores = Object.keys(bd);
+                      const exclusive = stores.length === 1;
+                      return (
+                        <tr key={`slow90-${p.product_code || p.product_name}`}>
+                          <td>{p.product_name || 'უცნობი'}</td>
+                          <td style={{ fontSize: 12, color: '#94a3b8' }}>{p.category || '—'}</td>
+                          <td>
+                            <span style={{
+                              padding: '2px 6px', borderRadius: 4, fontSize: 11,
+                              background: STORE_COLOR[p.dominant_store] ? `${STORE_COLOR[p.dominant_store]}30` : '#334155',
+                              color: STORE_COLOR[p.dominant_store] || '#cbd5e1',
+                              border: `1px solid ${STORE_COLOR[p.dominant_store] || '#475569'}`,
+                            }}>
+                              {p.dominant_store || '—'} {exclusive ? '(ერთადერთი)' : `${fmtNum(p.dominant_store_share_pct)}%`}
+                            </span>
+                          </td>
+                          <td className="amount-positive">{fmtMoney(p.revenue_ge)}</td>
+                          <td>{fmtNum(p.total_quantity)}</td>
+                          <td>{p.last_sale_date || '—'}</td>
+                          <td>
+                            <span style={{ padding: '1px 6px', borderRadius: 4, fontSize: 11, background: '#7f1d1d', color: '#fca5a5' }}>
+                              {p.days_since_sale} დღე
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -960,20 +976,35 @@ export default function RetailSales({ retailSales, responseMeta }) {
                   <thead>
                     <tr>
                       <th>პროდუქტი</th>
+                      <th>მაღაზია</th>
                       <th>lifetime შემოს.</th>
                       <th>ბოლო გაყიდვა</th>
                       <th>დღე</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {asArray(slowMovers.top_60_90).map((p) => (
-                      <tr key={`slow60-${p.product_code || p.product_name}`}>
-                        <td>{p.product_name || 'უცნობი'}</td>
-                        <td className="amount-positive">{fmtMoney(p.revenue_ge)}</td>
-                        <td>{p.last_sale_date || '—'}</td>
-                        <td>{p.days_since_sale}</td>
-                      </tr>
-                    ))}
+                    {asArray(slowMovers.top_60_90).map((p) => {
+                      const bd = p.store_breakdown || {};
+                      const exclusive = Object.keys(bd).length === 1;
+                      return (
+                        <tr key={`slow60-${p.product_code || p.product_name}`}>
+                          <td>{p.product_name || 'უცნობი'}</td>
+                          <td>
+                            <span style={{
+                              padding: '2px 6px', borderRadius: 4, fontSize: 11,
+                              background: STORE_COLOR[p.dominant_store] ? `${STORE_COLOR[p.dominant_store]}30` : '#334155',
+                              color: STORE_COLOR[p.dominant_store] || '#cbd5e1',
+                              border: `1px solid ${STORE_COLOR[p.dominant_store] || '#475569'}`,
+                            }}>
+                              {p.dominant_store || '—'} {exclusive ? '(ერთადერთი)' : `${fmtNum(p.dominant_store_share_pct)}%`}
+                            </span>
+                          </td>
+                          <td className="amount-positive">{fmtMoney(p.revenue_ge)}</td>
+                          <td>{p.last_sale_date || '—'}</td>
+                          <td>{p.days_since_sale}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -986,20 +1017,35 @@ export default function RetailSales({ retailSales, responseMeta }) {
                   <thead>
                     <tr>
                       <th>პროდუქტი</th>
+                      <th>მაღაზია</th>
                       <th>lifetime შემოს.</th>
                       <th>ბოლო გაყიდვა</th>
                       <th>დღე</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {asArray(slowMovers.top_30_60).map((p) => (
-                      <tr key={`slow30-${p.product_code || p.product_name}`}>
-                        <td>{p.product_name || 'უცნობი'}</td>
-                        <td className="amount-positive">{fmtMoney(p.revenue_ge)}</td>
-                        <td>{p.last_sale_date || '—'}</td>
-                        <td>{p.days_since_sale}</td>
-                      </tr>
-                    ))}
+                    {asArray(slowMovers.top_30_60).map((p) => {
+                      const bd = p.store_breakdown || {};
+                      const exclusive = Object.keys(bd).length === 1;
+                      return (
+                        <tr key={`slow30-${p.product_code || p.product_name}`}>
+                          <td>{p.product_name || 'უცნობი'}</td>
+                          <td>
+                            <span style={{
+                              padding: '2px 6px', borderRadius: 4, fontSize: 11,
+                              background: STORE_COLOR[p.dominant_store] ? `${STORE_COLOR[p.dominant_store]}30` : '#334155',
+                              color: STORE_COLOR[p.dominant_store] || '#cbd5e1',
+                              border: `1px solid ${STORE_COLOR[p.dominant_store] || '#475569'}`,
+                            }}>
+                              {p.dominant_store || '—'} {exclusive ? '(ერთადერთი)' : `${fmtNum(p.dominant_store_share_pct)}%`}
+                            </span>
+                          </td>
+                          <td className="amount-positive">{fmtMoney(p.revenue_ge)}</td>
+                          <td>{p.last_sale_date || '—'}</td>
+                          <td>{p.days_since_sale}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

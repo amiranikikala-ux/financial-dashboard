@@ -965,6 +965,8 @@ def synthesize_from_megaplus(megaplus_live):
 
     # ─── Slow movers / dead stock candidates ──────────────────────────────
     # Anchor = max date in entire dataset. Buckets: 30+ days no sale, 60+, 90+.
+    # Each row carries the dominant store + share % (via object_totals on the
+    # aggregated product row) so the UI can attribute dead stock to a shop.
     anchor_str = max_date
     slow_movers_30 = []; slow_movers_60 = []; slow_movers_90 = []
     if anchor_str:
@@ -974,7 +976,8 @@ def synthesize_from_megaplus(megaplus_live):
             anchor_dt = None
         if anchor_dt:
             for p in by_product_full:
-                if p.get("revenue_ge", 0) <= 0:
+                rev_total = float(p.get("revenue_ge") or 0)
+                if rev_total <= 0:
                     continue
                 last = p.get("max_date")
                 if not last:
@@ -986,14 +989,33 @@ def synthesize_from_megaplus(megaplus_live):
                 age = (anchor_dt - last_dt).days
                 if age < 30:
                     continue
+                # Dominant store = highest-revenue store across the lifetime
+                # object_totals breakdown.
+                store_breakdown: dict = {}
+                for ot in (p.get("object_totals") or []):
+                    name = ot.get("object")
+                    if not name:
+                        continue
+                    store_breakdown[name] = round(
+                        float(store_breakdown.get(name, 0.0)) + float(ot.get("revenue_ge") or 0), 2
+                    )
+                if store_breakdown:
+                    dom_obj, dom_rev = max(store_breakdown.items(), key=lambda kv: kv[1])
+                    dom_share = round((dom_rev / rev_total * 100) if rev_total > 0 else 0.0, 1)
+                else:
+                    dom_obj = None
+                    dom_share = 0.0
                 row = {
                     "product_name": p.get("product_name"),
                     "product_code": p.get("product_code"),
                     "category": p.get("category"),
-                    "revenue_ge": p.get("revenue_ge", 0),
+                    "revenue_ge": rev_total,
                     "total_quantity": p.get("total_quantity", 0),
                     "last_sale_date": last,
                     "days_since_sale": age,
+                    "dominant_store": dom_obj,
+                    "dominant_store_share_pct": dom_share,
+                    "store_breakdown": store_breakdown,
                 }
                 if age >= 90:
                     slow_movers_90.append(row)
