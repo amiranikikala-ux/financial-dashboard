@@ -1,0 +1,15 @@
+{
+  "notes": [
+    "Service-only suppliers (no/few waybills) where the dashboard debt should be invoice-based, not waybill-based.",
+    "Default debt formula = total_effective(waybills) - total_paid(bank). For service suppliers (consulting, transport, rent, communications) this produces a false negative because waybills are ~0 while bank payments are real.",
+    "For each tax_id listed below the pipeline overrides total_effective with the real invoice total (status: დადასტურებული + დასადასტურებელი) and recomputes total_debt accordingly. Original waybill total is preserved as waybill_total_effective.",
+    "Add a tax_id only after confirming with the owner that the supplier is service-only."
+  ],
+  "suppliers": [
+    {
+      "tax_id": "202246097",
+      "official_name": "შპს ალგანი",
+      "reason": "სერვის-მომწოდებელი — ზედნადები არ ეწერება (1 waybill, 100 ₾), ფაქტურა-ზე ვალდებულობა (47 invoices, 4940 ₾)."
+    }
+  ]
+}

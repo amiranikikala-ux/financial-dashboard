@@ -1262,6 +1262,15 @@ def _process_rs_suppliers(df, agg_df, rs_files, supplier_registry_cfg, script_di
     waybills_df = waybills_df.fillna("N/A")
 
     waybills_data = waybills_df.to_dict(orient='records')
+    for _row in waybills_data:
+        _delivery = str(_row.get("delivery_location") or "").strip()
+        _row["store"] = detect_object(
+            "rs_waybill",
+            text=_delivery,
+            object_mapping=object_mapping,
+            rs_location=_delivery,
+        ) if _delivery and _delivery != "N/A" else ""
+        _row["is_return"] = "დაბრუნება" in str(_row.get("type") or "")
     supplier_waybill_lines = _build_supplier_waybill_lines(
         waybills_data, object_mapping=object_mapping
     )
@@ -1329,7 +1338,7 @@ def _build_supplier_waybill_lines(waybills_data, object_mapping=None):
     return by_tid
 
 
-def _read_and_parse_rs(rs_files, object_mapping):
+def _read_and_parse_rs(rs_files, object_mapping, supplier_registry_cfg=None):
     """Read RS Excel files, parse columns, compute amounts/flags, aggregate by org.
 
     Returns (df, agg_df) or (None, None) if no RS data.
@@ -1432,6 +1441,18 @@ def _read_and_parse_rs(rs_files, object_mapping):
           .apply(lambda s: max((n for n in s.dropna() if n), key=len, default=''))
           .to_dict()
     )
+
+    # Registry override: if supplier_matching_registry.json defines an
+    # explicit official_name for a tax_id, it wins over the longest-name
+    # heuristic above (e.g. 246954176 = Coca-Cola, where the parquet cache
+    # stores the renamed legal name "შპს დისტრიბუცია 2024" but the owner
+    # recognizes the supplier by the original brand name).
+    if supplier_registry_cfg:
+        for item in supplier_registry_cfg.get("suppliers") or []:
+            tid = str(item.get("tax_id") or "").strip()
+            override = str(item.get("official_name") or "").strip()
+            if tid and override:
+                canonical_names_by_tax_id[tid] = override
 
     def _canonicalize_org(row):
         tid = row['_tax_id']
@@ -1557,7 +1578,9 @@ def run():
             "duplicate-suspected ფაილი totals-იდან გამორიცხულია: %s",
             ", ".join(retail_duplicate_policy.get("excluded_files") or []),
         )
-    df, agg_df = _read_and_parse_rs(rs_files, object_mapping)
+    df, agg_df = _read_and_parse_rs(
+        rs_files, object_mapping, supplier_registry_cfg=supplier_registry_cfg,
+    )
 
     if df is None:
         supplier_aging_result = {"suppliers": [], "summary": _empty_aging_summary()}
@@ -2097,6 +2120,18 @@ def run():
         apply_bilateral_netting(data)
     except Exception as exc:
         logger.warning("bilateral_netting: ვერ ჩაიდო data.json-ში: %s", exc)
+
+    # ----- სერვის-მომწოდებლები — ფაქტურა-ზე დაფუძნებული ვალი -----
+    # ალგანი, ბუღალტერი, ქირა და სხვ. — ზედნადები არ ეწერება, მხოლოდ
+    # ფაქტურა. default formula (total_effective − total_paid) ცრუ
+    # მინუსს აჩენებს. service_suppliers.json-ში მითითებული tax_id-ებს
+    # total_effective იცვლება invoice total_amount_real-ზე და total_debt
+    # ხელახლა ითვლება.
+    try:
+        from dashboard_pipeline.service_supplier_debt import apply_service_supplier_debt
+        apply_service_supplier_debt(data)
+    except Exception as exc:
+        logger.warning("service_supplier_debt: ვერ ჩაიდო data.json-ში: %s", exc)
 
     # ----- ანალიზიდან მოხსნა (user-flagged exclusion) -----
     # მომხმარებელმა გადაწყვიტა, რომ მომწოდებლის ფაქტურები გასაუქმებელია,

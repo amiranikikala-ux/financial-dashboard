@@ -8,6 +8,18 @@
   "explicit_skip_keywords": [],
   "suppliers": [
     {
+      "tax_id": "246954176",
+      "official_name": "შპს კოკა-კოლა დისტრიბუცია",
+      "aliases": [
+        "შპს დისტრიბუცია 2024"
+      ],
+      "evidence": [
+        "RS waybills 2022.xls + 2023.xls (106 rows total) all use 'შპს კოკა-კოლა დისტრიბუცია'.",
+        "RS invoice CSV 'ფაქტურები მყიდველი.csv': 103 rows = 'შპს კოკა-კოლა დისტრიბუცია', 1 outlier = 'შპს დისტრიბუცია 2024' (treated as supplier-side typo on a single invoice).",
+        "Pipeline previously fell back to alphabetical-first official_name and picked the outlier."
+      ]
+    },
+    {
       "tax_id": "404885184",
       "official_name": "შპს ბარამბო 2011",
       "aliases": [
