@@ -1,12 +1,153 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-10 (დილის ნახევარი) — **Retail Sales Sprint 2 done + period filter deepened (3 commits).** Sprint 2 backlog (cashier shifts / VAT / returns-by-product / discount lift / period filter) closed in one big commit; the period filter was then upgraded twice on owner feedback — first to support specific months/years (not just "last N days") with a by_product_by_month + receipts-in-by_month backend addition, then to scope top categories / top products / shifts / VAT into the picked period. Banner text rewritten to be precise about what filters and what stays lifetime.
+> **განახლდა**: 2026-05-10 (საღამო) — **Sprint 3 cross-store SKU comparison done (1 of 6 items) + Dead Stock §8 preview written, sprint blocked on owner Excel cleanup.** Same SKU sold in both stores now surfaces side-by-side qty/price/margin with diff (3,340 eligible SKUs, 1,664 with ≥5% price gap, 1,491 with ≥5pp margin gap). Live-verified via Playwright. Dead Stock §8 preview identifies `PRODUCTS.P_QUANT` as the per-store inventory snapshot; owner has Excel review file on Desktop with 6 sheets covering 109,325 ₾ in dead/slow stock (~42% of inventory) — sprint resumes after POS cleanup + fresh backup. Branch is 14 commits ahead of `origin/main` (owner hasn't pushed).
 >
-> Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`. Previous sprint plan → `HANDOFF_ARCHIVE/PREVIEWS/RETAIL_SALES_REMAINING_2026-05-09.md`.
+> Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`. Sprint preview → `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_DEAD_STOCK_2026-05-10_PREVIEW.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-10 დილა) — Retail Sales Sprint 2 + period filter deepening
+## 0. ბოლო session-ის შედეგი (2026-05-10 საღამო) — Sprint 3 cross-store comparison + Dead Stock §8 preview
+
+### Headline (საღამო — 2026-05-10)
+
+**2 commits on local main (NOT pushed — branch is 14 commits ahead of origin/main):**
+| commit | რა მოიცავს |
+|---|---|
+| `6a46a49` | docs(preview): Dead Stock §8 sprint preview |
+| `643dd22` | feat(retail-sales): Sprint 3 — cross-store SKU comparison |
+
+### Sprint 3 — cross-store SKU comparison (1 of 6 items shipped)
+
+Owner picked just one item from Sprint 3 backlog: "მხოლოდ cross-store შედარება". Same SKU sold in BOTH stores now surfaces side-by-side with diff.
+
+**Universe (lifetime, all SKUs that ever sold):**
+- დვაბზუ unique barcodes sold: 5,846
+- ოზურგეთი unique barcodes sold: 5,921
+- BOTH stores (cross-comparable raw): 3,771
+
+**After EAN + margin filters (≥8 digit barcode + margin in [-50%, +95%] both sides):**
+- Eligible SKUs: 3,340
+- ≥5% price gap: 1,664
+- ≥5pp margin gap: 1,491
+
+**Backend (retail_sales.py, +77 lines):** new `cross_store_comparison` block iterates `by_product_full`'s per-store `object_totals`, requires both დვაბზუ + ოზურგეთი rows, computes price_diff / price_diff_pct / margin_diff_pp. Filters protect insight quality: real EAN barcode (≥8 digits) — short internal codes (1028, 1046) collide between DBs as different products; margin in [-50%, +95%] both sides — outside that band signals missing GET-table cost imputation (in-store baking / deli), not real margin gap. Pre-sorted top 50 by abs price gap, abs margin gap, combined revenue.
+
+**API (api_contracts.py, +1 line):** `cross_store_comparison` added to retail-summary projection pass-through tuple.
+
+**Frontend (RetailSales.jsx, +111 lines):** new CollapsibleSection at page bottom — 3 KPI cards, sort selector (price gap / margin gap / combined revenue), 12-column comparison table. Section ignores store filter AND period filter (comparison is inherently cross-store + lifetime); banner explicitly states this. Color-coded diff cells (green for +, red for −).
+
+### Live verification (Playwright walkthrough)
+
+`http://localhost:8000/#retail_sales` page-bottom section:
+- Heading "მაღაზია vs მაღაზია — იგივე SKU" with InfoTip ⓘ
+- KPI cards: 3,340 / 1,664 / 1,491
+- 50-row table renders with 12 columns
+- Sort selector switches data correctly: price_gap → margin_gap top row changes from baby diapers to "შამპუნი ფრუქტისი" (-103.53pp margin gap)
+- 0 console errors
+
+### Real findings worth owner attention
+
+**Likely data-entry errors (not real pricing) — surface for owner correction:**
+- ვიპ ბეიბი ბავშვის საფენი ჯუნიორი 52ც, 5 ზომა: დვაბზუში 24.00 ₾, ოზურგეთში 0.60 ₾ (-97.5%). ფასის შეცდომა ოზურგეთში.
+- ქუში ბეიბი ბავშვის საფენი 5 ზომა: same pattern (-97.5%).
+
+**Likely missing cost imputation (not real margin):**
+- შამპუნი ფრუქტისი 250მლ: დვაბზუში -11.42%, ოზურგეთში 92.11% (-103.53pp). Cost imputation broken in ოზურგეთი GET table for this barcode.
+- კაპი ატამი პალპი 1ლ FR: დვაბზუში 9.33%, ოზურგეთში 81.65% (-72pp). Same root cause.
+
+**Real cross-store insight (owner can act on):**
+- 1,664 SKUs with ≥5% price gap × 3,340 shared SKUs = nearly half the shared catalog has divergent pricing. The table lets the owner identify big-revenue items where one store is leaving margin on the floor and decide whether to align prices.
+
+### Dead Stock §8 — preview written, sprint BLOCKED on owner cleanup
+
+Master Plan §8 evidence-only preview at `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_DEAD_STOCK_2026-05-10_PREVIEW.md` (180 lines, scope/inventory/risks/test plan/files-to-touch).
+
+**Key technical finding:** `PRODUCTS.P_QUANT` (decimal) in MegaPlus DB IS the per-store inventory snapshot — no separate stock table needed. JOIN to ORDERS via `PRODUCTS.P_ID = ORDERS.ORD_P_ID` yields `last_sale_date` directly (ORD_TIMESTAMP is `datetime`, not bigint epoch).
+
+**Live snapshot stats (per backup mtime):**
+
+| DB | positive qty SKU | negative qty SKU | qty min | stock value |
+|---|---|---|---|---|
+| MEGAPLUS_1329 (დვაბზუ) | 3,431 | 701 | -34,295 | ~128,563 ₾ |
+| MEGAPLUS_1301 (ოზურგეთი) | 3,351 | 1,025 | -13,181 | ~128,962 ₾ |
+| MEGAPLUS_LATEST | 3,390 | 715 | — | ~131,744 ₾ |
+
+**Excel review export for owner** at `C:\Users\tengiz\OneDrive\Desktop\dead_stock_review_2026-05-10.xlsx` (~595 KB; sandbox redirected the write from intended repo-root path to Desktop — Excel is the same content, just different location). 6 sheets:
+- summary
+- 🔴 მკვდარი 365+ დღე (1,951 SKU)
+- 🟠 მკვდარი 180-365 დღე (957 SKU)
+- 🟡 ნელი 90-180 დღე (602 SKU)
+- ⚠ უარყოფითი ნაშთი (1,726 SKU — POS error: sold without invoice in)
+- 💸 უფასო P_PRICE=0 (31 SKU — operational, e.g. "უფასო პარკი")
+
+**Combined dead+slow stock value: 109,325 ₾ (~42% of ~257k ₾ total inventory across two stores).** Owner-actionable headline.
+
+Each sheet sorted by stock_value DESC; 13 columns: store / code / barcode / name / category / qty / getprice / sellprice / stock_value / active / last_sale / days_since_sale.
+
+**Sprint 8 BLOCKED** until owner reviews Excel, fixes POS data (discontinue decisions, write-offs for negative qty), and a fresh backup reflects fixes. Then dashboard section gets built per the preview.
+
+### Implementation note — patching live data.json + tab-data artifact
+
+When code changes touch `_project_retail_sales_summary`, the running service serves a pre-built static artifact at `rs-dashboard/public/tab-data/retail_sales.json` (10 MB), NOT a live projection on every hit. So adding a new field to the bundle requires:
+
+1. Edit `synthesize_from_megaplus` to compute it.
+2. Edit `_project_retail_sales_summary` pass-through tuple.
+3. Re-run synthesize on cached `data.json["megaplus_live"]` and patch `data["retail_sales"][NEW_FIELD]` in `rs-dashboard/public/data.json`.
+4. Re-build the static artifact via `api_contracts.build_response_for_tab(cache, "retail_sales")` and write to `tab-data/retail_sales.json` (both `public/` and `dist/` copies).
+5. Service restart (`Restart-Service FinancialDashboardBackend`) with admin — needs `! Restart-Service ...` from owner.
+
+Verified pattern this session: `urllib.request` to `/api/data?tab=retail_sales` returns `cross_store_comparison` post-restart with full structure (50 items per sort).
+
+### Carry-overs from previous sessions (still open)
+
+- 🟡 **Sprint 3 retail polish — 5 of 6 items remain** (cross-store now done):
+  - Daily-level spike alerts (currently only monthly z-score)
+  - ▲▼ delta on every KPI card (not just MoM panel)
+  - Mobile responsive polish
+  - PDF / weekly email report
+  - Drill-down — click on a category → opens that category's product list
+- 🔴 **Dead Stock §8 — BLOCKED on owner Excel review + POS cleanup + fresh backup.** Excel on Desktop, preview in archive, sprint plan ready (`SPRINT_DEAD_STOCK_2026-05-10_PREVIEW.md`).
+- 🟡 **Period filter — items that still stay lifetime** (would need backend per-month versions; punted): საათობრივი / დღეების / hour×dow heatmap, Pareto / HHI / concentration, ფასდაკლების კატეგორიები, დაბრუნებული პროდუქტების top სია, დღგ-ის გარეშე ხაზი.
+- 🔴 **Lela-ს Foodmart cashback breakdown** — formula 90% incomplete, blocked on her email reply.
+- 🟡 **Future Gmail filters** — IMAP can't auto-filter; needs Gmail API + OAuth or cron labelling script.
+- 🟡 **Owner manual cash payments** — continues entering via UI as needed.
+- 🟡 **Pre-existing test failures unchanged** (test_expense_categories_incremental + test_foodmart_cashback_incremental).
+- 🟡 **Phase 3 — VAT input-side reconciliation** (Master Plan §18) — separate session.
+- 🟡 **Phase 4 — rs.ge SOAP automation** — blocked on rs.ge UI permission grant.
+- ⏸ **Mini PC** — owner cloud refused, deferred until hardware bought.
+- ⚠ **Branch state**: local `main` is **14 commits ahead of `origin/main`**. Owner has not pushed. Confirm before pushing.
+
+### Verification commands (next session)
+
+```powershell
+# Cross-store comparison — verify projection passes through.
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
+import urllib.request, json
+api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=retail_sales', timeout=30).read())
+csc = api['retail_sales'].get('cross_store_comparison') or {}
+print('shared_sku_count:', csc.get('shared_sku_count'))
+print('big_price_gap_count:', csc.get('big_price_gap_count'))
+print('big_margin_gap_count:', csc.get('big_margin_gap_count'))
+print('top_by_price_gap items:', len(csc.get('top_by_price_gap') or []))
+"
+# expect: 3340, 1664, 1491, 50
+
+# Dead Stock §8 — verify PRODUCTS.P_QUANT × P_GETPRICE per-store stock values match Excel export.
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
+import pyodbc
+conn = pyodbc.connect('Driver={ODBC Driver 18 for SQL Server};Server=localhost\\SQLEXPRESS;Database=master;Trusted_Connection=yes;TrustServerCertificate=yes', timeout=10)
+cur = conn.cursor()
+for db in ['MEGAPLUS_1329', 'MEGAPLUS_1301']:
+    cur.execute(f'USE [{db}]')
+    cur.execute('SELECT SUM(P_QUANT * P_GETPRICE) FROM PRODUCTS WHERE P_QUANT > 0')
+    print(db, '+ stock value:', cur.fetchone()[0])
+"
+# expect: ~128,563 (1329) and ~128,962 (1301)
+```
+
+---
+
+## 0a. წინა session-ის შედეგი (2026-05-10 დილა) — Retail Sales Sprint 2 + period filter deepening
 
 ### Headline (დილა — 2026-05-10)
 
