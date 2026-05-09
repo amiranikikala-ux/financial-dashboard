@@ -353,6 +353,12 @@ def get_tab_payload(
     to_date: str | None = None,
     from_time: str | None = None,
     to_time: str | None = None,
+    store: str | None = None,
+    status_filter: str | None = None,
+    type_filter: str | None = None,
+    amount_min: float | None = None,
+    amount_max: float | None = None,
+    returns_only: bool | None = None,
 ):
     """
     Build the same JSON object as GET /api/data (synchronous, for scripts/tests).
@@ -377,6 +383,12 @@ def get_tab_payload(
             to_date,
             from_time,
             to_time,
+            store,
+            status_filter,
+            type_filter,
+            amount_min,
+            amount_max,
+            returns_only,
         )
     )
 
@@ -412,6 +424,12 @@ def get_tab_payload(
         to_date=to_date,
         from_time=from_time,
         to_time=to_time,
+        store=store,
+        status_filter=status_filter,
+        type_filter=type_filter,
+        amount_min=amount_min,
+        amount_max=amount_max,
+        returns_only=returns_only,
     )
 
 
@@ -431,6 +449,12 @@ async def get_data(
     to_date: str | None = None,
     from_time: str | None = None,
     to_time: str | None = None,
+    store: str | None = None,
+    status_filter: str | None = None,
+    type_filter: str | None = None,
+    amount_min: float | None = None,
+    amount_max: float | None = None,
+    returns_only: bool | None = None,
 ):
     try:
         return get_tab_payload(
@@ -446,6 +470,12 @@ async def get_data(
             to_date=to_date,
             from_time=from_time,
             to_time=to_time,
+            store=store,
+            status_filter=status_filter,
+            type_filter=type_filter,
+            amount_min=amount_min,
+            amount_max=amount_max,
+            returns_only=returns_only,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

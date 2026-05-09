@@ -1042,6 +1042,9 @@ def _project_waybill_row(item):
         "status": item.get("status"),
         "type": item.get("type"),
         "effective_amount": item.get("effective_amount"),
+        "delivery_location": item.get("delivery_location"),
+        "store": item.get("store"),
+        "is_return": bool(item.get("is_return")),
     }
 
 
@@ -1093,8 +1096,686 @@ def _build_waybill_status_breakdown(rows):
     )
 
 
+def _build_waybill_store_breakdown(rows):
+    breakdown = {}
+    for item in rows:
+        store_name = _clean_lookup_text(item.get("store")) or "უცნობი"
+        entry = breakdown.setdefault(
+            store_name,
+            {"store": store_name, "row_count": 0, "effective_amount": 0.0},
+        )
+        entry["row_count"] += 1
+        entry["effective_amount"] += _waybill_numeric_value(item, "effective_amount")
+    return sorted(
+        breakdown.values(),
+        key=lambda v: (-float(v.get("effective_amount") or 0), str(v.get("store") or "")),
+    )
+
+
+def _build_waybill_type_breakdown(rows):
+    breakdown = {}
+    for item in rows:
+        wb_type = _clean_lookup_text(item.get("type")) or "უცნობი"
+        entry = breakdown.setdefault(
+            wb_type,
+            {"type": wb_type, "row_count": 0, "effective_amount": 0.0},
+        )
+        entry["row_count"] += 1
+        entry["effective_amount"] += _waybill_numeric_value(item, "effective_amount")
+    return sorted(
+        breakdown.values(),
+        key=lambda v: (-int(v.get("row_count") or 0), str(v.get("type") or "")),
+    )
+
+
+def _build_waybill_calendar_heatmap(rows):
+    """Daily activity for the last 365 days from the latest waybill date.
+
+    Returns list of {date, count, amount} ordered by date ascending. Frontend
+    renders this as a GitHub-style calendar heatmap.
+    """
+    from datetime import datetime as _dt, timedelta as _td
+
+    if not rows:
+        return []
+    max_d = ""
+    by_day = {}
+    for r in rows:
+        d = str(r.get("date") or "")[:10]
+        if not d:
+            continue
+        if d > max_d:
+            max_d = d
+        e = by_day.setdefault(d, {"count": 0, "amount": 0.0})
+        e["count"] += 1
+        e["amount"] += _waybill_amount_value(r)
+    if not max_d:
+        return []
+    try:
+        end_dt = _dt.strptime(max_d, "%Y-%m-%d")
+    except ValueError:
+        return []
+    start_dt = end_dt - _td(days=364)
+    out = []
+    cur = start_dt
+    while cur <= end_dt:
+        ds = cur.strftime("%Y-%m-%d")
+        e = by_day.get(ds, {"count": 0, "amount": 0.0})
+        out.append({
+            "date": ds,
+            "count": e["count"],
+            "amount": round(e["amount"], 2),
+            "weekday": cur.weekday(),
+        })
+        cur += _td(days=1)
+    return out
+
+
+def _build_waybill_duplicate_candidates(rows):
+    """Group waybills with identical supplier+date+amount. Returns groups
+    with 2+ candidates so the owner can verify whether they're real
+    duplicates or coincidence."""
+    grouped = {}
+    for r in rows:
+        sup = str(r.get("supplier") or "").strip()
+        d = str(r.get("date") or "")[:10]
+        amt = round(_waybill_amount_value(r), 2)
+        if not sup or not d or amt == 0:
+            continue
+        key = (sup, d, amt)
+        grouped.setdefault(key, []).append({
+            "waybill_number": str(r.get("waybill_number") or ""),
+            "status": str(r.get("status") or ""),
+            "type": str(r.get("type") or ""),
+            "store": str(r.get("store") or ""),
+        })
+    duplicates = []
+    for (sup, d, amt), entries in grouped.items():
+        if len(entries) < 2:
+            continue
+        duplicates.append({
+            "supplier": sup,
+            "date": d,
+            "amount": amt,
+            "count": len(entries),
+            "total_amount": round(amt * len(entries), 2),
+            "waybill_numbers": [e["waybill_number"] for e in entries],
+            "stores": list({e["store"] for e in entries if e["store"]}),
+        })
+    duplicates.sort(key=lambda x: (-x["count"], -abs(x["amount"])))
+    return duplicates[:50]
+
+
+def _build_waybill_month_benchmark(rows):
+    """Z-score and percentile of last complete month vs prior 12 months.
+
+    Compares only sums (positive amounts, returns excluded). Returns dict
+    with reference month, its amount, mean/std of prior, z-score, rank,
+    and percentile. Empty dict if not enough data.
+    """
+    from datetime import datetime as _dt
+    import statistics as _stats
+
+    monthly = {}
+    max_d = ""
+    for r in rows:
+        d = str(r.get("date") or "")[:10]
+        if len(d) < 7 or r.get("is_return"):
+            continue
+        if d > max_d:
+            max_d = d
+        ym = d[:7]
+        monthly[ym] = monthly.get(ym, 0.0) + _waybill_amount_value(r)
+    if not max_d or len(max_d) < 10 or len(monthly) < 4:
+        return {}
+    try:
+        max_dt = _dt.strptime(max_d, "%Y-%m-%d")
+    except ValueError:
+        return {}
+    if max_dt.day <= 20:
+        if max_dt.month == 1:
+            ref_year, ref_month = max_dt.year - 1, 12
+        else:
+            ref_year, ref_month = max_dt.year, max_dt.month - 1
+        ref_ym = f"{ref_year:04d}-{ref_month:02d}"
+    else:
+        ref_ym = max_d[:7]
+    if ref_ym not in monthly:
+        return {}
+    current_amount = monthly[ref_ym]
+    prior_months = sorted([(ym, v) for ym, v in monthly.items() if ym < ref_ym])
+    # Use the trailing 12 months max for stable benchmarking
+    prior_months = prior_months[-12:]
+    if len(prior_months) < 3:
+        return {}
+    prior_values = [v for _, v in prior_months]
+    mean_prior = _stats.mean(prior_values)
+    try:
+        std_prior = _stats.pstdev(prior_values) if len(prior_values) > 1 else 0.0
+    except _stats.StatisticsError:
+        std_prior = 0.0
+    z_score = round((current_amount - mean_prior) / std_prior, 2) if std_prior else 0.0
+    # Rank among prior + current; lower rank = larger value
+    all_values = prior_values + [current_amount]
+    sorted_vals = sorted(all_values, reverse=True)
+    rank = sorted_vals.index(current_amount) + 1
+    percentile = round((1 - (rank - 1) / len(sorted_vals)) * 100.0, 1)
+    if z_score >= 1.5:
+        verdict = "გაცილებით მეტი ვიდრე ჩვეულებრივ"
+        verdict_tone = "pos"
+    elif z_score >= 0.5:
+        verdict = "ოდნავ მეტი ვიდრე ჩვეულებრივ"
+        verdict_tone = "pos"
+    elif z_score <= -1.5:
+        verdict = "გაცილებით ნაკლები ვიდრე ჩვეულებრივ"
+        verdict_tone = "neg"
+    elif z_score <= -0.5:
+        verdict = "ოდნავ ნაკლები ვიდრე ჩვეულებრივ"
+        verdict_tone = "neg"
+    else:
+        verdict = "ჩვეულებრივი დონე"
+        verdict_tone = "neutral"
+    return {
+        "ref_month": ref_ym,
+        "ref_amount": round(current_amount, 2),
+        "mean_prior_12m": round(mean_prior, 2),
+        "std_prior_12m": round(std_prior, 2),
+        "z_score": z_score,
+        "rank": rank,
+        "total_compared": len(sorted_vals),
+        "percentile": percentile,
+        "verdict_ka": verdict,
+        "verdict_tone": verdict_tone,
+    }
+
+
+def _build_waybill_anomaly_data(rows, all_rows):
+    """Top-10 single largest waybills (outliers) + spike alerts.
+
+    A spike = supplier whose current-month amount is at least 2× their
+    historical monthly average (computed from prior months in all_rows).
+    Returns ``top_largest_waybills`` list and ``spike_alerts`` list.
+    """
+    from datetime import datetime as _dt
+
+    # Top-10 largest single waybills (sorted by absolute amount, returns excluded
+    # because their negative values would dominate "smallest" not "largest").
+    largest = sorted(
+        (r for r in rows if not r.get("is_return")),
+        key=lambda r: _waybill_amount_value(r),
+        reverse=True,
+    )[:10]
+    top_largest = [
+        {
+            "date": str(r.get("date") or "")[:10],
+            "supplier": str(r.get("supplier") or ""),
+            "waybill_number": str(r.get("waybill_number") or ""),
+            "amount": round(_waybill_amount_value(r), 2),
+            "store": str(r.get("store") or ""),
+            "status": str(r.get("status") or ""),
+        }
+        for r in largest
+    ]
+
+    # Spike alerts: for each supplier, look at their current-month total vs
+    # their historical monthly average from earlier months. Flag suppliers
+    # whose current-month amount is >= 2× average AND average > 0.
+    if not all_rows:
+        return {"top_largest_waybills": top_largest, "spike_alerts": []}
+
+    max_d = ""
+    for r in all_rows:
+        d = str(r.get("date") or "")[:10]
+        if d and d > max_d:
+            max_d = d
+    if not max_d or len(max_d) < 10:
+        return {"top_largest_waybills": top_largest, "spike_alerts": []}
+
+    # Use the last *complete* month so partial current-month data doesn't
+    # produce false negatives. If today is the 1st-20th, "last complete"
+    # is the previous calendar month.
+    try:
+        max_dt = _dt.strptime(max_d, "%Y-%m-%d")
+    except ValueError:
+        return {"top_largest_waybills": top_largest, "spike_alerts": []}
+    if max_dt.day <= 20:
+        if max_dt.month == 1:
+            ref_year, ref_month = max_dt.year - 1, 12
+        else:
+            ref_year, ref_month = max_dt.year, max_dt.month - 1
+        ref_ym = f"{ref_year:04d}-{ref_month:02d}"
+    else:
+        ref_ym = max_d[:7]
+
+    # Aggregate per supplier per month
+    sup_month_amount = {}
+    for r in all_rows:
+        if r.get("is_return"):
+            continue
+        d = str(r.get("date") or "")[:10]
+        if len(d) < 7:
+            continue
+        sup = str(r.get("supplier") or "").strip()
+        if not sup:
+            continue
+        amt = _waybill_amount_value(r)
+        ym = d[:7]
+        sup_month_amount.setdefault(sup, {})
+        sup_month_amount[sup][ym] = sup_month_amount[sup].get(ym, 0.0) + amt
+
+    spike_alerts = []
+    for sup, by_ym in sup_month_amount.items():
+        prior = [v for ym, v in by_ym.items() if ym < ref_ym]
+        current = by_ym.get(ref_ym, 0.0)
+        if not prior or current <= 0:
+            continue
+        avg_prior = sum(prior) / len(prior)
+        if avg_prior <= 0:
+            continue
+        ratio = current / avg_prior
+        if ratio >= 2.0:
+            spike_alerts.append({
+                "supplier": sup,
+                "current_amount": round(current, 2),
+                "avg_prior": round(avg_prior, 2),
+                "ratio": round(ratio, 2),
+                "current_month": ref_ym,
+                "prior_months": len(prior),
+            })
+    spike_alerts.sort(key=lambda x: x["ratio"], reverse=True)
+    spike_alerts = spike_alerts[:20]
+
+    return {"top_largest_waybills": top_largest, "spike_alerts": spike_alerts}
+
+
+def _build_waybill_supplier_analytics(rows, all_rows):
+    """Compute per-supplier rankings, HHI concentration, Pareto cumulative,
+    new-supplier and silent-supplier insights."""
+    from datetime import datetime as _dt
+
+    by_sup = {}
+    for r in rows:
+        sup = str(r.get("supplier") or "").strip()
+        if not sup:
+            continue
+        amt = _waybill_amount_value(r)
+        d = str(r.get("date") or "")[:10]
+        e = by_sup.setdefault(
+            sup,
+            {"supplier": sup, "count": 0, "amount": 0.0, "first_date": d, "last_date": d, "return_count": 0},
+        )
+        e["count"] += 1
+        e["amount"] += amt
+        if r.get("is_return"):
+            e["return_count"] += 1
+        if d:
+            if not e["first_date"] or d < e["first_date"]:
+                e["first_date"] = d
+            if not e["last_date"] or d > e["last_date"]:
+                e["last_date"] = d
+
+    sup_list = sorted(by_sup.values(), key=lambda x: x["amount"], reverse=True)
+    total = sum(s["amount"] for s in sup_list)
+
+    # Top 10
+    top10 = []
+    for s in sup_list[:10]:
+        top10.append({
+            "supplier": s["supplier"],
+            "amount": round(s["amount"], 2),
+            "count": s["count"],
+            "share_pct": round((s["amount"] / total) * 100.0, 2) if total else 0.0,
+        })
+
+    # Pareto: cumulative share
+    pareto = []
+    cum = 0.0
+    cum_count_at_80 = None
+    for i, s in enumerate(sup_list, start=1):
+        cum += s["amount"]
+        cum_pct = (cum / total) * 100.0 if total else 0.0
+        pareto.append({
+            "rank": i,
+            "supplier": s["supplier"],
+            "amount": round(s["amount"], 2),
+            "cumulative_pct": round(cum_pct, 2),
+        })
+        if cum_count_at_80 is None and cum_pct >= 80.0:
+            cum_count_at_80 = i
+
+    # HHI: sum of squared market shares (out of 10000). >2500 = highly concentrated
+    if total > 0:
+        hhi = round(sum(((s["amount"] / total) * 100.0) ** 2 for s in sup_list), 2)
+    else:
+        hhi = 0.0
+    if hhi >= 2500:
+        hhi_class = "მაღალი კონცენტრაცია"
+    elif hhi >= 1500:
+        hhi_class = "საშუალო"
+    else:
+        hhi_class = "დაბალი (დივერსიფიცირებული)"
+
+    # New-suppliers per month: month each supplier appeared for the first time
+    # (within filtered rows)
+    new_per_month = {}
+    for s in sup_list:
+        fd = s.get("first_date") or ""
+        if len(fd) >= 7:
+            ym = fd[:7]
+            new_per_month[ym] = new_per_month.get(ym, 0) + 1
+    new_suppliers_monthly = [
+        {"month": k, "new_suppliers": v}
+        for k, v in sorted(new_per_month.items())
+    ]
+
+    # Silent suppliers — using ALL rows so we know "last seen ever", not just
+    # in the current period. Threshold = max_date - 90 days.
+    silent_suppliers = []
+    max_date = ""
+    last_by_sup = {}
+    for r in all_rows:
+        sup = str(r.get("supplier") or "").strip()
+        d = str(r.get("date") or "")[:10]
+        if not sup or not d:
+            continue
+        if d > max_date:
+            max_date = d
+        if d > last_by_sup.get(sup, ""):
+            last_by_sup[sup] = d
+    if max_date:
+        try:
+            cutoff = (_dt.strptime(max_date, "%Y-%m-%d") - __import__("datetime").timedelta(days=90)).strftime("%Y-%m-%d")
+        except ValueError:
+            cutoff = ""
+        if cutoff:
+            for sup, ld in last_by_sup.items():
+                if ld < cutoff:
+                    days = 0
+                    try:
+                        days = (_dt.strptime(max_date, "%Y-%m-%d") - _dt.strptime(ld, "%Y-%m-%d")).days
+                    except ValueError:
+                        pass
+                    silent_suppliers.append({"supplier": sup, "last_date": ld, "days_silent": days})
+            silent_suppliers.sort(key=lambda x: x["days_silent"], reverse=True)
+    silent_suppliers = silent_suppliers[:30]
+
+    # Reliability: cancellation/return rate per supplier (top 20 by amount)
+    # Cancellation pulled from status field across this supplier's filtered rows.
+    sup_status = {}
+    for r in rows:
+        sup = str(r.get("supplier") or "").strip()
+        if not sup:
+            continue
+        sup_status.setdefault(sup, {"cancelled": 0, "total": 0})
+        sup_status[sup]["total"] += 1
+        if "გაუქმებული" in str(r.get("status") or ""):
+            sup_status[sup]["cancelled"] += 1
+    reliability = []
+    for s in sup_list[:20]:
+        st = sup_status.get(s["supplier"], {"cancelled": 0, "total": 0})
+        cancel_pct = (st["cancelled"] / st["total"]) * 100.0 if st["total"] else 0.0
+        return_pct = (s["return_count"] / s["count"]) * 100.0 if s["count"] else 0.0
+        score = round(100.0 - cancel_pct - (return_pct * 0.5), 2)
+        reliability.append({
+            "supplier": s["supplier"],
+            "amount": round(s["amount"], 2),
+            "count": s["count"],
+            "cancel_pct": round(cancel_pct, 2),
+            "return_pct": round(return_pct, 2),
+            "reliability_score": max(0.0, min(100.0, score)),
+        })
+
+    return {
+        "top_suppliers": top10,
+        "supplier_count_total": len(sup_list),
+        "supplier_count_for_80pct": cum_count_at_80,
+        "pareto": pareto[:50],
+        "hhi": hhi,
+        "hhi_class": hhi_class,
+        "new_suppliers_monthly": new_suppliers_monthly,
+        "silent_suppliers": silent_suppliers,
+        "supplier_reliability": reliability,
+    }
+
+
+def _build_waybill_quality_trends(rows):
+    """Monthly cancellation % and return % trends + type breakdown summary."""
+    monthly = {}
+    for r in rows:
+        d = str(r.get("date") or "")[:10]
+        if len(d) < 7:
+            continue
+        ym = d[:7]
+        e = monthly.setdefault(
+            ym,
+            {"month": ym, "total": 0, "cancelled": 0, "returns": 0, "amount": 0.0, "return_amount": 0.0},
+        )
+        e["total"] += 1
+        e["amount"] += _waybill_amount_value(r)
+        if "გაუქმებული" in str(r.get("status") or ""):
+            e["cancelled"] += 1
+        if r.get("is_return"):
+            e["returns"] += 1
+            e["return_amount"] += _waybill_amount_value(r)
+    out = []
+    for ym in sorted(monthly):
+        m = monthly[ym]
+        cancel_pct = (m["cancelled"] / m["total"]) * 100.0 if m["total"] else 0.0
+        return_pct = (m["returns"] / m["total"]) * 100.0 if m["total"] else 0.0
+        out.append({
+            "month": ym,
+            "total": m["total"],
+            "cancelled": m["cancelled"],
+            "returns": m["returns"],
+            "cancel_pct": round(cancel_pct, 2),
+            "return_pct": round(return_pct, 2),
+            "amount": round(m["amount"], 2),
+            "return_amount": round(m["return_amount"], 2),
+        })
+    return out
+
+
+def _build_waybill_chart_data(rows):
+    """Pre-aggregate filtered waybills for chart rendering on the frontend.
+
+    Returns dict with keys: monthly_trend, yearly_comparison, quarterly_trend,
+    day_of_week, store_monthly. Each is shaped for direct use in recharts.
+    """
+    from datetime import datetime as _dt
+
+    monthly = {}
+    yearly_by_month = {}
+    quarterly = {}
+    dow_count = [0] * 7
+    dow_amount = [0.0] * 7
+    store_monthly = {}
+
+    for r in rows:
+        d = str(r.get("date") or "")[:10]
+        if not d:
+            continue
+        try:
+            dt = _dt.strptime(d, "%Y-%m-%d")
+        except ValueError:
+            continue
+        amt = _waybill_amount_value(r)
+        store_name = str(r.get("store") or "უცნობი") or "უცნობი"
+
+        ym = d[:7]
+        m_entry = monthly.setdefault(
+            ym, {"month": ym, "count": 0, "amount": 0.0, "return_count": 0, "return_amount": 0.0}
+        )
+        m_entry["count"] += 1
+        m_entry["amount"] += amt
+        if r.get("is_return"):
+            m_entry["return_count"] += 1
+            m_entry["return_amount"] += amt
+
+        y = d[:4]
+        m_num = int(d[5:7])
+        yearly_by_month.setdefault(m_num, {})
+        yearly_by_month[m_num][y] = yearly_by_month[m_num].get(y, 0.0) + amt
+
+        q_idx = (dt.month - 1) // 3 + 1
+        qkey = f"{y}-Q{q_idx}"
+        q_entry = quarterly.setdefault(
+            qkey, {"quarter": qkey, "count": 0, "amount": 0.0}
+        )
+        q_entry["count"] += 1
+        q_entry["amount"] += amt
+
+        dow_idx = dt.weekday()
+        dow_count[dow_idx] += 1
+        dow_amount[dow_idx] += amt
+
+        store_monthly.setdefault(store_name, {})
+        store_monthly[store_name][ym] = store_monthly[store_name].get(ym, 0.0) + amt
+
+    # Sort monthly + add 3-month moving average
+    monthly_sorted = sorted(monthly.values(), key=lambda x: x["month"])
+    for i, m in enumerate(monthly_sorted):
+        window = monthly_sorted[max(0, i - 2): i + 1]
+        m["ma3_amount"] = round(sum(w["amount"] for w in window) / len(window), 2)
+        m["amount"] = round(m["amount"], 2)
+        m["return_amount"] = round(m["return_amount"], 2)
+
+    # Yearly comparison reshape: list of 12 month rows with year columns
+    month_short_ka = ["იან", "თებ", "მარ", "აპრ", "მაი", "ივნ", "ივლ", "აგვ", "სექ", "ოქტ", "ნოე", "დეკ"]
+    years_present = sorted({y for m_data in yearly_by_month.values() for y in m_data})
+    yearly_chart = []
+    for m_num in range(1, 13):
+        row = {"month": month_short_ka[m_num - 1], "month_num": m_num}
+        for y in years_present:
+            row[y] = round((yearly_by_month.get(m_num) or {}).get(y, 0.0), 2)
+        yearly_chart.append(row)
+
+    # Day-of-week
+    dow_labels = ["ორშ", "სამ", "ოთხ", "ხუთ", "პარ", "შაბ", "კვი"]
+    dow_data = [
+        {"day": dow_labels[i], "day_idx": i, "count": dow_count[i], "amount": round(dow_amount[i], 2)}
+        for i in range(7)
+    ]
+
+    # Store-monthly stacked: list of months with one column per store
+    all_months = sorted({ym for s_data in store_monthly.values() for ym in s_data})
+    store_keys = sorted(store_monthly.keys())
+    store_monthly_chart = []
+    for ym in all_months:
+        row = {"month": ym}
+        for store_key in store_keys:
+            row[store_key] = round(store_monthly[store_key].get(ym, 0.0), 2)
+        store_monthly_chart.append(row)
+
+    quarterly_sorted = sorted(quarterly.values(), key=lambda x: x["quarter"])
+    for q in quarterly_sorted:
+        q["amount"] = round(q["amount"], 2)
+
+    return {
+        "monthly_trend": monthly_sorted,
+        "yearly_comparison": yearly_chart,
+        "yearly_keys": years_present,
+        "quarterly_trend": quarterly_sorted,
+        "day_of_week": dow_data,
+        "store_monthly": store_monthly_chart,
+        "store_keys": store_keys,
+    }
+
+
+def _build_waybill_extra_kpis(filtered_rows, period_filter, all_rows):
+    """Compute extra KPIs: avg/median/max amount, return rate, daily avg count,
+    active/new suppliers, period-over-period velocity."""
+    import statistics as _stats
+    from datetime import datetime as _dt, timedelta as _td
+
+    amounts = [_waybill_amount_value(r) for r in filtered_rows]
+    return_count = sum(1 for r in filtered_rows if r.get("is_return"))
+    return_amount = sum(_waybill_amount_value(r) for r in filtered_rows if r.get("is_return"))
+
+    # Date range from filtered rows
+    dates_iso = [str(r.get("date") or "")[:10] for r in filtered_rows if r.get("date")]
+    dates_iso = [d for d in dates_iso if d]
+    if dates_iso:
+        min_date = min(dates_iso)
+        max_date = max(dates_iso)
+        try:
+            d1 = _dt.strptime(min_date, "%Y-%m-%d")
+            d2 = _dt.strptime(max_date, "%Y-%m-%d")
+            day_span = max(1, (d2 - d1).days + 1)
+        except ValueError:
+            day_span = 1
+    else:
+        min_date = max_date = ""
+        day_span = 1
+
+    # Suppliers in current filtered set
+    current_suppliers = set()
+    for r in filtered_rows:
+        sup = str(r.get("supplier") or "")
+        if sup:
+            current_suppliers.add(sup)
+
+    # New suppliers: appear in filtered but not in all_rows BEFORE min_date.
+    # Only meaningful when a period filter is applied (otherwise min_date is
+    # the dataset's first date and every supplier counts as "new").
+    new_suppliers_count = 0
+    if period_filter is not None and min_date and current_suppliers:
+        prior_suppliers = set()
+        for r in all_rows:
+            d = str(r.get("date") or "")[:10]
+            if d and d < min_date:
+                sup = str(r.get("supplier") or "")
+                if sup:
+                    prior_suppliers.add(sup)
+        new_suppliers_count = len(current_suppliers - prior_suppliers)
+
+    # Period-over-period velocity: compare filtered total to same-length window before
+    velocity_pct = None
+    prev_total = None
+    if period_filter is not None and min_date and max_date and day_span > 0:
+        try:
+            d1 = _dt.strptime(min_date, "%Y-%m-%d")
+            prev_end = d1 - _td(days=1)
+            prev_start = prev_end - _td(days=day_span - 1)
+            ps_iso = prev_start.strftime("%Y-%m-%d")
+            pe_iso = prev_end.strftime("%Y-%m-%d")
+            prev_amount = 0.0
+            for r in all_rows:
+                d = str(r.get("date") or "")[:10]
+                if d and ps_iso <= d <= pe_iso:
+                    prev_amount += _waybill_amount_value(r)
+            prev_total = round(prev_amount, 2)
+            current_total = sum(amounts)
+            if prev_amount > 0:
+                velocity_pct = round(((current_total - prev_amount) / prev_amount) * 100.0, 2)
+        except (ValueError, TypeError):
+            pass
+
+    total_amount = sum(amounts)
+    return {
+        "avg_amount": round(total_amount / len(amounts), 2) if amounts else 0.0,
+        "median_amount": round(_stats.median(amounts), 2) if amounts else 0.0,
+        "max_amount": round(max(amounts), 2) if amounts else 0.0,
+        "min_amount": round(min(amounts), 2) if amounts else 0.0,
+        "return_count": return_count,
+        "return_amount": round(return_amount, 2),
+        "return_pct": round((return_count / len(filtered_rows)) * 100.0, 2) if filtered_rows else 0.0,
+        "daily_avg_count": round(len(filtered_rows) / day_span, 2) if day_span else 0.0,
+        "daily_avg_amount": round(total_amount / day_span, 2) if day_span else 0.0,
+        "active_suppliers_count": len(current_suppliers),
+        "new_suppliers_count": new_suppliers_count,
+        "prev_period_total": prev_total,
+        "velocity_pct": velocity_pct,
+        "date_min": min_date,
+        "date_max": max_date,
+        "day_span": day_span,
+    }
+
+
 def _build_waybills_response(
-    cache, q=None, sort=None, limit=None, period_filter=None, **_kwargs
+    cache, q=None, sort=None, limit=None, period_filter=None,
+    store=None, status_filter=None, type_filter=None,
+    amount_min=None, amount_max=None, returns_only=None,
+    **_kwargs
 ):
     rows = cache.get("waybills") if isinstance(cache, dict) else None
     rows = rows if isinstance(rows, list) else []
@@ -1103,12 +1784,51 @@ def _build_waybills_response(
         for projected in (_project_waybill_row(item) for item in rows)
         if projected is not None
     ]
+    # Fallback: pipeline-generated cache may be older than this code and
+    # missing the store/is_return enrichment. Compute on the fly so KPIs and
+    # the store filter work without waiting for the next pipeline regen.
+    needs_store = any(not row.get("store") and row.get("delivery_location") for row in projected_rows[:50])
+    for row in projected_rows:
+        row["is_return"] = "დაბრუნება" in str(row.get("type") or "")
+    if needs_store:
+        try:
+            from dashboard_pipeline.constants import detect_object
+            from dashboard_pipeline.config_loaders import load_object_mapping
+            import os as _os
+            _script_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+            object_mapping = load_object_mapping(_script_dir)
+            for row in projected_rows:
+                if not row.get("store"):
+                    delivery = str(row.get("delivery_location") or "").strip()
+                    if delivery and delivery != "N/A":
+                        row["store"] = detect_object(
+                            "rs_waybill",
+                            text=delivery,
+                            object_mapping=object_mapping,
+                            rs_location=delivery,
+                        )
+        except Exception:
+            pass
     requested_query = _clean_lookup_text(q)
     requested_sort = _clean_lookup_text(sort)
     applied_sort = requested_sort if requested_sort in WAYBILL_ALLOWED_SORTS else None
     if requested_sort is not None and applied_sort is None:
         applied_sort = "amount_asc"
     applied_limit = _coerce_waybill_limit(limit)
+
+    requested_store = _clean_lookup_text(store)
+    requested_status = _clean_lookup_text(status_filter)
+    requested_type = _clean_lookup_text(type_filter)
+    try:
+        amt_min = float(amount_min) if amount_min not in (None, "") else None
+    except (TypeError, ValueError):
+        amt_min = None
+    try:
+        amt_max = float(amount_max) if amount_max not in (None, "") else None
+    except (TypeError, ValueError):
+        amt_max = None
+    returns_only_flag = bool(returns_only) and str(returns_only).lower() not in ("0", "false", "")
+
     period_filtered_rows = [
         item for item in projected_rows if matches_period(item.get("date"), period_filter)
     ]
@@ -1126,6 +1846,19 @@ def _build_waybills_response(
             if needle in str(item.get("supplier") or "").lower()
             or needle in str(item.get("waybill_number") or "").lower()
         ]
+    if requested_store:
+        filtered_rows = [r for r in filtered_rows if str(r.get("store") or "") == requested_store]
+    if requested_status:
+        filtered_rows = [r for r in filtered_rows if str(r.get("status") or "") == requested_status]
+    if requested_type:
+        filtered_rows = [r for r in filtered_rows if requested_type in str(r.get("type") or "")]
+    if returns_only_flag:
+        filtered_rows = [r for r in filtered_rows if r.get("is_return")]
+    if amt_min is not None:
+        filtered_rows = [r for r in filtered_rows if _waybill_amount_value(r) >= amt_min]
+    if amt_max is not None:
+        filtered_rows = [r for r in filtered_rows if _waybill_amount_value(r) <= amt_max]
+
     if applied_sort == "amount_desc":
         filtered_rows = sorted(filtered_rows, key=_waybill_amount_value, reverse=True)
     elif applied_sort == "date_desc":
@@ -1137,9 +1870,26 @@ def _build_waybills_response(
     returned_rows = (
         filtered_rows[:applied_limit] if applied_limit is not None else filtered_rows
     )
+
+    extra_kpis = _build_waybill_extra_kpis(filtered_rows, period_filter, projected_rows)
+    chart_data = _build_waybill_chart_data(filtered_rows)
+    supplier_analytics = _build_waybill_supplier_analytics(filtered_rows, projected_rows)
+    quality_trends = _build_waybill_quality_trends(filtered_rows)
+    anomaly_data = _build_waybill_anomaly_data(filtered_rows, projected_rows)
+    calendar_heatmap = _build_waybill_calendar_heatmap(filtered_rows)
+    duplicate_candidates = _build_waybill_duplicate_candidates(filtered_rows)
+    month_benchmark = _build_waybill_month_benchmark(filtered_rows)
+
     return {
         "waybills": returned_rows,
         "waybills_summary": {
+            **chart_data,
+            **supplier_analytics,
+            **anomaly_data,
+            "quality_trends": quality_trends,
+            "calendar_heatmap": calendar_heatmap,
+            "duplicate_candidates": duplicate_candidates,
+            "month_benchmark": month_benchmark,
             "query": requested_query,
             "sort": applied_sort,
             "total_count": len(filtered_rows),
@@ -1151,8 +1901,16 @@ def _build_waybills_response(
                 or requested_sort is not None
                 or applied_limit is not None
                 or bool(period_meta.get("applied"))
+                or requested_store
+                or requested_status
+                or requested_type
+                or returns_only_flag
+                or amt_min is not None
+                or amt_max is not None
             ),
             "status_breakdown": _build_waybill_status_breakdown(filtered_rows),
+            "store_breakdown": _build_waybill_store_breakdown(filtered_rows),
+            "type_breakdown": _build_waybill_type_breakdown(filtered_rows),
             "total_nominal_amount": float(
                 sum(
                     _waybill_numeric_value(item, "nominal_amount")
@@ -1166,6 +1924,15 @@ def _build_waybills_response(
                 )
             ),
             "period_meta": period_meta,
+            "filters": {
+                "store": requested_store,
+                "status": requested_status,
+                "type": requested_type,
+                "returns_only": returns_only_flag,
+                "amount_min": amt_min,
+                "amount_max": amt_max,
+            },
+            **extra_kpis,
         },
     }
 
@@ -2192,6 +2959,12 @@ def build_response_for_tab(
     to_date=None,
     from_time=None,
     to_time=None,
+    store=None,
+    status_filter=None,
+    type_filter=None,
+    amount_min=None,
+    amount_max=None,
+    returns_only=None,
 ):
     period_filter = build_period_filter(
         from_date=from_date,
@@ -2212,6 +2985,12 @@ def build_response_for_tab(
                 sort=sort,
                 limit=limit,
                 period_filter=period_filter,
+                store=store,
+                status_filter=status_filter,
+                type_filter=type_filter,
+                amount_min=amount_min,
+                amount_max=amount_max,
+                returns_only=returns_only,
             )
         )
     else:
