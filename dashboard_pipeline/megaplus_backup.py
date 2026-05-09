@@ -872,6 +872,313 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
             "markdown_pct": ((d_before_f - d_after_f) / d_before_f * 100) if d_before_f > 0 else 0.0,
         }
 
+        # Per-shift breakdown (cashier session-level analytics).
+        # ORD_SHIFT identifies one cashier session on one register (typically
+        # a single ~17h day-shift, e.g. 8 AM → 1 AM next morning). One shift =
+        # one user_id × one tab_id × one operating window.
+        cur.execute(
+            """
+            SELECT
+                o.ORD_SHIFT                                AS shift_id,
+                o.ORD_USER_ID                              AS user_id,
+                o.ORD_TAB_ID                               AS tab_id,
+                MIN(o.ORD_TIMESTAMP)                       AS shift_start,
+                MAX(o.ORD_TIMESTAMP)                       AS shift_end,
+                COUNT(*)                                   AS lines,
+                COUNT(DISTINCT o.ORD_N)                    AS receipts,
+                ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue,
+                ISNULL(SUM(o.ORD_quant), 0)                AS qty,
+                ISNULL(SUM(o.ORD_FASDAKLEBAMDE - o.ORD_jamjam), 0) AS markdown
+            FROM ORDERS o
+            WHERE o.ORD_ACT = 1 AND o.ORD_SHIFT IS NOT NULL AND o.ORD_TIMESTAMP IS NOT NULL
+            GROUP BY o.ORD_SHIFT, o.ORD_USER_ID, o.ORD_TAB_ID
+            ORDER BY o.ORD_SHIFT DESC
+            """
+        )
+        # ORD_SHIFT can group lines spanning multiple weeks if the cashier
+        # never formally closed a shift. A handful of shifts also happen to
+        # match a 2009 legacy timestamp giving impossible 15-year spans. Filter
+        # >30h durations into a separate "anomalous" bucket for visibility
+        # rather than letting them poison avg / max / duration.
+        SHIFT_DURATION_NORMAL_MAX_H = 30.0
+        all_shifts = []
+        anomalous_shifts = []
+        normal_revenues = []
+        normal_durations = []
+        for row in cur.fetchall():
+            sid, uid, tid, ts_start, ts_end, lines, receipts, rev, qty, md = row
+            rev_f = float(rev or 0)
+            dur_h = 0.0
+            if ts_start and ts_end:
+                dur_h = max(0.0, (ts_end - ts_start).total_seconds() / 3600.0)
+            receipts_i = int(receipts or 0)
+            entry = {
+                "shift_id": int(sid) if sid is not None else None,
+                "user_id": int(uid) if uid is not None else None,
+                "tab_id": int(tid) if tid is not None else None,
+                "shift_start": ts_start.isoformat() if ts_start else None,
+                "shift_end": ts_end.isoformat() if ts_end else None,
+                "duration_hours": round(dur_h, 2),
+                "lines": int(lines or 0),
+                "receipts": receipts_i,
+                "revenue": rev_f,
+                "quantity": float(qty or 0),
+                "markdown": float(md or 0),
+                "aov": round(rev_f / receipts_i, 2) if receipts_i else 0.0,
+                "is_anomalous": dur_h > SHIFT_DURATION_NORMAL_MAX_H,
+            }
+            all_shifts.append(entry)
+            if dur_h > SHIFT_DURATION_NORMAL_MAX_H:
+                anomalous_shifts.append(entry)
+            else:
+                normal_revenues.append(rev_f)
+                if dur_h > 0:
+                    normal_durations.append(dur_h)
+        # Headline stats over NORMAL shifts only — anomalies are surfaced
+        # separately. Total count includes both for transparency.
+        if normal_revenues:
+            sorted_revs = sorted(normal_revenues)
+            median_rev = sorted_revs[len(sorted_revs) // 2]
+        else:
+            median_rev = 0.0
+        shift_summary = {
+            "total_shifts": len(all_shifts),
+            "normal_shift_count": len(all_shifts) - len(anomalous_shifts),
+            "anomalous_shift_count": len(anomalous_shifts),
+            "avg_revenue_ge": round(sum(normal_revenues) / len(normal_revenues), 2) if normal_revenues else 0.0,
+            "median_revenue_ge": round(median_rev, 2),
+            "best_shift_revenue_ge": round(max(normal_revenues), 2) if normal_revenues else 0.0,
+            "worst_shift_revenue_ge": round(min(normal_revenues), 2) if normal_revenues else 0.0,
+            "avg_duration_hours": round(sum(normal_durations) / len(normal_durations), 2) if normal_durations else 0.0,
+            "last_shift_start": all_shifts[0].get("shift_start") if all_shifts else None,
+        }
+        shifts = all_shifts[:200]
+        # Surface up to 10 worst anomalies (longest first) for owner review.
+        shift_anomalies = sorted(anomalous_shifts, key=lambda s: -s["duration_hours"])[:10]
+
+        # Per-line VAT (ORD_VAT) — total VAT collected, by month, by category.
+        # Effective rate = ORD_VAT / ORD_jamjam. ORD_VAT = 0 indicates a
+        # VAT-exempt line (e.g. cigarettes / specific food categories).
+        cur.execute(
+            """
+            SELECT
+                ISNULL(SUM(o.ORD_VAT), 0)                  AS vat_total,
+                ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue,
+                COUNT(*)                                   AS lines,
+                SUM(CASE WHEN o.ORD_VAT = 0 THEN 1 ELSE 0 END)         AS exempt_lines,
+                ISNULL(SUM(CASE WHEN o.ORD_VAT = 0 THEN o.ORD_jamjam ELSE 0 END), 0) AS exempt_revenue
+            FROM ORDERS o
+            WHERE o.ORD_ACT = 1
+            """
+        )
+        v_total, v_rev, v_lines, v_exempt_lines, v_exempt_rev = cur.fetchone()
+        v_total_f = float(v_total or 0)
+        v_rev_f = float(v_rev or 0)
+        v_exempt_rev_f = float(v_exempt_rev or 0)
+        vat_totals = {
+            "vat_collected_ge": v_total_f,
+            "revenue_ge": v_rev_f,
+            "effective_rate_pct": round(v_total_f / v_rev_f * 100, 2) if v_rev_f else 0.0,
+            "lines": int(v_lines or 0),
+            "exempt_lines": int(v_exempt_lines or 0),
+            "exempt_revenue_ge": v_exempt_rev_f,
+            "exempt_share_pct": round(v_exempt_rev_f / v_rev_f * 100, 2) if v_rev_f else 0.0,
+        }
+
+        # VAT by month
+        cur.execute(
+            """
+            SELECT
+                CAST(YEAR(o.ORD_TIMESTAMP) AS varchar(4)) + '-'
+                    + RIGHT('0' + CAST(MONTH(o.ORD_TIMESTAMP) AS varchar(2)), 2) AS month,
+                ISNULL(SUM(o.ORD_VAT), 0)                  AS vat_total,
+                ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue
+            FROM ORDERS o
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP IS NOT NULL
+            GROUP BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP)
+            ORDER BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP)
+            """
+        )
+        vat_by_month = []
+        for month, vat_t, rev in cur.fetchall():
+            vat_t_f = float(vat_t or 0)
+            rev_f = float(rev or 0)
+            vat_by_month.append({
+                "month": month,
+                "vat_collected": vat_t_f,
+                "revenue": rev_f,
+                "effective_rate_pct": round(vat_t_f / rev_f * 100, 2) if rev_f else 0.0,
+            })
+
+        # VAT by category
+        cur.execute(
+            """
+            SELECT
+                ISNULL(p.P_GROUP, '(უცნობი)')              AS category,
+                ISNULL(SUM(o.ORD_VAT), 0)                  AS vat_total,
+                ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue,
+                COUNT(*)                                   AS lines,
+                SUM(CASE WHEN o.ORD_VAT = 0 THEN 1 ELSE 0 END) AS exempt_lines
+            FROM ORDERS o
+            JOIN PRODUCTS p ON o.ORD_P_ID = p.P_ID
+            WHERE o.ORD_ACT = 1
+            GROUP BY p.P_GROUP
+            ORDER BY SUM(o.ORD_VAT) DESC
+            """
+        )
+        vat_by_category = []
+        for cat, vat_t, rev, lines, exempt_lines in cur.fetchall():
+            vat_t_f = float(vat_t or 0)
+            rev_f = float(rev or 0)
+            lines_i = int(lines or 0)
+            exempt_lines_i = int(exempt_lines or 0)
+            vat_by_category.append({
+                "category": cat or "(უცნობი)",
+                "vat_collected": vat_t_f,
+                "revenue": rev_f,
+                "effective_rate_pct": round(vat_t_f / rev_f * 100, 2) if rev_f else 0.0,
+                "lines": lines_i,
+                "exempt_lines": exempt_lines_i,
+                "exempt_share_pct": round(exempt_lines_i / lines_i * 100, 2) if lines_i else 0.0,
+            })
+
+        # Returns by product (ORD_ACT = 2). Top 30 most-returned SKUs by
+        # absolute return revenue. Pairs the existing returns_voids aggregate
+        # with line-level product attribution so the UI can show "which SKUs
+        # are coming back" rather than only a single total.
+        cur.execute(
+            """
+            SELECT TOP 30
+                p.P_ID                                     AS product_id,
+                p.P_CODE                                   AS product_code,
+                p.P_BARCODE                                AS barcode,
+                p.P_NAME                                   AS product_name,
+                p.P_GROUP                                  AS category,
+                COUNT(*)                                   AS return_lines,
+                COUNT(DISTINCT o.ORD_N)                    AS return_receipts,
+                ISNULL(SUM(o.ORD_jamjam), 0)               AS return_revenue,
+                ISNULL(SUM(o.ORD_quant), 0)                AS return_qty,
+                MIN(o.ORD_TIMESTAMP)                       AS first_return,
+                MAX(o.ORD_TIMESTAMP)                       AS last_return
+            FROM ORDERS o
+            JOIN PRODUCTS p ON o.ORD_P_ID = p.P_ID
+            WHERE o.ORD_ACT = 2
+            GROUP BY p.P_ID, p.P_CODE, p.P_BARCODE, p.P_NAME, p.P_GROUP
+            ORDER BY ABS(ISNULL(SUM(o.ORD_jamjam), 0)) DESC
+            """
+        )
+        returns_by_product = []
+        for row in cur.fetchall():
+            (pid, code, barcode, name, category, lines, receipts,
+             rev, qty, first_at, last_at) = row
+            returns_by_product.append({
+                "product_id": int(pid),
+                "product_code": code or "",
+                "barcode": barcode or "",
+                "product_name": name or "",
+                "category": category or "",
+                "return_lines": int(lines or 0),
+                "return_receipts": int(receipts or 0),
+                "return_revenue": float(rev or 0),
+                "return_quantity": float(qty or 0),
+                "first_return": first_at.isoformat() if first_at else None,
+                "last_return": last_at.isoformat() if last_at else None,
+            })
+
+        # Returns by cashier — which user accepts most returns + ratio to
+        # their lifetime sales. user_id 0 / NULL grouped together as anonymous.
+        cur.execute(
+            """
+            SELECT
+                o.ORD_USER_ID                              AS user_id,
+                COUNT(*)                                   AS return_lines,
+                COUNT(DISTINCT o.ORD_N)                    AS return_receipts,
+                ISNULL(SUM(o.ORD_jamjam), 0)               AS return_revenue
+            FROM ORDERS o
+            WHERE o.ORD_ACT = 2
+            GROUP BY o.ORD_USER_ID
+            ORDER BY ABS(ISNULL(SUM(o.ORD_jamjam), 0)) DESC
+            """
+        )
+        returns_by_cashier = []
+        for uid, lines, receipts, rev in cur.fetchall():
+            returns_by_cashier.append({
+                "user_id": int(uid) if uid is not None else None,
+                "return_lines": int(lines or 0),
+                "return_receipts": int(receipts or 0),
+                "return_revenue": float(rev or 0),
+            })
+
+        # Returns by month — anomaly detection on returns trend.
+        cur.execute(
+            """
+            SELECT
+                CAST(YEAR(o.ORD_TIMESTAMP) AS varchar(4)) + '-'
+                    + RIGHT('0' + CAST(MONTH(o.ORD_TIMESTAMP) AS varchar(2)), 2) AS month,
+                COUNT(*)                                   AS lines,
+                COUNT(DISTINCT o.ORD_N)                    AS receipts,
+                ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue,
+                ISNULL(SUM(o.ORD_quant), 0)                AS qty
+            FROM ORDERS o
+            WHERE o.ORD_ACT = 2 AND o.ORD_TIMESTAMP IS NOT NULL
+            GROUP BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP)
+            ORDER BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP)
+            """
+        )
+        returns_by_month = []
+        for month, lines, receipts, rev, qty in cur.fetchall():
+            returns_by_month.append({
+                "month": month,
+                "lines": int(lines or 0),
+                "receipts": int(receipts or 0),
+                "revenue": float(rev or 0),
+                "quantity": float(qty or 0),
+            })
+
+        # Discount detail — per-category breakdown of markdowns. Reveals
+        # whether markdowns are concentrated in a few categories (= signal
+        # of selective promotion) vs spread across all (= signal of broad
+        # mark-down policy).
+        cur.execute(
+            """
+            SELECT
+                ISNULL(p.P_GROUP, '(უცნობი)')              AS category,
+                COUNT(*)                                   AS lines,
+                COUNT(DISTINCT o.ORD_N)                    AS receipts,
+                ISNULL(SUM(o.ORD_FASDAKLEBAMDE - o.ORD_jamjam), 0) AS markdown,
+                ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue_after,
+                ISNULL(SUM(o.ORD_FASDAKLEBAMDE), 0)        AS revenue_before,
+                ISNULL(SUM(o.ORD_quant * pec.effective_unit_cost), 0) AS cogs_imputed
+            FROM ORDERS o
+            JOIN PRODUCTS p ON o.ORD_P_ID = p.P_ID
+            LEFT JOIN #pec pec ON p.P_ID = pec.p_id
+            WHERE o.ORD_ACT = 1 AND o.ORD_FASDAKLEBAMDE > o.ORD_jamjam
+            GROUP BY p.P_GROUP
+            ORDER BY ISNULL(SUM(o.ORD_FASDAKLEBAMDE - o.ORD_jamjam), 0) DESC
+            """
+        )
+        discount_by_category = []
+        for cat, lines, receipts, md, rev_after, rev_before, cogs in cur.fetchall():
+            md_f = float(md or 0)
+            ra_f = float(rev_after or 0)
+            rb_f = float(rev_before or 0)
+            cogs_f = float(cogs or 0)
+            profit_actual = ra_f - cogs_f
+            profit_no_discount = rb_f - cogs_f  # If no markdown was given.
+            discount_by_category.append({
+                "category": cat or "(უცნობი)",
+                "lines": int(lines or 0),
+                "receipts": int(receipts or 0),
+                "markdown_total": md_f,
+                "revenue_after_markdown": ra_f,
+                "revenue_before_markdown": rb_f,
+                "cost": cogs_f,
+                "profit_actual": profit_actual,
+                "profit_if_no_discount": profit_no_discount,
+                "lift_lost_ge": md_f,  # = revenue_before − revenue_after, by definition
+                "markdown_pct": round((rb_f - ra_f) / rb_f * 100, 2) if rb_f else 0.0,
+            })
+
         # Operator-error detection on PRODUCTS table — empty / duplicate-variant
         # / PROTECTED-supplier review. Built on the same connection so it
         # joins the per-store snapshot the rest of this rollup is reading.
@@ -909,6 +1216,16 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
         "daily_trend": daily_trend,
         "returns_voids": returns_voids,
         "discount_totals": discount_totals,
+        "shifts": shifts,
+        "shift_summary": shift_summary,
+        "shift_anomalies": shift_anomalies,
+        "vat_totals": vat_totals,
+        "vat_by_month": vat_by_month,
+        "vat_by_category": vat_by_category,
+        "returns_by_product": returns_by_product,
+        "returns_by_cashier": returns_by_cashier,
+        "returns_by_month": returns_by_month,
+        "discount_by_category": discount_by_category,
         "suppliers": sorted(suppliers.values(), key=lambda s: s["lifetime"]["revenue"], reverse=True),
         "by_product": by_product,
         "by_product_recent": by_product_recent,

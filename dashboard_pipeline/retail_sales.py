@@ -827,6 +827,272 @@ def synthesize_from_megaplus(megaplus_live):
         "share_of_revenue_pct": round(disc_rev_after / bm_rev * 100, 2) if bm_rev > 0 else 0.0,
     }
 
+    # ─── Shifts (cashier sessions) — combined: union across stores ──────────
+    # Aggregate stats from each store's pre-computed shift_summary (which
+    # excludes >30h anomalies). Recomputing from union of `shifts` (top-200
+    # most-recent only) would yield wrong avg/max/median.
+    all_shifts = []
+    all_anomalies = []
+    sum_total = 0
+    sum_normal = 0
+    sum_anomalous = 0
+    weighted_rev_sum = 0.0
+    weighted_dur_sum = 0.0
+    best_combined = 0.0
+    worst_combined = float("inf")
+    last_start_combined = None
+    for store_id, rollup in stores.items():
+        obj_label = store_label_for.get(str(store_id)) or f"store_{store_id}"
+        for s in rollup.get("shifts") or []:
+            all_shifts.append({**s, "object": obj_label})
+        for s in rollup.get("shift_anomalies") or []:
+            all_anomalies.append({**s, "object": obj_label})
+        sm = rollup.get("shift_summary") or {}
+        total = int(sm.get("total_shifts") or 0)
+        normal = int(sm.get("normal_shift_count") or 0)
+        anomalous = int(sm.get("anomalous_shift_count") or 0)
+        sum_total += total
+        sum_normal += normal
+        sum_anomalous += anomalous
+        weighted_rev_sum += float(sm.get("avg_revenue_ge") or 0) * normal
+        weighted_dur_sum += float(sm.get("avg_duration_hours") or 0) * normal
+        best_combined = max(best_combined, float(sm.get("best_shift_revenue_ge") or 0))
+        if normal > 0:
+            worst_combined = min(worst_combined, float(sm.get("worst_shift_revenue_ge") or 0))
+        ls = sm.get("last_shift_start")
+        if ls and (last_start_combined is None or ls > last_start_combined):
+            last_start_combined = ls
+    all_shifts.sort(key=lambda s: s.get("shift_start") or "", reverse=True)
+    combined_shifts = all_shifts[:200]
+    all_anomalies.sort(key=lambda s: -s.get("duration_hours", 0))
+    combined_shift_anomalies = all_anomalies[:10]
+    # Median across stores can't be exactly recovered without all values; we
+    # approximate it with the avg-of-store-medians (good enough since the
+    # individual distributions are similar). For a precise median we'd need
+    # to keep every shift revenue in memory, which this dashboard does not.
+    median_revs = [float((rollup.get("shift_summary") or {}).get("median_revenue_ge") or 0)
+                    for rollup in stores.values() if (rollup.get("shift_summary") or {}).get("normal_shift_count")]
+    combined_shift_summary = {
+        "total_shifts": sum_total,
+        "normal_shift_count": sum_normal,
+        "anomalous_shift_count": sum_anomalous,
+        "avg_revenue_ge": round(weighted_rev_sum / sum_normal, 2) if sum_normal else 0.0,
+        "median_revenue_ge": round(sum(median_revs) / len(median_revs), 2) if median_revs else 0.0,
+        "best_shift_revenue_ge": round(best_combined, 2),
+        "worst_shift_revenue_ge": round(worst_combined if worst_combined != float("inf") else 0.0, 2),
+        "avg_duration_hours": round(weighted_dur_sum / sum_normal, 2) if sum_normal else 0.0,
+        "last_shift_start": last_start_combined,
+    }
+
+    # ─── VAT — combined ─────────────────────────────────────────────────────
+    vat_total_acc = 0.0
+    vat_rev_acc = 0.0
+    vat_lines_acc = 0
+    vat_exempt_lines_acc = 0
+    vat_exempt_rev_acc = 0.0
+    vat_month_acc: dict = {}
+    vat_cat_acc: dict = {}
+    for store_id, rollup in stores.items():
+        vt = rollup.get("vat_totals") or {}
+        vat_total_acc += float(vt.get("vat_collected_ge") or 0)
+        vat_rev_acc += float(vt.get("revenue_ge") or 0)
+        vat_lines_acc += int(vt.get("lines") or 0)
+        vat_exempt_lines_acc += int(vt.get("exempt_lines") or 0)
+        vat_exempt_rev_acc += float(vt.get("exempt_revenue_ge") or 0)
+        for m in rollup.get("vat_by_month") or []:
+            key = m.get("month")
+            if not key:
+                continue
+            cur = vat_month_acc.setdefault(key, {"month": key, "vat_collected": 0.0, "revenue": 0.0})
+            cur["vat_collected"] += float(m.get("vat_collected") or 0)
+            cur["revenue"] += float(m.get("revenue") or 0)
+        for c in rollup.get("vat_by_category") or []:
+            key = c.get("category") or "(უცნობი)"
+            cur = vat_cat_acc.setdefault(key, {
+                "category": key, "vat_collected": 0.0, "revenue": 0.0,
+                "lines": 0, "exempt_lines": 0,
+            })
+            cur["vat_collected"] += float(c.get("vat_collected") or 0)
+            cur["revenue"] += float(c.get("revenue") or 0)
+            cur["lines"] += int(c.get("lines") or 0)
+            cur["exempt_lines"] += int(c.get("exempt_lines") or 0)
+    vat_totals_combined = {
+        "vat_collected_ge": round(vat_total_acc, 2),
+        "revenue_ge": round(vat_rev_acc, 2),
+        "effective_rate_pct": round(vat_total_acc / vat_rev_acc * 100, 2) if vat_rev_acc else 0.0,
+        "lines": vat_lines_acc,
+        "exempt_lines": vat_exempt_lines_acc,
+        "exempt_revenue_ge": round(vat_exempt_rev_acc, 2),
+        "exempt_share_pct": round(vat_exempt_rev_acc / vat_rev_acc * 100, 2) if vat_rev_acc else 0.0,
+    }
+    vat_by_month_combined = []
+    for k in sorted(vat_month_acc.keys()):
+        row = vat_month_acc[k]
+        rev = row["revenue"]
+        vat_by_month_combined.append({
+            "month": k,
+            "vat_collected_ge": round(row["vat_collected"], 2),
+            "revenue_ge": round(rev, 2),
+            "effective_rate_pct": round(row["vat_collected"] / rev * 100, 2) if rev else 0.0,
+        })
+    vat_by_category_combined = []
+    for row in sorted(vat_cat_acc.values(), key=lambda r: -r["vat_collected"]):
+        rev = row["revenue"]
+        lines = row["lines"]
+        exempt = row["exempt_lines"]
+        vat_by_category_combined.append({
+            "category": row["category"],
+            "vat_collected_ge": round(row["vat_collected"], 2),
+            "revenue_ge": round(rev, 2),
+            "effective_rate_pct": round(row["vat_collected"] / rev * 100, 2) if rev else 0.0,
+            "lines": lines,
+            "exempt_lines": exempt,
+            "exempt_share_pct": round(exempt / lines * 100, 2) if lines else 0.0,
+        })
+
+    # ─── Returns analytics — combined ───────────────────────────────────────
+    returns_prod_acc: dict = {}
+    returns_cashier_acc: dict = {}
+    returns_month_acc: dict = {}
+    for store_id, rollup in stores.items():
+        obj_label = store_label_for.get(str(store_id)) or f"store_{store_id}"
+        for r in rollup.get("returns_by_product") or []:
+            barcode = r.get("barcode") or ""
+            code = r.get("product_code") or ""
+            key = barcode or code or f"pid_{r.get('product_id')}"
+            cur = returns_prod_acc.setdefault(key, {
+                "product_key": key,
+                "product_code": code,
+                "barcode": barcode,
+                "product_name": r.get("product_name") or "",
+                "category": r.get("category") or "",
+                "return_lines": 0, "return_receipts": 0,
+                "return_revenue": 0.0, "return_quantity": 0.0,
+                "first_return": None, "last_return": None,
+                "by_object": {},
+            })
+            cur["return_lines"] += int(r.get("return_lines") or 0)
+            cur["return_receipts"] += int(r.get("return_receipts") or 0)
+            cur["return_revenue"] += float(r.get("return_revenue") or 0)
+            cur["return_quantity"] += float(r.get("return_quantity") or 0)
+            fr = r.get("first_return")
+            lr = r.get("last_return")
+            if fr and (cur["first_return"] is None or fr < cur["first_return"]):
+                cur["first_return"] = fr
+            if lr and (cur["last_return"] is None or lr > cur["last_return"]):
+                cur["last_return"] = lr
+            obj_entry = cur["by_object"].setdefault(obj_label, {"object": obj_label, "return_lines": 0, "return_revenue": 0.0})
+            obj_entry["return_lines"] += int(r.get("return_lines") or 0)
+            obj_entry["return_revenue"] += float(r.get("return_revenue") or 0)
+        for c in rollup.get("returns_by_cashier") or []:
+            uid = c.get("user_id")
+            ckey = (obj_label, uid)
+            cur = returns_cashier_acc.setdefault(ckey, {
+                "object": obj_label, "user_id": uid,
+                "return_lines": 0, "return_receipts": 0, "return_revenue": 0.0,
+            })
+            cur["return_lines"] += int(c.get("return_lines") or 0)
+            cur["return_receipts"] += int(c.get("return_receipts") or 0)
+            cur["return_revenue"] += float(c.get("return_revenue") or 0)
+        for m in rollup.get("returns_by_month") or []:
+            key = m.get("month")
+            if not key:
+                continue
+            cur = returns_month_acc.setdefault(key, {"month": key, "lines": 0, "receipts": 0, "revenue": 0.0, "quantity": 0.0})
+            cur["lines"] += int(m.get("lines") or 0)
+            cur["receipts"] += int(m.get("receipts") or 0)
+            cur["revenue"] += float(m.get("revenue") or 0)
+            cur["quantity"] += float(m.get("quantity") or 0)
+    returns_by_product_combined = []
+    for key, row in sorted(returns_prod_acc.items(), key=lambda kv: abs(kv[1]["return_revenue"]), reverse=True)[:30]:
+        breakdown = sorted(row["by_object"].values(), key=lambda x: abs(x["return_revenue"]), reverse=True)
+        for b in breakdown:
+            b["return_revenue"] = round(b["return_revenue"], 2)
+        dominant = breakdown[0]["object"] if breakdown else None
+        returns_by_product_combined.append({
+            "product_key": row["product_key"],
+            "product_code": row["product_code"],
+            "barcode": row["barcode"],
+            "product_name": row["product_name"],
+            "category": row["category"],
+            "return_lines": row["return_lines"],
+            "return_receipts": row["return_receipts"],
+            "return_revenue_ge": round(row["return_revenue"], 2),
+            "return_quantity": round(row["return_quantity"], 2),
+            "first_return": row["first_return"],
+            "last_return": row["last_return"],
+            "dominant_object": dominant,
+            "object_breakdown": breakdown,
+        })
+    returns_by_cashier_combined = []
+    for (obj, uid), row in sorted(returns_cashier_acc.items(), key=lambda kv: abs(kv[1]["return_revenue"]), reverse=True)[:30]:
+        returns_by_cashier_combined.append({
+            "object": obj,
+            "user_id": uid,
+            "return_lines": row["return_lines"],
+            "return_receipts": row["return_receipts"],
+            "return_revenue_ge": round(row["return_revenue"], 2),
+        })
+    returns_by_month_combined = []
+    for k in sorted(returns_month_acc.keys()):
+        r = returns_month_acc[k]
+        returns_by_month_combined.append({
+            "month": k,
+            "lines": r["lines"],
+            "receipts": r["receipts"],
+            "revenue_ge": round(r["revenue"], 2),
+            "quantity": round(r["quantity"], 2),
+        })
+
+    # ─── Discount lift (per category) — combined ────────────────────────────
+    disc_cat_acc: dict = {}
+    for store_id, rollup in stores.items():
+        for c in rollup.get("discount_by_category") or []:
+            key = c.get("category") or "(უცნობი)"
+            cur = disc_cat_acc.setdefault(key, {
+                "category": key, "lines": 0, "receipts": 0,
+                "markdown_total": 0.0, "revenue_after": 0.0,
+                "revenue_before": 0.0, "cost": 0.0,
+            })
+            cur["lines"] += int(c.get("lines") or 0)
+            cur["receipts"] += int(c.get("receipts") or 0)
+            cur["markdown_total"] += float(c.get("markdown_total") or 0)
+            cur["revenue_after"] += float(c.get("revenue_after_markdown") or 0)
+            cur["revenue_before"] += float(c.get("revenue_before_markdown") or 0)
+            cur["cost"] += float(c.get("cost") or 0)
+    discount_by_category_combined = []
+    for row in sorted(disc_cat_acc.values(), key=lambda r: -r["markdown_total"]):
+        rb = row["revenue_before"]
+        ra = row["revenue_after"]
+        c = row["cost"]
+        discount_by_category_combined.append({
+            "category": row["category"],
+            "lines": row["lines"],
+            "receipts": row["receipts"],
+            "markdown_total_ge": round(row["markdown_total"], 2),
+            "revenue_after_markdown_ge": round(ra, 2),
+            "revenue_before_markdown_ge": round(rb, 2),
+            "cost_ge": round(c, 2),
+            "profit_actual_ge": round(ra - c, 2),
+            "profit_if_no_discount_ge": round(rb - c, 2),
+            "lift_lost_ge": round(rb - ra, 2),
+            "markdown_pct": round((rb - ra) / rb * 100, 2) if rb else 0.0,
+        })
+    # Lift summary across all categories
+    total_md = sum(r["markdown_total"] for r in disc_cat_acc.values())
+    total_rev_after = sum(r["revenue_after"] for r in disc_cat_acc.values())
+    total_rev_before = sum(r["revenue_before"] for r in disc_cat_acc.values())
+    total_cost_disc = sum(r["cost"] for r in disc_cat_acc.values())
+    discount_lift_summary = {
+        "markdown_total_ge": round(total_md, 2),
+        "revenue_after_markdown_ge": round(total_rev_after, 2),
+        "revenue_before_markdown_ge": round(total_rev_before, 2),
+        "profit_actual_ge": round(total_rev_after - total_cost_disc, 2),
+        "profit_if_no_discount_ge": round(total_rev_before - total_cost_disc, 2),
+        "profit_lost_ge": round(total_md, 2),  # markdown directly translates to lost margin (cost unchanged)
+        "categories_with_discount": len(disc_cat_acc),
+    }
+
     # ─── Per-store views (filterable dataset) ─────────────────────────────
     # Build a parallel "view" per store so the UI store filter swaps the
     # entire dataset (KPIs / charts / time blocks) instead of leaving most
@@ -1053,6 +1319,94 @@ def synthesize_from_megaplus(megaplus_live):
             "hhi_class": store_hhi_class,
             "pareto_top500": store_pareto,
         }
+        # ── Sprint 2: shifts / VAT / returns-by-product / discount-lift ──
+        view_shifts = []
+        for s in (rollup.get("shifts") or [])[:100]:
+            view_shifts.append({**s, "object": obj_label})
+        view_shift_summary = rollup.get("shift_summary") or {}
+        view_vat_totals = rollup.get("vat_totals") or {}
+        view_vat_by_month = []
+        for m in rollup.get("vat_by_month") or []:
+            rev = float(m.get("revenue") or 0)
+            view_vat_by_month.append({
+                "month": m.get("month"),
+                "vat_collected_ge": round(float(m.get("vat_collected") or 0), 2),
+                "revenue_ge": round(rev, 2),
+                "effective_rate_pct": float(m.get("effective_rate_pct") or 0),
+            })
+        view_vat_by_category = []
+        for c_row in rollup.get("vat_by_category") or []:
+            view_vat_by_category.append({
+                "category": c_row.get("category"),
+                "vat_collected_ge": round(float(c_row.get("vat_collected") or 0), 2),
+                "revenue_ge": round(float(c_row.get("revenue") or 0), 2),
+                "effective_rate_pct": float(c_row.get("effective_rate_pct") or 0),
+                "lines": int(c_row.get("lines") or 0),
+                "exempt_lines": int(c_row.get("exempt_lines") or 0),
+                "exempt_share_pct": float(c_row.get("exempt_share_pct") or 0),
+            })
+        view_returns_by_product = []
+        for r in (rollup.get("returns_by_product") or [])[:30]:
+            view_returns_by_product.append({
+                "product_code": r.get("product_code"),
+                "barcode": r.get("barcode"),
+                "product_name": r.get("product_name"),
+                "category": r.get("category"),
+                "return_lines": int(r.get("return_lines") or 0),
+                "return_receipts": int(r.get("return_receipts") or 0),
+                "return_revenue_ge": round(float(r.get("return_revenue") or 0), 2),
+                "return_quantity": round(float(r.get("return_quantity") or 0), 2),
+                "first_return": r.get("first_return"),
+                "last_return": r.get("last_return"),
+            })
+        view_returns_by_cashier = []
+        for c_row in rollup.get("returns_by_cashier") or []:
+            view_returns_by_cashier.append({
+                "user_id": c_row.get("user_id"),
+                "return_lines": int(c_row.get("return_lines") or 0),
+                "return_receipts": int(c_row.get("return_receipts") or 0),
+                "return_revenue_ge": round(float(c_row.get("return_revenue") or 0), 2),
+            })
+        view_returns_by_month = []
+        for m in rollup.get("returns_by_month") or []:
+            view_returns_by_month.append({
+                "month": m.get("month"),
+                "lines": int(m.get("lines") or 0),
+                "receipts": int(m.get("receipts") or 0),
+                "revenue_ge": round(float(m.get("revenue") or 0), 2),
+                "quantity": round(float(m.get("quantity") or 0), 2),
+            })
+        view_discount_by_category = []
+        v_total_md = 0.0; v_total_ra = 0.0; v_total_rb = 0.0; v_total_cost_d = 0.0
+        for c_row in rollup.get("discount_by_category") or []:
+            md_v = float(c_row.get("markdown_total") or 0)
+            ra_v = float(c_row.get("revenue_after_markdown") or 0)
+            rb_v = float(c_row.get("revenue_before_markdown") or 0)
+            cost_v = float(c_row.get("cost") or 0)
+            v_total_md += md_v; v_total_ra += ra_v; v_total_rb += rb_v; v_total_cost_d += cost_v
+            view_discount_by_category.append({
+                "category": c_row.get("category"),
+                "lines": int(c_row.get("lines") or 0),
+                "receipts": int(c_row.get("receipts") or 0),
+                "markdown_total_ge": round(md_v, 2),
+                "revenue_after_markdown_ge": round(ra_v, 2),
+                "revenue_before_markdown_ge": round(rb_v, 2),
+                "cost_ge": round(cost_v, 2),
+                "profit_actual_ge": round(ra_v - cost_v, 2),
+                "profit_if_no_discount_ge": round(rb_v - cost_v, 2),
+                "lift_lost_ge": round(rb_v - ra_v, 2),
+                "markdown_pct": round((rb_v - ra_v) / rb_v * 100, 2) if rb_v else 0.0,
+            })
+        view_discount_lift_summary = {
+            "markdown_total_ge": round(v_total_md, 2),
+            "revenue_after_markdown_ge": round(v_total_ra, 2),
+            "revenue_before_markdown_ge": round(v_total_rb, 2),
+            "profit_actual_ge": round(v_total_ra - v_total_cost_d, 2),
+            "profit_if_no_discount_ge": round(v_total_rb - v_total_cost_d, 2),
+            "profit_lost_ge": round(v_total_md, 2),
+            "categories_with_discount": len(view_discount_by_category),
+        }
+
         per_object_view[obj_label] = {
             "overall": view_overall,
             "basket_metrics": view_basket,
@@ -1069,6 +1423,17 @@ def synthesize_from_megaplus(megaplus_live):
             "top_products_by_revenue": sorted(view_by_product, key=lambda x: -x["revenue_ge"])[:50],
             "top_products_by_profit": sorted(view_by_product, key=lambda x: -x["profit_ge"])[:50],
             "concentration": view_concentration,
+            "shifts": view_shifts,
+            "shift_summary": view_shift_summary,
+            "shift_anomalies": rollup.get("shift_anomalies") or [],
+            "vat_totals": view_vat_totals,
+            "vat_by_month": view_vat_by_month,
+            "vat_by_category": view_vat_by_category,
+            "returns_by_product": view_returns_by_product,
+            "returns_by_cashier": view_returns_by_cashier,
+            "returns_by_month": view_returns_by_month,
+            "discount_by_category": view_discount_by_category,
+            "discount_lift_summary": view_discount_lift_summary,
         }
 
     # ─── Pareto / HHI on by_product (revenue concentration) ────────────────
@@ -1404,6 +1769,17 @@ def synthesize_from_megaplus(megaplus_live):
         "top_recent_movers": top_recent_movers,
         "hour_dow_grid": hour_dow_grid,
         "per_object_view": per_object_view,
+        "shifts": combined_shifts,
+        "shift_summary": combined_shift_summary,
+        "shift_anomalies": combined_shift_anomalies,
+        "vat_totals": vat_totals_combined,
+        "vat_by_month": vat_by_month_combined,
+        "vat_by_category": vat_by_category_combined,
+        "returns_by_product": returns_by_product_combined,
+        "returns_by_cashier": returns_by_cashier_combined,
+        "returns_by_month": returns_by_month_combined,
+        "discount_by_category": discount_by_category_combined,
+        "discount_lift_summary": discount_lift_summary,
     }
 
 

@@ -1042,6 +1042,17 @@ def _project_retail_sales_summary(bundle):
         "top_recent_movers",
         "hour_dow_grid",
         "per_object_view",
+        "shifts",
+        "shift_summary",
+        "shift_anomalies",
+        "vat_totals",
+        "vat_by_month",
+        "vat_by_category",
+        "returns_by_product",
+        "returns_by_cashier",
+        "returns_by_month",
+        "discount_by_category",
+        "discount_lift_summary",
     ):
         val = bundle.get(key)
         if val is not None:

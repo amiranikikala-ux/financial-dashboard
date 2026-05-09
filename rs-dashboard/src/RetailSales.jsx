@@ -69,6 +69,12 @@ const TIPS = {
   markdown: 'ფასდაკლება — სრული ფასი (ORD_FASDAKLEBAMDE) − გადახდილი (ORD_jamjam). რამდენ ფულზე იქნებოდა მეტი შემოსავალი ფასდაკლების გარეშე.',
   pareto: '80/20 — რამდენი პროდუქტი იძლევა შემოსავლის 80%-ს. რაც ნაკლები — მით უფრო დამოკიდებული ხარ ცოტა SKU-ზე.',
   hhi: 'Herfindahl-Hirschman Index — კონცენტრაციის კოეფიციენტი (პროდუქტის წილების კვადრატთა ჯამი). <1500 = დაბალი, 1500-2500 = საშუალო, >2500 = მაღალი (იშვიათი retail-ში — ისიც ცუდია).',
+  shift: 'ცვლა = ერთი მოლარის მუშაობის დრო ერთ სალაროზე (ჩვეულებრივ 8 დილის - 1 ღამის). ID = YYMMDDHHMM. მოლარე #1 = მფლობელი (კაბ).',
+  vat: 'დღგ = დამატებული ღირებულების გადასახადი (VAT). ORD_VAT = ხაზის დღგ ლარში. ეფექტური განაკვეთი = ჯამი დღგ ÷ ჯამი შემოსავალი. გამონაკლისი ხაზი = ORD_VAT=0 (ხშირად სიგარეტი).',
+  returnsByProduct: 'რომელი პროდუქტი ბრუნდება ხშირად. მცირე რიცხვები ნორმალურია — შემთხვევითი დაბრუნებები. გამოიყენე მენეჯერული ცხნილი თუ რომელიმე SKU სტაბილურად დიდი წილით ბრუნდება.',
+  returnsByMonth: 'დაბრუნების თვიური ცემპი. სტაბილურია? ან რომელიმე თვე გამოირჩევა? — გამოძიება საჭიროა.',
+  discountLift: 'რა მოგება იქნებოდა ფასდაკლების გარეშე — actual vs hypothetical. დაკარგული მარჟა = ფასდაკლების ჯამი (cost ცვლილებას არ ექვემდებარება).',
+  discountByCat: 'რომელი კატეგორია იღებს ფასდაკლებას. დიდი ფასდაკლება + დაბალი ფასდაკლების % = ფართო პოლიტიკა. მცირე ფასდაკლება + მაღალი % = სელექტიური clearance.',
 };
 
 const GEL = new Intl.NumberFormat('ka-GE', { style: 'currency', currency: 'GEL', maximumFractionDigits: 0 });
@@ -243,6 +249,11 @@ export default function RetailSales({ retailSales, responseMeta }) {
   const [topProductsLimit, setTopProductsLimit] = useState(20);
   const [storeFilter, setStoreFilter] = useState('all');
   const [productSearch, setProductSearch] = useState('');
+  // Period filter — applies to time-series + KPI block. Aggregate
+  // top-product / hour / dow lists stay lifetime (banner indicates).
+  const [periodPreset, setPeriodPreset] = useState('all');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
 
   if (!summary) {
     return (
@@ -321,10 +332,112 @@ export default function RetailSales({ retailSales, responseMeta }) {
   const slowMovers = summary.slow_movers || {};
   const topRecentMovers = asArray(summary.top_recent_movers);
 
+  // Sprint 2 — shifts / VAT / returns-by-product / discount-lift.
+  // All read from per-store view first (filterable), fall back to combined.
+  const shifts = asArray(view.shifts || summary.shifts);
+  const shiftSummary = view.shift_summary || summary.shift_summary || {};
+  const shiftAnomalies = asArray(view.shift_anomalies || summary.shift_anomalies);
+  const vatTotals = view.vat_totals || summary.vat_totals || {};
+  const vatByMonth = asArray(view.vat_by_month || summary.vat_by_month);
+  const vatByCategory = asArray(view.vat_by_category || summary.vat_by_category).slice(0, 12);
+  const returnsByProduct = asArray(view.returns_by_product || summary.returns_by_product);
+  const returnsByCashier = asArray(view.returns_by_cashier || summary.returns_by_cashier);
+  const returnsByMonth = asArray(view.returns_by_month || summary.returns_by_month);
+  const discountByCategory = asArray(view.discount_by_category || summary.discount_by_category).slice(0, 15);
+  const discountLiftSummary = view.discount_lift_summary || summary.discount_lift_summary || {};
+
   // Filter helper — applies store filter to per-object lists
   const matchStore = (obj) => storeFilter === 'all' || obj === storeFilter;
   const filteredCashiers = cashiers.filter((c) => matchStore(c.object));
   const filteredRegisters = registers.filter((r) => matchStore(r.object));
+
+  // ─── Period filter (client-side, time-series only) ────────────────────
+  // We have daily_trend (last 365 days, day-grain) and by_month (lifetime,
+  // month-grain). Period filter slices these for KPI recompute + chart
+  // filter. Top products / hour / dow / heatmap stay lifetime — banner
+  // explains. Custom range works only within the last-365-day window.
+  const periodRange = useMemo(() => {
+    if (periodPreset === 'all') return null;
+    const days = dailyTrend.map((d) => d.day).filter(Boolean).sort();
+    if (!days.length) return null;
+    const lastIso = days[days.length - 1];
+    const last = new Date(lastIso + 'T00:00:00');
+    const fmt = (d) => d.toISOString().slice(0, 10);
+    if (periodPreset === '7d') {
+      const from = new Date(last); from.setDate(from.getDate() - 6);
+      return { from: fmt(from), to: lastIso, label_ka: 'ბოლო 7 დღე' };
+    }
+    if (periodPreset === '30d') {
+      const from = new Date(last); from.setDate(from.getDate() - 29);
+      return { from: fmt(from), to: lastIso, label_ka: 'ბოლო 30 დღე' };
+    }
+    if (periodPreset === '90d') {
+      const from = new Date(last); from.setDate(from.getDate() - 89);
+      return { from: fmt(from), to: lastIso, label_ka: 'ბოლო 90 დღე' };
+    }
+    if (periodPreset === 'mtd') {
+      const from = new Date(last.getFullYear(), last.getMonth(), 1);
+      return { from: fmt(from), to: lastIso, label_ka: 'მიმდინარე თვე' };
+    }
+    if (periodPreset === 'ytd') {
+      const from = new Date(last.getFullYear(), 0, 1);
+      return { from: fmt(from), to: lastIso, label_ka: 'მიმდინარე წელი' };
+    }
+    if (periodPreset === 'custom' && customFrom && customTo) {
+      return { from: customFrom, to: customTo, label_ka: `${customFrom} → ${customTo}` };
+    }
+    return null;
+  }, [periodPreset, customFrom, customTo, dailyTrend]);
+
+  const dailyFiltered = useMemo(() => {
+    if (!periodRange) return dailyTrend;
+    return dailyTrend.filter((d) => d.day >= periodRange.from && d.day <= periodRange.to);
+  }, [dailyTrend, periodRange]);
+
+  const periodKpis = useMemo(() => {
+    if (!periodRange || dailyFiltered.length === 0) return null;
+    const sumRev = dailyFiltered.reduce((s, d) => s + toNum(d.revenue_ge), 0);
+    const sumCost = dailyFiltered.reduce((s, d) => s + toNum(d.cost_ge), 0);
+    const sumLines = dailyFiltered.reduce((s, d) => s + toNum(d.lines), 0);
+    const sumReceipts = dailyFiltered.reduce((s, d) => s + toNum(d.receipts), 0);
+    return {
+      revenue_ge: sumRev,
+      cost_ge: sumCost,
+      profit_ge: sumRev - sumCost,
+      gross_margin_pct: sumRev > 0 ? (sumRev - sumCost) / sumRev * 100 : 0,
+      lines: sumLines,
+      receipts: sumReceipts,
+      aov: sumReceipts > 0 ? sumRev / sumReceipts : 0,
+      items_per_basket: sumReceipts > 0 ? sumLines / sumReceipts : 0,
+      day_count: dailyFiltered.length,
+      from: periodRange.from,
+      to: periodRange.to,
+      label_ka: periodRange.label_ka,
+    };
+  }, [periodRange, dailyFiltered]);
+
+  // Effective values for KPI tiles (period-aware override).
+  const eff = {
+    revenue_ge: periodKpis ? periodKpis.revenue_ge : toNum(overall.revenue_ge),
+    cost_ge: periodKpis ? periodKpis.cost_ge : toNum(overall.cost_ge),
+    profit_ge: periodKpis ? periodKpis.profit_ge : toNum(overall.profit_ge),
+    gross_margin_pct: periodKpis ? periodKpis.gross_margin_pct : toNum(overall.gross_margin_pct),
+    receipts: periodKpis ? periodKpis.receipts : toNum(basket.receipts),
+    aov: periodKpis ? periodKpis.aov : toNum(basket.aov),
+    items_per_basket: periodKpis ? periodKpis.items_per_basket : toNum(basket.items_per_basket),
+    lines: periodKpis ? periodKpis.lines : toNum(overall.row_count),
+  };
+
+  // Filtered monthly + daily for chart display.
+  const byMonthFiltered = useMemo(() => {
+    if (!periodRange) return byMonth;
+    return byMonth.filter((m) => {
+      if (!m.month) return false;
+      // m.month is YYYY-MM. Compare against from/to as YYYY-MM.
+      const mPrefix = m.month;
+      return mPrefix >= periodRange.from.slice(0, 7) && mPrefix <= periodRange.to.slice(0, 7);
+    });
+  }, [byMonth, periodRange]);
 
   const hasRows = toNum(overall.row_count) > 0 || byObject.length > 0 || byMonth.length > 0;
   const periodLabel = periodMeta.label_ka || (periodMeta.applied ? 'არჩეული პერიოდი' : 'ყველა პერიოდი');
@@ -332,18 +445,21 @@ export default function RetailSales({ retailSales, responseMeta }) {
 
   // Daily trend with 7-day moving average for line smoothness
   const dailyWithMA = useMemo(() => {
+    const src = dailyFiltered;
     const out = [];
-    for (let i = 0; i < dailyTrend.length; i++) {
-      const win = dailyTrend.slice(Math.max(0, i - 6), i + 1);
+    for (let i = 0; i < src.length; i++) {
+      const win = src.slice(Math.max(0, i - 6), i + 1);
       const ma = win.reduce((s, d) => s + toNum(d.revenue_ge), 0) / win.length;
-      out.push({ ...dailyTrend[i], ma7: Math.round(ma), forecast: null });
+      out.push({ ...src[i], ma7: Math.round(ma), forecast: null });
     }
-    // Append 30-day forecast
-    forecastRows.forEach((f) => {
-      out.push({ day: f.day, revenue_ge: null, ma7: null, forecast: toNum(f.revenue_ge) });
-    });
+    // Append 30-day forecast — only when no period filter is active.
+    if (!periodRange) {
+      forecastRows.forEach((f) => {
+        out.push({ day: f.day, revenue_ge: null, ma7: null, forecast: toNum(f.revenue_ge) });
+      });
+    }
     return out;
-  }, [dailyTrend, forecastRows]);
+  }, [dailyFiltered, forecastRows, periodRange]);
 
   // Delta helper for KPI ▲▼ chip
   const renderDelta = (delta, deltaPct) => {
@@ -360,13 +476,16 @@ export default function RetailSales({ retailSales, responseMeta }) {
     );
   };
 
-  // Recent monthly trend (last 24 months) for chart
-  const monthlyChart = useMemo(() => byMonth.slice(-24).map((m) => ({
-    month: m.month,
-    revenue: toNum(m.revenue_ge),
-    profit: toNum(m.profit_ge),
-    margin: toNum(m.gross_margin_pct),
-  })), [byMonth]);
+  // Recent monthly trend chart — period-filtered when active, else last 24 months.
+  const monthlyChart = useMemo(() => {
+    const src = periodRange ? byMonthFiltered : byMonth.slice(-24);
+    return src.map((m) => ({
+      month: m.month,
+      revenue: toNum(m.revenue_ge),
+      profit: toNum(m.profit_ge),
+      margin: toNum(m.gross_margin_pct),
+    }));
+  }, [byMonth, byMonthFiltered, periodRange]);
 
   if (!hasRows) {
     return (
@@ -400,7 +519,7 @@ export default function RetailSales({ retailSales, responseMeta }) {
 
       {/* ─── Filters bar ─── */}
       <div className="controls controls-filters" style={{ marginTop: 12, marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-        <span className="badge muted">პერიოდი: {periodLabel}<InfoTip text={TIPS.daily} /></span>
+        <span className="badge muted">პერიოდი: {periodKpis ? periodKpis.label_ka : periodLabel}<InfoTip text={TIPS.daily} /></span>
         <span className="badge muted">თარიღი: {renderDateRange(overall.date_range)}</span>
         <span style={{ marginLeft: 12, fontSize: 13, color: '#94a3b8' }}>მაღაზია:</span>
         <select
@@ -411,6 +530,45 @@ export default function RetailSales({ retailSales, responseMeta }) {
           <option value="all">ყველა</option>
           {byObject.map((o) => (<option key={o.object} value={o.object}>{o.object}</option>))}
         </select>
+        <span style={{ marginLeft: 12, fontSize: 13, color: '#94a3b8' }}>პერიოდი:</span>
+        <select
+          value={periodPreset}
+          onChange={(e) => setPeriodPreset(e.target.value)}
+          style={{ background: '#1e293b', color: '#e2e8f0', border: '1px solid #334155', borderRadius: 6, padding: '4px 8px', fontSize: 13 }}
+        >
+          <option value="all">ყველა დრო</option>
+          <option value="7d">ბოლო 7 დღე</option>
+          <option value="30d">ბოლო 30 დღე</option>
+          <option value="90d">ბოლო 90 დღე</option>
+          <option value="mtd">მიმდინარე თვე</option>
+          <option value="ytd">მიმდინარე წელი</option>
+          <option value="custom">მორგებული</option>
+        </select>
+        {periodPreset === 'custom' && (
+          <>
+            <input
+              type="date"
+              value={customFrom}
+              onChange={(e) => setCustomFrom(e.target.value)}
+              style={{ background: '#1e293b', color: '#e2e8f0', border: '1px solid #334155', borderRadius: 6, padding: '3px 6px', fontSize: 12 }}
+            />
+            <span style={{ color: '#94a3b8' }}>→</span>
+            <input
+              type="date"
+              value={customTo}
+              onChange={(e) => setCustomTo(e.target.value)}
+              style={{ background: '#1e293b', color: '#e2e8f0', border: '1px solid #334155', borderRadius: 6, padding: '3px 6px', fontSize: 12 }}
+            />
+          </>
+        )}
+        {periodKpis && (
+          <span style={{
+            padding: '3px 10px', borderRadius: 4, fontSize: 12,
+            background: '#334155', color: '#cbd5e1', border: '1px solid #475569',
+          }}>
+            <strong>{periodKpis.label_ka}</strong> · {periodKpis.day_count} დღე · {periodKpis.from} → {periodKpis.to}
+          </span>
+        )}
         {filteredView && (
           <span style={{
             padding: '3px 10px', borderRadius: 4, fontSize: 12,
@@ -418,10 +576,16 @@ export default function RetailSales({ retailSales, responseMeta }) {
             color: STORE_COLOR[storeFilter] || '#cbd5e1',
             border: `1px solid ${STORE_COLOR[storeFilter] || '#475569'}`,
           }}>
-            ფილტრი აქტიურია — KPI / გრაფიკი / TOP პროდუქტი მხოლოდ <strong>{storeFilter}</strong>
+            მაღაზია: <strong>{storeFilter}</strong>
           </span>
         )}
       </div>
+
+      {periodKpis && (
+        <div className="trust-banner-sub" style={{ background: '#1e293b', borderLeft: '3px solid #3b82f6', padding: '8px 12px', marginBottom: 8, fontSize: 12 }}>
+          ⓘ პერიოდი <strong>{periodKpis.label_ka}</strong> ეხება მხოლოდ KPI ბარათებს, თვიური/დღიური ცემპს და კალენდარს. TOP პროდუქტი / საათობრივი / დღეების / Pareto / დაბრუნებები / ფასდაკლება / ცვლები / დღგ ცხრილები ლიფტაიმისაა.
+        </div>
+      )}
 
       {periodCaveat && (
         <div className="trust-banner-sub trust-banner-sub--warn">{periodCaveat}</div>
@@ -566,43 +730,43 @@ export default function RetailSales({ retailSales, responseMeta }) {
       <div className="kpi-grid retail-sales-kpi-grid">
         <div className="kpi-card kpi-card--accent">
           <div className="kpi-label">სულ შემოსავალი<InfoTip text={TIPS.revenue} /></div>
-          <div className="kpi-value amount-positive">{fmtMoney(overall.revenue_ge)}</div>
-          <div className="kpi-sub">POS-რეგისტრირებული</div>
+          <div className="kpi-value amount-positive">{fmtMoney(eff.revenue_ge)}</div>
+          <div className="kpi-sub">{periodKpis ? `${periodKpis.day_count} დღე` : 'POS-რეგისტრირებული'}</div>
         </div>
         <div className="kpi-card kpi-card--warn">
           <div className="kpi-label">სულ თვითღირებულება<InfoTip text={TIPS.cost} /></div>
-          <div className="kpi-value amount-negative">{fmtMoney(overall.cost_ge)}</div>
+          <div className="kpi-value amount-negative">{fmtMoney(eff.cost_ge)}</div>
           <div className="kpi-sub">ფაქტურიდან გათვლილი</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-label">სულ მოგება<InfoTip text={TIPS.profit} /></div>
-          <div className={`kpi-value ${renderMoneyClass(overall.profit_ge)}`}>{fmtMoney(overall.profit_ge)}</div>
+          <div className={`kpi-value ${renderMoneyClass(eff.profit_ge)}`}>{fmtMoney(eff.profit_ge)}</div>
           <div className="kpi-sub">შემოსავალი − imputed cost</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-label">Gross Margin<InfoTip text={TIPS.margin} /></div>
-          <div className="kpi-value amount-neutral">{fmtPct(overall.gross_margin_pct)}</div>
+          <div className="kpi-value amount-neutral">{fmtPct(eff.gross_margin_pct)}</div>
           <div className="kpi-sub">{fmtInt(overall.distinct_object_count)} ობიექტი</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-label">ჩეკები<InfoTip text={TIPS.receipts} /></div>
-          <div className="kpi-value amount-neutral">{fmtInt(basket.receipts)}</div>
+          <div className="kpi-value amount-neutral">{fmtInt(eff.receipts)}</div>
           <div className="kpi-sub">უნიკალური ORD_N</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-label">საშუალო ჩეკი (AOV)<InfoTip text={TIPS.aov} /></div>
-          <div className="kpi-value amount-neutral">{fmtMoney2(basket.aov)}</div>
+          <div className="kpi-value amount-neutral">{fmtMoney2(eff.aov)}</div>
           <div className="kpi-sub">ერთ ჩეკზე საშ. თანხა</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-label">პროდუქტი / ჩეკი<InfoTip text={TIPS.itemsPerBasket} /></div>
-          <div className="kpi-value amount-neutral">{fmtNum(basket.items_per_basket)}</div>
+          <div className="kpi-value amount-neutral">{fmtNum(eff.items_per_basket)}</div>
           <div className="kpi-sub">საშ. ხაზი ერთ ჩეკში</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-label">ხაზები / რაოდენობა<InfoTip text={TIPS.rows} /></div>
-          <div className="kpi-value amount-neutral">{fmtInt(overall.row_count)}</div>
-          <div className="kpi-sub">{fmtNum(overall.total_quantity)} ცალი / კგ</div>
+          <div className="kpi-value amount-neutral">{fmtInt(eff.lines)}</div>
+          <div className="kpi-sub">{periodKpis ? '(მხოლოდ პერიოდში)' : `${fmtNum(overall.total_quantity)} ცალი / კგ`}</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-label">ფასდაკლება ჯამში<InfoTip text={TIPS.markdown} /></div>
@@ -785,8 +949,8 @@ export default function RetailSales({ retailSales, responseMeta }) {
       {/* ─── Calendar heatmap ─── */}
       {calendarHeatmap.length > 0 && (
         <div className="chart-card">
-          <h3>კალენდრის თერმული რუკა — ბოლო 365 დღე<InfoTip text={TIPS.calendar} /></h3>
-          <CalendarHeatmap days={calendarHeatmap} />
+          <h3>კალენდრის თერმული რუკა {periodKpis ? `— ${periodKpis.label_ka}` : '— ბოლო 365 დღე'}<InfoTip text={TIPS.calendar} /></h3>
+          <CalendarHeatmap days={periodRange ? calendarHeatmap.filter((d) => d.day >= periodRange.from && d.day <= periodRange.to) : calendarHeatmap} />
         </div>
       )}
 
@@ -947,6 +1111,109 @@ export default function RetailSales({ retailSales, responseMeta }) {
         </CollapsibleSection>
       )}
 
+      {/* ─── Shifts (cashier sessions) ─── */}
+      {shifts.length > 0 && (
+        <div className="chart-card">
+          <h3>ცვლების ჭრილი<InfoTip text={TIPS.shift} /></h3>
+          <div className="kpi-grid retail-sales-kpi-grid" style={{ marginTop: 8 }}>
+            <div className="kpi-card">
+              <div className="kpi-label">ცვლები სულ</div>
+              <div className="kpi-value amount-neutral">{fmtInt(shiftSummary.total_shifts)}</div>
+              <div className="kpi-sub">
+                ნორმალური: {fmtInt(shiftSummary.normal_shift_count)} ·
+                ანომალია: {fmtInt(shiftSummary.anomalous_shift_count)}
+              </div>
+            </div>
+            <div className="kpi-card">
+              <div className="kpi-label">საშ. შემოსავ. ერთ ცვლაზე</div>
+              <div className="kpi-value amount-positive">{fmtMoney(shiftSummary.avg_revenue_ge)}</div>
+              <div className="kpi-sub">მედიანა: {fmtMoney(shiftSummary.median_revenue_ge)}</div>
+            </div>
+            <div className="kpi-card">
+              <div className="kpi-label">საუკეთესო ცვლა</div>
+              <div className="kpi-value amount-positive">{fmtMoney(shiftSummary.best_shift_revenue_ge)}</div>
+              <div className="kpi-sub">ერთ ცვლაში მაქს. შემოსავალი</div>
+            </div>
+            <div className="kpi-card">
+              <div className="kpi-label">საშ. ცვლის ხანგრძლივობა</div>
+              <div className="kpi-value amount-neutral">{fmtNum(shiftSummary.avg_duration_hours)} სთ</div>
+              <div className="kpi-sub">ბოლო: {(shiftSummary.last_shift_start || '').slice(0, 10) || '—'}</div>
+            </div>
+          </div>
+          {shiftAnomalies.length > 0 && (
+            <div style={{ marginTop: 12, padding: 10, background: '#1f1916', border: '1px solid #92400e', borderRadius: 6 }}>
+              <p style={{ fontSize: 12, color: '#fbbf24', margin: 0, marginBottom: 6 }}>
+                ⚠️ {shiftAnomalies.length} ცვლა {'>'}30 საათი — სავარაუდოდ მოლარემ არ დახურა ცვლა, ან ID განმეორებულად მოხვდა მონაცემებში. ჯამში ჩათვლილია, მაგრამ საშ./მაქს. ანგარიშიდან გამორიცხულია.
+              </p>
+              <div className="table-wrapper" style={{ fontSize: 12 }}>
+                <table>
+                  <thead><tr>
+                    <th>shift_id</th><th>დაწყება</th><th>დასრ.</th><th>ხანგრძ.</th><th>ხაზები</th><th>შემოსავ.</th>
+                    {storeFilter === 'all' && <th>მაღაზია</th>}
+                  </tr></thead>
+                  <tbody>
+                    {shiftAnomalies.map((a) => (
+                      <tr key={`anom-${a.shift_id}-${a.object || ''}`}>
+                        <td>{a.shift_id}</td>
+                        <td>{(a.shift_start || '').slice(0, 10)}</td>
+                        <td>{(a.shift_end || '').slice(0, 10)}</td>
+                        <td>{fmtNum(a.duration_hours)} სთ</td>
+                        <td>{fmtInt(a.lines)}</td>
+                        <td>{fmtMoney(a.revenue)}</td>
+                        {storeFilter === 'all' && <td>{a.object || '—'}</td>}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          <CollapsibleSection title={`ბოლო ${shifts.length} ცვლა`} badge={`${shifts.length}`}>
+            <div className="table-wrapper cashflow-table retail-sales-table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>დასაწყისი</th>
+                    <th>ხანგრძ.</th>
+                    <th>მაღაზია</th>
+                    <th>მოლარე</th>
+                    <th>სალარო</th>
+                    <th>ჩეკები</th>
+                    <th>ხაზები</th>
+                    <th>შემოსავალი</th>
+                    <th>AOV</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {shifts.slice(0, 60).map((s) => (
+                    <tr key={`shift-${s.shift_id}-${s.object || ''}`}>
+                      <td>{(s.shift_start || '').replace('T', ' ').slice(0, 16) || '—'}</td>
+                      <td>{fmtNum(s.duration_hours)} სთ</td>
+                      <td>
+                        {s.object ? (
+                          <span style={{
+                            padding: '2px 6px', borderRadius: 4, fontSize: 11,
+                            background: STORE_COLOR[s.object] ? `${STORE_COLOR[s.object]}30` : '#334155',
+                            color: STORE_COLOR[s.object] || '#cbd5e1',
+                            border: `1px solid ${STORE_COLOR[s.object] || '#475569'}`,
+                          }}>{s.object}</span>
+                        ) : '—'}
+                      </td>
+                      <td>#{s.user_id ?? '?'}</td>
+                      <td>#{s.tab_id ?? '?'}</td>
+                      <td>{fmtInt(s.receipts)}</td>
+                      <td>{fmtInt(s.lines)}</td>
+                      <td className="amount-positive">{fmtMoney(s.revenue)}</td>
+                      <td>{fmtMoney2(s.aov)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CollapsibleSection>
+        </div>
+      )}
+
       {/* ─── Returns + voids ─── */}
       {returnsVoids.length > 0 && (
         <div className="chart-card">
@@ -976,6 +1243,101 @@ export default function RetailSales({ retailSales, responseMeta }) {
         </div>
       )}
 
+      {/* ─── Returns by product / cashier / month ─── */}
+      {returnsByProduct.length > 0 && (
+        <CollapsibleSection
+          title="დაბრუნებული პროდუქტების top სია"
+          badge={`${returnsByProduct.length}`}
+        >
+          <p className="chart-desc"><InfoTip text={TIPS.returnsByProduct} />ORD_ACT=2 ჯგუფირებული პროდუქტის მიხედვით.</p>
+          <div className="table-wrapper cashflow-table retail-sales-table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>პროდუქტი</th>
+                  <th>კატეგორია</th>
+                  <th>დაბრ. ხაზები</th>
+                  <th>დაბრ. ჩეკი</th>
+                  <th>დაბრ. შემოს.</th>
+                  <th>რაოდ.</th>
+                  <th>ბოლო დაბრ.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {returnsByProduct.map((r, i) => (
+                  <tr key={`rbp-${r.barcode || r.product_code || i}`}>
+                    <td>{r.product_name || '—'}</td>
+                    <td style={{ fontSize: 12, color: '#94a3b8' }}>{r.category || '—'}</td>
+                    <td>{fmtInt(r.return_lines)}</td>
+                    <td>{fmtInt(r.return_receipts)}</td>
+                    <td className="amount-negative">{fmtMoney(r.return_revenue_ge)}</td>
+                    <td>{fmtNum(r.return_quantity)}</td>
+                    <td style={{ fontSize: 12 }}>{(r.last_return || '').slice(0, 10) || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CollapsibleSection>
+      )}
+
+      {returnsByMonth.length > 0 && (
+        <div className="chart-card">
+          <h3>დაბრუნების თვიური ცემპი<InfoTip text={TIPS.returnsByMonth} /></h3>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={returnsByMonth} margin={{ top: 10, right: 20, left: 30, bottom: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+              <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} />
+              <YAxis stroke="#94a3b8" fontSize={11} />
+              <Tooltip
+                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569' }}
+                formatter={(value, key) => [
+                  key === 'revenue_ge' ? fmtMoney(value) : fmtInt(value),
+                  key === 'revenue_ge' ? 'შემოსავალი' : (key === 'lines' ? 'ხაზები' : 'ჩეკი'),
+                ]}
+              />
+              <Legend />
+              <Bar dataKey="revenue_ge" name="დაბრუნ. შემოსავ." fill="#ef4444" />
+              <Bar dataKey="lines" name="ხაზები" fill="#f59e0b" yAxisId="right" />
+              <YAxis yAxisId="right" orientation="right" stroke="#f59e0b" fontSize={11} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {returnsByCashier.length > 0 && (
+        <CollapsibleSection
+          title="დაბრუნებები მოლარის მიხედვით"
+          badge={`${returnsByCashier.length}`}
+        >
+          <p className="chart-desc">რომელმა მოლარემ რამდენი დაბრუნება მიიღო.</p>
+          <div className="table-wrapper cashflow-table retail-sales-table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  {storeFilter === 'all' && <th>მაღაზია</th>}
+                  <th>მოლარე ID</th>
+                  <th>დაბრ. ხაზები</th>
+                  <th>დაბრ. ჩეკი</th>
+                  <th>დაბრ. შემოს.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {returnsByCashier.map((c, i) => (
+                  <tr key={`rbc-${c.object || ''}-${c.user_id ?? i}`}>
+                    {storeFilter === 'all' && <td>{c.object || '—'}</td>}
+                    <td>#{c.user_id ?? '?'}</td>
+                    <td>{fmtInt(c.return_lines)}</td>
+                    <td>{fmtInt(c.return_receipts)}</td>
+                    <td className="amount-negative">{fmtMoney(c.return_revenue_ge)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CollapsibleSection>
+      )}
+
       {/* ─── Discount panel ─── */}
       {discount.discounted_lines > 0 && (
         <div className="chart-card">
@@ -1002,6 +1364,163 @@ export default function RetailSales({ retailSales, responseMeta }) {
               <div className="kpi-sub">ფასდაკლებული გაყიდვის წილი</div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ─── Discount lift — actual vs hypothetical-without-discount ─── */}
+      {toNum(discountLiftSummary.markdown_total_ge) > 0 && (
+        <div className="chart-card">
+          <h3>ფასდაკლების შედეგი (Lift)<InfoTip text={TIPS.discountLift} /></h3>
+          <div className="kpi-grid retail-sales-kpi-grid" style={{ marginTop: 8 }}>
+            <div className="kpi-card">
+              <div className="kpi-label">ფაქტობრივი მოგება</div>
+              <div className="kpi-value amount-positive">{fmtMoney(discountLiftSummary.profit_actual_ge)}</div>
+              <div className="kpi-sub">ფასდაკლებული გაყიდვებიდან</div>
+            </div>
+            <div className="kpi-card">
+              <div className="kpi-label">თუ ფასდაკლება არ ყოფილიყო</div>
+              <div className="kpi-value amount-positive">{fmtMoney(discountLiftSummary.profit_if_no_discount_ge)}</div>
+              <div className="kpi-sub">ჰიპოთეზა — სრული ფასით გაყიდვა</div>
+            </div>
+            <div className="kpi-card" style={{ borderLeft: '3px solid #f59e0b' }}>
+              <div className="kpi-label">დაკარგული მოგება</div>
+              <div className="kpi-value amount-negative">{fmtMoney(discountLiftSummary.profit_lost_ge)}</div>
+              <div className="kpi-sub">ფასდაკლებაზე დახარჯული</div>
+            </div>
+            <div className="kpi-card">
+              <div className="kpi-label">კატეგორია ფასდაკლებით</div>
+              <div className="kpi-value amount-neutral">{fmtInt(discountLiftSummary.categories_with_discount)}</div>
+              <div className="kpi-sub">სულ რამდენ კატეგორიას ჰქონდა markdown</div>
+            </div>
+          </div>
+          {discountByCategory.length > 0 && (
+            <CollapsibleSection title="top კატეგორიები ფასდაკლებით" badge={`${discountByCategory.length}`}>
+              <p className="chart-desc"><InfoTip text={TIPS.discountByCat} />ფასდაკლების ჯამი ჩამოთვლილი კატეგორიების მიხედვით.</p>
+              <div className="table-wrapper cashflow-table retail-sales-table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>კატეგორია</th>
+                      <th>ხაზები</th>
+                      <th>ფასდ. ჯამი</th>
+                      <th>ფასდ. %</th>
+                      <th>გაყიდვა (after)</th>
+                      <th>თუ markdown არ ყოფილიყო</th>
+                      <th>ფაქტ. მოგება</th>
+                      <th>ალტერნ. მოგება</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {discountByCategory.map((c, i) => (
+                      <tr key={`dbc-${c.category || i}`}>
+                        <td>{c.category || '—'}</td>
+                        <td>{fmtInt(c.lines)}</td>
+                        <td className="amount-negative">{fmtMoney(c.markdown_total_ge)}</td>
+                        <td>{fmtPct(c.markdown_pct)}</td>
+                        <td className="amount-positive">{fmtMoney(c.revenue_after_markdown_ge)}</td>
+                        <td>{fmtMoney(c.revenue_before_markdown_ge)}</td>
+                        <td className={renderMoneyClass(c.profit_actual_ge)}>{fmtMoney(c.profit_actual_ge)}</td>
+                        <td className={renderMoneyClass(c.profit_if_no_discount_ge)}>{fmtMoney(c.profit_if_no_discount_ge)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CollapsibleSection>
+          )}
+        </div>
+      )}
+
+      {/* ─── VAT (დღგ) ─── */}
+      {toNum(vatTotals.vat_collected_ge) > 0 && (
+        <div className="chart-card">
+          <h3>დღგ (VAT) ანალიზი<InfoTip text={TIPS.vat} /></h3>
+          <div className="kpi-grid retail-sales-kpi-grid" style={{ marginTop: 8 }}>
+            <div className="kpi-card">
+              <div className="kpi-label">დღგ შეგროვილი</div>
+              <div className="kpi-value amount-neutral">{fmtMoney(vatTotals.vat_collected_ge)}</div>
+              <div className="kpi-sub">სრულ შემოსავალში: {fmtPct(vatTotals.effective_rate_pct)}</div>
+            </div>
+            <div className="kpi-card">
+              <div className="kpi-label">დღგ-ის გარეშე გაყიდვა</div>
+              <div className="kpi-value amount-neutral">{fmtMoney(vatTotals.exempt_revenue_ge)}</div>
+              <div className="kpi-sub">{fmtPct(vatTotals.exempt_share_pct)} მთლიანი გაყიდვის</div>
+            </div>
+            <div className="kpi-card">
+              <div className="kpi-label">დღგ-ის გარეშე ხაზი</div>
+              <div className="kpi-value amount-neutral">{fmtInt(vatTotals.exempt_lines)}</div>
+              <div className="kpi-sub">სულ {fmtInt(vatTotals.lines)} ხაზიდან</div>
+            </div>
+            <div className="kpi-card">
+              <div className="kpi-label">ეფექტური განაკვეთი</div>
+              <div className="kpi-value amount-neutral">{fmtPct(vatTotals.effective_rate_pct)}</div>
+              <div className="kpi-sub">სტანდარტი: 18% / 1.18 = 15.25%</div>
+            </div>
+          </div>
+
+          {vatByMonth.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <h4 style={{ fontSize: 14, color: '#cbd5e1', marginBottom: 8 }}>თვიური დღგ-ს ცემპი</h4>
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={vatByMonth} margin={{ top: 10, right: 20, left: 30, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} />
+                  <YAxis stroke="#94a3b8" fontSize={11} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569' }}
+                    formatter={(value, key) => [
+                      key === 'effective_rate_pct' ? fmtPct(value) : fmtMoney(value),
+                      key === 'vat_collected_ge' ? 'დღგ' : (key === 'revenue_ge' ? 'შემოსავალი' : 'განაკვეთი'),
+                    ]}
+                  />
+                  <Legend />
+                  <Line type="monotone" dataKey="vat_collected_ge" name="დღგ ჯამი" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="effective_rate_pct" name="ეფექტ. %" stroke="#f59e0b" strokeWidth={1.5} dot={false} yAxisId="right" />
+                  <YAxis yAxisId="right" orientation="right" stroke="#f59e0b" fontSize={11} domain={[0, 20]} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {vatByCategory.length > 0 && (
+            <CollapsibleSection title="top კატეგორიები დღგ-ის ჭრილში" badge={`${vatByCategory.length}`}>
+              <div className="table-wrapper cashflow-table retail-sales-table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>კატეგორია</th>
+                      <th>დღგ შეგროვ.</th>
+                      <th>შემოსავალი</th>
+                      <th>ეფექტ. %</th>
+                      <th>გამონ. ხაზი</th>
+                      <th>გამონ. %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vatByCategory.map((c, i) => (
+                      <tr key={`vbc-${c.category || i}`}>
+                        <td>{c.category || '—'}</td>
+                        <td className="amount-neutral">{fmtMoney(c.vat_collected_ge)}</td>
+                        <td className="amount-positive">{fmtMoney(c.revenue_ge)}</td>
+                        <td>
+                          <span style={{
+                            padding: '1px 6px', borderRadius: 4, fontSize: 11,
+                            background: toNum(c.effective_rate_pct) > 16 ? '#7f1d1d' : '#334155',
+                            color: toNum(c.effective_rate_pct) > 16 ? '#fca5a5' : '#cbd5e1',
+                          }}>{fmtPct(c.effective_rate_pct)}</span>
+                        </td>
+                        <td>{fmtInt(c.exempt_lines)}</td>
+                        <td>{fmtPct(c.exempt_share_pct)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="chart-desc" style={{ marginTop: 8, fontSize: 11, color: '#94a3b8' }}>
+                ⓘ თუ ეფექტ. % &gt; 16% — ეს მონაცემთა ხარისხის ნიშანია. სტანდარტი ≈15.25%.
+              </p>
+            </CollapsibleSection>
+          )}
         </div>
       )}
 
