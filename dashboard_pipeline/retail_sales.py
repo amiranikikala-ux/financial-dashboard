@@ -1003,6 +1003,56 @@ def synthesize_from_megaplus(megaplus_live):
                 "receipts": int(cell.get("receipts") or 0),
                 "revenue_ge": round(float(cell.get("revenue") or 0), 2),
             })
+        # Per-store concentration (Pareto + HHI + 50/80/90/95% thresholds).
+        # Built from this store's product list only — each shop has its own
+        # assortment + sales mix so combined HHI is misleading when filtered.
+        store_products = sorted(
+            (rollup.get("by_product") or []),
+            key=lambda r: float(r.get("revenue") or 0),
+            reverse=True,
+        )
+        store_total_rev = sum(float(p.get("revenue") or 0) for p in store_products)
+        store_pareto: list = []
+        store_50 = store_80 = store_90 = store_95 = None
+        cum_rev_s = 0.0
+        for idx, p in enumerate(store_products):
+            r_p = float(p.get("revenue") or 0)
+            if r_p <= 0:
+                continue
+            cum_rev_s += r_p
+            cum_pct = cum_rev_s / store_total_rev * 100 if store_total_rev > 0 else 0.0
+            if store_50 is None and cum_pct >= 50: store_50 = idx + 1
+            if store_80 is None and cum_pct >= 80: store_80 = idx + 1
+            if store_90 is None and cum_pct >= 90: store_90 = idx + 1
+            if store_95 is None and cum_pct >= 95: store_95 = idx + 1
+            if idx < 500:
+                store_pareto.append({
+                    "rank": idx + 1,
+                    "product_name": p.get("product_name"),
+                    "revenue_ge": round(r_p, 2),
+                    "cum_revenue_ge": round(cum_rev_s, 2),
+                    "cum_share_pct": round(cum_pct, 2),
+                })
+        store_hhi = 0.0
+        if store_total_rev > 0:
+            for p in store_products:
+                share = (float(p.get("revenue") or 0) / store_total_rev) * 100
+                store_hhi += share * share
+        store_hhi_class = (
+            "low" if store_hhi < 1500 else
+            "moderate" if store_hhi < 2500 else
+            "high"
+        )
+        view_concentration = {
+            "total_products_in_revenue": len([p for p in store_products if float(p.get("revenue") or 0) > 0]),
+            "products_for_50pct_revenue": store_50,
+            "products_for_80pct_revenue": store_80,
+            "products_for_90pct_revenue": store_90,
+            "products_for_95pct_revenue": store_95,
+            "hhi": round(store_hhi, 2),
+            "hhi_class": store_hhi_class,
+            "pareto_top500": store_pareto,
+        }
         per_object_view[obj_label] = {
             "overall": view_overall,
             "basket_metrics": view_basket,
@@ -1018,6 +1068,7 @@ def synthesize_from_megaplus(megaplus_live):
             "top_categories_by_profit": view_by_category[:25],
             "top_products_by_revenue": sorted(view_by_product, key=lambda x: -x["revenue_ge"])[:50],
             "top_products_by_profit": sorted(view_by_product, key=lambda x: -x["profit_ge"])[:50],
+            "concentration": view_concentration,
         }
 
     # ─── Pareto / HHI on by_product (revenue concentration) ────────────────

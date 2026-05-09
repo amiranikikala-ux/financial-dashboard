@@ -301,12 +301,15 @@ export default function RetailSales({ retailSales, responseMeta }) {
   const calendarHeatmap = asArray(view.calendar_heatmap || summary.calendar_heatmap);
   const returnsVoids = asArray(view.returns_voids || summary.returns_voids);
   const discount = view.discount_totals || summary.discount_totals || {};
-  // Cross-cutting blocks (not per-store-filterable; show globally always).
-  const concentration = summary.concentration || {};
-  const byCategoryByMonth = asArray(summary.by_category_by_month);
-  const paretoFull = asArray(concentration.pareto_top500);
+  // Concentration follows the filter (each store has its own product mix
+  // → a global HHI is misleading when scoped). Other cross-cutting blocks
+  // (spike alerts, prev-period compare, slow movers, top recent movers,
+  // forecast) stay global for now.
+  const concentration = view.concentration || summary.concentration || {};
   // Sample for the line chart: 0-50 every step, then 50-500 every 10th rank.
+  const paretoFull = asArray(concentration.pareto_top500);
   const paretoChart = paretoFull.filter((p, i) => i < 50 || i % 10 === 0);
+  const byCategoryByMonth = asArray(summary.by_category_by_month);
   const registers = asArray(summary.registers_per_object);
   const cashiers = asArray(summary.cashiers_per_object);
   const prevCompare = summary.prev_period_compare || {};
