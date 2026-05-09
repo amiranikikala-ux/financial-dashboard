@@ -456,6 +456,35 @@ def synthesize_from_megaplus(megaplus_live):
             row[f] = round(row[f], 2)
         by_category_by_month.append(row)
 
+    # ─── by_product_recent (365-day window — for grower/decliner analysis) ─
+    prod_recent_acc: dict = {}
+    for store_id, rollup in stores.items():
+        for p in rollup.get("by_product_recent") or []:
+            barcode = (p.get("barcode") or "").strip()
+            code = (p.get("product_code") or "").strip()
+            key = barcode or code or f"pid_{p.get('product_id')}"
+            if not key:
+                continue
+            cur = prod_recent_acc.setdefault(key, {
+                "product_key": key, "product_code": code, "barcode": barcode,
+                "product_name": p.get("product_name") or "",
+                "category": p.get("category") or "",
+                "row_count": 0, "total_quantity": 0.0,
+                "revenue_ge": 0.0, "cost_ge": 0.0, "profit_ge": 0.0,
+            })
+            cur["row_count"] += int(p.get("row_count") or 0)
+            cur["total_quantity"] += float(p.get("qty_sold") or 0)
+            cur["revenue_ge"] += float(p.get("revenue") or 0)
+            cur["cost_ge"] += float(p.get("cogs") or 0)
+            cur["profit_ge"] += float(p.get("profit") or 0)
+    by_product_recent_full = list(prod_recent_acc.values())
+    for row in by_product_recent_full:
+        rev = row["revenue_ge"]
+        row["gross_margin_pct"] = round((row["profit_ge"] / rev * 100) if rev > 0 else 0.0, 2)
+        for f in ("revenue_ge", "cost_ge", "profit_ge", "total_quantity"):
+            row[f] = round(row[f], 2)
+    by_product_recent_full.sort(key=lambda r: r.get("revenue_ge", 0), reverse=True)
+
     # ─── by_product (aggregate across stores by barcode/code) ──────────────
     prod_acc: dict = {}
     for store_id, rollup in stores.items():
@@ -815,6 +844,180 @@ def synthesize_from_megaplus(megaplus_live):
         "pareto_top500": pareto,
     }
 
+    # ─── Prev-period comparison (this month vs prev month, vs YoY) ─────────
+    # Walk by_month from the back. The latest row IS the in-progress month
+    # (probably partial); we compare it to (a) the most recent COMPLETE month
+    # and (b) same month last year to provide ▲▼ deltas in the UI.
+    months_indexed = {m["month"]: m for m in by_month if m.get("month")}
+    sorted_months = sorted(months_indexed.keys())
+    prev_period_compare = {}
+    if len(sorted_months) >= 2:
+        latest = months_indexed[sorted_months[-1]]
+        prev = months_indexed[sorted_months[-2]]
+        latest_rev = float(latest.get("revenue_ge") or 0)
+        prev_rev = float(prev.get("revenue_ge") or 0)
+        latest_profit = float(latest.get("profit_ge") or 0)
+        prev_profit = float(prev.get("profit_ge") or 0)
+        prev_period_compare["mom"] = {
+            "current_month": latest["month"],
+            "prev_month": prev["month"],
+            "current_revenue": round(latest_rev, 2),
+            "prev_revenue": round(prev_rev, 2),
+            "delta_revenue": round(latest_rev - prev_rev, 2),
+            "delta_revenue_pct": round((latest_rev - prev_rev) / prev_rev * 100, 2) if prev_rev > 0 else 0.0,
+            "current_profit": round(latest_profit, 2),
+            "prev_profit": round(prev_profit, 2),
+            "delta_profit": round(latest_profit - prev_profit, 2),
+            "current_margin_pct": float(latest.get("gross_margin_pct") or 0),
+            "prev_margin_pct": float(prev.get("gross_margin_pct") or 0),
+        }
+        # Year-over-year (same calendar month -12)
+        latest_month_key = sorted_months[-1]
+        try:
+            year, month = latest_month_key.split("-")
+            yoy_key = f"{int(year)-1}-{month}"
+            yoy = months_indexed.get(yoy_key)
+            if yoy:
+                yoy_rev = float(yoy.get("revenue_ge") or 0)
+                yoy_profit = float(yoy.get("profit_ge") or 0)
+                prev_period_compare["yoy"] = {
+                    "current_month": latest_month_key,
+                    "yoy_month": yoy_key,
+                    "current_revenue": round(latest_rev, 2),
+                    "yoy_revenue": round(yoy_rev, 2),
+                    "delta_revenue": round(latest_rev - yoy_rev, 2),
+                    "delta_revenue_pct": round((latest_rev - yoy_rev) / yoy_rev * 100, 2) if yoy_rev > 0 else 0.0,
+                    "delta_profit": round(latest_profit - yoy_profit, 2),
+                }
+        except Exception:
+            pass
+
+    # ─── Spike alerts (z-score on monthly revenue, skip 2009 legacy) ───────
+    real_months = [m for m in by_month if m.get("month") and not m["month"].startswith("2009")]
+    spike_alerts = []
+    if len(real_months) >= 6:
+        revs = [float(m.get("revenue_ge") or 0) for m in real_months]
+        mean = sum(revs) / len(revs)
+        var = sum((r - mean) ** 2 for r in revs) / len(revs)
+        std = var ** 0.5 if var > 0 else 1.0
+        for m, r in zip(real_months, revs):
+            if std == 0:
+                continue
+            z = (r - mean) / std
+            if abs(z) >= 2.0:
+                spike_alerts.append({
+                    "month": m["month"],
+                    "revenue_ge": round(r, 2),
+                    "mean_revenue_ge": round(mean, 2),
+                    "z_score": round(z, 2),
+                    "kind": "spike" if z > 0 else "drop",
+                    "message_ka": (
+                        f"{m['month']} — შემოსავალი {round(r):,} ₾, "
+                        f"საშუალოზე {abs(round(z, 1))}σ {'მეტი' if z > 0 else 'ნაკლები'}"
+                    ),
+                })
+    spike_alerts.sort(key=lambda s: abs(s["z_score"]), reverse=True)
+
+    # ─── 30-day forecast (trailing 30-day MA → projection) ─────────────────
+    forecast_next30 = []
+    if len(daily_trend) >= 30:
+        trail30 = daily_trend[-30:]
+        avg_daily_rev = sum(d.get("revenue_ge", 0) for d in trail30) / 30
+        avg_daily_lines = sum(d.get("lines", 0) for d in trail30) / 30
+        avg_daily_receipts = sum(d.get("receipts", 0) for d in trail30) / 30
+        last_day = daily_trend[-1].get("day")
+        try:
+            last_dt = _dt.date.fromisoformat(last_day) if last_day else None
+        except Exception:
+            last_dt = None
+        if last_dt:
+            for i in range(1, 31):
+                fd = last_dt + _dt.timedelta(days=i)
+                forecast_next30.append({
+                    "day": fd.isoformat(),
+                    "revenue_ge": round(avg_daily_rev, 2),
+                    "lines": round(avg_daily_lines, 0),
+                    "receipts": round(avg_daily_receipts, 0),
+                    "is_forecast": True,
+                })
+    forecast_summary = {
+        "method": "trailing_30d_moving_avg",
+        "next_30d_total_revenue_ge": round(sum(f["revenue_ge"] for f in forecast_next30), 2) if forecast_next30 else 0.0,
+        "next_30d_avg_daily_revenue_ge": round(sum(f["revenue_ge"] for f in forecast_next30) / 30, 2) if forecast_next30 else 0.0,
+        "rows": forecast_next30,
+    }
+
+    # ─── Slow movers / dead stock candidates ──────────────────────────────
+    # Anchor = max date in entire dataset. Buckets: 30+ days no sale, 60+, 90+.
+    anchor_str = max_date
+    slow_movers_30 = []; slow_movers_60 = []; slow_movers_90 = []
+    if anchor_str:
+        try:
+            anchor_dt = _dt.date.fromisoformat(anchor_str)
+        except Exception:
+            anchor_dt = None
+        if anchor_dt:
+            for p in by_product_full:
+                if p.get("revenue_ge", 0) <= 0:
+                    continue
+                last = p.get("max_date")
+                if not last:
+                    continue
+                try:
+                    last_dt = _dt.date.fromisoformat(last)
+                except Exception:
+                    continue
+                age = (anchor_dt - last_dt).days
+                if age < 30:
+                    continue
+                row = {
+                    "product_name": p.get("product_name"),
+                    "product_code": p.get("product_code"),
+                    "category": p.get("category"),
+                    "revenue_ge": p.get("revenue_ge", 0),
+                    "total_quantity": p.get("total_quantity", 0),
+                    "last_sale_date": last,
+                    "days_since_sale": age,
+                }
+                if age >= 90:
+                    slow_movers_90.append(row)
+                elif age >= 60:
+                    slow_movers_60.append(row)
+                else:
+                    slow_movers_30.append(row)
+    # Sort each bucket by revenue (highest revenue dead stock = biggest concern).
+    for b in (slow_movers_30, slow_movers_60, slow_movers_90):
+        b.sort(key=lambda r: r.get("revenue_ge", 0), reverse=True)
+    slow_movers = {
+        "anchor_date": anchor_str,
+        "bucket_30_60_count": len(slow_movers_30),
+        "bucket_60_90_count": len(slow_movers_60),
+        "bucket_90_plus_count": len(slow_movers_90),
+        "top_30_60": slow_movers_30[:30],
+        "top_60_90": slow_movers_60[:30],
+        "top_90_plus": slow_movers_90[:30],
+    }
+
+    # ─── Top recent movers (365-day window) ───────────────────────────────
+    # Top 20 by recent revenue + delta vs lifetime rank to flag risers.
+    lifetime_rank = {p.get("product_key"): idx + 1 for idx, p in enumerate(sorted_products)}
+    top_recent_movers = []
+    for idx, p in enumerate(by_product_recent_full[:30]):
+        recent_rank = idx + 1
+        life_rank = lifetime_rank.get(p.get("product_key"))
+        rank_change = (life_rank - recent_rank) if life_rank else None
+        top_recent_movers.append({
+            "rank_recent": recent_rank,
+            "rank_lifetime": life_rank,
+            "rank_change": rank_change,
+            "product_name": p.get("product_name"),
+            "product_code": p.get("product_code"),
+            "category": p.get("category"),
+            "revenue_ge_recent": p.get("revenue_ge"),
+            "profit_ge_recent": p.get("profit_ge"),
+            "gross_margin_pct_recent": p.get("gross_margin_pct"),
+        })
+
     return {
         "label_ka": "გაყიდული პროდუქცია (MegaPlus DB direct)",
         "notes_ka": (
@@ -887,6 +1090,11 @@ def synthesize_from_megaplus(megaplus_live):
         "concentration": concentration,
         "registers_per_object": register_per_store,
         "cashiers_per_object": cashier_per_store,
+        "prev_period_compare": prev_period_compare,
+        "spike_alerts": spike_alerts,
+        "forecast_next30": forecast_summary,
+        "slow_movers": slow_movers,
+        "top_recent_movers": top_recent_movers,
     }
 
 

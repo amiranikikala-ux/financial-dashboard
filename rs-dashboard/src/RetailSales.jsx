@@ -210,6 +210,14 @@ export default function RetailSales({ retailSales, responseMeta }) {
   const paretoChart = paretoFull.filter((p, i) => i < 50 || i % 10 === 0);
   const registers = asArray(summary.registers_per_object);
   const cashiers = asArray(summary.cashiers_per_object);
+  const prevCompare = summary.prev_period_compare || {};
+  const momCompare = prevCompare.mom || null;
+  const yoyCompare = prevCompare.yoy || null;
+  const spikeAlerts = asArray(summary.spike_alerts);
+  const forecast = summary.forecast_next30 || {};
+  const forecastRows = asArray(forecast.rows);
+  const slowMovers = summary.slow_movers || {};
+  const topRecentMovers = asArray(summary.top_recent_movers);
 
   // Filter helper — applies store filter to per-object lists
   const matchStore = (obj) => storeFilter === 'all' || obj === storeFilter;
@@ -226,10 +234,29 @@ export default function RetailSales({ retailSales, responseMeta }) {
     for (let i = 0; i < dailyTrend.length; i++) {
       const win = dailyTrend.slice(Math.max(0, i - 6), i + 1);
       const ma = win.reduce((s, d) => s + toNum(d.revenue_ge), 0) / win.length;
-      out.push({ ...dailyTrend[i], ma7: Math.round(ma) });
+      out.push({ ...dailyTrend[i], ma7: Math.round(ma), forecast: null });
     }
+    // Append 30-day forecast
+    forecastRows.forEach((f) => {
+      out.push({ day: f.day, revenue_ge: null, ma7: null, forecast: toNum(f.revenue_ge) });
+    });
     return out;
-  }, [dailyTrend]);
+  }, [dailyTrend, forecastRows]);
+
+  // Delta helper for KPI ▲▼ chip
+  const renderDelta = (delta, deltaPct) => {
+    if (delta === undefined || delta === null) return null;
+    const positive = delta >= 0;
+    return (
+      <span style={{
+        marginLeft: 6, fontSize: 11, padding: '1px 6px', borderRadius: 4,
+        background: positive ? '#064e3b' : '#7f1d1d',
+        color: positive ? '#6ee7b7' : '#fca5a5',
+      }}>
+        {positive ? '▲' : '▼'} {fmtPct(Math.abs(deltaPct))}
+      </span>
+    );
+  };
 
   // Recent monthly trend (last 24 months) for chart
   const monthlyChart = useMemo(() => byMonth.slice(-24).map((m) => ({
@@ -345,6 +372,84 @@ export default function RetailSales({ retailSales, responseMeta }) {
         </div>
       )}
 
+      {/* ─── Prev-period compare (MoM + YoY) ─── */}
+      {(momCompare || yoyCompare) && (
+        <div className="chart-card">
+          <h3>წინა პერიოდთან შედარება<InfoTip text="MoM = ბოლო თვე vs წინა თვე. YoY = ბოლო თვე vs იმავე თვე გასულ წელს. ბოლო თვე შეიძლება არასრული იყოს — შესადარისობა მიახლოებითია." /></h3>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 8 }}>
+            {momCompare && (
+              <div style={{ flex: '1 1 280px', minWidth: 280, background: '#1e293b', padding: 12, borderRadius: 6 }}>
+                <div className="kpi-sub" style={{ marginBottom: 4 }}>
+                  MoM · {momCompare.current_month} vs {momCompare.prev_month}
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 600 }}>
+                  {fmtMoney(momCompare.current_revenue)}
+                  {renderDelta(momCompare.delta_revenue, momCompare.delta_revenue_pct)}
+                </div>
+                <div className="kpi-sub" style={{ marginTop: 4 }}>
+                  წინა: {fmtMoney(momCompare.prev_revenue)} ·{' '}
+                  მოგება {fmtMoney(momCompare.current_profit)} ({momCompare.delta_profit >= 0 ? '+' : ''}{fmtMoney(momCompare.delta_profit)}) ·{' '}
+                  მარჟა {fmtPct(momCompare.current_margin_pct)}
+                </div>
+              </div>
+            )}
+            {yoyCompare && (
+              <div style={{ flex: '1 1 280px', minWidth: 280, background: '#1e293b', padding: 12, borderRadius: 6 }}>
+                <div className="kpi-sub" style={{ marginBottom: 4 }}>
+                  YoY · {yoyCompare.current_month} vs {yoyCompare.yoy_month}
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 600 }}>
+                  {fmtMoney(yoyCompare.current_revenue)}
+                  {renderDelta(yoyCompare.delta_revenue, yoyCompare.delta_revenue_pct)}
+                </div>
+                <div className="kpi-sub" style={{ marginTop: 4 }}>
+                  გასული წლის: {fmtMoney(yoyCompare.yoy_revenue)} ·{' '}
+                  მოგების ცვლა {yoyCompare.delta_profit >= 0 ? '+' : ''}{fmtMoney(yoyCompare.delta_profit)}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Spike alerts ─── */}
+      {spikeAlerts.length > 0 && (
+        <div className="chart-card" style={{ borderLeft: '3px solid #a855f7' }}>
+          <h3 style={{ color: '#c4b5fd' }}>🚨 ანომალიის ალერტი ({spikeAlerts.length})<InfoTip text="თვიური შემოსავალი > 2σ საშუალოზე ან ნაკლები. z-score-ის მიხედვით დალაგებული. 2009-სატესტო თვე გამოტოვებულია." /></h3>
+          <p className="chart-desc">თვის შემოსავალი საშუალოდან ცაფფი მაღალი / დაბალი (z-score ≥ 2σ).</p>
+          <table style={{ width: '100%', fontSize: 13, marginTop: 8 }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left' }}>თვე</th>
+                <th style={{ textAlign: 'left' }}>ტიპი</th>
+                <th style={{ textAlign: 'right' }}>შემოსავალი</th>
+                <th style={{ textAlign: 'right' }}>საშ. შემოს.</th>
+                <th style={{ textAlign: 'right' }}>z-score</th>
+                <th style={{ textAlign: 'left' }}>აღწერა</th>
+              </tr>
+            </thead>
+            <tbody>
+              {spikeAlerts.map((s) => (
+                <tr key={`spike-${s.month}`}>
+                  <td>{s.month}</td>
+                  <td>
+                    <span style={{
+                      padding: '2px 6px', borderRadius: 4, fontSize: 11,
+                      background: s.kind === 'spike' ? '#064e3b' : '#7f1d1d',
+                      color: s.kind === 'spike' ? '#6ee7b7' : '#fca5a5',
+                    }}>{s.kind === 'spike' ? '▲ ცემპი' : '▼ ვარდნა'}</span>
+                  </td>
+                  <td style={{ textAlign: 'right' }}>{fmtMoney(s.revenue_ge)}</td>
+                  <td style={{ textAlign: 'right' }}>{fmtMoney(s.mean_revenue_ge)}</td>
+                  <td style={{ textAlign: 'right' }}>{s.z_score >= 0 ? '+' : ''}{fmtNum(s.z_score)}σ</td>
+                  <td style={{ fontSize: 12, color: '#94a3b8' }}>{s.message_ka}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* ─── KPI grid (12 cards) ─── */}
       <div className="kpi-grid retail-sales-kpi-grid">
         <div className="kpi-card kpi-card--accent">
@@ -438,10 +543,17 @@ export default function RetailSales({ retailSales, responseMeta }) {
         </div>
       )}
 
-      {/* ─── Daily trend (last 365 days) ─── */}
+      {/* ─── Daily trend (last 365 days) + 30-day forecast ─── */}
       {dailyWithMA.length > 0 && (
         <div className="chart-card">
-          <h3>დღიური ტრენდი — ბოლო 365 დღე<InfoTip text={TIPS.daily} /></h3>
+          <h3>დღიური ტრენდი — ბოლო 365 დღე + 30-დღიანი პროგნოზი<InfoTip text="ცისფერი ფონი = ფაქტი. ნარინჯისფერი = 7-დღიანი მძლავრი საშუალო. წყვეტილი მწვანე = trailing 30-დღის MA-ით პროგნოზი მომდევნო 30 დღისთვის." /></h3>
+          {forecast.next_30d_total_revenue_ge > 0 && (
+            <p className="chart-desc">
+              30-დღიანი პროგნოზი: <strong>{fmtMoney(forecast.next_30d_total_revenue_ge)}</strong>{' '}
+              ჯამში · დღიური საშ. <strong>{fmtMoney(forecast.next_30d_avg_daily_revenue_ge)}</strong>{' '}
+              (ბოლო 30 დღის საშუალოს ვინარჩუნებთ — სეზონური ცვლილება არ არის გათვალისწინებული).
+            </p>
+          )}
           <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={dailyWithMA}>
               <defs>
@@ -455,11 +567,12 @@ export default function RetailSales({ retailSales, responseMeta }) {
               <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} tickFormatter={fmtInt} />
               <Tooltip
                 contentStyle={{ background: '#0f172a', border: '1px solid #334155' }}
-                formatter={(v) => fmtMoney(v)}
+                formatter={(v) => v == null ? '—' : fmtMoney(v)}
               />
               <Legend />
-              <Area type="monotone" dataKey="revenue_ge" stroke="#3b82f6" fillOpacity={1} fill="url(#grRev)" name="დღიური შემოს." />
-              <Line type="monotone" dataKey="ma7" stroke="#f59e0b" strokeWidth={2} dot={false} name="7-დღიანი მძლავ. საშ." />
+              <Area type="monotone" dataKey="revenue_ge" stroke="#3b82f6" fillOpacity={1} fill="url(#grRev)" name="ფაქტი" connectNulls={false} />
+              <Line type="monotone" dataKey="ma7" stroke="#f59e0b" strokeWidth={2} dot={false} name="7-დღიანი MA" connectNulls={false} />
+              <Line type="monotone" dataKey="forecast" stroke="#10b981" strokeWidth={2} strokeDasharray="5 5" dot={false} name="30-დღ. პროგნოზი" connectNulls={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -724,6 +837,152 @@ export default function RetailSales({ retailSales, responseMeta }) {
               <div className="kpi-sub">ფასდაკლებული გაყიდვის წილი</div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ─── Top recent movers (365-day window vs lifetime) ─── */}
+      {topRecentMovers.length > 0 && (
+        <CollapsibleSection title="ბოლო 365 დღის ლიდერი პროდუქტები" badge={`${topRecentMovers.length}`}>
+          <p className="chart-desc">
+            <InfoTip text='ბოლო 365 დღის რანკი vs lifetime რანკი. "rank ცვლა" დადებითი = ცემპი (აიწია); უარყოფითი = ვარდნა (დაეცა).' />
+            ცვლა ცხადყოფს რა საქონელი იწევა / ეცემა — recent რანკი vs lifetime.
+          </p>
+          <div className="table-wrapper cashflow-table retail-sales-table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>recent #</th>
+                  <th>lifetime #</th>
+                  <th>ცვლა</th>
+                  <th>პროდუქტი</th>
+                  <th>კატეგორია</th>
+                  <th>365-დღ. შემოს.</th>
+                  <th>365-დღ. მოგება</th>
+                  <th>Margin</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topRecentMovers.map((p) => (
+                  <tr key={`mover-${p.product_code || p.product_name}-${p.rank_recent}`}>
+                    <td>#{p.rank_recent}</td>
+                    <td>{p.rank_lifetime ? `#${p.rank_lifetime}` : '—'}</td>
+                    <td>
+                      {p.rank_change == null ? '—' : (
+                        <span style={{
+                          padding: '1px 6px', borderRadius: 4, fontSize: 11,
+                          background: p.rank_change > 0 ? '#064e3b' : (p.rank_change < 0 ? '#7f1d1d' : '#334155'),
+                          color: p.rank_change > 0 ? '#6ee7b7' : (p.rank_change < 0 ? '#fca5a5' : '#cbd5e1'),
+                        }}>{p.rank_change > 0 ? '▲' : (p.rank_change < 0 ? '▼' : '=')} {Math.abs(p.rank_change)}</span>
+                      )}
+                    </td>
+                    <td>{p.product_name || 'უცნობი'}</td>
+                    <td style={{ fontSize: 12, color: '#94a3b8' }}>{p.category || '—'}</td>
+                    <td className="amount-positive">{fmtMoney(p.revenue_ge_recent)}</td>
+                    <td className={renderMoneyClass(p.profit_ge_recent)}>{fmtMoney(p.profit_ge_recent)}</td>
+                    <td>{fmtPct(p.gross_margin_pct_recent)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CollapsibleSection>
+      )}
+
+      {/* ─── Slow movers / dead stock candidates ─── */}
+      {(slowMovers.bucket_30_60_count > 0 || slowMovers.bucket_60_90_count > 0 || slowMovers.bucket_90_plus_count > 0) && (
+        <div className="chart-card" style={{ borderLeft: '3px solid #ef4444' }}>
+          <h3 style={{ color: '#fca5a5' }}>🐢 slow movers / dead stock candidates<InfoTip text="ბოლო გაყიდვის თარიღიდან 30/60/90+ დღე. ჯერ კიდევ ნაშთშია? — ფული ცხნად ჩარიცხული. რაც უფრო მაღალი lifetime შემოსავალი, მით უფრო მნიშვნელოვანი — ცარიელი ფული." /></h3>
+          <p className="chart-desc">
+            Anchor: {slowMovers.anchor_date || '—'} · 30-60 დღე: {fmtInt(slowMovers.bucket_30_60_count)} პროდუქტი ·{' '}
+            60-90 დღე: {fmtInt(slowMovers.bucket_60_90_count)} ·{' '}
+            90+ დღე: {fmtInt(slowMovers.bucket_90_plus_count)}
+          </p>
+          {asArray(slowMovers.top_90_plus).length > 0 && (
+            <CollapsibleSection title={`90+ დღე გაყიდვის გარეშე — top ${asArray(slowMovers.top_90_plus).length}`} badge={`${slowMovers.bucket_90_plus_count}`}>
+              <div className="table-wrapper cashflow-table retail-sales-table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>პროდუქტი</th>
+                      <th>კატეგორია</th>
+                      <th>lifetime შემოს.</th>
+                      <th>lifetime რაოდ.</th>
+                      <th>ბოლო გაყიდვა</th>
+                      <th>დღე გაყიდვის გარეშე</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {asArray(slowMovers.top_90_plus).map((p) => (
+                      <tr key={`slow90-${p.product_code || p.product_name}`}>
+                        <td>{p.product_name || 'უცნობი'}</td>
+                        <td style={{ fontSize: 12, color: '#94a3b8' }}>{p.category || '—'}</td>
+                        <td className="amount-positive">{fmtMoney(p.revenue_ge)}</td>
+                        <td>{fmtNum(p.total_quantity)}</td>
+                        <td>{p.last_sale_date || '—'}</td>
+                        <td>
+                          <span style={{ padding: '1px 6px', borderRadius: 4, fontSize: 11, background: '#7f1d1d', color: '#fca5a5' }}>
+                            {p.days_since_sale} დღე
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CollapsibleSection>
+          )}
+          {asArray(slowMovers.top_60_90).length > 0 && (
+            <CollapsibleSection title={`60-90 დღე გაყიდვის გარეშე — top ${asArray(slowMovers.top_60_90).length}`} badge={`${slowMovers.bucket_60_90_count}`}>
+              <div className="table-wrapper cashflow-table retail-sales-table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>პროდუქტი</th>
+                      <th>lifetime შემოს.</th>
+                      <th>ბოლო გაყიდვა</th>
+                      <th>დღე</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {asArray(slowMovers.top_60_90).map((p) => (
+                      <tr key={`slow60-${p.product_code || p.product_name}`}>
+                        <td>{p.product_name || 'უცნობი'}</td>
+                        <td className="amount-positive">{fmtMoney(p.revenue_ge)}</td>
+                        <td>{p.last_sale_date || '—'}</td>
+                        <td>{p.days_since_sale}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CollapsibleSection>
+          )}
+          {asArray(slowMovers.top_30_60).length > 0 && (
+            <CollapsibleSection title={`30-60 დღე გაყიდვის გარეშე — top ${asArray(slowMovers.top_30_60).length}`} badge={`${slowMovers.bucket_30_60_count}`}>
+              <div className="table-wrapper cashflow-table retail-sales-table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>პროდუქტი</th>
+                      <th>lifetime შემოს.</th>
+                      <th>ბოლო გაყიდვა</th>
+                      <th>დღე</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {asArray(slowMovers.top_30_60).map((p) => (
+                      <tr key={`slow30-${p.product_code || p.product_name}`}>
+                        <td>{p.product_name || 'უცნობი'}</td>
+                        <td className="amount-positive">{fmtMoney(p.revenue_ge)}</td>
+                        <td>{p.last_sale_date || '—'}</td>
+                        <td>{p.days_since_sale}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CollapsibleSection>
+          )}
         </div>
       )}
 
