@@ -343,6 +343,11 @@ def synthesize_from_megaplus(megaplus_live):
         qty = sum(float(p.get("qty_sold") or 0) for p in rollup.get("by_product") or [])
         rows = int(totals.get("sale_lines") or 0)
         margin = (profit / rev * 100) if rev > 0 else 0.0
+        rng = rollup.get("data_range") or {}
+        store_rmin = (rng.get("min_timestamp") or "")[:10] or None
+        store_rmax = (rng.get("max_timestamp") or "")[:10] or None
+        cat_count = len({(c.get("category") or "") for c in (rollup.get("by_category") or []) if c.get("category")})
+        prod_count = len({((p.get("barcode") or "").strip() or (p.get("product_code") or "").strip() or str(p.get("product_id"))) for p in (rollup.get("by_product") or [])})
         by_object.append({
             "object": obj_label,
             "row_count": rows,
@@ -351,6 +356,9 @@ def synthesize_from_megaplus(megaplus_live):
             "cost_ge": round(cost, 2),
             "profit_ge": round(profit, 2),
             "gross_margin_pct": round(margin, 2),
+            "distinct_category_count": cat_count,
+            "distinct_product_count": prod_count,
+            "date_range": {"min": store_rmin, "max": store_rmax},
         })
 
     # ─── by_month (aggregate across stores) ────────────────────────────────
@@ -534,6 +542,61 @@ def synthesize_from_megaplus(megaplus_live):
     top_products_by_revenue = sorted(by_product_full, key=lambda r: r.get("revenue_ge", 0), reverse=True)[:50]
     top_products_by_profit = sorted(by_product_full, key=lambda r: r.get("profit_ge", 0), reverse=True)[:50]
 
+    # ─── Data-quality aggregation (no silent gaps) ─────────────────────────
+    # Surface NULL-timestamp + legacy-pre-2023 rows so the UI can warn that
+    # these rows ARE in `overall` totals but DROP OUT of `by_month` / time
+    # charts (NULL has no month bucket; pre-2023 are likely seed/test data
+    # that distort 2023+ trends if not flagged).
+    dq_null_rows = 0; dq_null_rev = 0.0; dq_null_qty = 0.0
+    dq_legacy_rows = 0; dq_legacy_rev = 0.0; dq_legacy_qty = 0.0
+    dq_per_store: list = []
+    for store_id, rollup in stores.items():
+        obj_label = store_label_for.get(str(store_id)) or f"store_{store_id}"
+        dq = rollup.get("data_quality") or {}
+        nt = dq.get("null_timestamp") or {}
+        lg = dq.get("legacy_pre_2023") or {}
+        nt_rows = int(nt.get("row_count") or 0)
+        nt_rev = float(nt.get("revenue") or 0)
+        nt_qty = float(nt.get("quantity") or 0)
+        lg_rows = int(lg.get("row_count") or 0)
+        lg_rev = float(lg.get("revenue") or 0)
+        lg_qty = float(lg.get("quantity") or 0)
+        dq_null_rows += nt_rows; dq_null_rev += nt_rev; dq_null_qty += nt_qty
+        dq_legacy_rows += lg_rows; dq_legacy_rev += lg_rev; dq_legacy_qty += lg_qty
+        dq_per_store.append({
+            "object": obj_label,
+            "null_timestamp_count": nt_rows,
+            "null_timestamp_revenue": round(nt_rev, 2),
+            "null_timestamp_quantity": round(nt_qty, 2),
+            "legacy_pre_2023_count": lg_rows,
+            "legacy_pre_2023_revenue": round(lg_rev, 2),
+            "legacy_pre_2023_quantity": round(lg_qty, 2),
+            "legacy_pre_2023_min": (lg.get("min_timestamp") or "")[:10] or None,
+            "legacy_pre_2023_max": (lg.get("max_timestamp") or "")[:10] or None,
+        })
+    data_quality = {
+        "null_timestamp": {
+            "row_count": dq_null_rows,
+            "revenue_ge": round(dq_null_rev, 2),
+            "quantity": round(dq_null_qty, 2),
+            "note_ka": (
+                "ხაზები რომელთა თარიღი DB-ში NULL-ია — ჩათვლილია overall ჯამში, "
+                "მაგრამ თვიური/დღიური ცხრილ-გრაფიკიდან ცვივა (თვის bucket-ი ვერ მიენიჭა)."
+            ),
+        },
+        "legacy_pre_2023": {
+            "row_count": dq_legacy_rows,
+            "revenue_ge": round(dq_legacy_rev, 2),
+            "quantity": round(dq_legacy_qty, 2),
+            "note_ka": (
+                "2023-01-01-მდე ხაზები — სავარაუდოდ DB-ის ისტორიული სატესტო/seed "
+                "მონაცემი. ჩათვლილია overall ჯამში და by_month-ში; რეალური "
+                "ოპერაციული პერიოდი 2023-01-დან იწყება."
+            ),
+        },
+        "per_object": dq_per_store,
+    }
+
     return {
         "label_ka": "გაყიდული პროდუქცია (MegaPlus DB direct)",
         "notes_ka": (
@@ -594,6 +657,7 @@ def synthesize_from_megaplus(megaplus_live):
         "top_products_by_profit": top_products_by_profit,
         "rows_preview": [],
         "period_meta": {"applied": False, "label_ka": "MegaPlus DB lifetime"},
+        "data_quality": data_quality,
     }
 
 

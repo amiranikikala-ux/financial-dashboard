@@ -1015,6 +1015,12 @@ def _project_retail_sales_summary(bundle):
                 }
             )
         summary[key] = projected
+    # Pass-through data-quality block surfaced by synthesize_from_megaplus —
+    # used by the UI to warn that NULL-timestamp + legacy-pre-2023 rows are
+    # in the totals but invisible in time-series charts.
+    dq = bundle.get("data_quality")
+    if isinstance(dq, dict):
+        summary["data_quality"] = dq
     return summary
 
 

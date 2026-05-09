@@ -556,6 +556,50 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 "margin_pct": (profit / rev_f * 100) if rev_f else None,
             })
 
+        # ─── Data-quality flags (no silent gaps) ────────────────────────────
+        # Surface rows that would otherwise drop out of by_month: NULL
+        # timestamps (no month bucket) and legacy pre-2023 rows (likely test
+        # seed data). UI can show these as explicit warnings instead of
+        # silently excluding them from time-series aggregations.
+        cur.execute(
+            """
+            SELECT
+                COUNT(*)                              AS row_count,
+                ISNULL(SUM(o.ORD_jamjam), 0)          AS revenue,
+                ISNULL(SUM(o.ORD_quant), 0)           AS qty
+            FROM ORDERS o
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP IS NULL
+            """
+        )
+        nt_count, nt_rev, nt_qty = cur.fetchone()
+        null_timestamp_stats = {
+            "row_count": int(nt_count or 0),
+            "revenue": float(nt_rev or 0),
+            "quantity": float(nt_qty or 0),
+        }
+        cur.execute(
+            """
+            SELECT
+                COUNT(*)                              AS row_count,
+                ISNULL(SUM(o.ORD_jamjam), 0)          AS revenue,
+                ISNULL(SUM(o.ORD_quant), 0)           AS qty,
+                MIN(o.ORD_TIMESTAMP)                  AS min_ts,
+                MAX(o.ORD_TIMESTAMP)                  AS max_ts
+            FROM ORDERS o
+            WHERE o.ORD_ACT = 1
+              AND o.ORD_TIMESTAMP IS NOT NULL
+              AND o.ORD_TIMESTAMP < '2023-01-01'
+            """
+        )
+        lg_count, lg_rev, lg_qty, lg_min, lg_max = cur.fetchone()
+        legacy_pre_2023_stats = {
+            "row_count": int(lg_count or 0),
+            "revenue": float(lg_rev or 0),
+            "quantity": float(lg_qty or 0),
+            "min_timestamp": lg_min.isoformat() if lg_min else None,
+            "max_timestamp": lg_max.isoformat() if lg_max else None,
+        }
+
         # Operator-error detection on PRODUCTS table — empty / duplicate-variant
         # / PROTECTED-supplier review. Built on the same connection so it
         # joins the per-store snapshot the rest of this rollup is reading.
@@ -579,6 +623,10 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
             "total_active_orders": int(total_rows or 0),
         },
         "totals": totals,
+        "data_quality": {
+            "null_timestamp": null_timestamp_stats,
+            "legacy_pre_2023": legacy_pre_2023_stats,
+        },
         "suppliers": sorted(suppliers.values(), key=lambda s: s["lifetime"]["revenue"], reverse=True),
         "by_product": by_product,
         "by_product_recent": by_product_recent,

@@ -2,6 +2,45 @@ import { useState } from 'react';
 import CollapsibleSection from './components/CollapsibleSection.jsx';
 import ExportButton from './components/ExportButton.jsx';
 
+function InfoTip({ text }) {
+  const [show, setShow] = useState(false);
+  if (!text) return null;
+  return (
+    <span
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+      style={{ position: 'relative', display: 'inline-block', marginLeft: 6, lineHeight: 1 }}
+    >
+      <span
+        style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: 15, height: 15, borderRadius: '50%',
+          background: '#475569', color: '#cbd5e1',
+          fontSize: 10, fontWeight: 600, cursor: 'help', userSelect: 'none',
+        }}
+      >i</span>
+      {show && (
+        <span style={{
+          position: 'absolute', bottom: '120%', left: '50%', transform: 'translateX(-50%)',
+          background: '#0f172a', border: '1px solid #475569', borderRadius: 6,
+          padding: '8px 10px', fontSize: 12, color: '#e2e8f0', width: 280,
+          zIndex: 1000, boxShadow: '0 4px 14px rgba(0,0,0,0.5)',
+          textTransform: 'none', letterSpacing: 0, fontWeight: 400,
+          lineHeight: 1.45, whiteSpace: 'normal', textAlign: 'left', pointerEvents: 'none',
+        }}>{text}</span>
+      )}
+    </span>
+  );
+}
+
+const TIP_REVENUE = 'POS-ში რეგისტრირებული გაყიდვების ჯამი (ORD_jamjam — ფასდაკლების შემდეგ). წყარო: MegaPlus DB, ORDERS.ORD_ACT=1.';
+const TIP_COST = 'ფაქტურიდან გათვლილი (imputed) თვითღირებულება — მომწოდებლის ფაქტურიდან ერთეულზე. POS-ის ცარიელ ORD_GETPRICE-ს ცვლის. შესაძლოა განსხვავდებოდეს რეგისტრირებული POS cost-ისგან.';
+const TIP_PROFIT = 'შემოსავალი − imputed cost. ფაქტურიდან გათვლილი მოგება. POS-რეგისტრირებული მოგებისგან განსხვავდება ფაქტურის cost-ის სიზუსტის მიხედვით.';
+const TIP_MARGIN = 'მოგება / შემოსავალი × 100. რადგან cost imputed-ია, რეალურ POS-მარჟასთან მცირე გადახრა შესაძლებელია.';
+const TIP_ROWS = 'გაყიდვის ხაზების რაოდენობა (per-product per-receipt). 1 ჩეკში რამდენიმე ხაზი იქნება, ერთი ხაზი = ერთი პროდუქტი ერთ ჩეკში.';
+const TIP_COVERAGE = 'რამდენი ZIP backup დამუშავდა MegaPlus-ის წყაროდან. თითო მაღაზია = თითო ZIP თითო დღეს.';
+const TIP_PERIOD_BANNER = 'რა დიაპაზონშია მონაცემები. „ყველა პერიოდი" ნიშნავს — DB-ის ლაიფტაიმის ჯამი (2023-დან მიმდინარე დღემდე + ცოტა ისტორიული სატესტო).';
+
 const GEL = new Intl.NumberFormat('ka-GE', {
   style: 'currency',
   currency: 'GEL',
@@ -55,6 +94,12 @@ export default function RetailSales({ retailSales, responseMeta }) {
   const periodMeta = summary.period_meta && typeof summary.period_meta === 'object'
     ? summary.period_meta
     : {};
+  const dataQuality = summary.data_quality && typeof summary.data_quality === 'object'
+    ? summary.data_quality
+    : null;
+  const dqNull = dataQuality?.null_timestamp || null;
+  const dqLegacy = dataQuality?.legacy_pre_2023 || null;
+  const dqPerObject = asArray(dataQuality?.per_object);
   const byObject = asArray(summary.by_object);
   const byMonth = asArray(summary.by_month);
   const topCategoriesByProfit = asArray(summary.top_categories_by_profit).slice(0, 12);
@@ -153,31 +198,84 @@ export default function RetailSales({ retailSales, responseMeta }) {
         RS truth totals ან bank reconciliation ჯამებში; გამოიყენე როგორც დამატებითი ანალიზის ჭრილი.
       </div>
 
+      {(dqNull?.row_count > 0 || dqLegacy?.row_count > 0) && (
+        <div className="chart-card" style={{ borderLeft: '3px solid #f59e0b', background: '#1c1917' }}>
+          <h3 style={{ color: '#fbbf24' }}>⚠️ მონაცემთა ხარისხის შენიშვნა</h3>
+          <p className="chart-desc" style={{ marginBottom: 10 }}>
+            ქვემოთ ხაზები <strong>ჩათვლილია</strong> ზემოთ ჯამში (შემოსავალი / რაოდენობა / მოგება),
+            მაგრამ შეიძლება <strong>ცხადად არ ჩანდნენ</strong> თვიური / დღიური ჭრილის გრაფიკში.
+          </p>
+          {dqNull?.row_count > 0 && (
+            <div className="kpi-sub" style={{ marginBottom: 6 }}>
+              <strong style={{ color: '#fbbf24' }}>თარიღი არ აქვს:</strong>{' '}
+              {fmtInt(dqNull.row_count)} ხაზი · {fmtMoney(dqNull.revenue_ge)} ·{' '}
+              რაოდ. {fmtNum(dqNull.quantity)}
+              <InfoTip text={dqNull.note_ka} />
+            </div>
+          )}
+          {dqLegacy?.row_count > 0 && (
+            <div className="kpi-sub" style={{ marginBottom: 6 }}>
+              <strong style={{ color: '#fbbf24' }}>2023-01-01-მდე:</strong>{' '}
+              {fmtInt(dqLegacy.row_count)} ხაზი · {fmtMoney(dqLegacy.revenue_ge)} ·{' '}
+              რაოდ. {fmtNum(dqLegacy.quantity)} (სავარაუდოდ DB-ის ისტორიული სატესტო)
+              <InfoTip text={dqLegacy.note_ka} />
+            </div>
+          )}
+          {dqPerObject.length > 0 && (
+            <details style={{ marginTop: 10 }}>
+              <summary style={{ cursor: 'pointer', fontSize: 12, color: '#94a3b8' }}>per-მაღაზია ჭრილი</summary>
+              <table style={{ marginTop: 8, fontSize: 12, width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left', padding: '4px 8px' }}>მაღაზია</th>
+                    <th style={{ textAlign: 'right', padding: '4px 8px' }}>NULL თარიღი</th>
+                    <th style={{ textAlign: 'right', padding: '4px 8px' }}>NULL შემოს.</th>
+                    <th style={{ textAlign: 'right', padding: '4px 8px' }}>2009 ხაზი</th>
+                    <th style={{ textAlign: 'right', padding: '4px 8px' }}>2009 შემოს.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dqPerObject.map((r) => (
+                    <tr key={`dq-${r.object || 'na'}`}>
+                      <td style={{ padding: '4px 8px' }}>{r.object || 'უცნობი'}</td>
+                      <td style={{ padding: '4px 8px', textAlign: 'right' }}>{fmtInt(r.null_timestamp_count)}</td>
+                      <td style={{ padding: '4px 8px', textAlign: 'right' }}>{fmtMoney(r.null_timestamp_revenue)}</td>
+                      <td style={{ padding: '4px 8px', textAlign: 'right' }}>{fmtInt(r.legacy_pre_2023_count)}</td>
+                      <td style={{ padding: '4px 8px', textAlign: 'right' }}>{fmtMoney(r.legacy_pre_2023_revenue)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </details>
+          )}
+        </div>
+      )}
+
       <div className="kpi-grid retail-sales-kpi-grid">
         <div className="kpi-card kpi-card--accent">
-          <div className="kpi-label">სულ შემოსავალი</div>
+          <div className="kpi-label">სულ შემოსავალი<InfoTip text={TIP_REVENUE} /></div>
           <div className="kpi-value amount-positive">{fmtMoney(overall.revenue_ge)}</div>
-          <div className="kpi-sub">retail source revenue</div>
+          <div className="kpi-sub">POS-რეგისტრირებული</div>
         </div>
         <div className="kpi-card kpi-card--warn">
-          <div className="kpi-label">სულ თვითღირებულება</div>
+          <div className="kpi-label">სულ თვითღირებულება<InfoTip text={TIP_COST} /></div>
           <div className="kpi-value amount-negative">{fmtMoney(overall.cost_ge)}</div>
-          <div className="kpi-sub">retail source cost</div>
+          <div className="kpi-sub">ფაქტურიდან გათვლილი (imputed)</div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-label">სულ მოგება</div>
+          <div className="kpi-label">სულ მოგება<InfoTip text={TIP_PROFIT} /></div>
           <div className={`kpi-value ${renderMoneyClass(overall.profit_ge)}`}>
             {fmtMoney(overall.profit_ge)}
           </div>
-          <div className="kpi-sub">შემოსავალი - თვითღირებულება</div>
+          <div className="kpi-sub">შემოსავალი − imputed cost</div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-label">Gross Margin</div>
+          <div className="kpi-label">Gross Margin<InfoTip text={TIP_MARGIN} /></div>
           <div className="kpi-value amount-neutral">{fmtPct(overall.gross_margin_pct)}</div>
           <div className="kpi-sub">{fmtInt(overall.distinct_object_count)} ობიექტი</div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-label">ხაზები / რაოდენობა</div>
+          <div className="kpi-label">ხაზები / რაოდენობა<InfoTip text={TIP_ROWS} /></div>
           <div className="kpi-value amount-neutral">{fmtInt(overall.row_count)}</div>
           <div className="kpi-sub">რაოდ.: {fmtNum(overall.total_quantity)}</div>
         </div>
