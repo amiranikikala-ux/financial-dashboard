@@ -1,12 +1,145 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-09 (evening) — **Waybills page full analytics overhaul (4 phases + 3 advanced features)** — backend `_build_waybills_response` enriched with 6 filters + ~30 new aggregations (KPIs, charts, supplier analytics, anomaly, calendar heatmap, duplicates, month benchmark). Frontend Waybills.jsx rewritten — KPI cards, recharts visualisations, GitHub-style calendar heatmap, collapsed detail table with year/month/day filters defaulting to current month, info-tooltips on every title (28 explanations). 3 commits on origin/main. Morning's Coca-Cola pipeline fix + Algani service-supplier debt now also committed (was uncommitted from earlier session).
+> **განახლდა**: 2026-05-09 (ღამე) — **Retail Sales page full analytics overhaul (Sprint 1 done — 6 commits).** ORDERS table exposes 40 columns; the page was using ~5. Lifted everything: basket / payment / cashier / register / hour / dow / hour×dow heatmap / Pareto / HHI / discounts / returns / MoM-YoY / spike alerts / forecast / slow movers / top recent movers — all with per-store filter that genuinely scopes the entire dataset. Sprint 2 backlog tracked in `HANDOFF_ARCHIVE/PREVIEWS/RETAIL_SALES_REMAINING_2026-05-09.md` (cashier shifts / period filter / discount lift / returns-by-product / VAT analysis).
 >
-> Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`. სრული აუდიტი → `HANDOFF_ARCHIVE/SUPPLIERS_AUDIT_2026-05-08.md`.
+> Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`. Sprint 2 plan → `HANDOFF_ARCHIVE/PREVIEWS/RETAIL_SALES_REMAINING_2026-05-09.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-09 evening) — Waybills page full analytics overhaul
+## 0. ბოლო session-ის შედეგი (2026-05-09 ღამე) — Retail Sales page full analytics overhaul
+
+### Headline (ღამე — 2026-05-09)
+
+**6 commits on origin/main:**
+| commit | რა მოიცავს |
+|---|---|
+| `2f087ad` | fix(retail-sales): proof-gate audit — surface dropped rows, clarify cost label, fix per-store date range |
+| `85ce7d2` | feat(retail-sales): full analytics overhaul — basket / payment / time / Pareto / discounts |
+| `8735cdc` | feat(retail-sales): add forward-looking analytics — MoM/YoY, spike alerts, forecast, slow movers |
+| `31b6db1` | feat(retail-sales): add per-store split to top recent movers (დვაბზუ vs ოზურგეთი) |
+| `a897694` | feat(retail-sales): per-store split on slow-movers tables |
+| `d28aa7d` | feat(retail-sales): real per-store filter + hour×dow heatmap + category-over-time + product search |
+| `14ebc92` | fix(retail-sales): per-store concentration follows the store filter |
+
+### Sprint 0 — proof-gate audit (3 ფიქსი)
+
+Owner asked to verify existing numbers before adding more. Found three issues:
+
+1. **NULL ORD_TIMESTAMP rows silently dropped from time-series.** ოზურგეთი has 6,044 active sales (14,383 ₾) with NULL timestamp — landed in `overall` totals but vanished from `by_month` because YEAR(NULL) produced no bucket. Now surfaced via `data_quality.null_timestamp` block + per-store breakdown + UI yellow warning panel.
+2. **234 legacy rows dated 2009-01-01** (likely DB seed/test data) blended into the trend's "first month" line without flagging. Same `data_quality.legacy_pre_2023` block now reports them with min/max range.
+3. **`by_object[].date_range` missing** — UI showed em-dash for the per-store period column. Backfilled from per-store rollup in `synthesize_from_megaplus`. Frontend KPI cards gained InfoTip explaining cost is GET-table imputed (not POS-recorded ORD_GETPRICE) — current 12.22% portfolio margin is on imputed-cost basis.
+
+### Sprint 1 — full analytics overhaul
+
+**Backend (megaplus_backup.py + retail_sales.py + api_contracts.py)**:
+- 10 new per-store SQL queries: basket_metrics (receipts via ORD_N), payment_types (0=cash / 1=card), cashiers (top 30), registers (ORD_TAB_ID), hour_of_day (24 buckets), day_of_week (Monday-first), hour_dow_grid (7×24 = 168 cells), daily_trend (last 365 days with imputed cogs), returns_voids (ORD_ACT in (0,2)), discount_totals (ORD_FASDAKLEBAMDE − ORD_jamjam).
+- Concentration / Pareto / HHI: products_for_50/80/90/95pct now computed against full sorted list (not capped at top-200 — was a bug at HHI 44.94 that left all four counters null).
+- Forward-looking: prev_period_compare (MoM + YoY ▲▼), spike_alerts (z-score ≥ 2σ on monthly), forecast_next30 (trailing 30-day MA × 30 days), slow_movers (30-60 / 60-90 / 90+ buckets), top_recent_movers (recent vs lifetime rank with rank_change).
+- **Per-store views** (`per_object_view[store]`): each store carries a complete parallel dataset — overall, basket, payment, hour, dow, hour×dow grid, daily, calendar, returns, discount, by_month, top categories, top products, AND its own concentration block (HHI / 50-80-90-95% thresholds).
+- Top recent movers + slow movers each carry `dominant_store` + `store_breakdown` for per-row attribution.
+
+**Frontend (RetailSales.jsx — full rewrite)**:
+- 12 KPI cards (was 6) — added receipts / AOV / items-per-basket / markdown / returns / 80-20 product count.
+- recharts charts: monthly trend (revenue + profit + margin dual-axis), daily 365-day trend with 7-day MA + 30-day forecast (dashed green tail), hour-of-day bar, day-of-week bar, **hour×dow heatmap (7×24 grid)**, payment-type pie, store-mix pie, Pareto line, **category-over-time chart (top-6 × 24 months)**.
+- Custom CalendarHeatmap (53×7 grid).
+- Tables: cashier ranking with AOV + first/last sale, register breakdown, returns + voids, top recent movers (with store chip), slow movers 3 buckets (with store chip).
+- **Real store filter** — when "დვაბზუ" or "ოზურგეთი" picked, every KPI / chart / top list / concentration / 80-20 reads from `per_object_view[store]`. Banner at top shows store chip. Combined view restored when "ყველა".
+- **Product search** — substring match on name / code / barcode, shows filtered count, "გაწმენდა" button.
+- InfoTip ⓘ on every KPI / chart title — explains formula + underlying ORDERS column.
+
+### Numbers from this run
+
+| metric | combined | დვაბზუ | ოზურგეთი |
+|---|---|---|---|
+| Revenue | 4,898,512 ₾ | 2,250,730 ₾ | 2,647,782 ₾ |
+| Receipts | 597,851 | 234,451 | 363,400 |
+| AOV | 8.19 ₾ | 9.60 ₾ | 7.29 ₾ |
+| Items / basket | 2.74 | 3.10 | 2.50 |
+| HHI | 44.94 (low) | 45.64 (low) | 56.44 (low) |
+| Products = 80% | 801 | 801 | **584** (more concentrated) |
+| Slow movers 90+ days | — | — | dominant — ~all top 5 are ოზურგეთი cigarette SKUs ~400 days no sale |
+
+**Top hour×dow cells** (combined): შაბ 19h (55,035 ₾), შაბ 18h (54,006 ₾), პარ 19h (53,886 ₾), ხუთ 18h (53,061 ₾), ხუთ 19h (51,683 ₾) — clear weekday-evening peak useful for shift planning.
+
+**Cash vs card** (combined): ნაღდი 63.81% (3.13M ₾) vs ბარათი 36.19% (1.77M ₾).
+
+**Spike alerts** (combined): one — 2025-08 = 313,878 ₾ at +2.7σ above mean (summer / harvest peak).
+
+### Live browser verification (Playwright walkthrough)
+
+Navigated to http://localhost:8000/#retail_sales and exercised the page:
+- 19 sections rendered, 0 console errors (one Apple meta-tag deprecation warning, unrelated).
+- Store filter live-tested → KPI swapped 4.9M → 2.25M for დვაბზუ, banner showed, date range collapsed from 2009 (legacy) to 2024-03-31 (real start of დვაბზუ data).
+- HourDow heatmap visually confirms morning (00-05) cold + evening (18-21) red.
+- Category-over-time chart showed clear top category (cigarettes) with 2025-08 peak.
+- Product search "კოკა" → 4 by revenue / 5 by profit, filter count chip rendered.
+
+### Open / next session — Sprint 2 (this is what to pick up first in the new chat)
+
+Plan tracked in `HANDOFF_ARCHIVE/PREVIEWS/RETAIL_SALES_REMAINING_2026-05-09.md`. Owner approved continuation. Sprint 2 items, all medium-priority:
+
+- 🔴 **Cashier shift breakdown** — `ORD_SHIFT` column exists in DB, not yet queried. Query + per-shift table (revenue / receipts / AOV / hours).
+- 🔴 **Period filter** — UI selector for last 7d / 30d / MTD / YTD / custom range. Currently only "lifetime" view. Most-bang-for-buck pair with the Sprint 1 store filter.
+- 🔴 **Discount "lift" analysis** — what would profit be without the markdown? Did the discount actually drive incremental volume vs just compress margin?
+- 🔴 **Returns by product** — which SKUs return most often, which cashier accepts the most returns. ORD_ACT=2 already queried; needs per-product / per-user grouping.
+- 🔴 **VAT analysis** — `ORD_VAT` column exists, never used. Per-category VAT, per-month VAT, vs bookkeeper's declaration cross-check.
+
+Sprint 3 (lower priority, after Sprint 2):
+- 🟡 **Daily-level spike alerts** — currently only monthly z-score; daily anomaly would catch one-off events.
+- 🟡 **▲▼ delta on every KPI card** (not just MoM panel).
+- 🟡 **Same-product cross-store comparison** — same SKU price/margin in dvabzu vs ozurgeti.
+- 🟡 **Mobile responsive polish**.
+- 🟡 **PDF / weekly email report**.
+- 🟡 **Drill-down** — click on a category → opens that category's product list.
+
+### Carry-overs from previous sessions (still open)
+
+- 🔴 **Lela-ს Foodmart cashback breakdown** — formula 90% incomplete, blocked on her email reply.
+- 🟡 **Future Gmail filters** — IMAP can't auto-filter; needs Gmail API + OAuth or cron labelling script. Owner decides.
+- 🟡 **Owner manual cash payments** — continues entering via UI as needed.
+- 🟡 **Pre-existing test failures unchanged** (test_expense_categories_incremental + test_foodmart_cashback_incremental).
+- 🟡 **Phase 3 — VAT input-side reconciliation** (Master Plan §18) — separate session.
+- 🟡 **Phase 4 — rs.ge SOAP automation** — blocked on rs.ge UI permission grant.
+- ⏸ **Mini PC** — owner cloud refused, deferred until hardware bought.
+
+### Verification commands (next session)
+
+```powershell
+# Per-store concentration check (Sprint 1 fix):
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
+import urllib.request, json
+api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=retail_sales', timeout=30).read())
+for store, view in (api['retail_sales']['per_object_view'] or {}).items():
+    c = view['concentration']
+    print(f'{store}: HHI={c[\"hhi\"]} class={c[\"hhi_class\"]} 80%-products={c[\"products_for_80pct_revenue\"]}')
+# expect: დვაბზუ 45.64 low 801; ოზურგეთი 56.44 low 584; combined 44.94 low 801
+"
+
+# Hour×DoW grid sanity (Sprint 1 — should be 168 cells):
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
+import urllib.request, json
+api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=retail_sales', timeout=30).read())
+g = api['retail_sales']['hour_dow_grid']
+print(f'cells: {len(g)} (expect 168)')
+top = sorted(g, key=lambda c: -c['revenue_ge'])[:5]
+for c in top: print(f'  dow={c[\"dow\"]} ({c[\"dow_label_ka\"]}) hr={c[\"hour\"]:02d}h: {c[\"revenue_ge\"]:.0f} ₾')
+# expect: top cell შაბ 19h ~55k ₾
+"
+
+# Data quality breakdown (Sprint 0 fix):
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
+import urllib.request, json
+api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=retail_sales', timeout=30).read())
+dq = api['retail_sales']['data_quality']
+print('null timestamp:', dq['null_timestamp']['row_count'], 'rows', dq['null_timestamp']['revenue_ge'], '₾')
+print('legacy pre-2023:', dq['legacy_pre_2023']['row_count'], 'rows', dq['legacy_pre_2023']['revenue_ge'], '₾')
+# expect: 6044 / 14383.69 ; 234 / 660.97 (all ozurgeti)
+"
+```
+
+---
+
+## 0a. წინა session-ის შედეგი (2026-05-09 evening) — Waybills page full analytics overhaul
 
 ### Headline (evening — 2026-05-09)
 
