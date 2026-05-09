@@ -351,13 +351,47 @@ export default function RetailSales({ retailSales, responseMeta }) {
   const filteredCashiers = cashiers.filter((c) => matchStore(c.object));
   const filteredRegisters = registers.filter((r) => matchStore(r.object));
 
-  // ─── Period filter (client-side, time-series only) ────────────────────
-  // We have daily_trend (last 365 days, day-grain) and by_month (lifetime,
-  // month-grain). Period filter slices these for KPI recompute + chart
-  // filter. Top products / hour / dow / heatmap stay lifetime — banner
-  // explains. Custom range works only within the last-365-day window.
+  // ─── Period filter (client-side) ──────────────────────────────────────
+  // Three data sources used in priority order:
+  //   1. daily_trend  — last 365 days, day-grain (most accurate, has cogs)
+  //   2. by_month     — lifetime, month-grain (works for old months too)
+  //   3. fallback     — banner only, stats unavailable
+  // Filter lexicons:
+  //   'all', '7d', '30d', '90d', 'mtd', 'ytd', 'custom',
+  //   'month:YYYY-MM' (specific month),
+  //   'year:YYYY'    (specific calendar year).
+  const KA_MONTH = ['იანვარი','თებერვალი','მარტი','აპრილი','მაისი','ივნისი','ივლისი','აგვისტო','სექტემბერი','ოქტომბერი','ნოემბერი','დეკემბერი'];
+
+  // Distinct (year, month) pairs from data — sorted desc (newest first).
+  const availableMonthsDesc = useMemo(() => {
+    const set = new Set();
+    byMonth.forEach((m) => { if (m.month) set.add(m.month); });
+    return Array.from(set).sort().reverse();
+  }, [byMonth]);
+  const availableYearsDesc = useMemo(() => {
+    const set = new Set();
+    availableMonthsDesc.forEach((m) => set.add(m.slice(0, 4)));
+    return Array.from(set).sort().reverse();
+  }, [availableMonthsDesc]);
+
   const periodRange = useMemo(() => {
     if (periodPreset === 'all') return null;
+    // Specific month: 'month:YYYY-MM'
+    if (periodPreset.startsWith('month:')) {
+      const ym = periodPreset.slice(6); // 'YYYY-MM'
+      if (!/^\d{4}-\d{2}$/.test(ym)) return null;
+      const [y, m] = ym.split('-').map(Number);
+      const firstDay = `${ym}-01`;
+      const lastDay = new Date(y, m, 0).toISOString().slice(0, 10); // last day of month
+      return { from: firstDay, to: lastDay, label_ka: `${KA_MONTH[m - 1]} ${y}`, scope: 'month' };
+    }
+    // Specific year: 'year:YYYY'
+    if (periodPreset.startsWith('year:')) {
+      const y = periodPreset.slice(5);
+      if (!/^\d{4}$/.test(y)) return null;
+      return { from: `${y}-01-01`, to: `${y}-12-31`, label_ka: `${y} წელი`, scope: 'year' };
+    }
+    // Relative presets — anchored to last day in daily_trend.
     const days = dailyTrend.map((d) => d.day).filter(Boolean).sort();
     if (!days.length) return null;
     const lastIso = days[days.length - 1];
@@ -365,26 +399,26 @@ export default function RetailSales({ retailSales, responseMeta }) {
     const fmt = (d) => d.toISOString().slice(0, 10);
     if (periodPreset === '7d') {
       const from = new Date(last); from.setDate(from.getDate() - 6);
-      return { from: fmt(from), to: lastIso, label_ka: 'ბოლო 7 დღე' };
+      return { from: fmt(from), to: lastIso, label_ka: 'ბოლო 7 დღე', scope: 'relative' };
     }
     if (periodPreset === '30d') {
       const from = new Date(last); from.setDate(from.getDate() - 29);
-      return { from: fmt(from), to: lastIso, label_ka: 'ბოლო 30 დღე' };
+      return { from: fmt(from), to: lastIso, label_ka: 'ბოლო 30 დღე', scope: 'relative' };
     }
     if (periodPreset === '90d') {
       const from = new Date(last); from.setDate(from.getDate() - 89);
-      return { from: fmt(from), to: lastIso, label_ka: 'ბოლო 90 დღე' };
+      return { from: fmt(from), to: lastIso, label_ka: 'ბოლო 90 დღე', scope: 'relative' };
     }
     if (periodPreset === 'mtd') {
       const from = new Date(last.getFullYear(), last.getMonth(), 1);
-      return { from: fmt(from), to: lastIso, label_ka: 'მიმდინარე თვე' };
+      return { from: fmt(from), to: lastIso, label_ka: 'მიმდინარე თვე', scope: 'relative' };
     }
     if (periodPreset === 'ytd') {
       const from = new Date(last.getFullYear(), 0, 1);
-      return { from: fmt(from), to: lastIso, label_ka: 'მიმდინარე წელი' };
+      return { from: fmt(from), to: lastIso, label_ka: 'მიმდინარე წელი', scope: 'relative' };
     }
     if (periodPreset === 'custom' && customFrom && customTo) {
-      return { from: customFrom, to: customTo, label_ka: `${customFrom} → ${customTo}` };
+      return { from: customFrom, to: customTo, label_ka: `${customFrom} → ${customTo}`, scope: 'custom' };
     }
     return null;
   }, [periodPreset, customFrom, customTo, dailyTrend]);
@@ -394,12 +428,44 @@ export default function RetailSales({ retailSales, responseMeta }) {
     return dailyTrend.filter((d) => d.day >= periodRange.from && d.day <= periodRange.to);
   }, [dailyTrend, periodRange]);
 
+  // Period KPIs — prefer daily_trend (richer cost data); fall back to by_month
+  // when picked period extends earlier than daily_trend's 365-day window.
   const periodKpis = useMemo(() => {
-    if (!periodRange || dailyFiltered.length === 0) return null;
-    const sumRev = dailyFiltered.reduce((s, d) => s + toNum(d.revenue_ge), 0);
-    const sumCost = dailyFiltered.reduce((s, d) => s + toNum(d.cost_ge), 0);
-    const sumLines = dailyFiltered.reduce((s, d) => s + toNum(d.lines), 0);
-    const sumReceipts = dailyFiltered.reduce((s, d) => s + toNum(d.receipts), 0);
+    if (!periodRange) return null;
+    // Detect coverage: only use daily if requested-from >= daily-earliest.
+    const dailyEarliest = dailyTrend.length > 0 ? dailyTrend[0].day : null;
+    const fullyInDaily = dailyEarliest && periodRange.from >= dailyEarliest;
+    if (fullyInDaily && dailyFiltered.length > 0) {
+      const sumRev = dailyFiltered.reduce((s, d) => s + toNum(d.revenue_ge), 0);
+      const sumCost = dailyFiltered.reduce((s, d) => s + toNum(d.cost_ge), 0);
+      const sumLines = dailyFiltered.reduce((s, d) => s + toNum(d.lines), 0);
+      const sumReceipts = dailyFiltered.reduce((s, d) => s + toNum(d.receipts), 0);
+      return {
+        revenue_ge: sumRev,
+        cost_ge: sumCost,
+        profit_ge: sumRev - sumCost,
+        gross_margin_pct: sumRev > 0 ? (sumRev - sumCost) / sumRev * 100 : 0,
+        lines: sumLines,
+        receipts: sumReceipts,
+        aov: sumReceipts > 0 ? sumRev / sumReceipts : 0,
+        items_per_basket: sumReceipts > 0 ? sumLines / sumReceipts : 0,
+        day_count: dailyFiltered.length,
+        from: periodRange.from,
+        to: periodRange.to,
+        label_ka: periodRange.label_ka,
+        source: 'daily',
+      };
+    }
+    // Fallback: aggregate from by_month for the requested window. This kicks
+    // in for months / years that extend before daily_trend's coverage.
+    const fromMonth = periodRange.from.slice(0, 7);
+    const toMonth = periodRange.to.slice(0, 7);
+    const monthsInRange = byMonth.filter((m) => m.month >= fromMonth && m.month <= toMonth);
+    if (monthsInRange.length === 0) return null;
+    const sumRev = monthsInRange.reduce((s, m) => s + toNum(m.revenue_ge), 0);
+    const sumCost = monthsInRange.reduce((s, m) => s + toNum(m.cost_ge), 0);
+    const sumLines = monthsInRange.reduce((s, m) => s + toNum(m.row_count), 0);
+    const sumReceipts = monthsInRange.reduce((s, m) => s + toNum(m.receipts), 0);
     return {
       revenue_ge: sumRev,
       cost_ge: sumCost,
@@ -409,12 +475,14 @@ export default function RetailSales({ retailSales, responseMeta }) {
       receipts: sumReceipts,
       aov: sumReceipts > 0 ? sumRev / sumReceipts : 0,
       items_per_basket: sumReceipts > 0 ? sumLines / sumReceipts : 0,
-      day_count: dailyFiltered.length,
+      day_count: null,
+      month_count: monthsInRange.length,
       from: periodRange.from,
       to: periodRange.to,
       label_ka: periodRange.label_ka,
+      source: 'monthly',
     };
-  }, [periodRange, dailyFiltered]);
+  }, [periodRange, dailyFiltered, dailyTrend, byMonth]);
 
   // Effective values for KPI tiles (period-aware override).
   const eff = {
@@ -534,15 +602,30 @@ export default function RetailSales({ retailSales, responseMeta }) {
         <select
           value={periodPreset}
           onChange={(e) => setPeriodPreset(e.target.value)}
-          style={{ background: '#1e293b', color: '#e2e8f0', border: '1px solid #334155', borderRadius: 6, padding: '4px 8px', fontSize: 13 }}
+          style={{ background: '#1e293b', color: '#e2e8f0', border: '1px solid #334155', borderRadius: 6, padding: '4px 8px', fontSize: 13, minWidth: 200 }}
         >
           <option value="all">ყველა დრო</option>
-          <option value="7d">ბოლო 7 დღე</option>
-          <option value="30d">ბოლო 30 დღე</option>
-          <option value="90d">ბოლო 90 დღე</option>
-          <option value="mtd">მიმდინარე თვე</option>
-          <option value="ytd">მიმდინარე წელი</option>
-          <option value="custom">მორგებული</option>
+          <optgroup label="ფარდობითი">
+            <option value="7d">ბოლო 7 დღე</option>
+            <option value="30d">ბოლო 30 დღე</option>
+            <option value="90d">ბოლო 90 დღე</option>
+            <option value="mtd">მიმდინარე თვე</option>
+            <option value="ytd">მიმდინარე წელი</option>
+          </optgroup>
+          <optgroup label="კონკრეტული თვე">
+            {availableMonthsDesc.map((ym) => {
+              const [y, m] = ym.split('-');
+              return <option key={`m-${ym}`} value={`month:${ym}`}>{`${y} — ${KA_MONTH[Number(m) - 1]}`}</option>;
+            })}
+          </optgroup>
+          <optgroup label="კონკრეტული წელი">
+            {availableYearsDesc.map((y) => (
+              <option key={`y-${y}`} value={`year:${y}`}>{`${y} წელი`}</option>
+            ))}
+          </optgroup>
+          <optgroup label="მორგებული">
+            <option value="custom">მორგებული თარიღების შუალედი</option>
+          </optgroup>
         </select>
         {periodPreset === 'custom' && (
           <>
@@ -566,7 +649,9 @@ export default function RetailSales({ retailSales, responseMeta }) {
             padding: '3px 10px', borderRadius: 4, fontSize: 12,
             background: '#334155', color: '#cbd5e1', border: '1px solid #475569',
           }}>
-            <strong>{periodKpis.label_ka}</strong> · {periodKpis.day_count} დღე · {periodKpis.from} → {periodKpis.to}
+            <strong>{periodKpis.label_ka}</strong> ·{' '}
+            {periodKpis.source === 'daily' ? `${periodKpis.day_count} დღე` : `${periodKpis.month_count} თვე`} ·{' '}
+            {periodKpis.from} → {periodKpis.to}
           </span>
         )}
         {filteredView && (
@@ -731,7 +816,13 @@ export default function RetailSales({ retailSales, responseMeta }) {
         <div className="kpi-card kpi-card--accent">
           <div className="kpi-label">სულ შემოსავალი<InfoTip text={TIPS.revenue} /></div>
           <div className="kpi-value amount-positive">{fmtMoney(eff.revenue_ge)}</div>
-          <div className="kpi-sub">{periodKpis ? `${periodKpis.day_count} დღე` : 'POS-რეგისტრირებული'}</div>
+          <div className="kpi-sub">{
+            periodKpis
+              ? (periodKpis.source === 'daily'
+                  ? `${periodKpis.day_count} დღე`
+                  : `${periodKpis.month_count} თვე`)
+              : 'POS-რეგისტრირებული'
+          }</div>
         </div>
         <div className="kpi-card kpi-card--warn">
           <div className="kpi-label">სულ თვითღირებულება<InfoTip text={TIPS.cost} /></div>

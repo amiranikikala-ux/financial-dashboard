@@ -456,6 +456,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 CAST(YEAR(o.ORD_TIMESTAMP) AS varchar(4)) + '-'
                     + RIGHT('0' + CAST(MONTH(o.ORD_TIMESTAMP) AS varchar(2)), 2) AS month,
                 COUNT(*)                                     AS row_count,
+                COUNT(DISTINCT o.ORD_N)                      AS receipts,
                 SUM(o.ORD_quant)                             AS qty_sold,
                 SUM(o.ORD_jamjam)                            AS revenue,
                 SUM(o.ORD_quant * pec.effective_unit_cost)   AS cogs_imputed,
@@ -468,13 +469,14 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
             """
         )
         by_month = []
-        for month, row_count, qty, rev, cogs_imp, cogs_rec in cur.fetchall():
+        for month, row_count, receipts, qty, rev, cogs_imp, cogs_rec in cur.fetchall():
             rev_f = float(rev or 0)
             cogs_imp_f = float(cogs_imp or 0)
             profit = rev_f - cogs_imp_f
             by_month.append({
                 "month": month,
                 "row_count": int(row_count or 0),
+                "receipts": int(receipts or 0),
                 "qty_sold": float(qty or 0),
                 "revenue": rev_f,
                 "cogs": cogs_imp_f,

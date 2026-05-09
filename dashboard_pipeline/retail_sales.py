@@ -369,10 +369,11 @@ def synthesize_from_megaplus(megaplus_live):
             if not key:
                 continue
             cur = month_acc.setdefault(key, {
-                "month": key, "row_count": 0, "total_quantity": 0.0,
+                "month": key, "row_count": 0, "receipts": 0, "total_quantity": 0.0,
                 "revenue_ge": 0.0, "cost_ge": 0.0, "profit_ge": 0.0,
             })
             cur["row_count"] += int(m.get("row_count") or 0)
+            cur["receipts"] += int(m.get("receipts") or 0)
             cur["total_quantity"] += float(m.get("qty_sold") or 0)
             cur["revenue_ge"] += float(m.get("revenue") or 0)
             cur["cost_ge"] += float(m.get("cogs") or 0)
@@ -398,6 +399,7 @@ def synthesize_from_megaplus(megaplus_live):
                 "object": obj_label,
                 "month": m.get("month"),
                 "row_count": int(m.get("row_count") or 0),
+                "receipts": int(m.get("receipts") or 0),
                 "total_quantity": float(m.get("qty_sold") or 0),
                 "revenue_ge": round(rev, 2),
                 "cost_ge": round(cost, 2),
@@ -1220,6 +1222,7 @@ def synthesize_from_megaplus(megaplus_live):
             view_by_month.append({
                 "month": m.get("month"),
                 "row_count": int(m.get("row_count") or 0),
+                "receipts": int(m.get("receipts") or 0),
                 "total_quantity": round(float(m.get("qty_sold") or 0), 2),
                 "revenue_ge": round(r, 2), "cost_ge": round(c, 2),
                 "profit_ge": round(r - c, 2),
