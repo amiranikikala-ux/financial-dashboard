@@ -1040,6 +1040,8 @@ def _project_retail_sales_summary(bundle):
         "forecast_next30",
         "slow_movers",
         "top_recent_movers",
+        "hour_dow_grid",
+        "per_object_view",
     ):
         val = bundle.get(key)
         if val is not None:

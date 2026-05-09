@@ -757,6 +757,33 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 "revenue": float(rev or 0),
             })
 
+        # Hour × Day-of-week heatmap (7 dow × 24 hour = up to 168 cells).
+        # Lets the UI render a single grid showing the busiest weekday-hour
+        # combination instead of two separate one-dimensional charts.
+        cur.execute(
+            """
+            SELECT
+                DATEPART(WEEKDAY, o.ORD_TIMESTAMP)         AS dow,
+                DATEPART(HOUR,    o.ORD_TIMESTAMP)         AS hr,
+                COUNT(*)                                   AS lines,
+                COUNT(DISTINCT o.ORD_N)                    AS receipts,
+                ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue
+            FROM ORDERS o
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP IS NOT NULL
+            GROUP BY DATEPART(WEEKDAY, o.ORD_TIMESTAMP), DATEPART(HOUR, o.ORD_TIMESTAMP)
+            ORDER BY 1, 2
+            """
+        )
+        hour_dow_grid = []
+        for dow, hr, lines, receipts, rev in cur.fetchall():
+            hour_dow_grid.append({
+                "dow": int(dow) if dow is not None else None,
+                "hour": int(hr) if hr is not None else None,
+                "lines": int(lines or 0),
+                "receipts": int(receipts or 0),
+                "revenue": float(rev or 0),
+            })
+
         # Daily trend — last 365 days only (calendar heatmap + recent trend).
         anchor_dt = max_ts or datetime.now()
         since_365 = anchor_dt - timedelta(days=365)
@@ -878,6 +905,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
         "registers": registers,
         "hour_of_day": hour_of_day,
         "day_of_week": day_of_week,
+        "hour_dow_grid": hour_dow_grid,
         "daily_trend": daily_trend,
         "returns_voids": returns_voids,
         "discount_totals": discount_totals,

@@ -652,6 +652,8 @@ def synthesize_from_megaplus(megaplus_live):
     cashier_per_store: list = []
     hour_acc: dict = {h: {"hour": h, "lines": 0, "receipts": 0, "revenue": 0.0} for h in range(24)}
     dow_acc: dict = {d: {"dow": d, "lines": 0, "receipts": 0, "revenue": 0.0} for d in range(1, 8)}
+    hour_dow_acc: dict = {(d, h): {"dow": d, "hour": h, "lines": 0, "receipts": 0, "revenue": 0.0}
+                          for d in range(1, 8) for h in range(24)}
     daily_acc: dict = {}
     returns_acc: dict = {}
     disc_lines = 0; disc_receipts = 0; disc_md_total = 0.0; disc_rev_after = 0.0; disc_rev_before = 0.0
@@ -686,6 +688,16 @@ def synthesize_from_megaplus(megaplus_live):
             dow_acc[dw]["lines"] += int(d.get("lines") or 0)
             dow_acc[dw]["receipts"] += int(d.get("receipts") or 0)
             dow_acc[dw]["revenue"] += float(d.get("revenue") or 0)
+        for cell in rollup.get("hour_dow_grid") or []:
+            dw = cell.get("dow"); hr = cell.get("hour")
+            if dw is None or hr is None:
+                continue
+            key = (dw, hr)
+            if key not in hour_dow_acc:
+                continue
+            hour_dow_acc[key]["lines"] += int(cell.get("lines") or 0)
+            hour_dow_acc[key]["receipts"] += int(cell.get("receipts") or 0)
+            hour_dow_acc[key]["revenue"] += float(cell.get("revenue") or 0)
         for d in rollup.get("daily_trend") or []:
             day = d.get("day")
             if not day:
@@ -751,6 +763,16 @@ def synthesize_from_megaplus(megaplus_live):
             "receipts": h["receipts"],
             "revenue_ge": round(h["revenue"], 2),
         })
+    hour_dow_grid = []
+    for (dw, hr), c in hour_dow_acc.items():
+        hour_dow_grid.append({
+            "dow": dw,
+            "dow_label_ka": DOW_LABEL.get(dw, str(dw)),
+            "hour": hr,
+            "lines": c["lines"],
+            "receipts": c["receipts"],
+            "revenue_ge": round(c["revenue"], 2),
+        })
     daily_trend = []
     for k in sorted(daily_acc.keys()):
         d = daily_acc[k]
@@ -804,6 +826,199 @@ def synthesize_from_megaplus(megaplus_live):
         "avg_markdown_pct": round((disc_rev_before - disc_rev_after) / disc_rev_before * 100, 2) if disc_rev_before > 0 else 0.0,
         "share_of_revenue_pct": round(disc_rev_after / bm_rev * 100, 2) if bm_rev > 0 else 0.0,
     }
+
+    # ─── Per-store views (filterable dataset) ─────────────────────────────
+    # Build a parallel "view" per store so the UI store filter swaps the
+    # entire dataset (KPIs / charts / time blocks) instead of leaving most
+    # of the page on the combined totals. PAY_LABEL / DOW_LABEL re-used
+    # from the aggregation block above.
+    per_object_view: dict = {}
+    for store_id, rollup in stores.items():
+        obj_label = store_label_for.get(str(store_id)) or f"store_{store_id}"
+        totals_o = rollup.get("totals") or {}
+        rev_o = float(totals_o.get("revenue") or 0)
+        cost_o = float(totals_o.get("cogs") or 0)
+        profit_o = float(totals_o.get("profit") or 0)
+        rng_o = rollup.get("data_range") or {}
+        bm_o = rollup.get("basket_metrics") or {}
+        # Overall block
+        view_overall = {
+            "row_count": int(bm_o.get("lines") or 0),
+            "revenue_ge": round(rev_o, 2),
+            "cost_ge": round(cost_o, 2),
+            "profit_ge": round(profit_o, 2),
+            "gross_margin_pct": round((profit_o / rev_o * 100) if rev_o > 0 else 0.0, 2),
+            "total_quantity": round(float(bm_o.get("quantity") or 0), 2),
+            "distinct_object_count": 1,
+            "distinct_category_count": len(rollup.get("by_category") or []),
+            "distinct_product_count": len(rollup.get("by_product") or []),
+            "date_range": {
+                "min": (rng_o.get("min_timestamp") or "")[:10] or None,
+                "max": (rng_o.get("max_timestamp") or "")[:10] or None,
+            },
+        }
+        # basket
+        view_basket = {
+            "lines": int(bm_o.get("lines") or 0),
+            "receipts": int(bm_o.get("receipts") or 0),
+            "revenue_ge": round(float(bm_o.get("revenue") or 0), 2),
+            "quantity": round(float(bm_o.get("quantity") or 0), 2),
+            "aov": round(float(bm_o.get("aov") or 0), 2),
+            "items_per_basket": round(float(bm_o.get("items_per_basket") or 0), 2),
+            "qty_per_basket": round(float(bm_o.get("qty_per_basket") or 0), 2),
+        }
+        # payment breakdown
+        view_payment = []
+        for pt in rollup.get("payment_types") or []:
+            r = float(pt.get("revenue") or 0)
+            view_payment.append({
+                "pay_typ": pt.get("pay_typ"),
+                "label_ka": PAY_LABEL.get(pt.get("pay_typ"), f"სხვა #{pt.get('pay_typ')}"),
+                "lines": int(pt.get("lines") or 0),
+                "receipts": int(pt.get("receipts") or 0),
+                "revenue_ge": round(r, 2),
+                "share_pct": round(r / rev_o * 100, 2) if rev_o > 0 else 0.0,
+            })
+        view_payment.sort(key=lambda x: -x["revenue_ge"])
+        # hour / dow
+        view_hour = [
+            {"hour": h.get("hour"), "lines": int(h.get("lines") or 0),
+             "receipts": int(h.get("receipts") or 0), "revenue_ge": round(float(h.get("revenue") or 0), 2)}
+            for h in (rollup.get("hour_of_day") or [])
+        ]
+        view_dow = []
+        for d in rollup.get("day_of_week") or []:
+            dw = d.get("dow")
+            view_dow.append({
+                "dow": dw,
+                "label_ka": DOW_LABEL.get(dw, str(dw)),
+                "lines": int(d.get("lines") or 0),
+                "receipts": int(d.get("receipts") or 0),
+                "revenue_ge": round(float(d.get("revenue") or 0), 2),
+            })
+        # daily / calendar
+        view_daily = []
+        view_cal = []
+        for d in rollup.get("daily_trend") or []:
+            day = d.get("day")
+            if not day:
+                continue
+            r = float(d.get("revenue") or 0)
+            c = float(d.get("cogs") or 0)
+            view_daily.append({
+                "day": day, "lines": int(d.get("lines") or 0), "receipts": int(d.get("receipts") or 0),
+                "revenue_ge": round(r, 2), "cost_ge": round(c, 2), "profit_ge": round(r - c, 2),
+                "gross_margin_pct": round((r - c) / r * 100, 2) if r > 0 else 0.0,
+            })
+            try:
+                wd = _dt.date.fromisoformat(day).weekday()
+            except Exception:
+                wd = None
+            view_cal.append({
+                "day": day, "weekday": wd,
+                "lines": int(d.get("lines") or 0), "receipts": int(d.get("receipts") or 0),
+                "revenue_ge": round(r, 2),
+            })
+        # returns + voids
+        view_returns = []
+        for rv in rollup.get("returns_voids") or []:
+            kind = rv.get("kind")
+            rrev = float(rv.get("revenue") or 0)
+            view_returns.append({
+                "act": rv.get("act"), "kind": kind,
+                "label_ka": "გაუქმებული" if kind == "void" else "დაბრუნებული",
+                "lines": int(rv.get("lines") or 0),
+                "receipts": int(rv.get("receipts") or 0),
+                "revenue_ge": round(rrev, 2),
+                "quantity": round(float(rv.get("quantity") or 0), 2),
+                "share_pct": round(abs(rrev) / rev_o * 100, 4) if rev_o > 0 else 0.0,
+            })
+        # discount
+        dt_o = rollup.get("discount_totals") or {}
+        d_after = float(dt_o.get("revenue_after_markdown") or 0)
+        d_before = float(dt_o.get("revenue_before_markdown") or 0)
+        view_discount = {
+            "discounted_lines": int(dt_o.get("discounted_lines") or 0),
+            "discounted_receipts": int(dt_o.get("discounted_receipts") or 0),
+            "markdown_total_ge": round(float(dt_o.get("markdown_total") or 0), 2),
+            "revenue_after_markdown_ge": round(d_after, 2),
+            "revenue_before_markdown_ge": round(d_before, 2),
+            "avg_markdown_pct": round((d_before - d_after) / d_before * 100, 2) if d_before > 0 else 0.0,
+            "share_of_revenue_pct": round(d_after / rev_o * 100, 2) if rev_o > 0 else 0.0,
+        }
+        # by_month (already a list)
+        view_by_month = []
+        for m in rollup.get("by_month") or []:
+            r = float(m.get("revenue") or 0)
+            c = float(m.get("cogs") or 0)
+            view_by_month.append({
+                "month": m.get("month"),
+                "row_count": int(m.get("row_count") or 0),
+                "total_quantity": round(float(m.get("qty_sold") or 0), 2),
+                "revenue_ge": round(r, 2), "cost_ge": round(c, 2),
+                "profit_ge": round(r - c, 2),
+                "gross_margin_pct": round((r - c) / r * 100, 2) if r > 0 else 0.0,
+            })
+        # by_category (top-25 by revenue) for per-store top categories panel
+        view_by_category = []
+        for c_row in (rollup.get("by_category") or []):
+            r = float(c_row.get("revenue") or 0)
+            c = float(c_row.get("cogs") or 0)
+            view_by_category.append({
+                "category": c_row.get("category"),
+                "row_count": int(c_row.get("row_count") or 0),
+                "total_quantity": round(float(c_row.get("qty_sold") or 0), 2),
+                "revenue_ge": round(r, 2), "cost_ge": round(c, 2),
+                "profit_ge": round(r - c, 2),
+                "gross_margin_pct": round((r - c) / r * 100, 2) if r > 0 else 0.0,
+                "distinct_product_count": int(c_row.get("distinct_product_count") or 0),
+            })
+        view_by_category.sort(key=lambda x: -x["profit_ge"])
+        # by_product (top-50 by revenue) per store
+        view_by_product = []
+        for p in (rollup.get("by_product") or [])[:200]:
+            r = float(p.get("revenue") or 0)
+            c = float(p.get("cogs") or 0)
+            view_by_product.append({
+                "product_name": p.get("product_name"),
+                "product_code": p.get("product_code"),
+                "barcode": p.get("barcode"),
+                "category": p.get("category"),
+                "revenue_ge": round(r, 2), "cost_ge": round(c, 2),
+                "profit_ge": round(r - c, 2),
+                "gross_margin_pct": round((r - c) / r * 100, 2) if r > 0 else 0.0,
+                "total_quantity": round(float(p.get("qty_sold") or 0), 2),
+            })
+        # Hour × DoW grid for this store (pulled from per-store rollup).
+        view_hour_dow = []
+        for cell in rollup.get("hour_dow_grid") or []:
+            dw = cell.get("dow"); hr = cell.get("hour")
+            if dw is None or hr is None:
+                continue
+            view_hour_dow.append({
+                "dow": dw,
+                "dow_label_ka": DOW_LABEL.get(dw, str(dw)),
+                "hour": hr,
+                "lines": int(cell.get("lines") or 0),
+                "receipts": int(cell.get("receipts") or 0),
+                "revenue_ge": round(float(cell.get("revenue") or 0), 2),
+            })
+        per_object_view[obj_label] = {
+            "overall": view_overall,
+            "basket_metrics": view_basket,
+            "payment_breakdown": view_payment,
+            "hour_breakdown": view_hour,
+            "dow_breakdown": view_dow,
+            "hour_dow_grid": view_hour_dow,
+            "daily_trend": view_daily,
+            "calendar_heatmap": view_cal,
+            "returns_voids": view_returns,
+            "discount_totals": view_discount,
+            "by_month": view_by_month,
+            "top_categories_by_profit": view_by_category[:25],
+            "top_products_by_revenue": sorted(view_by_product, key=lambda x: -x["revenue_ge"])[:50],
+            "top_products_by_profit": sorted(view_by_product, key=lambda x: -x["profit_ge"])[:50],
+        }
 
     # ─── Pareto / HHI on by_product (revenue concentration) ────────────────
     # Compute 80%/90%/95% thresholds against the FULL product list, then
@@ -1136,6 +1351,8 @@ def synthesize_from_megaplus(megaplus_live):
         "forecast_next30": forecast_summary,
         "slow_movers": slow_movers,
         "top_recent_movers": top_recent_movers,
+        "hour_dow_grid": hour_dow_grid,
+        "per_object_view": per_object_view,
     }
 
 

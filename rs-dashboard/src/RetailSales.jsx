@@ -92,6 +92,82 @@ function renderDateRange(range) {
   return `${range?.min || '—'} → ${range?.max || '—'}`;
 }
 
+// ─── Hour × Day-of-Week heatmap (7 rows × 24 cols = 168 cells) ──────────────
+function HourDowHeatmap({ grid }) {
+  const cellW = 22, cellH = 22, gap = 2;
+  const dayLabels = { 1: 'ორშ', 2: 'სამ', 3: 'ოთხ', 4: 'ხუთ', 5: 'პარ', 6: 'შაბ', 7: 'კვი' };
+  if (!grid || grid.length === 0) return <div className="kpi-sub">მონაცემი არ არის</div>;
+  // Build (dow, hour) → revenue map
+  const map = new Map();
+  let maxRev = 0;
+  grid.forEach((c) => {
+    map.set(`${c.dow}-${c.hour}`, c);
+    if (toNum(c.revenue_ge) > maxRev) maxRev = toNum(c.revenue_ge);
+  });
+  const intensity = (rev) => {
+    if (!maxRev || !rev) return '#1e293b';
+    const r = rev / maxRev;
+    if (r > 0.75) return '#ef4444';
+    if (r > 0.50) return '#f59e0b';
+    if (r > 0.25) return '#eab308';
+    if (r > 0.05) return '#84cc16';
+    return '#1e293b';
+  };
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
+        {/* Day labels column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap, marginRight: 6 }}>
+          <div style={{ height: cellH, fontSize: 10, color: 'transparent' }}>·</div>
+          {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+            <div key={d} style={{ height: cellH, fontSize: 11, color: '#94a3b8', lineHeight: `${cellH}px` }}>
+              {dayLabels[d]}
+            </div>
+          ))}
+        </div>
+        {/* Grid */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap }}>
+          {/* Hour labels row */}
+          <div style={{ display: 'flex', gap }}>
+            {Array.from({ length: 24 }, (_, h) => (
+              <div key={h} style={{ width: cellW, height: cellH, fontSize: 10, color: '#94a3b8', textAlign: 'center', lineHeight: `${cellH}px` }}>
+                {h % 3 === 0 ? `${String(h).padStart(2, '0')}` : ''}
+              </div>
+            ))}
+          </div>
+          {/* 7 rows */}
+          {[1, 2, 3, 4, 5, 6, 7].map((dw) => (
+            <div key={dw} style={{ display: 'flex', gap }}>
+              {Array.from({ length: 24 }, (_, hr) => {
+                const cell = map.get(`${dw}-${hr}`);
+                const rev = toNum(cell?.revenue_ge);
+                return (
+                  <div
+                    key={hr}
+                    title={cell ? `${dayLabels[dw]} ${String(hr).padStart(2, '0')}:00 — ${fmtMoney(rev)} · ${fmtInt(cell.receipts)} ჩეკი` : ''}
+                    style={{
+                      width: cellW, height: cellH, borderRadius: 2,
+                      background: intensity(rev),
+                      cursor: 'help',
+                    }}
+                  />
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: 10, color: '#94a3b8' }}>
+        <span>ცარიელი</span>
+        {['#1e293b', '#84cc16', '#eab308', '#f59e0b', '#ef4444'].map((c) => (
+          <span key={c} style={{ width: 12, height: 12, background: c, borderRadius: 2 }} />
+        ))}
+        <span>დაკავებული</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Calendar heatmap (mirror Waybills) ─────────────────────────────────────
 function CalendarHeatmap({ days }) {
   const cellSize = 12, cellGap = 2;
@@ -166,6 +242,7 @@ export default function RetailSales({ retailSales, responseMeta }) {
   const summary = retailSales && typeof retailSales === 'object' ? retailSales : null;
   const [topProductsLimit, setTopProductsLimit] = useState(20);
   const [storeFilter, setStoreFilter] = useState('all');
+  const [productSearch, setProductSearch] = useState('');
 
   if (!summary) {
     return (
@@ -179,32 +256,54 @@ export default function RetailSales({ retailSales, responseMeta }) {
     );
   }
 
-  const overall = summary.overall || {};
+  // Per-store view: when storeFilter !== 'all' we route every chart-/KPI-
+  // bound source through per_object_view[store] so the page reflects ONLY
+  // that store. When 'all' we use the combined summary as before.
+  const perObjectViewMap = (summary.per_object_view && typeof summary.per_object_view === 'object') ? summary.per_object_view : {};
+  const filteredView = storeFilter !== 'all' && perObjectViewMap[storeFilter];
+  const view = filteredView || summary;
+
+  const overall = view.overall || summary.overall || {};
   const periodMeta = summary.period_meta && typeof summary.period_meta === 'object' ? summary.period_meta : {};
   const dataQuality = summary.data_quality && typeof summary.data_quality === 'object' ? summary.data_quality : null;
   const dqNull = dataQuality?.null_timestamp || null;
   const dqLegacy = dataQuality?.legacy_pre_2023 || null;
   const dqPerObject = asArray(dataQuality?.per_object);
   const byObject = asArray(summary.by_object);
-  const byMonth = asArray(summary.by_month);
-  const topCategoriesByProfit = asArray(summary.top_categories_by_profit).slice(0, 12);
-  const topProductsByRevenue = asArray(summary.top_products_by_revenue).slice(0, topProductsLimit);
-  const topProductsByProfit = asArray(summary.top_products_by_profit).slice(0, topProductsLimit);
+  const byMonth = asArray(view.by_month || summary.by_month);
+  const topCategoriesByProfit = asArray(view.top_categories_by_profit || summary.top_categories_by_profit).slice(0, 12);
+  const topProductsByRevenueAll = asArray(view.top_products_by_revenue || summary.top_products_by_revenue);
+  const topProductsByProfitAll = asArray(view.top_products_by_profit || summary.top_products_by_profit);
   const duplicatePolicy = summary.duplicate_policy && typeof summary.duplicate_policy === 'object' ? summary.duplicate_policy : {};
   const suspectedFiles = asArray(duplicatePolicy.suspected_files);
   const categoriesShown = asArray(summary.by_category).length;
   const productsShown = asArray(summary.by_product).length;
 
-  // Etap 1 analytics blocks
-  const basket = summary.basket_metrics || {};
-  const paymentBreakdown = asArray(summary.payment_breakdown);
-  const dowBreakdown = asArray(summary.dow_breakdown);
-  const hourBreakdown = asArray(summary.hour_breakdown);
-  const dailyTrend = asArray(summary.daily_trend);
-  const calendarHeatmap = asArray(summary.calendar_heatmap);
-  const returnsVoids = asArray(summary.returns_voids);
-  const discount = summary.discount_totals || {};
+  // Product search — case-insensitive substring match on name / code / barcode.
+  const matchesSearch = (p) => {
+    if (!productSearch) return true;
+    const q = productSearch.toLowerCase().trim();
+    if (!q) return true;
+    return ((p.product_name || '').toLowerCase().includes(q)
+         || (p.product_code || '').toLowerCase().includes(q)
+         || (p.barcode || '').toLowerCase().includes(q));
+  };
+  const topProductsByRevenue = topProductsByRevenueAll.filter(matchesSearch).slice(0, topProductsLimit);
+  const topProductsByProfit = topProductsByProfitAll.filter(matchesSearch).slice(0, topProductsLimit);
+
+  // Per-store-filterable analytics blocks
+  const basket = view.basket_metrics || summary.basket_metrics || {};
+  const paymentBreakdown = asArray(view.payment_breakdown || summary.payment_breakdown);
+  const dowBreakdown = asArray(view.dow_breakdown || summary.dow_breakdown);
+  const hourBreakdown = asArray(view.hour_breakdown || summary.hour_breakdown);
+  const hourDowGrid = asArray(view.hour_dow_grid || summary.hour_dow_grid);
+  const dailyTrend = asArray(view.daily_trend || summary.daily_trend);
+  const calendarHeatmap = asArray(view.calendar_heatmap || summary.calendar_heatmap);
+  const returnsVoids = asArray(view.returns_voids || summary.returns_voids);
+  const discount = view.discount_totals || summary.discount_totals || {};
+  // Cross-cutting blocks (not per-store-filterable; show globally always).
   const concentration = summary.concentration || {};
+  const byCategoryByMonth = asArray(summary.by_category_by_month);
   const paretoFull = asArray(concentration.pareto_top500);
   // Sample for the line chart: 0-50 every step, then 50-500 every 10th rank.
   const paretoChart = paretoFull.filter((p, i) => i < 50 || i % 10 === 0);
@@ -309,6 +408,16 @@ export default function RetailSales({ retailSales, responseMeta }) {
           <option value="all">ყველა</option>
           {byObject.map((o) => (<option key={o.object} value={o.object}>{o.object}</option>))}
         </select>
+        {filteredView && (
+          <span style={{
+            padding: '3px 10px', borderRadius: 4, fontSize: 12,
+            background: STORE_COLOR[storeFilter] ? `${STORE_COLOR[storeFilter]}30` : '#334155',
+            color: STORE_COLOR[storeFilter] || '#cbd5e1',
+            border: `1px solid ${STORE_COLOR[storeFilter] || '#475569'}`,
+          }}>
+            ფილტრი აქტიურია — KPI / გრაფიკი / TOP პროდუქტი მხოლოდ <strong>{storeFilter}</strong>
+          </span>
+        )}
       </div>
 
       {periodCaveat && (
@@ -616,6 +725,59 @@ export default function RetailSales({ retailSales, responseMeta }) {
           </div>
         )}
       </div>
+
+      {/* ─── Hour × Day-of-week heatmap (combined 7×24 grid) ─── */}
+      {hourDowGrid.length > 0 && (
+        <div className="chart-card">
+          <h3>საათი × კვირის-დღე რუკა<InfoTip text="168 უჯრედი (7 დღე × 24 საათი). წითელი = ყველაზე დაკავებული, მუქი = ცარიელი. სამუშაო გრაფიკის გადაწყობისთვის გამოგადგება — ცხადად ჩანს, რომელ კომბინაციაში ხდება ყველაზე მეტი გაყიდვა." /></h3>
+          <p className="chart-desc">ცხადყოფს, კვირის რომელ დღეს და რომელ საათში მაქსიმუმი გაყიდვა. გადაატანე მაუსი უჯრაზე — დეტალი.</p>
+          <HourDowHeatmap grid={hourDowGrid} />
+        </div>
+      )}
+
+      {/* ─── Category mix over time (top 6 categories monthly trend) ─── */}
+      {byCategoryByMonth.length > 0 && (() => {
+        // Build monthly buckets keyed by (month, category) → revenue. Pick
+        // top 6 categories by total revenue and pivot to a chart-friendly shape.
+        const catTotals = new Map();
+        byCategoryByMonth.forEach((cm) => {
+          const k = cm.category || '(უცნობი)';
+          catTotals.set(k, (catTotals.get(k) || 0) + toNum(cm.revenue_ge));
+        });
+        const topCats = Array.from(catTotals.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k]) => k);
+        const months = Array.from(new Set(byCategoryByMonth.map((c) => c.month))).filter(Boolean).sort();
+        const recentMonths = months.slice(-24);
+        const pivot = recentMonths.map((m) => {
+          const row = { month: m };
+          topCats.forEach((c) => { row[c] = 0; });
+          byCategoryByMonth.forEach((cm) => {
+            if (cm.month === m && topCats.includes(cm.category)) {
+              row[cm.category] = (row[cm.category] || 0) + toNum(cm.revenue_ge);
+            }
+          });
+          return row;
+        });
+        return (
+          <div className="chart-card">
+            <h3>კატეგორიები დროში — ბოლო 24 თვე<InfoTip text="ტოპ 6 კატეგორიის თვიური შემოსავალი. ცხადყოფს — რომელი კატეგორია იწევს, რომელი ეცემა. იგივე კატეგორია სხვადასხვა ფერით." /></h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={pivot}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                <XAxis dataKey="month" stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} tickFormatter={fmtInt} />
+                <Tooltip
+                  contentStyle={{ background: '#0f172a', border: '1px solid #334155' }}
+                  formatter={(v) => fmtMoney(v)}
+                />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                {topCats.map((c, i) => (
+                  <Line key={c} type="monotone" dataKey={c} stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={false} />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      })()}
 
       {/* ─── Calendar heatmap ─── */}
       {calendarHeatmap.length > 0 && (
@@ -1159,8 +1321,8 @@ export default function RetailSales({ retailSales, responseMeta }) {
         </div>
       </div>
 
-      {/* ─── TOP products selector ─── */}
-      <div className="controls" style={{ marginTop: 12, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+      {/* ─── TOP products selector + search ─── */}
+      <div className="controls" style={{ marginTop: 12, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 13, color: '#94a3b8' }}>TOP პროდუქტების რაოდენობა:</span>
         <select
           value={topProductsLimit}
@@ -1171,6 +1333,27 @@ export default function RetailSales({ retailSales, responseMeta }) {
           <option value={30}>30</option>
           <option value={50}>50</option>
         </select>
+        <span style={{ fontSize: 13, color: '#94a3b8', marginLeft: 12 }}>ძიება:</span>
+        <input
+          type="text"
+          value={productSearch}
+          onChange={(e) => setProductSearch(e.target.value)}
+          placeholder="პროდუქტის სახელი / კოდი / ბარკოდი"
+          style={{ background: '#1e293b', color: '#e2e8f0', border: '1px solid #334155', borderRadius: 6, padding: '4px 10px', fontSize: 13, minWidth: 280 }}
+        />
+        {productSearch && (
+          <button
+            onClick={() => setProductSearch('')}
+            style={{ background: '#7f1d1d', color: '#fca5a5', border: '1px solid #b91c1c', borderRadius: 4, padding: '3px 8px', fontSize: 11, cursor: 'pointer' }}
+          >
+            გაწმენდა
+          </button>
+        )}
+        {productSearch && (
+          <span className="kpi-sub" style={{ marginLeft: 6 }}>
+            ნაპოვნი: {fmtInt(topProductsByRevenue.length)} (რევენიუთი) / {fmtInt(topProductsByProfit.length)} (მოგებით)
+          </span>
+        )}
       </div>
 
       <div className="retail-sales-grid-2">
