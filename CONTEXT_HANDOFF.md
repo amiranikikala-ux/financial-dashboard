@@ -1,12 +1,128 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-09 (ღამე) — **Retail Sales page full analytics overhaul (Sprint 1 done — 6 commits).** ORDERS table exposes 40 columns; the page was using ~5. Lifted everything: basket / payment / cashier / register / hour / dow / hour×dow heatmap / Pareto / HHI / discounts / returns / MoM-YoY / spike alerts / forecast / slow movers / top recent movers — all with per-store filter that genuinely scopes the entire dataset. Sprint 2 backlog tracked in `HANDOFF_ARCHIVE/PREVIEWS/RETAIL_SALES_REMAINING_2026-05-09.md` (cashier shifts / period filter / discount lift / returns-by-product / VAT analysis).
+> **განახლდა**: 2026-05-10 (დილის ნახევარი) — **Retail Sales Sprint 2 done + period filter deepened (3 commits).** Sprint 2 backlog (cashier shifts / VAT / returns-by-product / discount lift / period filter) closed in one big commit; the period filter was then upgraded twice on owner feedback — first to support specific months/years (not just "last N days") with a by_product_by_month + receipts-in-by_month backend addition, then to scope top categories / top products / shifts / VAT into the picked period. Banner text rewritten to be precise about what filters and what stays lifetime.
 >
-> Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`. Sprint 2 plan → `HANDOFF_ARCHIVE/PREVIEWS/RETAIL_SALES_REMAINING_2026-05-09.md`.
+> Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`. Previous sprint plan → `HANDOFF_ARCHIVE/PREVIEWS/RETAIL_SALES_REMAINING_2026-05-09.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-09 ღამე) — Retail Sales page full analytics overhaul
+## 0. ბოლო session-ის შედეგი (2026-05-10 დილა) — Retail Sales Sprint 2 + period filter deepening
+
+### Headline (დილა — 2026-05-10)
+
+**3 commits on origin/main:**
+| commit | რა მოიცავს |
+|---|---|
+| `49f7a1d` | feat(retail-sales): Sprint 2 — shifts / VAT / returns-by-product / discount-lift / period filter (initial) |
+| `86a2df7` | feat(retail-sales): period filter — pick a specific month or year |
+| `d1c566d` | feat(retail-sales): period filter now scopes top categories / products / shifts / VAT |
+
+### Sprint 2 — five backlog items shipped together
+
+**Backend (megaplus_backup.py + retail_sales.py + api_contracts.py):**
+
+1. **Cashier shifts (ORD_SHIFT)** — top 200 most-recent sessions per store with start/end timestamp, user_id, tab_id, line/receipt/revenue/AOV. Critical refinement: shifts >30h split into a separate `shift_anomalies` block (50 of 3,141 — biggest is one shift_id whose lines spanned 2009→2023 due to a legacy seed row). Headline avg/median/best/worst computed on NORMAL shifts only so the 14-year-shift outlier doesn't poison the average. Combined view aggregates from each store's pre-computed summary (not from union of top-200) so stats are over ALL shifts.
+2. **VAT (ORD_VAT)** — total / per-month / per-category. 727,219 ₾ collected lifetime, 14.85% effective rate. Surfaces 192,923 VAT-exempt lines. Per-category table shows a red chip when effective_rate >16% (data-quality concern; e.g. ყავა ნალექიანი has 92.7% which suggests POS encoding bug for that group).
+3. **Returns by product / cashier / month** — ORD_ACT=2 grouped per-SKU (top 30), per-user_id, per-month. Existing returns_voids aggregate kept; now line-level attribution.
+4. **Discount lift** — per-category markdown_total + revenue_after + revenue_before + cost. Reveals the discounted SKUs are sold at NET LOSS — actual profit -46,529 ₾, hypothetical (no markdown) +100,369 ₾. ⚠️ owner-actionable finding. UI shows 4 KPI cards + per-category breakdown table.
+5. **Period filter** — see next two sections for evolution.
+
+**Frontend (RetailSales.jsx):**
+- New sections: ცვლების ჭრილი (with anomaly amber-warning table), დაბრუნებული პროდუქტები, ფასდაკლების შედეგი (Lift), დღგ ანალიზი (with monthly trend line + per-category table).
+- 8 new TIPS entries; reuses existing CollapsibleSection, STORE_COLOR, recharts.
+- Section titles add "— <period label>" suffix when period filter is active.
+
+### Period filter — three iterations
+
+**v1 (in commit 49f7a1d):** Relative-only presets — last 7d / 30d / 90d / MTD / YTD / custom range. KPI tiles + monthly + daily + calendar period-aware. Top products / hour / dow stayed lifetime.
+
+**v2 (commit 86a2df7) — owner pushback:** "მინდა აპრილის თვეს გადავხედო და არა მაისის" — relative presets don't cover specific months. Dropdown reorganized with `<optgroup>` sections:
+- ფარდობითი (5 relative presets)
+- კონკრეტული თვე (37 explicit months back to 2023)
+- კონკრეტული წელი (5 years 2022-2026)
+- მორგებული (custom date range)
+
+Backend fix: `by_month` query gains `COUNT(DISTINCT ORD_N) AS receipts` so AOV/items-per-basket compute for older months too. periodKpis prefers daily_trend (richer cost data) but falls back to by_month when picked period extends earlier than the 365-day daily window. Coverage check uses `periodRange.from >= dailyEarliest`, so picking 2025 full year now uses by_month (12 months of 2,199,166 ₾) instead of silently truncating to 7-month partial daily coverage.
+
+**v3 (commit d1c566d) — extend period scoping deeper:** TOP კატეგორია, TOP პროდუქტი, ცვლები, დღგ now actually swap data when period is active.
+- New backend SQL `by_product_by_month`: top 50 products per (store, month) using `ROW_NUMBER() OVER (PARTITION BY year, month ORDER BY revenue DESC)`. ~1,300 rows for დვაბზუ, 1,850 for ოზურგეთი. ~5MB data.json growth (130 → 135 MB).
+- Threaded through synthesize_from_megaplus combined view + per_object_view, with object_breakdown so multi-store rows attribute revenue per store.
+- Frontend useMemo hooks: `topCategoriesByProfit`, `topProductsByRevenueAll`, `topProductsByProfitAll`, `shiftsFiltered`, `vatTotalsPeriod`, `returnsTotalsPeriod` recompute when periodRange changes; fall back to lifetime when period='all'.
+- Shifts panel live-recomputes summary (avg/median/best/worst/duration) from shiftsFiltered with anomalies still excluded from averages.
+- VAT panel KPI labels shift to "პერიოდის შემოსავალი" + "დღგ-ის გარეშე ხაზი (ლიფტაიმი)" so it's clear what's period-scoped vs lifetime.
+- Banner copy rewritten — lists exactly what filters and what stays lifetime.
+
+### Verification (combined view)
+
+| period | revenue | profit | KPI source |
+|---|---|---|---|
+| ყველა დრო (lifetime) | 4,898,512 ₾ | — | overall |
+| ბოლო 30 დღე | 196,612 ₾ | 31,095 ₾ (15.82%) | daily |
+| ბოლო 7 დღე | 47,076 ₾ | 7,705 ₾ (16.37%) | daily |
+| აპრილი 2026 | 185,900 ₾ | 29,480 ₾ (15.86%) | daily |
+| ივნისი 2024 | 137,154 ₾ | 12,988 ₾ (9.47%) | by_month (older than 365-day window) |
+| 2025 წელი | 2,199,166 ₾ | 298,722 ₾ (13.58%) | by_month (12 months, fallback) |
+
+**აპრილი 2026 deeper checks:**
+- TOP კატეგორია: სიგარეტი 75,329 ₾ rev / 7,893 ₾ profit / 10.48% margin (April only)
+- TOP პროდუქტი: ვინსტონი კომპაქტ ბლუ 6,755 ₾ rev / 514 ₾ profit
+- ცვლები: 57 sessions, avg 3,227 ₾ (vs lifetime avg 1,517 ₾ — peak month)
+- დღგ: 27,357 ₾ collected, 14.26% effective rate
+- Lifetime view unchanged — top product remains "შეფუთული ქვის პური" 141,777 ₾ when period='all'.
+
+### Data quality findings surfaced this session
+
+1. **Shift duration outliers (50 of 3,141)**: ORD_SHIFT can group lines spanning multiple weeks if cashier never closed shift; one anomaly spans 2009→2023 from a legacy seed row. Headline stats now exclude these; ⚠️ amber UI warning lists worst 10.
+2. **VAT effective rate >16% in some categories**: ყავა ნალექიანი shows 92.7% effective rate (21,473 ₾ VAT on 23,165 ₾ revenue). Likely POS encoding issue for that P_GROUP. Surfaced via red chip in per-category table; not silently normalized.
+3. **Discount lift NET NEGATIVE**: Across all discounted SKUs combined, actual profit is -46,529 ₾ vs hypothetical +100,369 ₾ without markdown. ბრენდი category shows 56% markdown, ლუდი ქართული 41%. Owner-actionable finding for promo policy review.
+
+### Carry-overs from previous sessions (still open)
+
+- 🟡 **Sprint 3 lower-priority items** (deferred from Sprint 2 backlog list):
+  - Daily-level spike alerts (currently only monthly z-score)
+  - ▲▼ delta on every KPI card (not just MoM panel)
+  - Cross-store same-product comparison (same SKU price/margin in dvabzu vs ozurgeti)
+  - Mobile responsive polish
+  - PDF / weekly email report
+  - Drill-down — click on a category → opens that category's product list
+- 🟡 **Period filter — items that still stay lifetime** (would need backend per-month versions; punted): saათობრივი / დღეების / hour×dow heatmap, Pareto / HHI / concentration, ფასდაკლების კატეგორიები, დაბრუნებული პროდუქტების top სია, დღგ-ის გარეშე ხაზი (per-month exempt-line counts).
+- 🔴 **Lela-ს Foodmart cashback breakdown** — formula 90% incomplete, blocked on her email reply.
+- 🟡 **Future Gmail filters** — IMAP can't auto-filter; needs Gmail API + OAuth or cron labelling script.
+- 🟡 **Owner manual cash payments** — continues entering via UI as needed.
+- 🟡 **Pre-existing test failures unchanged** (test_expense_categories_incremental + test_foodmart_cashback_incremental).
+- 🟡 **Phase 3 — VAT input-side reconciliation** (Master Plan §18) — separate session.
+- 🟡 **Phase 4 — rs.ge SOAP automation** — blocked on rs.ge UI permission grant.
+- ⏸ **Mini PC** — owner cloud refused, deferred until hardware bought.
+
+### Verification commands (next session)
+
+```powershell
+# Period filter — pick a month and verify backend supplies by_product_by_month.
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
+import urllib.request, json
+api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=retail_sales', timeout=30).read())
+rs = api['retail_sales']
+print('by_product_by_month:', len(rs.get('by_product_by_month') or []))
+print('shift_anomalies:', len(rs.get('shift_anomalies') or []))
+print('shift_summary normal/anom:', rs['shift_summary']['normal_shift_count'], '/', rs['shift_summary']['anomalous_shift_count'])
+# Per-store also has by_product_by_month
+for store, view in (rs.get('per_object_view') or {}).items():
+    print(f'  {store}: by_product_by_month={len(view.get(\"by_product_by_month\") or [])}')
+"
+
+# By_month receipts populated (used for AOV/items-per-basket on older months).
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
+import urllib.request, json
+api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=retail_sales', timeout=30).read())
+for m in api['retail_sales']['by_month'][:3]:
+    print(m.get('month'), 'rev=', m.get('revenue_ge'), 'receipts=', m.get('receipts'))
+# expect: receipts populated (non-zero)
+"
+```
+
+---
+
+## 0a. წინა session-ის შედეგი (2026-05-09 ღამე) — Retail Sales page full analytics overhaul
 
 ### Headline (ღამე — 2026-05-09)
 
