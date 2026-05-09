@@ -1053,6 +1053,7 @@ def _project_retail_sales_summary(bundle):
         "returns_by_month",
         "discount_by_category",
         "discount_lift_summary",
+        "by_product_by_month",
     ):
         val = bundle.get(key)
         if val is not None:

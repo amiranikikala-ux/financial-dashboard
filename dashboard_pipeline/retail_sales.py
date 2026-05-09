@@ -458,6 +458,53 @@ def synthesize_from_megaplus(megaplus_live):
             row[f] = round(row[f], 2)
         by_category_by_month.append(row)
 
+    # ─── by_product_by_month — combine per-store top-50-per-month rows ─────
+    # Aggregate same product+month across stores so the UI can compute
+    # period-scoped top products by summing rows in a date range.
+    pbm_acc: dict = {}
+    for store_id, rollup in stores.items():
+        obj_label = store_label_for.get(str(store_id)) or f"store_{store_id}"
+        for r in rollup.get("by_product_by_month") or []:
+            month = r.get("month")
+            barcode = (r.get("barcode") or "").strip()
+            code = (r.get("product_code") or "").strip()
+            pkey = barcode or code or f"pid_{r.get('product_id')}"
+            if not month or not pkey:
+                continue
+            key = (month, pkey)
+            cur = pbm_acc.setdefault(key, {
+                "month": month, "product_key": pkey,
+                "product_code": code, "barcode": barcode,
+                "product_name": r.get("product_name") or "",
+                "category": r.get("category") or "",
+                "row_count": 0, "receipts": 0,
+                "qty_sold": 0.0, "revenue_ge": 0.0,
+                "cost_ge": 0.0, "profit_ge": 0.0,
+                "by_object": {},
+            })
+            cur["row_count"] += int(r.get("row_count") or 0)
+            cur["receipts"] += int(r.get("receipts") or 0)
+            cur["qty_sold"] += float(r.get("qty_sold") or 0)
+            cur["revenue_ge"] += float(r.get("revenue") or 0)
+            cur["cost_ge"] += float(r.get("cogs") or 0)
+            cur["profit_ge"] += float(r.get("profit") or 0)
+            obj_entry = cur["by_object"].setdefault(obj_label, {"object": obj_label, "revenue_ge": 0.0, "profit_ge": 0.0})
+            obj_entry["revenue_ge"] += float(r.get("revenue") or 0)
+            obj_entry["profit_ge"] += float(r.get("profit") or 0)
+    by_product_by_month = []
+    for (month, pkey) in sorted(pbm_acc.keys()):
+        row = pbm_acc[(month, pkey)]
+        for f in ("qty_sold", "revenue_ge", "cost_ge", "profit_ge"):
+            row[f] = round(row[f], 2)
+        rev = row["revenue_ge"]
+        row["gross_margin_pct"] = round((row["profit_ge"] / rev * 100) if rev > 0 else 0.0, 2)
+        for o in row["by_object"].values():
+            o["revenue_ge"] = round(o["revenue_ge"], 2)
+            o["profit_ge"] = round(o["profit_ge"], 2)
+        row["object_breakdown"] = sorted(row["by_object"].values(), key=lambda x: -x["revenue_ge"])
+        del row["by_object"]
+        by_product_by_month.append(row)
+
     # ─── by_product_recent (365-day window — for grower/decliner analysis) ─
     # Track per-store revenue alongside the aggregate so the UI can show
     # which store drives each product's recent sales (დვაბზუ vs ოზურგეთი).
@@ -1410,8 +1457,28 @@ def synthesize_from_megaplus(megaplus_live):
             "categories_with_discount": len(view_discount_by_category),
         }
 
+        # Period-aware top products for this store (raw rows; UI sums by range)
+        view_by_product_by_month = []
+        for r in rollup.get("by_product_by_month") or []:
+            rev = float(r.get("revenue") or 0)
+            cogs = float(r.get("cogs") or 0)
+            view_by_product_by_month.append({
+                "month": r.get("month"),
+                "product_code": r.get("product_code"),
+                "barcode": r.get("barcode"),
+                "product_name": r.get("product_name"),
+                "category": r.get("category"),
+                "row_count": int(r.get("row_count") or 0),
+                "receipts": int(r.get("receipts") or 0),
+                "qty_sold": round(float(r.get("qty_sold") or 0), 2),
+                "revenue_ge": round(rev, 2),
+                "cost_ge": round(cogs, 2),
+                "profit_ge": round(rev - cogs, 2),
+                "rank_in_month": int(r.get("rank_in_month") or 0),
+            })
         per_object_view[obj_label] = {
             "overall": view_overall,
+            "by_product_by_month": view_by_product_by_month,
             "basket_metrics": view_basket,
             "payment_breakdown": view_payment,
             "hour_breakdown": view_hour,
@@ -1747,6 +1814,7 @@ def synthesize_from_megaplus(megaplus_live):
         "by_month": by_month,
         "by_category_by_month": by_category_by_month,
         "by_object_by_month": by_object_by_month,
+        "by_product_by_month": by_product_by_month,
         "top_objects_by_profit": top_objects_by_profit,
         "top_categories_by_profit": top_categories_by_profit,
         "top_products_by_revenue": top_products_by_revenue,

@@ -558,6 +558,67 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 "margin_pct": (profit / rev_f * 100) if rev_f else None,
             })
 
+        # ─── By-product × month — top 50 per (store, month) ────────────────
+        # Lets the UI compute period-scoped top products for any picked
+        # month/year by summing rows within the requested date range.
+        # Capped at top-50 per month to keep payload bounded (~37 months ×
+        # 50 × 2 stores ≈ 3,700 rows per store rollup).
+        cur.execute(
+            """
+            WITH ranked AS (
+                SELECT
+                    CAST(YEAR(o.ORD_TIMESTAMP) AS varchar(4)) + '-'
+                        + RIGHT('0' + CAST(MONTH(o.ORD_TIMESTAMP) AS varchar(2)), 2) AS month,
+                    p.P_ID                                       AS product_id,
+                    p.P_CODE                                     AS product_code,
+                    p.P_BARCODE                                  AS barcode,
+                    p.P_NAME                                     AS product_name,
+                    p.P_GROUP                                    AS category,
+                    SUM(o.ORD_quant)                             AS qty_sold,
+                    SUM(o.ORD_jamjam)                            AS revenue,
+                    SUM(o.ORD_quant * pec.effective_unit_cost)   AS cogs_imputed,
+                    COUNT(*)                                     AS row_count,
+                    COUNT(DISTINCT o.ORD_N)                      AS receipts,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP)
+                        ORDER BY SUM(o.ORD_jamjam) DESC
+                    ) AS rk
+                FROM ORDERS o
+                JOIN PRODUCTS p ON o.ORD_P_ID = p.P_ID
+                LEFT JOIN #pec pec ON p.P_ID = pec.p_id
+                WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP IS NOT NULL
+                GROUP BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP),
+                         p.P_ID, p.P_CODE, p.P_BARCODE, p.P_NAME, p.P_GROUP
+            )
+            SELECT month, product_id, product_code, barcode, product_name, category,
+                   qty_sold, revenue, cogs_imputed, row_count, receipts, rk
+            FROM ranked
+            WHERE rk <= 50
+            ORDER BY month, rk
+            """
+        )
+        by_product_by_month = []
+        for row in cur.fetchall():
+            (mo, pid, code, barcode, name, category,
+             qty, rev, cogs, row_count, receipts, rk) = row
+            rev_f = float(rev or 0)
+            cogs_f = float(cogs or 0)
+            by_product_by_month.append({
+                "month": mo,
+                "product_id": int(pid),
+                "product_code": code or "",
+                "barcode": barcode or "",
+                "product_name": name or "",
+                "category": category or "",
+                "qty_sold": float(qty or 0),
+                "revenue": rev_f,
+                "cogs": cogs_f,
+                "profit": rev_f - cogs_f,
+                "row_count": int(row_count or 0),
+                "receipts": int(receipts or 0),
+                "rank_in_month": int(rk),
+            })
+
         # ─── Data-quality flags (no silent gaps) ────────────────────────────
         # Surface rows that would otherwise drop out of by_month: NULL
         # timestamps (no month bucket) and legacy pre-2023 rows (likely test
@@ -1234,6 +1295,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
         "by_month": by_month,
         "by_category": by_category,
         "by_category_by_month": by_category_by_month,
+        "by_product_by_month": by_product_by_month,
         "category_anomalies": anomaly_bundle,
         "waybill_data": waybill_data,
     }

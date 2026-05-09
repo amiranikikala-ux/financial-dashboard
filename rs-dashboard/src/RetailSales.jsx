@@ -282,9 +282,11 @@ export default function RetailSales({ retailSales, responseMeta }) {
   const dqPerObject = asArray(dataQuality?.per_object);
   const byObject = asArray(summary.by_object);
   const byMonth = asArray(view.by_month || summary.by_month);
-  const topCategoriesByProfit = asArray(view.top_categories_by_profit || summary.top_categories_by_profit).slice(0, 12);
-  const topProductsByRevenueAll = asArray(view.top_products_by_revenue || summary.top_products_by_revenue);
-  const topProductsByProfitAll = asArray(view.top_products_by_profit || summary.top_products_by_profit);
+  const topCategoriesByProfitLifetime = asArray(view.top_categories_by_profit || summary.top_categories_by_profit).slice(0, 12);
+  const topProductsByRevenueAllLifetime = asArray(view.top_products_by_revenue || summary.top_products_by_revenue);
+  const topProductsByProfitAllLifetime = asArray(view.top_products_by_profit || summary.top_products_by_profit);
+  const byCategoryByMonth = asArray(view.by_category_by_month || summary.by_category_by_month);
+  const byProductByMonth = asArray(view.by_product_by_month || summary.by_product_by_month);
   const duplicatePolicy = summary.duplicate_policy && typeof summary.duplicate_policy === 'object' ? summary.duplicate_policy : {};
   const suspectedFiles = asArray(duplicatePolicy.suspected_files);
   const categoriesShown = asArray(summary.by_category).length;
@@ -299,8 +301,8 @@ export default function RetailSales({ retailSales, responseMeta }) {
          || (p.product_code || '').toLowerCase().includes(q)
          || (p.barcode || '').toLowerCase().includes(q));
   };
-  const topProductsByRevenue = topProductsByRevenueAll.filter(matchesSearch).slice(0, topProductsLimit);
-  const topProductsByProfit = topProductsByProfitAll.filter(matchesSearch).slice(0, topProductsLimit);
+  // NB: `topProductsByRevenue` / `topProductsByProfit` (filtered) are computed
+  // below where `topProductsByRevenueAll` / `...ProfitAll` exist (period-aware).
 
   // Per-store-filterable analytics blocks
   const basket = view.basket_metrics || summary.basket_metrics || {};
@@ -320,7 +322,6 @@ export default function RetailSales({ retailSales, responseMeta }) {
   // Sample for the line chart: 0-50 every step, then 50-500 every 10th rank.
   const paretoFull = asArray(concentration.pareto_top500);
   const paretoChart = paretoFull.filter((p, i) => i < 50 || i % 10 === 0);
-  const byCategoryByMonth = asArray(summary.by_category_by_month);
   const registers = asArray(summary.registers_per_object);
   const cashiers = asArray(summary.cashiers_per_object);
   const prevCompare = summary.prev_period_compare || {};
@@ -507,6 +508,107 @@ export default function RetailSales({ retailSales, responseMeta }) {
     });
   }, [byMonth, periodRange]);
 
+  // Period-scoped top categories (sum by_category_by_month rows in range).
+  const topCategoriesByProfit = useMemo(() => {
+    if (!periodRange) return topCategoriesByProfitLifetime;
+    const fromM = periodRange.from.slice(0, 7);
+    const toM = periodRange.to.slice(0, 7);
+    const acc = {};
+    for (const r of byCategoryByMonth) {
+      if (!r.month || r.month < fromM || r.month > toM) continue;
+      const k = r.category || '(უცნობი)';
+      const cur = acc[k] || { category: k, row_count: 0, total_quantity: 0, revenue_ge: 0, cost_ge: 0, profit_ge: 0 };
+      cur.row_count += toNum(r.row_count);
+      cur.total_quantity += toNum(r.total_quantity);
+      cur.revenue_ge += toNum(r.revenue_ge);
+      cur.cost_ge += toNum(r.cost_ge);
+      cur.profit_ge += toNum(r.profit_ge);
+      acc[k] = cur;
+    }
+    const out = Object.values(acc);
+    out.forEach((r) => { r.gross_margin_pct = r.revenue_ge > 0 ? (r.profit_ge / r.revenue_ge) * 100 : 0; });
+    return out.sort((a, b) => b.profit_ge - a.profit_ge).slice(0, 12);
+  }, [periodRange, byCategoryByMonth, topCategoriesByProfitLifetime]);
+
+  // Period-scoped top products (sum by_product_by_month rows in range).
+  const topProductsByRevenueAll = useMemo(() => {
+    if (!periodRange) return topProductsByRevenueAllLifetime;
+    const fromM = periodRange.from.slice(0, 7);
+    const toM = periodRange.to.slice(0, 7);
+    const acc = {};
+    for (const r of byProductByMonth) {
+      if (!r.month || r.month < fromM || r.month > toM) continue;
+      const k = r.barcode || r.product_code || r.product_name;
+      if (!k) continue;
+      const cur = acc[k] || {
+        product_code: r.product_code, barcode: r.barcode,
+        product_name: r.product_name, category: r.category,
+        row_count: 0, qty_sold: 0, revenue_ge: 0, cost_ge: 0, profit_ge: 0,
+      };
+      cur.row_count += toNum(r.row_count);
+      cur.qty_sold += toNum(r.qty_sold);
+      cur.revenue_ge += toNum(r.revenue_ge);
+      cur.cost_ge += toNum(r.cost_ge);
+      cur.profit_ge += toNum(r.profit_ge);
+      acc[k] = cur;
+    }
+    const out = Object.values(acc);
+    out.forEach((r) => { r.gross_margin_pct = r.revenue_ge > 0 ? (r.profit_ge / r.revenue_ge) * 100 : 0; });
+    return out.sort((a, b) => b.revenue_ge - a.revenue_ge);
+  }, [periodRange, byProductByMonth, topProductsByRevenueAllLifetime]);
+
+  const topProductsByProfitAll = useMemo(() => {
+    if (!periodRange) return topProductsByProfitAllLifetime;
+    return [...topProductsByRevenueAll].sort((a, b) => b.profit_ge - a.profit_ge);
+  }, [periodRange, topProductsByRevenueAll, topProductsByProfitAllLifetime]);
+
+  // Search-filtered + sliced top product lists (consumed by the UI tables).
+  const topProductsByRevenue = topProductsByRevenueAll.filter(matchesSearch).slice(0, topProductsLimit);
+  const topProductsByProfit = topProductsByProfitAll.filter(matchesSearch).slice(0, topProductsLimit);
+
+  // Period-scoped shifts (filter by shift_start within range).
+  const shiftsFiltered = useMemo(() => {
+    if (!periodRange) return null;
+    return shifts.filter((s) => {
+      if (!s.shift_start) return false;
+      const day = s.shift_start.slice(0, 10);
+      return day >= periodRange.from && day <= periodRange.to;
+    });
+  }, [periodRange, shifts]);
+
+  // Period-scoped VAT totals (sum vat_by_month in range).
+  const vatTotalsPeriod = useMemo(() => {
+    if (!periodRange) return null;
+    const fromM = periodRange.from.slice(0, 7);
+    const toM = periodRange.to.slice(0, 7);
+    const filtered = vatByMonth.filter((m) => m.month >= fromM && m.month <= toM);
+    if (!filtered.length) return null;
+    const sumVat = filtered.reduce((s, m) => s + toNum(m.vat_collected_ge), 0);
+    const sumRev = filtered.reduce((s, m) => s + toNum(m.revenue_ge), 0);
+    return {
+      vat_collected_ge: sumVat,
+      revenue_ge: sumRev,
+      effective_rate_pct: sumRev > 0 ? sumVat / sumRev * 100 : 0,
+      months: filtered.length,
+    };
+  }, [periodRange, vatByMonth]);
+
+  // Period-scoped returns total (sum returns_by_month).
+  const returnsTotalsPeriod = useMemo(() => {
+    if (!periodRange) return null;
+    const fromM = periodRange.from.slice(0, 7);
+    const toM = periodRange.to.slice(0, 7);
+    const filtered = returnsByMonth.filter((m) => m.month >= fromM && m.month <= toM);
+    if (!filtered.length) return null;
+    return {
+      lines: filtered.reduce((s, m) => s + toNum(m.lines), 0),
+      receipts: filtered.reduce((s, m) => s + toNum(m.receipts), 0),
+      revenue_ge: filtered.reduce((s, m) => s + toNum(m.revenue_ge), 0),
+      quantity: filtered.reduce((s, m) => s + toNum(m.quantity), 0),
+      months: filtered.length,
+    };
+  }, [periodRange, returnsByMonth]);
+
   const hasRows = toNum(overall.row_count) > 0 || byObject.length > 0 || byMonth.length > 0;
   const periodLabel = periodMeta.label_ka || (periodMeta.applied ? 'არჩეული პერიოდი' : 'ყველა პერიოდი');
   const periodCaveat = responseMeta?.period_caveat_ka || '';
@@ -668,7 +770,8 @@ export default function RetailSales({ retailSales, responseMeta }) {
 
       {periodKpis && (
         <div className="trust-banner-sub" style={{ background: '#1e293b', borderLeft: '3px solid #3b82f6', padding: '8px 12px', marginBottom: 8, fontSize: 12 }}>
-          ⓘ პერიოდი <strong>{periodKpis.label_ka}</strong> ეხება მხოლოდ KPI ბარათებს, თვიური/დღიური ცემპს და კალენდარს. TOP პროდუქტი / საათობრივი / დღეების / Pareto / დაბრუნებები / ფასდაკლება / ცვლები / დღგ ცხრილები ლიფტაიმისაა.
+          ⓘ პერიოდი <strong>{periodKpis.label_ka}</strong> ვრცელდება: KPI ბარათები, თვიური / დღიური ცემპი, კალენდარი, TOP კატეგორია, TOP პროდუქტი, ცვლები, დღგ.
+          ლიფტაიმისაა: საათობრივი / დღის / Pareto / ფასდაკლების კატეგორიები / დაბრუნებული პროდუქტები / დღგ-ის გარეშე ხაზი.
         </div>
       )}
 
@@ -1203,38 +1306,68 @@ export default function RetailSales({ retailSales, responseMeta }) {
       )}
 
       {/* ─── Shifts (cashier sessions) ─── */}
-      {shifts.length > 0 && (
+      {shifts.length > 0 && (() => {
+        // Period-aware shift summary: when period filter is active, recompute
+        // stats from shiftsFiltered (which respects shift_start in range).
+        // Anomalies (>30h) excluded from avg/best/worst even within period.
+        const usingFiltered = !!shiftsFiltered;
+        const baseShifts = usingFiltered ? shiftsFiltered : shifts;
+        const normalShifts = baseShifts.filter((s) => !s.is_anomalous);
+        const periodAnomalies = baseShifts.filter((s) => s.is_anomalous);
+        const liveSummary = usingFiltered
+          ? (() => {
+              if (normalShifts.length === 0) {
+                return { total_shifts: baseShifts.length, normal_shift_count: 0, anomalous_shift_count: periodAnomalies.length, avg_revenue_ge: 0, median_revenue_ge: 0, best_shift_revenue_ge: 0, worst_shift_revenue_ge: 0, avg_duration_hours: 0, last_shift_start: baseShifts[0]?.shift_start };
+              }
+              const revs = normalShifts.map((s) => toNum(s.revenue)).sort((a, b) => a - b);
+              const durs = normalShifts.map((s) => toNum(s.duration_hours)).filter((d) => d > 0);
+              return {
+                total_shifts: baseShifts.length,
+                normal_shift_count: normalShifts.length,
+                anomalous_shift_count: periodAnomalies.length,
+                avg_revenue_ge: revs.reduce((s, v) => s + v, 0) / revs.length,
+                median_revenue_ge: revs[Math.floor(revs.length / 2)],
+                best_shift_revenue_ge: revs[revs.length - 1],
+                worst_shift_revenue_ge: revs[0],
+                avg_duration_hours: durs.length ? durs.reduce((s, v) => s + v, 0) / durs.length : 0,
+                last_shift_start: baseShifts[0]?.shift_start,
+              };
+            })()
+          : shiftSummary;
+        const displayShifts = baseShifts;
+        const displayAnomalies = usingFiltered ? periodAnomalies : shiftAnomalies;
+        return (
         <div className="chart-card">
-          <h3>ცვლების ჭრილი<InfoTip text={TIPS.shift} /></h3>
+          <h3>ცვლების ჭრილი {usingFiltered && periodKpis ? `— ${periodKpis.label_ka}` : ''}<InfoTip text={TIPS.shift} /></h3>
           <div className="kpi-grid retail-sales-kpi-grid" style={{ marginTop: 8 }}>
             <div className="kpi-card">
               <div className="kpi-label">ცვლები სულ</div>
-              <div className="kpi-value amount-neutral">{fmtInt(shiftSummary.total_shifts)}</div>
+              <div className="kpi-value amount-neutral">{fmtInt(liveSummary.total_shifts)}</div>
               <div className="kpi-sub">
-                ნორმალური: {fmtInt(shiftSummary.normal_shift_count)} ·
-                ანომალია: {fmtInt(shiftSummary.anomalous_shift_count)}
+                ნორმალური: {fmtInt(liveSummary.normal_shift_count)} ·
+                ანომალია: {fmtInt(liveSummary.anomalous_shift_count)}
               </div>
             </div>
             <div className="kpi-card">
               <div className="kpi-label">საშ. შემოსავ. ერთ ცვლაზე</div>
-              <div className="kpi-value amount-positive">{fmtMoney(shiftSummary.avg_revenue_ge)}</div>
-              <div className="kpi-sub">მედიანა: {fmtMoney(shiftSummary.median_revenue_ge)}</div>
+              <div className="kpi-value amount-positive">{fmtMoney(liveSummary.avg_revenue_ge)}</div>
+              <div className="kpi-sub">მედიანა: {fmtMoney(liveSummary.median_revenue_ge)}</div>
             </div>
             <div className="kpi-card">
               <div className="kpi-label">საუკეთესო ცვლა</div>
-              <div className="kpi-value amount-positive">{fmtMoney(shiftSummary.best_shift_revenue_ge)}</div>
+              <div className="kpi-value amount-positive">{fmtMoney(liveSummary.best_shift_revenue_ge)}</div>
               <div className="kpi-sub">ერთ ცვლაში მაქს. შემოსავალი</div>
             </div>
             <div className="kpi-card">
               <div className="kpi-label">საშ. ცვლის ხანგრძლივობა</div>
-              <div className="kpi-value amount-neutral">{fmtNum(shiftSummary.avg_duration_hours)} სთ</div>
-              <div className="kpi-sub">ბოლო: {(shiftSummary.last_shift_start || '').slice(0, 10) || '—'}</div>
+              <div className="kpi-value amount-neutral">{fmtNum(liveSummary.avg_duration_hours)} სთ</div>
+              <div className="kpi-sub">ბოლო: {(liveSummary.last_shift_start || '').slice(0, 10) || '—'}</div>
             </div>
           </div>
-          {shiftAnomalies.length > 0 && (
+          {displayAnomalies.length > 0 && (
             <div style={{ marginTop: 12, padding: 10, background: '#1f1916', border: '1px solid #92400e', borderRadius: 6 }}>
               <p style={{ fontSize: 12, color: '#fbbf24', margin: 0, marginBottom: 6 }}>
-                ⚠️ {shiftAnomalies.length} ცვლა {'>'}30 საათი — სავარაუდოდ მოლარემ არ დახურა ცვლა, ან ID განმეორებულად მოხვდა მონაცემებში. ჯამში ჩათვლილია, მაგრამ საშ./მაქს. ანგარიშიდან გამორიცხულია.
+                ⚠️ {displayAnomalies.length} ცვლა {'>'}30 საათი — სავარაუდოდ მოლარემ არ დახურა ცვლა, ან ID განმეორებულად მოხვდა მონაცემებში. ჯამში ჩათვლილია, მაგრამ საშ./მაქს. ანგარიშიდან გამორიცხულია.
               </p>
               <div className="table-wrapper" style={{ fontSize: 12 }}>
                 <table>
@@ -1243,7 +1376,7 @@ export default function RetailSales({ retailSales, responseMeta }) {
                     {storeFilter === 'all' && <th>მაღაზია</th>}
                   </tr></thead>
                   <tbody>
-                    {shiftAnomalies.map((a) => (
+                    {displayAnomalies.map((a) => (
                       <tr key={`anom-${a.shift_id}-${a.object || ''}`}>
                         <td>{a.shift_id}</td>
                         <td>{(a.shift_start || '').slice(0, 10)}</td>
@@ -1259,7 +1392,12 @@ export default function RetailSales({ retailSales, responseMeta }) {
               </div>
             </div>
           )}
-          <CollapsibleSection title={`ბოლო ${shifts.length} ცვლა`} badge={`${shifts.length}`}>
+          {displayShifts.length === 0 ? (
+            <p className="chart-desc" style={{ marginTop: 8, fontSize: 12, color: '#94a3b8' }}>
+              ⓘ არჩეულ პერიოდში ცვლა არ მოიძებნა.
+            </p>
+          ) : (
+          <CollapsibleSection title={`${usingFiltered ? 'პერიოდის' : 'ბოლო'} ${displayShifts.length} ცვლა`} badge={`${displayShifts.length}`}>
             <div className="table-wrapper cashflow-table retail-sales-table-scroll">
               <table>
                 <thead>
@@ -1276,7 +1414,7 @@ export default function RetailSales({ retailSales, responseMeta }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {shifts.slice(0, 60).map((s) => (
+                  {displayShifts.slice(0, 60).map((s) => (
                     <tr key={`shift-${s.shift_id}-${s.object || ''}`}>
                       <td>{(s.shift_start || '').replace('T', ' ').slice(0, 16) || '—'}</td>
                       <td>{fmtNum(s.duration_hours)} სთ</td>
@@ -1302,8 +1440,10 @@ export default function RetailSales({ retailSales, responseMeta }) {
               </table>
             </div>
           </CollapsibleSection>
+          )}
         </div>
-      )}
+        );
+      })()}
 
       {/* ─── Returns + voids ─── */}
       {returnsVoids.length > 0 && (
@@ -1525,26 +1665,26 @@ export default function RetailSales({ retailSales, responseMeta }) {
       {/* ─── VAT (დღგ) ─── */}
       {toNum(vatTotals.vat_collected_ge) > 0 && (
         <div className="chart-card">
-          <h3>დღგ (VAT) ანალიზი<InfoTip text={TIPS.vat} /></h3>
+          <h3>დღგ (VAT) ანალიზი {vatTotalsPeriod && periodKpis ? `— ${periodKpis.label_ka}` : ''}<InfoTip text={TIPS.vat} /></h3>
           <div className="kpi-grid retail-sales-kpi-grid" style={{ marginTop: 8 }}>
             <div className="kpi-card">
               <div className="kpi-label">დღგ შეგროვილი</div>
-              <div className="kpi-value amount-neutral">{fmtMoney(vatTotals.vat_collected_ge)}</div>
-              <div className="kpi-sub">სრულ შემოსავალში: {fmtPct(vatTotals.effective_rate_pct)}</div>
+              <div className="kpi-value amount-neutral">{fmtMoney(vatTotalsPeriod ? vatTotalsPeriod.vat_collected_ge : vatTotals.vat_collected_ge)}</div>
+              <div className="kpi-sub">სრულ შემოსავალში: {fmtPct(vatTotalsPeriod ? vatTotalsPeriod.effective_rate_pct : vatTotals.effective_rate_pct)}</div>
             </div>
             <div className="kpi-card">
-              <div className="kpi-label">დღგ-ის გარეშე გაყიდვა</div>
-              <div className="kpi-value amount-neutral">{fmtMoney(vatTotals.exempt_revenue_ge)}</div>
-              <div className="kpi-sub">{fmtPct(vatTotals.exempt_share_pct)} მთლიანი გაყიდვის</div>
+              <div className="kpi-label">პერიოდის შემოსავალი</div>
+              <div className="kpi-value amount-positive">{fmtMoney(vatTotalsPeriod ? vatTotalsPeriod.revenue_ge : vatTotals.revenue_ge)}</div>
+              <div className="kpi-sub">{vatTotalsPeriod ? `${vatTotalsPeriod.months} თვე` : 'ლიფტაიმი'}</div>
             </div>
             <div className="kpi-card">
-              <div className="kpi-label">დღგ-ის გარეშე ხაზი</div>
+              <div className="kpi-label">დღგ-ის გარეშე ხაზი (ლიფტაიმი)</div>
               <div className="kpi-value amount-neutral">{fmtInt(vatTotals.exempt_lines)}</div>
-              <div className="kpi-sub">სულ {fmtInt(vatTotals.lines)} ხაზიდან</div>
+              <div className="kpi-sub">სულ {fmtInt(vatTotals.lines)} ხაზიდან · {fmtPct(vatTotals.exempt_share_pct)}</div>
             </div>
             <div className="kpi-card">
               <div className="kpi-label">ეფექტური განაკვეთი</div>
-              <div className="kpi-value amount-neutral">{fmtPct(vatTotals.effective_rate_pct)}</div>
+              <div className="kpi-value amount-neutral">{fmtPct(vatTotalsPeriod ? vatTotalsPeriod.effective_rate_pct : vatTotals.effective_rate_pct)}</div>
               <div className="kpi-sub">სტანდარტი: 18% / 1.18 = 15.25%</div>
             </div>
           </div>
