@@ -856,32 +856,54 @@ export default function RetailSales({ retailSales, responseMeta }) {
                   <th>ცვლა</th>
                   <th>პროდუქტი</th>
                   <th>კატეგორია</th>
+                  <th>დომინანტი მაღაზია</th>
                   <th>365-დღ. შემოს.</th>
                   <th>365-დღ. მოგება</th>
                   <th>Margin</th>
                 </tr>
               </thead>
               <tbody>
-                {topRecentMovers.map((p) => (
-                  <tr key={`mover-${p.product_code || p.product_name}-${p.rank_recent}`}>
-                    <td>#{p.rank_recent}</td>
-                    <td>{p.rank_lifetime ? `#${p.rank_lifetime}` : '—'}</td>
-                    <td>
-                      {p.rank_change == null ? '—' : (
+                {topRecentMovers.map((p) => {
+                  const breakdown = p.store_breakdown || {};
+                  const dvabzu = toNum(breakdown['დვაბზუ']);
+                  const ozurgeti = toNum(breakdown['ოზურგეთი']);
+                  const isExclusive = (dvabzu === 0 && ozurgeti > 0) || (ozurgeti === 0 && dvabzu > 0);
+                  return (
+                    <tr key={`mover-${p.product_code || p.product_name}-${p.rank_recent}`}>
+                      <td>#{p.rank_recent}</td>
+                      <td>{p.rank_lifetime ? `#${p.rank_lifetime}` : '—'}</td>
+                      <td>
+                        {p.rank_change == null ? '—' : (
+                          <span style={{
+                            padding: '1px 6px', borderRadius: 4, fontSize: 11,
+                            background: p.rank_change > 0 ? '#064e3b' : (p.rank_change < 0 ? '#7f1d1d' : '#334155'),
+                            color: p.rank_change > 0 ? '#6ee7b7' : (p.rank_change < 0 ? '#fca5a5' : '#cbd5e1'),
+                          }}>{p.rank_change > 0 ? '▲' : (p.rank_change < 0 ? '▼' : '=')} {Math.abs(p.rank_change)}</span>
+                        )}
+                      </td>
+                      <td>{p.product_name || 'უცნობი'}</td>
+                      <td style={{ fontSize: 12, color: '#94a3b8' }}>{p.category || '—'}</td>
+                      <td>
                         <span style={{
-                          padding: '1px 6px', borderRadius: 4, fontSize: 11,
-                          background: p.rank_change > 0 ? '#064e3b' : (p.rank_change < 0 ? '#7f1d1d' : '#334155'),
-                          color: p.rank_change > 0 ? '#6ee7b7' : (p.rank_change < 0 ? '#fca5a5' : '#cbd5e1'),
-                        }}>{p.rank_change > 0 ? '▲' : (p.rank_change < 0 ? '▼' : '=')} {Math.abs(p.rank_change)}</span>
-                      )}
-                    </td>
-                    <td>{p.product_name || 'უცნობი'}</td>
-                    <td style={{ fontSize: 12, color: '#94a3b8' }}>{p.category || '—'}</td>
-                    <td className="amount-positive">{fmtMoney(p.revenue_ge_recent)}</td>
-                    <td className={renderMoneyClass(p.profit_ge_recent)}>{fmtMoney(p.profit_ge_recent)}</td>
-                    <td>{fmtPct(p.gross_margin_pct_recent)}</td>
-                  </tr>
-                ))}
+                          padding: '2px 6px', borderRadius: 4, fontSize: 11,
+                          background: STORE_COLOR[p.dominant_store] ? `${STORE_COLOR[p.dominant_store]}30` : '#334155',
+                          color: STORE_COLOR[p.dominant_store] || '#cbd5e1',
+                          border: `1px solid ${STORE_COLOR[p.dominant_store] || '#475569'}`,
+                        }}>
+                          {p.dominant_store || '—'} {isExclusive ? '(ერთადერთი)' : `${fmtNum(p.dominant_store_share_pct)}%`}
+                        </span>
+                        {!isExclusive && dvabzu > 0 && ozurgeti > 0 && (
+                          <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
+                            დ: {fmtMoney(dvabzu)} · ო: {fmtMoney(ozurgeti)}
+                          </div>
+                        )}
+                      </td>
+                      <td className="amount-positive">{fmtMoney(p.revenue_ge_recent)}</td>
+                      <td className={renderMoneyClass(p.profit_ge_recent)}>{fmtMoney(p.profit_ge_recent)}</td>
+                      <td>{fmtPct(p.gross_margin_pct_recent)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

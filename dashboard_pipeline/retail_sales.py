@@ -457,8 +457,11 @@ def synthesize_from_megaplus(megaplus_live):
         by_category_by_month.append(row)
 
     # ─── by_product_recent (365-day window — for grower/decliner analysis) ─
+    # Track per-store revenue alongside the aggregate so the UI can show
+    # which store drives each product's recent sales (დვაბზუ vs ოზურგეთი).
     prod_recent_acc: dict = {}
     for store_id, rollup in stores.items():
+        obj_label = store_label_for.get(str(store_id)) or f"store_{store_id}"
         for p in rollup.get("by_product_recent") or []:
             barcode = (p.get("barcode") or "").strip()
             code = (p.get("product_code") or "").strip()
@@ -471,18 +474,31 @@ def synthesize_from_megaplus(megaplus_live):
                 "category": p.get("category") or "",
                 "row_count": 0, "total_quantity": 0.0,
                 "revenue_ge": 0.0, "cost_ge": 0.0, "profit_ge": 0.0,
+                "by_object": {},
             })
+            rev = float(p.get("revenue") or 0)
             cur["row_count"] += int(p.get("row_count") or 0)
             cur["total_quantity"] += float(p.get("qty_sold") or 0)
-            cur["revenue_ge"] += float(p.get("revenue") or 0)
+            cur["revenue_ge"] += rev
             cur["cost_ge"] += float(p.get("cogs") or 0)
             cur["profit_ge"] += float(p.get("profit") or 0)
+            cur["by_object"][obj_label] = round(cur["by_object"].get(obj_label, 0.0) + rev, 2)
     by_product_recent_full = list(prod_recent_acc.values())
     for row in by_product_recent_full:
         rev = row["revenue_ge"]
         row["gross_margin_pct"] = round((row["profit_ge"] / rev * 100) if rev > 0 else 0.0, 2)
         for f in ("revenue_ge", "cost_ge", "profit_ge", "total_quantity"):
             row[f] = round(row[f], 2)
+        # Pick the dominant store + share %.
+        per_obj = row.get("by_object") or {}
+        if per_obj:
+            dominant_obj, dominant_rev = max(per_obj.items(), key=lambda kv: kv[1])
+            row["dominant_store"] = dominant_obj
+            row["dominant_store_revenue_ge"] = dominant_rev
+            row["dominant_store_share_pct"] = round((dominant_rev / rev * 100) if rev > 0 else 0.0, 1)
+        else:
+            row["dominant_store"] = None
+            row["dominant_store_share_pct"] = 0.0
     by_product_recent_full.sort(key=lambda r: r.get("revenue_ge", 0), reverse=True)
 
     # ─── by_product (aggregate across stores by barcode/code) ──────────────
@@ -1016,6 +1032,9 @@ def synthesize_from_megaplus(megaplus_live):
             "revenue_ge_recent": p.get("revenue_ge"),
             "profit_ge_recent": p.get("profit_ge"),
             "gross_margin_pct_recent": p.get("gross_margin_pct"),
+            "dominant_store": p.get("dominant_store"),
+            "dominant_store_share_pct": p.get("dominant_store_share_pct"),
+            "store_breakdown": p.get("by_object") or {},
         })
 
     return {
