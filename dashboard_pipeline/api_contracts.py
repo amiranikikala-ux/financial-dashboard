@@ -1054,6 +1054,7 @@ def _project_retail_sales_summary(bundle):
         "discount_by_category",
         "discount_lift_summary",
         "by_product_by_month",
+        "cross_store_comparison",
     ):
         val = bundle.get(key)
         if val is not None:

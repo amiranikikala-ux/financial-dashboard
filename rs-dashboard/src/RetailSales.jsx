@@ -75,6 +75,7 @@ const TIPS = {
   returnsByMonth: 'დაბრუნების თვიური ცემპი. სტაბილურია? ან რომელიმე თვე გამოირჩევა? — გამოძიება საჭიროა.',
   discountLift: 'რა მოგება იქნებოდა ფასდაკლების გარეშე — actual vs hypothetical. დაკარგული მარჟა = ფასდაკლების ჯამი (cost ცვლილებას არ ექვემდებარება).',
   discountByCat: 'რომელი კატეგორია იღებს ფასდაკლებას. დიდი ფასდაკლება + დაბალი ფასდაკლების % = ფართო პოლიტიკა. მცირე ფასდაკლება + მაღალი % = სელექტიური clearance.',
+  crossStore: 'მაღაზია vs მაღაზია — იგივე SKU. გვიჩვენებს რომელი პროდუქტი ორივე მაღაზიაში იყიდება განსხვავებული ფასით ან მარჟით. გაფილტრულია მხოლოდ რეალური EAN შტრიხკოდი (>=8 ციფრი). მაღაზიის ფილტრს არ ემორჩილება — comparison-ის არსი თვითონ cross-store-ია. ცხოვრების ჯამი (period filter არ ვრცელდება).',
 };
 
 const GEL = new Intl.NumberFormat('ka-GE', { style: 'currency', currency: 'GEL', maximumFractionDigits: 0 });
@@ -249,6 +250,7 @@ export default function RetailSales({ retailSales, responseMeta }) {
   const [topProductsLimit, setTopProductsLimit] = useState(20);
   const [storeFilter, setStoreFilter] = useState('all');
   const [productSearch, setProductSearch] = useState('');
+  const [crossStoreSortBy, setCrossStoreSortBy] = useState('price_gap');
   // Period filter — applies to time-series + KPI block. Aggregate
   // top-product / hour / dow lists stay lifetime (banner indicates).
   const [periodPreset, setPeriodPreset] = useState('all');
@@ -346,6 +348,13 @@ export default function RetailSales({ retailSales, responseMeta }) {
   const returnsByMonth = asArray(view.returns_by_month || summary.returns_by_month);
   const discountByCategory = asArray(view.discount_by_category || summary.discount_by_category).slice(0, 15);
   const discountLiftSummary = view.discount_lift_summary || summary.discount_lift_summary || {};
+  // Cross-store comparison — combined-view only (the comparison itself is cross-store).
+  const crossStore = summary.cross_store_comparison || {};
+  const crossStoreItems = (() => {
+    if (crossStoreSortBy === 'margin_gap') return asArray(crossStore.top_by_margin_gap);
+    if (crossStoreSortBy === 'combined_rev') return asArray(crossStore.top_by_combined_revenue);
+    return asArray(crossStore.top_by_price_gap);
+  })();
 
   // Filter helper — applies store filter to per-object lists
   const matchStore = (obj) => storeFilter === 'all' || obj === storeFilter;
@@ -2195,6 +2204,108 @@ export default function RetailSales({ retailSales, responseMeta }) {
           </table>
         </div>
       </CollapsibleSection>
+
+      {/* ── Cross-store SKU comparison ─────────────────────────────────── */}
+      {toNum(crossStore.shared_sku_count) > 0 && (
+        <div style={{ marginTop: 24 }}>
+          <h3 style={{ marginBottom: 12, color: '#e2e8f0' }}>
+            მაღაზია vs მაღაზია — იგივე SKU
+            <InfoTip text={TIPS.crossStore} />
+          </h3>
+
+          {/* Banner — cross-store is lifetime + ignores store filter */}
+          <div style={{
+            padding: '8px 12px', marginBottom: 12,
+            background: '#1e293b', border: '1px solid #334155', borderRadius: 6,
+            fontSize: 13, color: '#cbd5e1',
+          }}>
+            ეს ცხრილი ყოველთვის ცხოვრების ჯამია — მაღაზიის ფილტრი / პერიოდის ფილტრი მასზე არ ვრცელდება.
+            {' '}{crossStore.filter_notes_ka}
+          </div>
+
+          {/* KPI cards */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+            <div className="kpi-card" style={{ flex: '1 1 200px', padding: 12, background: '#1e293b', borderRadius: 8 }}>
+              <div style={{ fontSize: 12, color: '#94a3b8' }}>SKU ორივე მაღაზიაში</div>
+              <div style={{ fontSize: 24, fontWeight: 600, color: '#e2e8f0' }}>{fmtInt(crossStore.shared_sku_count)}</div>
+            </div>
+            <div className="kpi-card" style={{ flex: '1 1 200px', padding: 12, background: '#1e293b', borderRadius: 8 }}>
+              <div style={{ fontSize: 12, color: '#94a3b8' }}>ფასით განსხვავებული (≥5%)</div>
+              <div style={{ fontSize: 24, fontWeight: 600, color: '#f59e0b' }}>{fmtInt(crossStore.big_price_gap_count)}</div>
+            </div>
+            <div className="kpi-card" style={{ flex: '1 1 200px', padding: 12, background: '#1e293b', borderRadius: 8 }}>
+              <div style={{ fontSize: 12, color: '#94a3b8' }}>მარჟით განსხვავებული (≥5pp)</div>
+              <div style={{ fontSize: 24, fontWeight: 600, color: '#ef4444' }}>{fmtInt(crossStore.big_margin_gap_count)}</div>
+            </div>
+          </div>
+
+          {/* Sort selector */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <span style={{ color: '#cbd5e1', fontSize: 13 }}>დახარისხება:</span>
+            <select
+              value={crossStoreSortBy}
+              onChange={(e) => setCrossStoreSortBy(e.target.value)}
+              style={{ padding: '4px 8px', background: '#0f172a', color: '#e2e8f0', border: '1px solid #334155', borderRadius: 4 }}
+            >
+              <option value="price_gap">ფასის სხვაობით (top 50)</option>
+              <option value="margin_gap">მარჟის სხვაობით (top 50)</option>
+              <option value="combined_rev">ჯამური შემოსავლით (top 50)</option>
+            </select>
+          </div>
+
+          <CollapsibleSection title={`top ${crossStoreItems.length} SKU`} badge={`${crossStoreItems.length}`}>
+            <div className="table-wrapper cashflow-table retail-sales-table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>შტრიხკოდი</th>
+                    <th>დასახელება</th>
+                    <th>კატეგორია</th>
+                    <th>დვაბზუ რაოდ.</th>
+                    <th>ოზურგ. რაოდ.</th>
+                    <th>დვაბზუ ფასი</th>
+                    <th>ოზურგ. ფასი</th>
+                    <th>ფასის სხვაობა</th>
+                    <th>დვაბზუ მარჟა</th>
+                    <th>ოზურგ. მარჟა</th>
+                    <th>მარჟის სხვაობა</th>
+                    <th>ჯამური შემოს.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {crossStoreItems.map((row) => {
+                    const priceDiff = toNum(row.price_diff_ge);
+                    const marginDiff = toNum(row.margin_diff_pp);
+                    return (
+                      <tr key={`cross-${row.barcode}-${row.product_name}`}>
+                        <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{row.barcode}</td>
+                        <td>{row.product_name || 'უცნობი'}</td>
+                        <td>{row.category || '—'}</td>
+                        <td style={{ textAlign: 'right' }}>{fmtNum(row.qty_dvabzu)}</td>
+                        <td style={{ textAlign: 'right' }}>{fmtNum(row.qty_ozurgeti)}</td>
+                        <td style={{ textAlign: 'right' }}>{fmtMoney2(row.avg_price_dvabzu_ge)}</td>
+                        <td style={{ textAlign: 'right' }}>{fmtMoney2(row.avg_price_ozurgeti_ge)}</td>
+                        <td style={{ textAlign: 'right', color: priceDiff >= 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>
+                          {priceDiff >= 0 ? '+' : ''}{fmtMoney2(priceDiff)}
+                          <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 4 }}>
+                            ({toNum(row.price_diff_pct) >= 0 ? '+' : ''}{toNum(row.price_diff_pct).toFixed(1)}%)
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'right' }}>{fmtPct(row.margin_dvabzu_pct)}</td>
+                        <td style={{ textAlign: 'right' }}>{fmtPct(row.margin_ozurgeti_pct)}</td>
+                        <td style={{ textAlign: 'right', color: marginDiff >= 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>
+                          {marginDiff >= 0 ? '+' : ''}{toNum(marginDiff).toFixed(2)}pp
+                        </td>
+                        <td style={{ textAlign: 'right' }}>{fmtMoney(row.revenue_combined_ge)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CollapsibleSection>
+        </div>
+      )}
     </div>
   );
 }

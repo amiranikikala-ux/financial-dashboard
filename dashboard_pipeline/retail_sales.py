@@ -1506,6 +1506,82 @@ def synthesize_from_megaplus(megaplus_live):
             "discount_lift_summary": view_discount_lift_summary,
         }
 
+    # ─── Cross-store SKU comparison ────────────────────────────────────────
+    # Same SKU sold in BOTH stores: side-by-side qty / avg-price / margin
+    # with diff. Two filters protect quality of insight:
+    #   1) real EAN barcode (>=8 numeric digits). Short internal codes
+    #      (1028, 1046) collide between stores — they index different
+    #      products in დვაბზუ vs ოზურგეთი DBs.
+    #   2) margin within [-50%, +95%] on BOTH sides. Outside this band
+    #      signals missing cost imputation (in-store baking / deli / no
+    #      GET row) — would surface as fake 100% margin diff and dwarf
+    #      real pricing-policy gaps.
+    cross_store_re_ean = __import__("re").compile(r"^\d{8,}$")
+    cross_store_items: list = []
+    for r in by_product_full:
+        barcode = (r.get("barcode") or "").strip()
+        if not cross_store_re_ean.match(barcode):
+            continue
+        object_totals = r.get("object_totals") or []
+        by_store_map = {ot.get("object"): ot for ot in object_totals if ot.get("object")}
+        a = by_store_map.get("დვაბზუ")
+        b = by_store_map.get("ოზურგეთი")
+        if not a or not b:
+            continue
+        qty_a = float(a.get("total_quantity") or 0)
+        qty_b = float(b.get("total_quantity") or 0)
+        rev_a = float(a.get("revenue_ge") or 0)
+        rev_b = float(b.get("revenue_ge") or 0)
+        cost_a = float(a.get("cost_ge") or 0)
+        cost_b = float(b.get("cost_ge") or 0)
+        if qty_a <= 0 or qty_b <= 0 or rev_a <= 0 or rev_b <= 0:
+            continue
+        avg_price_a = rev_a / qty_a
+        avg_price_b = rev_b / qty_b
+        margin_a = ((rev_a - cost_a) / rev_a * 100) if rev_a else 0.0
+        margin_b = ((rev_b - cost_b) / rev_b * 100) if rev_b else 0.0
+        if margin_a > 95 or margin_a < -50 or margin_b > 95 or margin_b < -50:
+            continue
+        price_diff = avg_price_a - avg_price_b
+        max_price = max(avg_price_a, avg_price_b)
+        price_diff_pct = (price_diff / max_price * 100) if max_price else 0.0
+        margin_diff_pp = margin_a - margin_b
+        cross_store_items.append({
+            "barcode": barcode,
+            "product_code": r.get("product_code"),
+            "product_name": r.get("product_name"),
+            "category": r.get("category"),
+            "qty_dvabzu": round(qty_a, 2),
+            "qty_ozurgeti": round(qty_b, 2),
+            "qty_ratio_dv_oz": round(qty_a / qty_b, 2) if qty_b else None,
+            "avg_price_dvabzu_ge": round(avg_price_a, 2),
+            "avg_price_ozurgeti_ge": round(avg_price_b, 2),
+            "price_diff_ge": round(price_diff, 2),
+            "price_diff_pct": round(price_diff_pct, 2),
+            "margin_dvabzu_pct": round(margin_a, 2),
+            "margin_ozurgeti_pct": round(margin_b, 2),
+            "margin_diff_pp": round(margin_diff_pp, 2),
+            "revenue_dvabzu_ge": round(rev_a, 2),
+            "revenue_ozurgeti_ge": round(rev_b, 2),
+            "revenue_combined_ge": round(rev_a + rev_b, 2),
+        })
+    cross_store_comparison = {
+        "shared_sku_count": len(cross_store_items),
+        "big_price_gap_count": sum(1 for x in cross_store_items if abs(x["price_diff_pct"]) >= 5),
+        "big_margin_gap_count": sum(1 for x in cross_store_items if abs(x["margin_diff_pp"]) >= 5),
+        "filter_notes_ka": (
+            "მხოლოდ რეალური EAN შტრიხკოდი (>=8 ციფრი) — შიდა მოკლე "
+            "კოდები (1028, 1046) გამოვრიცხეთ რადგან სხვადასხვა "
+            "პროდუქტი ერთ კოდს იზიარებს ორ მაღაზიაში. ასევე "
+            "გამოვრიცხეთ ის SKU-ები სადაც მარჟა >95% ან <-50% — ეს "
+            "cost-ის imputation-ის ხარვეზია (in-store baking / deli), "
+            "არა რეალური მარჟის სხვაობა."
+        ),
+        "top_by_price_gap": sorted(cross_store_items, key=lambda x: -abs(x["price_diff_pct"]))[:50],
+        "top_by_margin_gap": sorted(cross_store_items, key=lambda x: -abs(x["margin_diff_pp"]))[:50],
+        "top_by_combined_revenue": sorted(cross_store_items, key=lambda x: -x["revenue_combined_ge"])[:50],
+    }
+
     # ─── Pareto / HHI on by_product (revenue concentration) ────────────────
     # Compute 80%/90%/95% thresholds against the FULL product list, then
     # serialize only the first 500 ranks for the chart (UI doesn't need
@@ -1851,6 +1927,7 @@ def synthesize_from_megaplus(megaplus_live):
         "returns_by_month": returns_by_month_combined,
         "discount_by_category": discount_by_category_combined,
         "discount_lift_summary": discount_lift_summary,
+        "cross_store_comparison": cross_store_comparison,
     }
 
 
