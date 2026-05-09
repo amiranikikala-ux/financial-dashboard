@@ -1021,6 +1021,23 @@ def _project_retail_sales_summary(bundle):
     dq = bundle.get("data_quality")
     if isinstance(dq, dict):
         summary["data_quality"] = dq
+    # Pass-through analytics blocks — basket / payment / time / concentration.
+    for key in (
+        "basket_metrics",
+        "payment_breakdown",
+        "dow_breakdown",
+        "hour_breakdown",
+        "daily_trend",
+        "calendar_heatmap",
+        "returns_voids",
+        "discount_totals",
+        "concentration",
+        "registers_per_object",
+        "cashiers_per_object",
+    ):
+        val = bundle.get(key)
+        if val is not None:
+            summary[key] = val
     return summary
 
 

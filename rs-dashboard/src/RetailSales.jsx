@@ -1,6 +1,21 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import {
+  ResponsiveContainer,
+  LineChart, Line,
+  BarChart, Bar,
+  AreaChart, Area,
+  PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+} from 'recharts';
 import CollapsibleSection from './components/CollapsibleSection.jsx';
 import ExportButton from './components/ExportButton.jsx';
+
+const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#a855f7', '#06b6d4', '#84cc16', '#ec4899'];
+const STORE_COLOR = {
+  'დვაბზუ': '#3b82f6',
+  'ოზურგეთი': '#10b981',
+  'უცნობი': '#94a3b8',
+};
 
 function InfoTip({ text }) {
   const [show, setShow] = useState(false);
@@ -33,57 +48,131 @@ function InfoTip({ text }) {
   );
 }
 
-const TIP_REVENUE = 'POS-ში რეგისტრირებული გაყიდვების ჯამი (ORD_jamjam — ფასდაკლების შემდეგ). წყარო: MegaPlus DB, ORDERS.ORD_ACT=1.';
-const TIP_COST = 'ფაქტურიდან გათვლილი (imputed) თვითღირებულება — მომწოდებლის ფაქტურიდან ერთეულზე. POS-ის ცარიელ ORD_GETPRICE-ს ცვლის. შესაძლოა განსხვავდებოდეს რეგისტრირებული POS cost-ისგან.';
-const TIP_PROFIT = 'შემოსავალი − imputed cost. ფაქტურიდან გათვლილი მოგება. POS-რეგისტრირებული მოგებისგან განსხვავდება ფაქტურის cost-ის სიზუსტის მიხედვით.';
-const TIP_MARGIN = 'მოგება / შემოსავალი × 100. რადგან cost imputed-ია, რეალურ POS-მარჟასთან მცირე გადახრა შესაძლებელია.';
-const TIP_ROWS = 'გაყიდვის ხაზების რაოდენობა (per-product per-receipt). 1 ჩეკში რამდენიმე ხაზი იქნება, ერთი ხაზი = ერთი პროდუქტი ერთ ჩეკში.';
-const TIP_COVERAGE = 'რამდენი ZIP backup დამუშავდა MegaPlus-ის წყაროდან. თითო მაღაზია = თითო ZIP თითო დღეს.';
-const TIP_PERIOD_BANNER = 'რა დიაპაზონშია მონაცემები. „ყველა პერიოდი" ნიშნავს — DB-ის ლაიფტაიმის ჯამი (2023-დან მიმდინარე დღემდე + ცოტა ისტორიული სატესტო).';
+const TIPS = {
+  revenue: 'POS-ში რეგისტრირებული გაყიდვების ჯამი (ORD_jamjam — ფასდაკლების შემდეგ). წყარო: MegaPlus DB, ORDERS.ORD_ACT=1.',
+  cost: 'ფაქტურიდან გათვლილი (imputed) თვითღირებულება — მომწოდებლის ფაქტურიდან ერთეულზე. POS-ის ცარიელ ORD_GETPRICE-ს ცვლის. შესაძლოა განსხვავდებოდეს რეგისტრირებული POS cost-ისგან.',
+  profit: 'შემოსავალი − imputed cost. ფაქტურიდან გათვლილი მოგება. POS-რეგისტრირებული მოგებისგან განსხვავდება ფაქტურის cost-ის სიზუსტის მიხედვით.',
+  margin: 'მოგება / შემოსავალი × 100. რადგან cost imputed-ია, რეალურ POS-მარჟასთან მცირე გადახრა შესაძლებელია.',
+  rows: 'გაყიდვის ხაზების რაოდენობა (per-product per-receipt). 1 ჩეკში რამდენიმე ხაზი იქნება, ერთი ხაზი = ერთი პროდუქტი ერთ ჩეკში.',
+  receipts: 'უნიკალური ჩეკების რაოდენობა (ORD_N). ერთ ჩეკში რამდენიმე ხაზია — საქონლის რაოდენობით.',
+  aov: 'საშუალო ჩეკი (Average Order Value) = სულ შემოსავალი ÷ ჩეკების რაოდენობა. ერთ ვიზიტში დატოვებული საშუალო თანხა.',
+  itemsPerBasket: 'ერთ ჩეკში რამდენი ხაზი (პროდუქტი) საშუალოდ. = ხაზები ÷ ჩეკები.',
+  qtyPerBasket: 'ერთ ჩეკში რამდენი ცალი / კგ. = რაოდენობა ÷ ჩეკები.',
+  payment: 'გადახდის ფორმის ჭრილი — ნაღდი ფული vs ბანკის ბარათი. წყარო: ORD_PAY_TYP. 0=ნაღდი, 1=ბარათი.',
+  hour: 'რომელ საათში რამდენი გაიყიდა (0-23). ცარიელი თარიღის ხაზები გამოტოვებულია.',
+  dow: 'კვირის რომელ დღეს რამდენი გაიყიდა (ორშაბათი-კვირა).',
+  daily: 'ბოლო 365 დღის შემოსავალი — ერთ დღეზე. რეგრესი / ცემპი თვალით ჩანს.',
+  calendar: 'კალენდრის თერმულ რუკა — ბოლო 365 დღე. მუქი = მეტი ჩეკი იმ დღეს.',
+  cashier: 'მოლარის ჭრილი — სახელის წყარო DB-ში ცარიელია, ID-ს ვიყენებთ. AOV = ერთ ჩეკზე საშუალო თანხა.',
+  register: 'სალარო-ის (cash-register) ჭრილი — ORD_TAB_ID-ის მიხედვით.',
+  returns: 'ORD_ACT=2 დაბრუნება + ORD_ACT=0 გაუქმება. POS-ის ფასდაკლებად გადანაცვლებული გაყიდვები + ბათილი ჩეკები.',
+  markdown: 'ფასდაკლება — სრული ფასი (ORD_FASDAKLEBAMDE) − გადახდილი (ORD_jamjam). რამდენ ფულზე იქნებოდა მეტი შემოსავალი ფასდაკლების გარეშე.',
+  pareto: '80/20 — რამდენი პროდუქტი იძლევა შემოსავლის 80%-ს. რაც ნაკლები — მით უფრო დამოკიდებული ხარ ცოტა SKU-ზე.',
+  hhi: 'Herfindahl-Hirschman Index — კონცენტრაციის კოეფიციენტი (პროდუქტის წილების კვადრატთა ჯამი). <1500 = დაბალი, 1500-2500 = საშუალო, >2500 = მაღალი (იშვიათი retail-ში — ისიც ცუდია).',
+};
 
-const GEL = new Intl.NumberFormat('ka-GE', {
-  style: 'currency',
-  currency: 'GEL',
-  maximumFractionDigits: 0,
-});
+const GEL = new Intl.NumberFormat('ka-GE', { style: 'currency', currency: 'GEL', maximumFractionDigits: 0 });
+const GEL2 = new Intl.NumberFormat('ka-GE', { style: 'currency', currency: 'GEL', maximumFractionDigits: 2 });
+const NUM = new Intl.NumberFormat('ka-GE', { maximumFractionDigits: 2 });
+const INT = new Intl.NumberFormat('ka-GE', { maximumFractionDigits: 0 });
 
-const NUM = new Intl.NumberFormat('ka-GE', {
-  maximumFractionDigits: 2,
-});
-
-const INT = new Intl.NumberFormat('ka-GE', {
-  maximumFractionDigits: 0,
-});
-
-const asArray = (value) => (Array.isArray(value) ? value : []);
-const toNum = (value) => Number(value) || 0;
-const fmtMoney = (value) => GEL.format(toNum(value));
-const fmtNum = (value) => NUM.format(toNum(value));
-const fmtInt = (value) => INT.format(toNum(value));
-const fmtPct = (value) => `${toNum(value).toFixed(2)}%`;
+const asArray = (v) => (Array.isArray(v) ? v : []);
+const toNum = (v) => Number(v) || 0;
+const fmtMoney = (v) => GEL.format(toNum(v));
+const fmtMoney2 = (v) => GEL2.format(toNum(v));
+const fmtNum = (v) => NUM.format(toNum(v));
+const fmtInt = (v) => INT.format(toNum(v));
+const fmtPct = (v) => `${toNum(v).toFixed(2)}%`;
 
 function renderMoneyClass(value) {
-  if (toNum(value) >= 0) return 'amount-positive';
-  return 'amount-negative';
+  return toNum(value) >= 0 ? 'amount-positive' : 'amount-negative';
 }
 
 function renderDateRange(range) {
-  const min = range?.min || '—';
-  const max = range?.max || '—';
-  return `${min} → ${max}`;
+  return `${range?.min || '—'} → ${range?.max || '—'}`;
+}
+
+// ─── Calendar heatmap (mirror Waybills) ─────────────────────────────────────
+function CalendarHeatmap({ days }) {
+  const cellSize = 12, cellGap = 2;
+  const dayLabels = ['ორშ', 'სამ', 'ოთხ', 'ხუთ', 'პარ', 'შაბ', 'კვი'];
+  const maxRev = days.reduce((m, d) => Math.max(m, toNum(d.revenue_ge)), 0);
+  if (days.length === 0) return <div className="kpi-sub">მონაცემი არ არის</div>;
+  const columns = [];
+  let currentWeek = [];
+  days.forEach((d, i) => {
+    if (i === 0 && d.weekday > 0) {
+      for (let p = 0; p < d.weekday; p++) currentWeek.push(null);
+    }
+    currentWeek.push(d);
+    if (currentWeek.length === 7) {
+      columns.push(currentWeek);
+      currentWeek = [];
+    }
+  });
+  if (currentWeek.length > 0) {
+    while (currentWeek.length < 7) currentWeek.push(null);
+    columns.push(currentWeek);
+  }
+  const intensity = (rev) => {
+    if (!maxRev || !rev) return '#1e293b';
+    const r = rev / maxRev;
+    if (r > 0.75) return '#10b981';
+    if (r > 0.50) return '#34d399';
+    if (r > 0.25) return '#6ee7b7';
+    if (r > 0.05) return '#a7f3d0';
+    return '#1e293b';
+  };
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: cellGap, marginRight: 4 }}>
+          {dayLabels.map((l, i) => (
+            <div key={l} style={{ height: cellSize, fontSize: 9, color: '#94a3b8', lineHeight: `${cellSize}px` }}>
+              {i % 2 === 0 ? l : ''}
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: cellGap }}>
+          {columns.map((col, ci) => (
+            <div key={ci} style={{ display: 'flex', flexDirection: 'column', gap: cellGap }}>
+              {col.map((d, di) => (
+                <div
+                  key={di}
+                  title={d ? `${d.day} · ${fmtMoney(d.revenue_ge)} · ${fmtInt(d.receipts)} ჩეკი` : ''}
+                  style={{
+                    width: cellSize, height: cellSize, borderRadius: 2,
+                    background: d ? intensity(d.revenue_ge) : 'transparent',
+                    cursor: d ? 'help' : 'default',
+                  }}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 10, color: '#94a3b8' }}>
+        <span>ნაკლები</span>
+        {['#1e293b', '#a7f3d0', '#6ee7b7', '#34d399', '#10b981'].map((c) => (
+          <span key={c} style={{ width: 10, height: 10, background: c, borderRadius: 2 }} />
+        ))}
+        <span>მეტი</span>
+      </div>
+    </div>
+  );
 }
 
 export default function RetailSales({ retailSales, responseMeta }) {
   const summary = retailSales && typeof retailSales === 'object' ? retailSales : null;
+  const [topProductsLimit, setTopProductsLimit] = useState(20);
+  const [storeFilter, setStoreFilter] = useState('all');
 
   if (!summary) {
     return (
       <div className="cashflow-page pnl-empty">
         <div className="kpi-card" style={{ maxWidth: 520, margin: '48px auto', textAlign: 'center' }}>
           <div className="kpi-label">Retail Sales summary ჯერ არ არის</div>
-          <div className="kpi-sub" style={{ marginTop: 12 }}>
-            გაუშვი ტერმინალში:
-          </div>
+          <div className="kpi-sub" style={{ marginTop: 12 }}>გაუშვი ტერმინალში:</div>
           <code className="pnl-code-hint">python generate_dashboard_data.py</code>
         </div>
       </div>
@@ -91,32 +180,64 @@ export default function RetailSales({ retailSales, responseMeta }) {
   }
 
   const overall = summary.overall || {};
-  const periodMeta = summary.period_meta && typeof summary.period_meta === 'object'
-    ? summary.period_meta
-    : {};
-  const dataQuality = summary.data_quality && typeof summary.data_quality === 'object'
-    ? summary.data_quality
-    : null;
+  const periodMeta = summary.period_meta && typeof summary.period_meta === 'object' ? summary.period_meta : {};
+  const dataQuality = summary.data_quality && typeof summary.data_quality === 'object' ? summary.data_quality : null;
   const dqNull = dataQuality?.null_timestamp || null;
   const dqLegacy = dataQuality?.legacy_pre_2023 || null;
   const dqPerObject = asArray(dataQuality?.per_object);
   const byObject = asArray(summary.by_object);
   const byMonth = asArray(summary.by_month);
   const topCategoriesByProfit = asArray(summary.top_categories_by_profit).slice(0, 12);
-  const [topProductsLimit, setTopProductsLimit] = useState(20);
   const topProductsByRevenue = asArray(summary.top_products_by_revenue).slice(0, topProductsLimit);
   const topProductsByProfit = asArray(summary.top_products_by_profit).slice(0, topProductsLimit);
-  const duplicatePolicy =
-    summary.duplicate_policy && typeof summary.duplicate_policy === 'object'
-      ? summary.duplicate_policy
-      : {};
+  const duplicatePolicy = summary.duplicate_policy && typeof summary.duplicate_policy === 'object' ? summary.duplicate_policy : {};
   const suspectedFiles = asArray(duplicatePolicy.suspected_files);
   const categoriesShown = asArray(summary.by_category).length;
   const productsShown = asArray(summary.by_product).length;
-  const hasRows =
-    toNum(overall.row_count) > 0 || byObject.length > 0 || byMonth.length > 0;
+
+  // Etap 1 analytics blocks
+  const basket = summary.basket_metrics || {};
+  const paymentBreakdown = asArray(summary.payment_breakdown);
+  const dowBreakdown = asArray(summary.dow_breakdown);
+  const hourBreakdown = asArray(summary.hour_breakdown);
+  const dailyTrend = asArray(summary.daily_trend);
+  const calendarHeatmap = asArray(summary.calendar_heatmap);
+  const returnsVoids = asArray(summary.returns_voids);
+  const discount = summary.discount_totals || {};
+  const concentration = summary.concentration || {};
+  const paretoFull = asArray(concentration.pareto_top500);
+  // Sample for the line chart: 0-50 every step, then 50-500 every 10th rank.
+  const paretoChart = paretoFull.filter((p, i) => i < 50 || i % 10 === 0);
+  const registers = asArray(summary.registers_per_object);
+  const cashiers = asArray(summary.cashiers_per_object);
+
+  // Filter helper — applies store filter to per-object lists
+  const matchStore = (obj) => storeFilter === 'all' || obj === storeFilter;
+  const filteredCashiers = cashiers.filter((c) => matchStore(c.object));
+  const filteredRegisters = registers.filter((r) => matchStore(r.object));
+
+  const hasRows = toNum(overall.row_count) > 0 || byObject.length > 0 || byMonth.length > 0;
   const periodLabel = periodMeta.label_ka || (periodMeta.applied ? 'არჩეული პერიოდი' : 'ყველა პერიოდი');
   const periodCaveat = responseMeta?.period_caveat_ka || '';
+
+  // Daily trend with 7-day moving average for line smoothness
+  const dailyWithMA = useMemo(() => {
+    const out = [];
+    for (let i = 0; i < dailyTrend.length; i++) {
+      const win = dailyTrend.slice(Math.max(0, i - 6), i + 1);
+      const ma = win.reduce((s, d) => s + toNum(d.revenue_ge), 0) / win.length;
+      out.push({ ...dailyTrend[i], ma7: Math.round(ma) });
+    }
+    return out;
+  }, [dailyTrend]);
+
+  // Recent monthly trend (last 24 months) for chart
+  const monthlyChart = useMemo(() => byMonth.slice(-24).map((m) => ({
+    month: m.month,
+    revenue: toNum(m.revenue_ge),
+    profit: toNum(m.profit_ge),
+    margin: toNum(m.gross_margin_pct),
+  })), [byMonth]);
 
   if (!hasRows) {
     return (
@@ -125,20 +246,6 @@ export default function RetailSales({ retailSales, responseMeta }) {
           <div className="kpi-label">
             {periodMeta.applied ? 'არჩეულ პერიოდში Retail Sales არ მოიძებნა' : 'Retail Sales წყარო ცარიელია'}
           </div>
-          <div className="kpi-sub" style={{ marginTop: 10 }}>
-            {periodMeta.applied ? `ფილტრი: ${periodLabel}` : 'გადაამოწმე ფაილები:'}
-          </div>
-          {periodMeta.applied ? (
-            <div className="chart-desc" style={{ marginTop: 12 }}>
-              სულ ნანახი: {fmtInt(periodMeta.total_rows_seen)} · დამთხვეული: {fmtInt(periodMeta.matched_rows)}
-            </div>
-          ) : (
-            <>
-              <code className="pnl-code-hint">Financial_Analysis/გაყიდული პროდუქტები სოფ დვაბზუ/*.xlsx</code>
-              <code className="pnl-code-hint">Financial_Analysis/გაყიდული პროდუქტები სოფ ოზურგეთი/*.xlsx</code>
-            </>
-          )}
-          {periodCaveat ? <div className="chart-desc" style={{ marginTop: 12 }}>{periodCaveat}</div> : null}
         </div>
       </div>
     );
@@ -147,57 +254,46 @@ export default function RetailSales({ retailSales, responseMeta }) {
   return (
     <div className="cashflow-page">
       <div className="tab-hero">
-        <span className="tab-hero-title">🛒 Retail Sales — summary</span>
+        <span className="tab-hero-title">🛒 Retail Sales — full analytics</span>
         <span className="tab-hero-desc">
-          {summary.notes_ka ||
-            'დვაბზუ + ოზურგეთი retail sales source: revenue / cost / profit / margin.'}
+          {summary.notes_ka || 'დვაბზუ + ოზურგეთი retail sales — revenue / cost / profit / margin / basket / payment / time-of-day.'}
         </span>
         <ExportButton
           filename={`RetailSales_${new Date().toISOString().slice(0, 10)}.xlsx`}
           sheets={[
-            {
-              name: 'თვიური',
-              rows: byMonth.map((m) => ({
-                თვე: m.month || '',
-                ობიექტი: m.object || '',
-                შემოსავალი: Number(m.revenue) || 0,
-                თვითთვალი: Number(m.cost) || 0,
-                მოგება: Number(m.profit) || 0,
-                margin_pct: Number(m.margin_pct) || 0,
-              })),
-            },
-            {
-              name: 'Top Products',
-              rows: topProductsByRevenue.map((p) => ({
-                პროდუქტი: p.product || '',
-                შემოსავალი: Number(p.revenue) || 0,
-                მოგება: Number(p.profit) || 0,
-              })),
-            },
+            { name: 'თვიური', rows: byMonth.map((m) => ({ თვე: m.month || '', შემოსავალი: toNum(m.revenue_ge), მოგება: toNum(m.profit_ge), margin_pct: toNum(m.gross_margin_pct) })) },
+            { name: 'TOP Products', rows: topProductsByRevenue.map((p) => ({ პროდუქტი: p.product_name || '', შემოსავალი: toNum(p.revenue_ge), მოგება: toNum(p.profit_ge) })) },
+            { name: 'მოლარეები', rows: cashiers.map((c) => ({ მაღაზია: c.object, user_id: c.user_id, ჩეკი: c.receipts, შემოსავალი: toNum(c.revenue), AOV: toNum(c.aov) })) },
+            { name: 'საათობრივი', rows: hourBreakdown.map((h) => ({ საათი: h.hour, ხაზი: h.lines, ჩეკი: h.receipts, შემოსავალი: toNum(h.revenue_ge) })) },
           ]}
         />
       </div>
 
-      <div className="controls controls-filters" style={{ marginTop: 12, marginBottom: 12 }}>
-        <span className="badge muted">პერიოდი: {periodMeta.applied ? periodLabel : 'ყველა პერიოდი'}</span>
-        <span className="badge muted">ნანახი ხაზები: {fmtInt(periodMeta.total_rows_seen)}</span>
-        <span className="badge muted">დამთხვეული: {fmtInt(periodMeta.matched_rows)}</span>
-        {toNum(periodMeta.excluded_unparseable_count) > 0 && (
-          <span className="badge conf-low">ვერ დაიპარსა: {fmtInt(periodMeta.excluded_unparseable_count)}</span>
-        )}
+      {/* ─── Filters bar ─── */}
+      <div className="controls controls-filters" style={{ marginTop: 12, marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+        <span className="badge muted">პერიოდი: {periodLabel}<InfoTip text={TIPS.daily} /></span>
+        <span className="badge muted">თარიღი: {renderDateRange(overall.date_range)}</span>
+        <span style={{ marginLeft: 12, fontSize: 13, color: '#94a3b8' }}>მაღაზია:</span>
+        <select
+          value={storeFilter}
+          onChange={(e) => setStoreFilter(e.target.value)}
+          style={{ background: '#1e293b', color: '#e2e8f0', border: '1px solid #334155', borderRadius: 6, padding: '4px 8px', fontSize: 13 }}
+        >
+          <option value="all">ყველა</option>
+          {byObject.map((o) => (<option key={o.object} value={o.object}>{o.object}</option>))}
+        </select>
       </div>
 
-      {periodCaveat ? (
-        <div className="trust-banner-sub trust-banner-sub--warn">
-          {periodCaveat}
-        </div>
-      ) : null}
+      {periodCaveat && (
+        <div className="trust-banner-sub trust-banner-sub--warn">{periodCaveat}</div>
+      )}
 
       <div className="local-pay-banner imported-products-reference-note" role="note">
-        Reference-only წყაროა retail-sales export-იდან. ეს ბლოკი არ ერთვება supplier debt/AP,
+        Reference-only წყაროა Megaplus DB-ის რეტეილ გაყიდვებიდან. ეს ბლოკი არ ერთვება supplier debt/AP,
         RS truth totals ან bank reconciliation ჯამებში; გამოიყენე როგორც დამატებითი ანალიზის ჭრილი.
       </div>
 
+      {/* ─── Data quality warning ─── */}
       {(dqNull?.row_count > 0 || dqLegacy?.row_count > 0) && (
         <div className="chart-card" style={{ borderLeft: '3px solid #f59e0b', background: '#1c1917' }}>
           <h3 style={{ color: '#fbbf24' }}>⚠️ მონაცემთა ხარისხის შენიშვნა</h3>
@@ -208,16 +304,14 @@ export default function RetailSales({ retailSales, responseMeta }) {
           {dqNull?.row_count > 0 && (
             <div className="kpi-sub" style={{ marginBottom: 6 }}>
               <strong style={{ color: '#fbbf24' }}>თარიღი არ აქვს:</strong>{' '}
-              {fmtInt(dqNull.row_count)} ხაზი · {fmtMoney(dqNull.revenue_ge)} ·{' '}
-              რაოდ. {fmtNum(dqNull.quantity)}
+              {fmtInt(dqNull.row_count)} ხაზი · {fmtMoney(dqNull.revenue_ge)} · რაოდ. {fmtNum(dqNull.quantity)}
               <InfoTip text={dqNull.note_ka} />
             </div>
           )}
           {dqLegacy?.row_count > 0 && (
             <div className="kpi-sub" style={{ marginBottom: 6 }}>
               <strong style={{ color: '#fbbf24' }}>2023-01-01-მდე:</strong>{' '}
-              {fmtInt(dqLegacy.row_count)} ხაზი · {fmtMoney(dqLegacy.revenue_ge)} ·{' '}
-              რაოდ. {fmtNum(dqLegacy.quantity)} (სავარაუდოდ DB-ის ისტორიული სატესტო)
+              {fmtInt(dqLegacy.row_count)} ხაზი · {fmtMoney(dqLegacy.revenue_ge)} · რაოდ. {fmtNum(dqLegacy.quantity)} (სავარაუდოდ DB-ის ისტორიული სატესტო)
               <InfoTip text={dqLegacy.note_ka} />
             </div>
           )}
@@ -251,33 +345,61 @@ export default function RetailSales({ retailSales, responseMeta }) {
         </div>
       )}
 
+      {/* ─── KPI grid (12 cards) ─── */}
       <div className="kpi-grid retail-sales-kpi-grid">
         <div className="kpi-card kpi-card--accent">
-          <div className="kpi-label">სულ შემოსავალი<InfoTip text={TIP_REVENUE} /></div>
+          <div className="kpi-label">სულ შემოსავალი<InfoTip text={TIPS.revenue} /></div>
           <div className="kpi-value amount-positive">{fmtMoney(overall.revenue_ge)}</div>
           <div className="kpi-sub">POS-რეგისტრირებული</div>
         </div>
         <div className="kpi-card kpi-card--warn">
-          <div className="kpi-label">სულ თვითღირებულება<InfoTip text={TIP_COST} /></div>
+          <div className="kpi-label">სულ თვითღირებულება<InfoTip text={TIPS.cost} /></div>
           <div className="kpi-value amount-negative">{fmtMoney(overall.cost_ge)}</div>
-          <div className="kpi-sub">ფაქტურიდან გათვლილი (imputed)</div>
+          <div className="kpi-sub">ფაქტურიდან გათვლილი</div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-label">სულ მოგება<InfoTip text={TIP_PROFIT} /></div>
-          <div className={`kpi-value ${renderMoneyClass(overall.profit_ge)}`}>
-            {fmtMoney(overall.profit_ge)}
-          </div>
+          <div className="kpi-label">სულ მოგება<InfoTip text={TIPS.profit} /></div>
+          <div className={`kpi-value ${renderMoneyClass(overall.profit_ge)}`}>{fmtMoney(overall.profit_ge)}</div>
           <div className="kpi-sub">შემოსავალი − imputed cost</div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-label">Gross Margin<InfoTip text={TIP_MARGIN} /></div>
+          <div className="kpi-label">Gross Margin<InfoTip text={TIPS.margin} /></div>
           <div className="kpi-value amount-neutral">{fmtPct(overall.gross_margin_pct)}</div>
           <div className="kpi-sub">{fmtInt(overall.distinct_object_count)} ობიექტი</div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-label">ხაზები / რაოდენობა<InfoTip text={TIP_ROWS} /></div>
+          <div className="kpi-label">ჩეკები<InfoTip text={TIPS.receipts} /></div>
+          <div className="kpi-value amount-neutral">{fmtInt(basket.receipts)}</div>
+          <div className="kpi-sub">უნიკალური ORD_N</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-label">საშუალო ჩეკი (AOV)<InfoTip text={TIPS.aov} /></div>
+          <div className="kpi-value amount-neutral">{fmtMoney2(basket.aov)}</div>
+          <div className="kpi-sub">ერთ ჩეკზე საშ. თანხა</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-label">პროდუქტი / ჩეკი<InfoTip text={TIPS.itemsPerBasket} /></div>
+          <div className="kpi-value amount-neutral">{fmtNum(basket.items_per_basket)}</div>
+          <div className="kpi-sub">საშ. ხაზი ერთ ჩეკში</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-label">ხაზები / რაოდენობა<InfoTip text={TIPS.rows} /></div>
           <div className="kpi-value amount-neutral">{fmtInt(overall.row_count)}</div>
-          <div className="kpi-sub">რაოდ.: {fmtNum(overall.total_quantity)}</div>
+          <div className="kpi-sub">{fmtNum(overall.total_quantity)} ცალი / კგ</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-label">ფასდაკლება ჯამში<InfoTip text={TIPS.markdown} /></div>
+          <div className="kpi-value amount-neutral">{fmtMoney(discount.markdown_total_ge)}</div>
+          <div className="kpi-sub">{fmtPct(discount.avg_markdown_pct)} საშ. სკიდკა</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-label">დაბრუნება / გაუქმება<InfoTip text={TIPS.returns} /></div>
+          <div className="kpi-value amount-neutral">
+            {fmtInt(returnsVoids.reduce((s, r) => s + toNum(r.lines), 0))}
+          </div>
+          <div className="kpi-sub">
+            {fmtMoney(returnsVoids.reduce((s, r) => s + toNum(r.revenue_ge), 0))} ჯამი
+          </div>
         </div>
         <div className="kpi-card">
           <div className="kpi-label">კატეგორია / პროდუქტი</div>
@@ -286,10 +408,328 @@ export default function RetailSales({ retailSales, responseMeta }) {
           </div>
           <div className="kpi-sub">{renderDateRange(overall.date_range)}</div>
         </div>
+        <div className="kpi-card">
+          <div className="kpi-label">80/20 პროდუქტი<InfoTip text={TIPS.pareto} /></div>
+          <div className="kpi-value amount-neutral">{fmtInt(concentration.products_for_80pct_revenue)}</div>
+          <div className="kpi-sub">პროდუქტი = 80% შემოს. (HHI {fmtNum(concentration.hhi)} {concentration.hhi_class})</div>
+        </div>
       </div>
 
+      {/* ─── Monthly trend chart ─── */}
+      {monthlyChart.length > 0 && (
+        <div className="chart-card">
+          <h3>თვიური ტრენდი (ბოლო 24 თვე)<InfoTip text="თვიური შემოსავალი + მოგება + მარჟა %. წითელი ხაზი მარჟა-ს % აჩვენებს მარჯვენა ღერძზე." /></h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={monthlyChart}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+              <XAxis dataKey="month" stroke="#94a3b8" tick={{ fontSize: 11 }} />
+              <YAxis yAxisId="left" stroke="#94a3b8" tick={{ fontSize: 11 }} tickFormatter={(v) => fmtInt(v)} />
+              <YAxis yAxisId="right" orientation="right" stroke="#f59e0b" tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}%`} />
+              <Tooltip
+                contentStyle={{ background: '#0f172a', border: '1px solid #334155' }}
+                formatter={(v, name) => name === 'მარჟა %' ? `${v}%` : fmtMoney(v)}
+              />
+              <Legend />
+              <Line yAxisId="left" type="monotone" dataKey="revenue" stroke="#3b82f6" name="შემოსავალი" strokeWidth={2} dot={false} />
+              <Line yAxisId="left" type="monotone" dataKey="profit" stroke="#10b981" name="მოგება" strokeWidth={2} dot={false} />
+              <Line yAxisId="right" type="monotone" dataKey="margin" stroke="#f59e0b" name="მარჟა %" strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* ─── Daily trend (last 365 days) ─── */}
+      {dailyWithMA.length > 0 && (
+        <div className="chart-card">
+          <h3>დღიური ტრენდი — ბოლო 365 დღე<InfoTip text={TIPS.daily} /></h3>
+          <ResponsiveContainer width="100%" height={260}>
+            <AreaChart data={dailyWithMA}>
+              <defs>
+                <linearGradient id="grRev" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4} />
+                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+              <XAxis dataKey="day" stroke="#94a3b8" tick={{ fontSize: 10 }} interval={Math.floor(dailyWithMA.length / 12)} />
+              <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} tickFormatter={fmtInt} />
+              <Tooltip
+                contentStyle={{ background: '#0f172a', border: '1px solid #334155' }}
+                formatter={(v) => fmtMoney(v)}
+              />
+              <Legend />
+              <Area type="monotone" dataKey="revenue_ge" stroke="#3b82f6" fillOpacity={1} fill="url(#grRev)" name="დღიური შემოს." />
+              <Line type="monotone" dataKey="ma7" stroke="#f59e0b" strokeWidth={2} dot={false} name="7-დღიანი მძლავ. საშ." />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* ─── Hour-of-day + Day-of-week ─── */}
+      <div className="retail-sales-grid-2">
+        {hourBreakdown.length > 0 && (
+          <div className="chart-card">
+            <h3>საათობრივი ცემპი<InfoTip text={TIPS.hour} /></h3>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={hourBreakdown}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                <XAxis dataKey="hour" stroke="#94a3b8" tick={{ fontSize: 11 }} tickFormatter={(h) => `${String(h).padStart(2, '0')}h`} />
+                <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} tickFormatter={fmtInt} />
+                <Tooltip
+                  contentStyle={{ background: '#0f172a', border: '1px solid #334155' }}
+                  formatter={(v) => fmtMoney(v)}
+                  labelFormatter={(h) => `${String(h).padStart(2, '0')}:00`}
+                />
+                <Bar dataKey="revenue_ge" fill="#3b82f6" name="შემოსავალი" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+        {dowBreakdown.length > 0 && (
+          <div className="chart-card">
+            <h3>კვირის დღე<InfoTip text={TIPS.dow} /></h3>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={dowBreakdown}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                <XAxis dataKey="label_ka" stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} tickFormatter={fmtInt} />
+                <Tooltip
+                  contentStyle={{ background: '#0f172a', border: '1px solid #334155' }}
+                  formatter={(v) => fmtMoney(v)}
+                />
+                <Bar dataKey="revenue_ge" fill="#10b981" name="შემოსავალი" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      {/* ─── Calendar heatmap ─── */}
+      {calendarHeatmap.length > 0 && (
+        <div className="chart-card">
+          <h3>კალენდრის თერმული რუკა — ბოლო 365 დღე<InfoTip text={TIPS.calendar} /></h3>
+          <CalendarHeatmap days={calendarHeatmap} />
+        </div>
+      )}
+
+      {/* ─── Payment + Store mix ─── */}
+      <div className="retail-sales-grid-2">
+        {paymentBreakdown.length > 0 && (
+          <div className="chart-card">
+            <h3>გადახდის ფორმა<InfoTip text={TIPS.payment} /></h3>
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie
+                  data={paymentBreakdown}
+                  dataKey="revenue_ge"
+                  nameKey="label_ka"
+                  outerRadius={80}
+                  label={(entry) => `${entry.label_ka}: ${fmtPct(entry.share_pct)}`}
+                >
+                  {paymentBreakdown.map((p, i) => (
+                    <Cell key={p.label_ka} fill={i === 0 ? '#10b981' : '#3b82f6'} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155' }} formatter={(v) => fmtMoney(v)} />
+              </PieChart>
+            </ResponsiveContainer>
+            <table style={{ width: '100%', fontSize: 12, marginTop: 8 }}>
+              <thead><tr><th style={{ textAlign: 'left' }}>ფორმა</th><th style={{ textAlign: 'right' }}>ჩეკები</th><th style={{ textAlign: 'right' }}>შემოს.</th><th style={{ textAlign: 'right' }}>%</th></tr></thead>
+              <tbody>
+                {paymentBreakdown.map((p) => (
+                  <tr key={p.label_ka}>
+                    <td>{p.label_ka}</td>
+                    <td style={{ textAlign: 'right' }}>{fmtInt(p.receipts)}</td>
+                    <td style={{ textAlign: 'right' }}>{fmtMoney(p.revenue_ge)}</td>
+                    <td style={{ textAlign: 'right' }}>{fmtPct(p.share_pct)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {byObject.length > 0 && (
+          <div className="chart-card">
+            <h3>მაღაზიის mix<InfoTip text="მაღაზიების შემოსავალი ერთ ჩარდახში" /></h3>
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie
+                  data={byObject}
+                  dataKey="revenue_ge"
+                  nameKey="object"
+                  outerRadius={80}
+                  label={(entry) => `${entry.object}: ${fmtMoney(entry.revenue_ge)}`}
+                >
+                  {byObject.map((o) => (
+                    <Cell key={o.object} fill={STORE_COLOR[o.object] || '#94a3b8'} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155' }} formatter={(v) => fmtMoney(v)} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      {/* ─── Pareto + concentration ─── */}
+      {paretoChart.length > 0 && (
+        <div className="chart-card">
+          <h3>Pareto — შემოსავლის კუმულატიური წილი<InfoTip text={TIPS.pareto} /></h3>
+          <p className="chart-desc">
+            HHI = <strong>{fmtNum(concentration.hhi)}</strong> ({concentration.hhi_class}).
+            ჯამური {fmtInt(concentration.total_products_in_revenue)} პროდუქტიდან:{' '}
+            <strong>{fmtInt(concentration.products_for_50pct_revenue)}</strong> = 50% შემოს. ·{' '}
+            <strong>{fmtInt(concentration.products_for_80pct_revenue) || '>500'}</strong> = 80% ·{' '}
+            <strong>{fmtInt(concentration.products_for_90pct_revenue) || '>500'}</strong> = 90%.
+          </p>
+          <ResponsiveContainer width="100%" height={240}>
+            <LineChart data={paretoChart}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+              <XAxis dataKey="rank" stroke="#94a3b8" tick={{ fontSize: 11 }} />
+              <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}%`} domain={[0, 100]} />
+              <Tooltip
+                contentStyle={{ background: '#0f172a', border: '1px solid #334155' }}
+                formatter={(v) => `${v}%`}
+                labelFormatter={(rank) => `რანკი ${rank}`}
+              />
+              <Line type="monotone" dataKey="cum_share_pct" stroke="#a855f7" strokeWidth={2} dot={false} name="კუმულ. წილი %" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* ─── Cashier table ─── */}
+      {cashiers.length > 0 && (
+        <CollapsibleSection title="მოლარეების ცხრილი" badge={`${filteredCashiers.length}`}>
+          <p className="chart-desc">
+            <InfoTip text={TIPS.cashier} />
+            სახელის წყარო DB-ში ცარიელია — მხოლოდ ID-ს ვიჩვენებთ. მოწმებიდან: მოლარე #1 = მფლობელი (კაბ), #2-დან მუშები.
+          </p>
+          <div className="table-wrapper cashflow-table retail-sales-table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>მაღაზია</th>
+                  <th>მოლარე ID</th>
+                  <th>ჩეკები</th>
+                  <th>ხაზები</th>
+                  <th>შემოსავალი</th>
+                  <th>AOV</th>
+                  <th>პირველი გაყიდვა</th>
+                  <th>ბოლო გაყიდვა</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredCashiers.map((c) => (
+                  <tr key={`cash-${c.object}-${c.user_id}`}>
+                    <td>{c.object}</td>
+                    <td>#{c.user_id ?? '?'}</td>
+                    <td>{fmtInt(c.receipts)}</td>
+                    <td>{fmtInt(c.lines)}</td>
+                    <td className="amount-positive">{fmtMoney(c.revenue)}</td>
+                    <td>{fmtMoney2(c.aov)}</td>
+                    <td>{(c.first_sale || '').slice(0, 10) || '—'}</td>
+                    <td>{(c.last_sale || '').slice(0, 10) || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CollapsibleSection>
+      )}
+
+      {/* ─── Register table ─── */}
+      {registers.length > 0 && (
+        <CollapsibleSection title="სალაროების (cash-register) ცხრილი" badge={`${filteredRegisters.length}`}>
+          <p className="chart-desc"><InfoTip text={TIPS.register} />ORD_TAB_ID-ის ჭრილით.</p>
+          <div className="table-wrapper cashflow-table retail-sales-table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>მაღაზია</th>
+                  <th>სალარო ID</th>
+                  <th>ჩეკები</th>
+                  <th>ხაზები</th>
+                  <th>შემოსავალი</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRegisters.map((r) => (
+                  <tr key={`reg-${r.object}-${r.tab_id}`}>
+                    <td>{r.object}</td>
+                    <td>#{r.tab_id ?? '?'}</td>
+                    <td>{fmtInt(r.receipts)}</td>
+                    <td>{fmtInt(r.lines)}</td>
+                    <td className="amount-positive">{fmtMoney(r.revenue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CollapsibleSection>
+      )}
+
+      {/* ─── Returns + voids ─── */}
+      {returnsVoids.length > 0 && (
+        <div className="chart-card">
+          <h3>დაბრუნება + გაუქმება<InfoTip text={TIPS.returns} /></h3>
+          <table style={{ width: '100%', fontSize: 13 }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left' }}>ტიპი</th>
+                <th style={{ textAlign: 'right' }}>ხაზები</th>
+                <th style={{ textAlign: 'right' }}>შემოსავალი</th>
+                <th style={{ textAlign: 'right' }}>რაოდ.</th>
+                <th style={{ textAlign: 'right' }}>%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {returnsVoids.map((r) => (
+                <tr key={`rv-${r.kind}`}>
+                  <td>{r.label_ka} (act={r.act})</td>
+                  <td style={{ textAlign: 'right' }}>{fmtInt(r.lines)}</td>
+                  <td style={{ textAlign: 'right' }}>{fmtMoney(r.revenue_ge)}</td>
+                  <td style={{ textAlign: 'right' }}>{fmtNum(r.quantity)}</td>
+                  <td style={{ textAlign: 'right' }}>{fmtPct(r.share_pct)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ─── Discount panel ─── */}
+      {discount.discounted_lines > 0 && (
+        <div className="chart-card">
+          <h3>ფასდაკლების ანალიზი<InfoTip text={TIPS.markdown} /></h3>
+          <div className="kpi-grid retail-sales-kpi-grid" style={{ marginTop: 8 }}>
+            <div className="kpi-card">
+              <div className="kpi-label">ფასდაკლების ჯამი</div>
+              <div className="kpi-value amount-negative">{fmtMoney(discount.markdown_total_ge)}</div>
+              <div className="kpi-sub">დახარჯული ფული რომ მომხმარებელი მოგვიზიდოთ</div>
+            </div>
+            <div className="kpi-card">
+              <div className="kpi-label">ფასდაკლებული ხაზი</div>
+              <div className="kpi-value amount-neutral">{fmtInt(discount.discounted_lines)}</div>
+              <div className="kpi-sub">{fmtInt(discount.discounted_receipts)} ჩეკში</div>
+            </div>
+            <div className="kpi-card">
+              <div className="kpi-label">საშ. ფასდაკლების %</div>
+              <div className="kpi-value amount-neutral">{fmtPct(discount.avg_markdown_pct)}</div>
+              <div className="kpi-sub">სრული ფასიდან რა შემცირდა</div>
+            </div>
+            <div className="kpi-card">
+              <div className="kpi-label">% შემოსავალში</div>
+              <div className="kpi-value amount-neutral">{fmtPct(discount.share_of_revenue_pct)}</div>
+              <div className="kpi-sub">ფასდაკლებული გაყიდვის წილი</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Coverage + duplicate policy ─── */}
       <div className="chart-card">
-        <h3>Coverage და duplicate policy</h3>
+        <h3>Coverage და duplicate policy<InfoTip text={TIPS.coverage} /></h3>
         <p className="chart-desc">
           Source files: ნაპოვნი {fmtInt(summary.files_found_count)} · წაკითხული{' '}
           {fmtInt(summary.files_read_count)} · policy-skip {fmtInt(summary.files_skipped_by_policy_count)}
@@ -313,12 +753,8 @@ export default function RetailSales({ retailSales, responseMeta }) {
                 key={`${item.relative_path || 'missing'}-${item.suspected_duplicate_of || 'none'}`}
                 className="retail-sales-policy-item"
               >
-                <div className="retail-sales-policy-path">
-                  <code>{item.relative_path || 'უცნობი ფაილი'}</code>
-                </div>
-                <div className="kpi-sub">
-                  suspected duplicate of: <code>{item.suspected_duplicate_of || '—'}</code>
-                </div>
+                <div className="retail-sales-policy-path"><code>{item.relative_path || 'უცნობი ფაილი'}</code></div>
+                <div className="kpi-sub">suspected duplicate of: <code>{item.suspected_duplicate_of || '—'}</code></div>
                 {item.reason_ka ? <div className="chart-desc">{item.reason_ka}</div> : null}
               </li>
             ))}
@@ -326,6 +762,7 @@ export default function RetailSales({ retailSales, responseMeta }) {
         )}
       </div>
 
+      {/* ─── Per-store summary table ─── */}
       <div className="chart-card">
         <h3>ობიექტების summary</h3>
         <div className="table-wrapper cashflow-table retail-sales-table-scroll">
@@ -339,7 +776,7 @@ export default function RetailSales({ retailSales, responseMeta }) {
                 <th>თვითღირებულება</th>
                 <th>მოგება</th>
                 <th>Margin</th>
-                <th>კატეგორია/პროდუქტი</th>
+                <th>კატ./პროდ.</th>
                 <th>პერიოდი</th>
               </tr>
             </thead>
@@ -357,20 +794,14 @@ export default function RetailSales({ retailSales, responseMeta }) {
                   <td>{renderDateRange(row.date_range)}</td>
                 </tr>
               ))}
-              {byObject.length === 0 && (
-                <tr>
-                  <td colSpan="9" style={{ textAlign: 'center' }}>
-                    ობიექტების summary ვერ მოიძებნა
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
       </div>
 
+      {/* ─── Monthly table ─── */}
       <div className="chart-card">
-        <h3>თვიური დინამიკა</h3>
+        <h3>თვიური ცხრილი</h3>
         <div className="table-wrapper cashflow-table retail-sales-table-scroll">
           <table>
             <thead>
@@ -396,28 +827,18 @@ export default function RetailSales({ retailSales, responseMeta }) {
                   <td>{fmtPct(row.gross_margin_pct)}</td>
                 </tr>
               ))}
-              {byMonth.length === 0 && (
-                <tr>
-                  <td colSpan="7" style={{ textAlign: 'center' }}>
-                    თვიური summary ცარიელია
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
       </div>
 
+      {/* ─── TOP products selector ─── */}
       <div className="controls" style={{ marginTop: 12, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ fontSize: 13, color: '#94a3b8' }}>TOP პროდუქტების რაოდენობა:</span>
         <select
           value={topProductsLimit}
           onChange={(e) => setTopProductsLimit(Number(e.target.value))}
-          style={{
-            background: '#1e293b', color: '#e2e8f0',
-            border: '1px solid #334155', borderRadius: 6,
-            padding: '4px 8px', fontSize: 13,
-          }}
+          style={{ background: '#1e293b', color: '#e2e8f0', border: '1px solid #334155', borderRadius: 6, padding: '4px 8px', fontSize: 13 }}
         >
           <option value={20}>20</option>
           <option value={30}>30</option>
@@ -426,10 +847,7 @@ export default function RetailSales({ retailSales, responseMeta }) {
       </div>
 
       <div className="retail-sales-grid-2">
-        <CollapsibleSection
-          title="TOP კატეგორიები — მოგებით"
-          badge={`${topCategoriesByProfit.length}`}
-        >
+        <CollapsibleSection title="TOP კატეგორიები — მოგებით" badge={`${topCategoriesByProfit.length}`}>
           <div className="table-wrapper cashflow-table retail-sales-table-scroll">
             <table>
               <thead>
@@ -451,22 +869,12 @@ export default function RetailSales({ retailSales, responseMeta }) {
                     <td>{fmtPct(row.gross_margin_pct)}</td>
                   </tr>
                 ))}
-                {topCategoriesByProfit.length === 0 && (
-                  <tr>
-                    <td colSpan="5" style={{ textAlign: 'center' }}>
-                      TOP კატეგორიები არ არის
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
         </CollapsibleSection>
 
-        <CollapsibleSection
-          title="TOP პროდუქტები — შემოსავლით"
-          badge={`${topProductsByRevenue.length}`}
-        >
+        <CollapsibleSection title="TOP პროდუქტები — შემოსავლით" badge={`${topProductsByRevenue.length}`}>
           <div className="table-wrapper cashflow-table retail-sales-table-scroll">
             <table>
               <thead>
@@ -480,9 +888,7 @@ export default function RetailSales({ retailSales, responseMeta }) {
               </thead>
               <tbody>
                 {topProductsByRevenue.map((row) => (
-                  <tr
-                    key={`retail-revenue-${row.product_code || 'na'}-${row.product_name || 'na'}-${toNum(row.revenue_ge)}`}
-                  >
+                  <tr key={`retail-revenue-${row.product_code || 'na'}-${row.product_name || 'na'}-${toNum(row.revenue_ge)}`}>
                     <td>{row.product_name || 'უცნობი პროდუქტი'}</td>
                     <td>{row.product_code || '—'}</td>
                     <td className="amount-positive">{fmtMoney(row.revenue_ge)}</td>
@@ -490,23 +896,13 @@ export default function RetailSales({ retailSales, responseMeta }) {
                     <td>{fmtPct(row.gross_margin_pct)}</td>
                   </tr>
                 ))}
-                {topProductsByRevenue.length === 0 && (
-                  <tr>
-                    <td colSpan="5" style={{ textAlign: 'center' }}>
-                      TOP პროდუქტები არ არის
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
         </CollapsibleSection>
       </div>
 
-      <CollapsibleSection
-        title="TOP პროდუქტები — მოგებით"
-        badge={`${topProductsByProfit.length}`}
-      >
+      <CollapsibleSection title="TOP პროდუქტები — მოგებით" badge={`${topProductsByProfit.length}`}>
         <div className="table-wrapper cashflow-table retail-sales-table-scroll">
           <table>
             <thead>
@@ -522,9 +918,7 @@ export default function RetailSales({ retailSales, responseMeta }) {
             </thead>
             <tbody>
               {topProductsByProfit.map((row) => (
-                <tr
-                  key={`retail-profit-${row.product_code || 'na'}-${row.product_name || 'na'}-${toNum(row.profit_ge)}`}
-                >
+                <tr key={`retail-profit-${row.product_code || 'na'}-${row.product_name || 'na'}-${toNum(row.profit_ge)}`}>
                   <td>{row.product_name || 'უცნობი პროდუქტი'}</td>
                   <td>{row.product_code || '—'}</td>
                   <td>{row.category || '—'}</td>
@@ -534,13 +928,6 @@ export default function RetailSales({ retailSales, responseMeta }) {
                   <td>{fmtPct(row.gross_margin_pct)}</td>
                 </tr>
               ))}
-              {topProductsByProfit.length === 0 && (
-                <tr>
-                  <td colSpan="7" style={{ textAlign: 'center' }}>
-                    TOP პროდუქტები არ არის
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>

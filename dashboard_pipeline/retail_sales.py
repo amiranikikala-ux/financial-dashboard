@@ -597,6 +597,224 @@ def synthesize_from_megaplus(megaplus_live):
         "per_object": dq_per_store,
     }
 
+    # ─── Sales analytics (basket / payment / cashier / time / etc.) ────────
+    # Aggregate per-store rollup blocks into portfolio-wide views. Cashiers
+    # and registers stay split by store because their IDs are per-store
+    # namespaced (user_id 5 in dvabzu ≠ user_id 5 in ozurgeti).
+    bm_lines = 0; bm_receipts = 0; bm_rev = 0.0; bm_qty = 0.0
+    payment_acc: dict = {}
+    register_per_store: list = []
+    cashier_per_store: list = []
+    hour_acc: dict = {h: {"hour": h, "lines": 0, "receipts": 0, "revenue": 0.0} for h in range(24)}
+    dow_acc: dict = {d: {"dow": d, "lines": 0, "receipts": 0, "revenue": 0.0} for d in range(1, 8)}
+    daily_acc: dict = {}
+    returns_acc: dict = {}
+    disc_lines = 0; disc_receipts = 0; disc_md_total = 0.0; disc_rev_after = 0.0; disc_rev_before = 0.0
+    for store_id, rollup in stores.items():
+        obj_label = store_label_for.get(str(store_id)) or f"store_{store_id}"
+        bm = rollup.get("basket_metrics") or {}
+        bm_lines += int(bm.get("lines") or 0)
+        bm_receipts += int(bm.get("receipts") or 0)
+        bm_rev += float(bm.get("revenue") or 0)
+        bm_qty += float(bm.get("quantity") or 0)
+        for pt in rollup.get("payment_types") or []:
+            key = pt.get("pay_typ")
+            cur = payment_acc.setdefault(key, {"pay_typ": key, "lines": 0, "receipts": 0, "revenue": 0.0})
+            cur["lines"] += int(pt.get("lines") or 0)
+            cur["receipts"] += int(pt.get("receipts") or 0)
+            cur["revenue"] += float(pt.get("revenue") or 0)
+        for r in rollup.get("registers") or []:
+            register_per_store.append({**r, "object": obj_label})
+        for c in rollup.get("cashiers") or []:
+            cashier_per_store.append({**c, "object": obj_label})
+        for h in rollup.get("hour_of_day") or []:
+            hr = h.get("hour")
+            if hr is None or hr not in hour_acc:
+                continue
+            hour_acc[hr]["lines"] += int(h.get("lines") or 0)
+            hour_acc[hr]["receipts"] += int(h.get("receipts") or 0)
+            hour_acc[hr]["revenue"] += float(h.get("revenue") or 0)
+        for d in rollup.get("day_of_week") or []:
+            dw = d.get("dow")
+            if dw is None or dw not in dow_acc:
+                continue
+            dow_acc[dw]["lines"] += int(d.get("lines") or 0)
+            dow_acc[dw]["receipts"] += int(d.get("receipts") or 0)
+            dow_acc[dw]["revenue"] += float(d.get("revenue") or 0)
+        for d in rollup.get("daily_trend") or []:
+            day = d.get("day")
+            if not day:
+                continue
+            cur = daily_acc.setdefault(day, {"day": day, "lines": 0, "receipts": 0, "revenue": 0.0, "cogs": 0.0, "profit": 0.0})
+            cur["lines"] += int(d.get("lines") or 0)
+            cur["receipts"] += int(d.get("receipts") or 0)
+            cur["revenue"] += float(d.get("revenue") or 0)
+            cur["cogs"] += float(d.get("cogs") or 0)
+            cur["profit"] += float(d.get("profit") or 0)
+        for rv in rollup.get("returns_voids") or []:
+            kind = rv.get("kind")
+            cur = returns_acc.setdefault(kind, {"kind": kind, "act": rv.get("act"), "lines": 0, "receipts": 0, "revenue": 0.0, "quantity": 0.0})
+            cur["lines"] += int(rv.get("lines") or 0)
+            cur["receipts"] += int(rv.get("receipts") or 0)
+            cur["revenue"] += float(rv.get("revenue") or 0)
+            cur["quantity"] += float(rv.get("quantity") or 0)
+        dt = rollup.get("discount_totals") or {}
+        disc_lines += int(dt.get("discounted_lines") or 0)
+        disc_receipts += int(dt.get("discounted_receipts") or 0)
+        disc_md_total += float(dt.get("markdown_total") or 0)
+        disc_rev_after += float(dt.get("revenue_after_markdown") or 0)
+        disc_rev_before += float(dt.get("revenue_before_markdown") or 0)
+
+    basket_metrics = {
+        "lines": bm_lines,
+        "receipts": bm_receipts,
+        "revenue_ge": round(bm_rev, 2),
+        "quantity": round(bm_qty, 2),
+        "aov": round(bm_rev / bm_receipts, 2) if bm_receipts else 0.0,
+        "items_per_basket": round(bm_lines / bm_receipts, 2) if bm_receipts else 0.0,
+        "qty_per_basket": round(bm_qty / bm_receipts, 2) if bm_receipts else 0.0,
+    }
+    PAY_LABEL = {0: "ნაღდი", 1: "ბარათი"}
+    payment_breakdown = []
+    for pt in sorted(payment_acc.values(), key=lambda x: -x["revenue"]):
+        share = (pt["revenue"] / bm_rev * 100) if bm_rev else 0.0
+        payment_breakdown.append({
+            "pay_typ": pt["pay_typ"],
+            "label_ka": PAY_LABEL.get(pt["pay_typ"], f"სხვა #{pt['pay_typ']}"),
+            "lines": pt["lines"],
+            "receipts": pt["receipts"],
+            "revenue_ge": round(pt["revenue"], 2),
+            "share_pct": round(share, 2),
+        })
+    DOW_LABEL = {1: "ორშაბათი", 2: "სამშაბათი", 3: "ოთხშაბათი", 4: "ხუთშაბათი", 5: "პარასკევი", 6: "შაბათი", 7: "კვირა"}
+    dow_breakdown = []
+    for dw in sorted(dow_acc.keys()):
+        d = dow_acc[dw]
+        dow_breakdown.append({
+            "dow": dw,
+            "label_ka": DOW_LABEL.get(dw, str(dw)),
+            "lines": d["lines"],
+            "receipts": d["receipts"],
+            "revenue_ge": round(d["revenue"], 2),
+        })
+    hour_breakdown = []
+    for hr in sorted(hour_acc.keys()):
+        h = hour_acc[hr]
+        hour_breakdown.append({
+            "hour": hr,
+            "lines": h["lines"],
+            "receipts": h["receipts"],
+            "revenue_ge": round(h["revenue"], 2),
+        })
+    daily_trend = []
+    for k in sorted(daily_acc.keys()):
+        d = daily_acc[k]
+        rev = d["revenue"]; profit = d["profit"]
+        daily_trend.append({
+            "day": k,
+            "lines": d["lines"],
+            "receipts": d["receipts"],
+            "revenue_ge": round(rev, 2),
+            "cost_ge": round(d["cogs"], 2),
+            "profit_ge": round(profit, 2),
+            "gross_margin_pct": round((profit / rev * 100) if rev > 0 else 0.0, 2),
+        })
+    # Calendar heatmap = same daily list, but enriched with weekday for UI grid.
+    import datetime as _dt
+    calendar_heatmap = []
+    for d in daily_trend:
+        try:
+            wd = _dt.date.fromisoformat(d["day"]).weekday()  # Mon=0 .. Sun=6
+        except Exception:
+            wd = None
+        calendar_heatmap.append({
+            "day": d["day"],
+            "weekday": wd,
+            "lines": d["lines"],
+            "receipts": d["receipts"],
+            "revenue_ge": d["revenue_ge"],
+        })
+    returns_voids = []
+    for k in ("void", "return"):
+        rv = returns_acc.get(k)
+        if not rv:
+            continue
+        share = (abs(rv["revenue"]) / bm_rev * 100) if bm_rev else 0.0
+        returns_voids.append({
+            "act": rv["act"],
+            "kind": k,
+            "label_ka": "გაუქმებული" if k == "void" else "დაბრუნებული",
+            "lines": rv["lines"],
+            "receipts": rv["receipts"],
+            "revenue_ge": round(rv["revenue"], 2),
+            "quantity": round(rv["quantity"], 2),
+            "share_pct": round(share, 4),
+        })
+    discount_totals = {
+        "discounted_lines": disc_lines,
+        "discounted_receipts": disc_receipts,
+        "markdown_total_ge": round(disc_md_total, 2),
+        "revenue_after_markdown_ge": round(disc_rev_after, 2),
+        "revenue_before_markdown_ge": round(disc_rev_before, 2),
+        "avg_markdown_pct": round((disc_rev_before - disc_rev_after) / disc_rev_before * 100, 2) if disc_rev_before > 0 else 0.0,
+        "share_of_revenue_pct": round(disc_rev_after / bm_rev * 100, 2) if bm_rev > 0 else 0.0,
+    }
+
+    # ─── Pareto / HHI on by_product (revenue concentration) ────────────────
+    # Compute 80%/90%/95% thresholds against the FULL product list, then
+    # serialize only the first 500 ranks for the chart (UI doesn't need
+    # ranks 501+ on screen, but the cumulative thresholds must come from
+    # the complete distribution).
+    sorted_products = sorted(by_product_full, key=lambda r: r.get("revenue_ge", 0), reverse=True)
+    total_revenue = sum(r.get("revenue_ge", 0) for r in sorted_products)
+    pareto = []
+    products_for_50pct = None
+    products_for_80pct = None
+    products_for_90pct = None
+    products_for_95pct = None
+    cum_rev_full = 0.0
+    if total_revenue > 0:
+        for idx, r in enumerate(sorted_products):
+            cum_rev_full += r.get("revenue_ge", 0)
+            cum_pct = cum_rev_full / total_revenue * 100
+            if products_for_50pct is None and cum_pct >= 50:
+                products_for_50pct = idx + 1
+            if products_for_80pct is None and cum_pct >= 80:
+                products_for_80pct = idx + 1
+            if products_for_90pct is None and cum_pct >= 90:
+                products_for_90pct = idx + 1
+            if products_for_95pct is None and cum_pct >= 95:
+                products_for_95pct = idx + 1
+            if idx < 500:
+                pareto.append({
+                    "rank": idx + 1,
+                    "product_name": r.get("product_name"),
+                    "revenue_ge": r.get("revenue_ge"),
+                    "cum_revenue_ge": round(cum_rev_full, 2),
+                    "cum_share_pct": round(cum_pct, 2),
+                })
+    # HHI = sum of (share %)² for ALL products. > 2500 = high concentration.
+    hhi = 0.0
+    if total_revenue > 0:
+        for r in by_product_full:
+            share = (r.get("revenue_ge", 0) / total_revenue) * 100
+            hhi += share * share
+    hhi_class = (
+        "low" if hhi < 1500 else
+        "moderate" if hhi < 2500 else
+        "high"
+    )
+    concentration = {
+        "total_products_in_revenue": len([r for r in by_product_full if r.get("revenue_ge", 0) > 0]),
+        "products_for_50pct_revenue": products_for_50pct,
+        "products_for_80pct_revenue": products_for_80pct,
+        "products_for_90pct_revenue": products_for_90pct,
+        "products_for_95pct_revenue": products_for_95pct,
+        "hhi": round(hhi, 2),
+        "hhi_class": hhi_class,
+        "pareto_top500": pareto,
+    }
+
     return {
         "label_ka": "გაყიდული პროდუქცია (MegaPlus DB direct)",
         "notes_ka": (
@@ -658,6 +876,17 @@ def synthesize_from_megaplus(megaplus_live):
         "rows_preview": [],
         "period_meta": {"applied": False, "label_ka": "MegaPlus DB lifetime"},
         "data_quality": data_quality,
+        "basket_metrics": basket_metrics,
+        "payment_breakdown": payment_breakdown,
+        "dow_breakdown": dow_breakdown,
+        "hour_breakdown": hour_breakdown,
+        "daily_trend": daily_trend,
+        "calendar_heatmap": calendar_heatmap,
+        "returns_voids": returns_voids,
+        "discount_totals": discount_totals,
+        "concentration": concentration,
+        "registers_per_object": register_per_store,
+        "cashiers_per_object": cashier_per_store,
     }
 
 

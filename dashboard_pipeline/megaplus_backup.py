@@ -600,6 +600,251 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
             "max_timestamp": lg_max.isoformat() if lg_max else None,
         }
 
+        # ─── Sales analytics: receipt / payment / cashier / time-of-day ─────
+        # Lift the depth of the Sales page from "totals + monthly trend" to
+        # operational analytics by exposing the columns ORDERS already has.
+        # ORD_N groups lines into receipts (ORD_ID is line-level — many lines
+        # per receipt share one ORD_N).
+
+        # Receipt-level basket metrics (overall — full lifetime).
+        cur.execute(
+            """
+            SELECT
+                COUNT(*)                                   AS lines,
+                COUNT(DISTINCT o.ORD_N)                    AS receipts,
+                ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue,
+                ISNULL(SUM(o.ORD_quant), 0)                AS qty
+            FROM ORDERS o
+            WHERE o.ORD_ACT = 1
+            """
+        )
+        bm_lines, bm_receipts, bm_rev, bm_qty = cur.fetchone()
+        bm_lines = int(bm_lines or 0)
+        bm_receipts = int(bm_receipts or 0)
+        bm_rev = float(bm_rev or 0)
+        bm_qty = float(bm_qty or 0)
+        basket_metrics = {
+            "lines": bm_lines,
+            "receipts": bm_receipts,
+            "revenue": bm_rev,
+            "quantity": bm_qty,
+            "aov": (bm_rev / bm_receipts) if bm_receipts else 0.0,
+            "items_per_basket": (bm_lines / bm_receipts) if bm_receipts else 0.0,
+            "qty_per_basket": (bm_qty / bm_receipts) if bm_receipts else 0.0,
+        }
+
+        # Payment-type breakdown. ORD_PAY_TYP=0 = ნაღდი, =1 = ბარათი
+        # (verified by Megaplus operator convention; surfaced in UI).
+        cur.execute(
+            """
+            SELECT
+                o.ORD_PAY_TYP                              AS pay_typ,
+                COUNT(*)                                   AS lines,
+                COUNT(DISTINCT o.ORD_N)                    AS receipts,
+                ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue
+            FROM ORDERS o
+            WHERE o.ORD_ACT = 1
+            GROUP BY o.ORD_PAY_TYP
+            """
+        )
+        payment_types = []
+        for pt, lines, receipts, rev in cur.fetchall():
+            payment_types.append({
+                "pay_typ": int(pt) if pt is not None else None,
+                "lines": int(lines or 0),
+                "receipts": int(receipts or 0),
+                "revenue": float(rev or 0),
+            })
+
+        # Cashier-level breakdown (top 30 by revenue). STAFF table is empty
+        # in this DB so we can only show ORD_USER_ID — UI maps to "მოლარე #N".
+        cur.execute(
+            """
+            SELECT TOP 30
+                o.ORD_USER_ID                              AS user_id,
+                COUNT(*)                                   AS lines,
+                COUNT(DISTINCT o.ORD_N)                    AS receipts,
+                ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue,
+                MIN(o.ORD_TIMESTAMP)                       AS first_sale,
+                MAX(o.ORD_TIMESTAMP)                       AS last_sale
+            FROM ORDERS o
+            WHERE o.ORD_ACT = 1
+            GROUP BY o.ORD_USER_ID
+            ORDER BY ISNULL(SUM(o.ORD_jamjam), 0) DESC
+            """
+        )
+        cashiers = []
+        for uid, lines, receipts, rev, fs, ls in cur.fetchall():
+            cashiers.append({
+                "user_id": int(uid) if uid is not None else None,
+                "lines": int(lines or 0),
+                "receipts": int(receipts or 0),
+                "revenue": float(rev or 0),
+                "aov": (float(rev or 0) / int(receipts)) if receipts else 0.0,
+                "first_sale": fs.isoformat() if fs else None,
+                "last_sale": ls.isoformat() if ls else None,
+            })
+
+        # Cash-register breakdown (ORD_TAB_ID).
+        cur.execute(
+            """
+            SELECT
+                o.ORD_TAB_ID                               AS tab_id,
+                COUNT(*)                                   AS lines,
+                COUNT(DISTINCT o.ORD_N)                    AS receipts,
+                ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue
+            FROM ORDERS o
+            WHERE o.ORD_ACT = 1
+            GROUP BY o.ORD_TAB_ID
+            ORDER BY ISNULL(SUM(o.ORD_jamjam), 0) DESC
+            """
+        )
+        registers = []
+        for tab, lines, receipts, rev in cur.fetchall():
+            registers.append({
+                "tab_id": int(tab) if tab is not None else None,
+                "lines": int(lines or 0),
+                "receipts": int(receipts or 0),
+                "revenue": float(rev or 0),
+            })
+
+        # Hour-of-day (0-23). NULL timestamps excluded — already counted in
+        # null_timestamp_stats; including them would muddy a clear time-of-day
+        # signal.
+        cur.execute(
+            """
+            SELECT
+                DATEPART(HOUR, o.ORD_TIMESTAMP)            AS hr,
+                COUNT(*)                                   AS lines,
+                COUNT(DISTINCT o.ORD_N)                    AS receipts,
+                ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue
+            FROM ORDERS o
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP IS NOT NULL
+            GROUP BY DATEPART(HOUR, o.ORD_TIMESTAMP)
+            ORDER BY 1
+            """
+        )
+        hour_of_day = []
+        for hr, lines, receipts, rev in cur.fetchall():
+            hour_of_day.append({
+                "hour": int(hr) if hr is not None else None,
+                "lines": int(lines or 0),
+                "receipts": int(receipts or 0),
+                "revenue": float(rev or 0),
+            })
+
+        # Day-of-week. SET DATEFIRST 1 → Monday=1 .. Sunday=7 (ISO).
+        cur.execute("SET DATEFIRST 1")
+        cur.execute(
+            """
+            SELECT
+                DATEPART(WEEKDAY, o.ORD_TIMESTAMP)         AS dow,
+                COUNT(*)                                   AS lines,
+                COUNT(DISTINCT o.ORD_N)                    AS receipts,
+                ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue
+            FROM ORDERS o
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP IS NOT NULL
+            GROUP BY DATEPART(WEEKDAY, o.ORD_TIMESTAMP)
+            ORDER BY 1
+            """
+        )
+        day_of_week = []
+        for dow, lines, receipts, rev in cur.fetchall():
+            day_of_week.append({
+                "dow": int(dow) if dow is not None else None,
+                "lines": int(lines or 0),
+                "receipts": int(receipts or 0),
+                "revenue": float(rev or 0),
+            })
+
+        # Daily trend — last 365 days only (calendar heatmap + recent trend).
+        anchor_dt = max_ts or datetime.now()
+        since_365 = anchor_dt - timedelta(days=365)
+        cur.execute(
+            """
+            SELECT
+                CAST(o.ORD_TIMESTAMP AS DATE)              AS day,
+                COUNT(*)                                   AS lines,
+                COUNT(DISTINCT o.ORD_N)                    AS receipts,
+                ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue,
+                ISNULL(SUM(o.ORD_quant * pec.effective_unit_cost), 0) AS cogs_imputed
+            FROM ORDERS o
+            LEFT JOIN #pec pec ON o.ORD_P_ID = pec.p_id
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP IS NOT NULL AND o.ORD_TIMESTAMP >= ?
+            GROUP BY CAST(o.ORD_TIMESTAMP AS DATE)
+            ORDER BY 1
+            """,
+            since_365,
+        )
+        daily_trend = []
+        for day, lines, receipts, rev, cogs in cur.fetchall():
+            rev_f = float(rev or 0)
+            cogs_f = float(cogs or 0)
+            daily_trend.append({
+                "day": day.isoformat() if day else None,
+                "lines": int(lines or 0),
+                "receipts": int(receipts or 0),
+                "revenue": rev_f,
+                "cogs": cogs_f,
+                "profit": rev_f - cogs_f,
+            })
+
+        # Returns + voids (ORD_ACT != 1).
+        cur.execute(
+            """
+            SELECT
+                o.ORD_ACT                                  AS act,
+                COUNT(*)                                   AS lines,
+                COUNT(DISTINCT o.ORD_N)                    AS receipts,
+                ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue,
+                ISNULL(SUM(o.ORD_quant), 0)                AS qty,
+                MIN(o.ORD_TIMESTAMP)                       AS first_at,
+                MAX(o.ORD_TIMESTAMP)                       AS last_at
+            FROM ORDERS o
+            WHERE o.ORD_ACT IN (0, 2)
+            GROUP BY o.ORD_ACT
+            """
+        )
+        returns_voids = []
+        for act, lines, receipts, rev, qty, fa, la in cur.fetchall():
+            returns_voids.append({
+                "act": int(act) if act is not None else None,
+                "kind": "void" if act == 0 else ("return" if act == 2 else "other"),
+                "lines": int(lines or 0),
+                "receipts": int(receipts or 0),
+                "revenue": float(rev or 0),
+                "quantity": float(qty or 0),
+                "first_at": fa.isoformat() if fa else None,
+                "last_at": la.isoformat() if la else None,
+            })
+
+        # Discount totals — ORD_FASDAKLEBAMDE > ORD_jamjam means a markdown
+        # was applied. ORD_discount also exists but per-line ORD_FASDAKLEBAMDE
+        # is the more reliable source.
+        cur.execute(
+            """
+            SELECT
+                COUNT(*)                                   AS lines,
+                COUNT(DISTINCT o.ORD_N)                    AS receipts,
+                ISNULL(SUM(o.ORD_FASDAKLEBAMDE - o.ORD_jamjam), 0) AS markdown_total,
+                ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue_after,
+                ISNULL(SUM(o.ORD_FASDAKLEBAMDE), 0)        AS revenue_before
+            FROM ORDERS o
+            WHERE o.ORD_ACT = 1 AND o.ORD_FASDAKLEBAMDE > o.ORD_jamjam
+            """
+        )
+        d_lines, d_receipts, d_total, d_after, d_before = cur.fetchone()
+        d_after_f = float(d_after or 0)
+        d_before_f = float(d_before or 0)
+        discount_totals = {
+            "discounted_lines": int(d_lines or 0),
+            "discounted_receipts": int(d_receipts or 0),
+            "markdown_total": float(d_total or 0),
+            "revenue_after_markdown": d_after_f,
+            "revenue_before_markdown": d_before_f,
+            "markdown_pct": ((d_before_f - d_after_f) / d_before_f * 100) if d_before_f > 0 else 0.0,
+        }
+
         # Operator-error detection on PRODUCTS table — empty / duplicate-variant
         # / PROTECTED-supplier review. Built on the same connection so it
         # joins the per-store snapshot the rest of this rollup is reading.
@@ -627,6 +872,15 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
             "null_timestamp": null_timestamp_stats,
             "legacy_pre_2023": legacy_pre_2023_stats,
         },
+        "basket_metrics": basket_metrics,
+        "payment_types": payment_types,
+        "cashiers": cashiers,
+        "registers": registers,
+        "hour_of_day": hour_of_day,
+        "day_of_week": day_of_week,
+        "daily_trend": daily_trend,
+        "returns_voids": returns_voids,
+        "discount_totals": discount_totals,
         "suppliers": sorted(suppliers.values(), key=lambda s: s["lifetime"]["revenue"], reverse=True),
         "by_product": by_product,
         "by_product_recent": by_product_recent,
