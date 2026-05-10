@@ -1793,6 +1793,52 @@ def synthesize_from_megaplus(megaplus_live):
                 })
     spike_alerts.sort(key=lambda s: abs(s["z_score"]), reverse=True)
 
+    # ─── Daily spike alerts (rolling 60-day baseline, last 14 days) ────────
+    # Detects when a recent day's revenue deviates by ≥2σ from the trailing
+    # 60-day mean. Day-of-week variance is absorbed into the 60-day window
+    # noise (≈8-9 samples per weekday). Days with revenue=0 are skipped on
+    # both sides — closed days would otherwise emit false drops AND drag
+    # baseline mean down. Sorted by |z| so worst offenders surface first.
+    daily_spike_alerts: list = []
+    recent_n = 14
+    baseline_n = 60
+    if len(daily_trend) >= baseline_n + 1:
+        for idx, d in enumerate(daily_trend):
+            if idx < baseline_n or idx < len(daily_trend) - recent_n:
+                # Need a full baseline AND limit to the recent window
+                if idx < len(daily_trend) - recent_n:
+                    continue
+            day = d.get("day")
+            rev = float(d.get("revenue_ge") or 0)
+            if not day or rev <= 0:
+                continue
+            baseline = daily_trend[max(0, idx - baseline_n):idx]
+            baseline_revs = [float(b.get("revenue_ge") or 0) for b in baseline
+                             if float(b.get("revenue_ge") or 0) > 0]
+            if len(baseline_revs) < 30:
+                continue
+            mean = sum(baseline_revs) / len(baseline_revs)
+            var = sum((r - mean) ** 2 for r in baseline_revs) / len(baseline_revs)
+            std = var ** 0.5
+            if std == 0:
+                continue
+            z = (rev - mean) / std
+            if abs(z) >= 2.0:
+                daily_spike_alerts.append({
+                    "day": day,
+                    "revenue_ge": round(rev, 2),
+                    "mean_revenue_ge": round(mean, 2),
+                    "z_score": round(z, 2),
+                    "kind": "spike" if z > 0 else "drop",
+                    "baseline_days": len(baseline_revs),
+                    "message_ka": (
+                        f"{day} — შემოსავალი {round(rev):,} ₾, "
+                        f"60-დღიან საშუალოზე {abs(round(z, 1))}σ "
+                        f"{'მეტი' if z > 0 else 'ნაკლები'}"
+                    ),
+                })
+    daily_spike_alerts.sort(key=lambda s: abs(s["z_score"]), reverse=True)
+
     # ─── 30-day forecast (trailing 30-day MA → projection) ─────────────────
     forecast_next30 = []
     if len(daily_trend) >= 30:
@@ -1993,6 +2039,7 @@ def synthesize_from_megaplus(megaplus_live):
         "cashiers_per_object": cashier_per_store,
         "prev_period_compare": prev_period_compare,
         "spike_alerts": spike_alerts,
+        "daily_spike_alerts": daily_spike_alerts,
         "forecast_next30": forecast_summary,
         "slow_movers": slow_movers,
         "top_recent_movers": top_recent_movers,

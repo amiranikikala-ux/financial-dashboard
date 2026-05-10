@@ -1056,6 +1056,7 @@ def _project_retail_sales_summary(bundle):
         "by_product_by_month",
         "cross_store_comparison",
         "dead_stock_summary",
+        "daily_spike_alerts",
     ):
         val = bundle.get(key)
         if val is not None:

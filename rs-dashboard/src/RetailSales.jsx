@@ -325,6 +325,7 @@ export default function RetailSales({ retailSales, responseMeta }) {
   const momCompare = prevCompare.mom || null;
   const yoyCompare = prevCompare.yoy || null;
   const spikeAlerts = asArray(summary.spike_alerts);
+  const dailySpikeAlerts = asArray(summary.daily_spike_alerts);
   const forecast = summary.forecast_next30 || {};
   const forecastRows = asArray(forecast.rows);
   const slowMovers = summary.slow_movers || {};
@@ -1015,6 +1016,44 @@ export default function RetailSales({ retailSales, responseMeta }) {
               {spikeAlerts.map((s) => (
                 <tr key={`spike-${s.month}`}>
                   <td>{s.month}</td>
+                  <td>
+                    <span style={{
+                      padding: '2px 6px', borderRadius: 4, fontSize: 11,
+                      background: s.kind === 'spike' ? '#064e3b' : '#7f1d1d',
+                      color: s.kind === 'spike' ? '#6ee7b7' : '#fca5a5',
+                    }}>{s.kind === 'spike' ? '▲ ცემპი' : '▼ ვარდნა'}</span>
+                  </td>
+                  <td style={{ textAlign: 'right' }}>{fmtMoney(s.revenue_ge)}</td>
+                  <td style={{ textAlign: 'right' }}>{fmtMoney(s.mean_revenue_ge)}</td>
+                  <td style={{ textAlign: 'right' }}>{s.z_score >= 0 ? '+' : ''}{fmtNum(s.z_score)}σ</td>
+                  <td style={{ fontSize: 12, color: '#94a3b8' }}>{s.message_ka}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ─── Daily spike alerts (last 14 days vs trailing 60-day baseline) ─── */}
+      {dailySpikeAlerts.length > 0 && (
+        <div className="chart-card" style={{ borderLeft: '3px solid #f97316' }}>
+          <h3 style={{ color: '#fdba74' }}>🚨 დღიური ანომალია ({dailySpikeAlerts.length})<InfoTip text="ბოლო 14 დღიდან რომელი დღე გადასცდა ±2σ-ს წინა 60 დღის საშუალოდან. დახურული დღეები (revenue=0) გამოტოვებულია — ცრუ ვარდნებს არ ქმნის." /></h3>
+          <p className="chart-desc">ბოლო 14 დღის ცემპი / ვარდნა — შემოსავალი 60-დღიან საშუალოდან ±2σ ანდა მეტი.</p>
+          <table style={{ width: '100%', fontSize: 13, marginTop: 8 }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left' }}>თარიღი</th>
+                <th style={{ textAlign: 'left' }}>ტიპი</th>
+                <th style={{ textAlign: 'right' }}>შემოსავალი</th>
+                <th style={{ textAlign: 'right' }}>60დღ. საშ.</th>
+                <th style={{ textAlign: 'right' }}>z-score</th>
+                <th style={{ textAlign: 'left' }}>აღწერა</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dailySpikeAlerts.map((s) => (
+                <tr key={`daily-spike-${s.day}`}>
+                  <td>{s.day}</td>
                   <td>
                     <span style={{
                       padding: '2px 6px', borderRadius: 4, fontSize: 11,
