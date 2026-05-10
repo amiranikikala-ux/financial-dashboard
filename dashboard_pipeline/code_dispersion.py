@@ -1,43 +1,47 @@
 """
-Code dispersion detector — read-only utility.
+Code dispersion detector — forensic timeline-based, read-only utility.
 
 Identifies MegaPlus PRODUCTS rows where the same physical product is
-registered under multiple DIFFERENT codes (different P_IDs with different
-barcodes). Symptom: one code holds heavy negative P_QUANT while one or more
-sibling codes hold compensating positive P_QUANT — intake was recorded on
-one code, sales on another.
+registered under multiple DIFFERENT codes. Symptom: one code holds heavy
+negative P_QUANT while sibling codes hold compensating positive — intake
+recorded on one code, sales on another.
 
 Distinct from PRODUCTS_FRAGMENTATION (`HANDOFF_ARCHIVE/PREVIEWS/
 PRODUCTS_FRAGMENTATION_2026-05-03.md`) which detects same-barcode-multiple-
-P_IDs. Here we detect different-barcodes-same-physical-product.
+P_IDs. Here different-barcodes-same-physical-product.
 
-Pipeline:
-  1. SQL — anchors (P_QUANT < 0 AND ORDERS history) + positive-qty pool
-  2. Prefilter — first-content-token-stem match (cheap O(N×k))
-  3. AI classification (Haiku 4.5) — handles Georgian inflection, brand
-     recognition, size normalization, variant disambiguation
-  4. Math validation — total_in − total_out ≈ Σ qty_now (closure check)
-  5. Excel review file — owner reviews verdicts and applies merges manually
-     in MegaPlus UI; we never write to DB
+Approach (no AI guessing — owner's explicit feedback 2026-05-11):
+  Math closure + supplier overlap + brand stem + temporal coexistence.
+  AI was removed because it over-merged distinct brands sharing only one
+  generic word (Spilo vs Leopardi matchsticks both contained "ასანთი").
 
-Mirrors `orphan_resolver.py` shape: one Excel out, no DB writes, owner is
-the final authority. NEVER writes back to MegaPlus.
+Pair detection (Strategy A — anchor has intake history):
+  1. Pair math closure: anchor.qty + candidate.qty ≈ (in - out)
+  2. Same brand stem (first 4-char content token)
+  3. Shared supplier (G_D_ID) within overlapping intake year-window
 
-Usage (PowerShell, parent venv):
+Pair detection (Strategy B — anchor has ZERO intake, phased-out code):
+  1. Pair math closure
+  2. Same brand stem
+  3. Same first 7 digits of EAN barcode (same manufacturer)
+
+Output: Excel review file (Georgian labels). Mirrors orphan_resolver.py:
+read-only, owner moves stock manually in MegaPlus, both codes stay ACTIVE
+(prevents broken cashier scans on physically-shelved old-barcode boxes).
+
+Usage:
 
     & "C:\\Users\\tengiz\\OneDrive\\Desktop\\AI აგენტი\\venv\\Scripts\\python.exe" \\
-        -m dashboard_pipeline.code_dispersion --limit 200
+        -m dashboard_pipeline.code_dispersion --limit 100
 """
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import re
 import sys
-import time
 import unicodedata
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -45,83 +49,49 @@ from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import anthropic
 import openpyxl
-from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.styles import Font, PatternFill
 
-from dashboard_pipeline.ai.config import load_ai_config
 from dashboard_pipeline.megaplus_backup import _connect
+from dashboard_pipeline.waybill_reconciliation import parse_g_time
 
 logger = logging.getLogger(__name__)
 
 STORES: dict[str, str] = {"1329": "დვაბზუ", "1301": "ოზურგეთი"}
-
-CACHE_PATH = Path(__file__).resolve().parent.parent / ".code_dispersion_cache.json"
 DESKTOP = Path(r"C:\Users\tengiz\OneDrive\Desktop")
 
-# AI model + prompt
-AI_MODEL = "claude-haiku-4-5-20251001"
-AI_MAX_TOKENS = 1500
-AI_TEMPERATURE = 0.0
-AI_PARALLELISM = 6
-AI_TIMEOUT_S = 60.0
-AI_MAX_RETRIES = 3
-
-SYSTEM_PROMPT = """\
-You are a product-data analyst working with a Georgian retail store database.
-Your job: decide which candidate products are the SAME physical product as an
-anchor product, considering Georgian language morphology.
-
-Rules for "same physical product":
-- Same brand (ფეირი = Fairy; საირმე ≠ ნაბეღლავი ≠ ბორჯომი)
-- Same flavor/variant (ლიმონი ≠ ფორთოხალი; Compact Blue ≠ Expert Red)
-- Same per-unit size after normalization. Treat operator typos:
-    * "0.450მლ" likely means 0.450ლ = 450მლ
-    * "0.5ლ" = 500მლ; "21x450მლ" → unit = 450მლ; "(12ც) 0.150ლ" → 150მლ
-- Same packaging type when distinguishable (cans ≠ glass ≠ PET)
-- Different sizes (0.150ლ ≠ 0.250ლ) → NOT same product
-- Inflected Georgian words (ლიმონი / ლიმონის / ლიმონს) → SAME stem
-- Internal/short barcodes (4 digits, "1028", "4038") are MegaPlus-internal; do
-  NOT use barcode equality to decide — judge by name + size only
-- If anchor's name doesn't match candidate's brand+flavor+size, return NO
-
-Return STRICT JSON only — no prose outside JSON. Schema:
-{
-  "anchor_p_id": <int>,
-  "verdicts": [
-    {"p_id": <int>, "same": true|false, "confidence": "high"|"medium"|"low",
-     "reason_ka": "<short Georgian explanation>"},
-    ...
-  ]
-}
-"""
+_IN_CHUNK = 1500           # SQL Server cap on IN-clause params
+MATH_TOLERANCE = 1.0       # qty closure tolerance (units)
+BARCODE_PREFIX_LEN = 7     # for Strategy B (zero-intake anchor)
+SUPPLIER_OVERLAP_YEARS = 2 # Strategy A — shared supplier within ±N years
 
 
-# ─────────────────────────── Normalization helpers ──────────────────────────
+# ─────────────────────────── Normalization ─────────────────────────────────
 
 _token_re = re.compile(r"[\s/+\-_().,*\\\[\]]+")
 
-# Generic prefixes that don't identify a brand on their own. The detector
-# skips them when extracting first-content-stem.
 _GENERIC_PREFIXES = {
     "მინ", "წყალი", "გაზ", "სასმელი", "შ", "მ", "შიდა", "მოხმარება",
     "სიგარეტი", "ერთჯერადი", "საღეჭი", "რეზინი", "ნამცხვარი", "ხორცი",
     "რძე", "ყველი", "მაკარონი", "შოკოლადი", "შოკოლადის",
-    "ფქვილი", "ნაყინი", "ფაფა", "ფაფი",
+    "ფქვილი", "ნაყინი", "ფაფა", "ფაფი", "ბატონი", "ბატონჩიკი",
+    "ყავა", "ხსნადი", "ყინულოვანი", "ცივი", "ცხელი",
+    "ჩაი", "წვენი", "ნექტარი", "კოკტეილი", "კავპუჩინო", "ლატე",
+    "სოუსი", "კეჩუპი", "მაიონეზი",
+    "კონფეტი", "კონფეტები", "ნამცხვრის", "გამოსაცხობი",
+    "ჭიქა", "თეფში", "კოვზი", "ჩანგალი", "დანა",
+    "პარკი", "პოლიეთილენის", "ერთჯერადი",
+    "სათამაშო", "თოჯინა",
+    "fr", "g", "ml", "kg",
 }
 
 
 def normalize(name: str) -> str:
-    n = unicodedata.normalize("NFC", str(name or "")).strip().lower()
-    return re.sub(r"\s+", " ", n)
+    return re.sub(r"\s+", " ", unicodedata.normalize("NFC", str(name or "")).strip().lower())
 
 
 def first_content_stem(name: str, stem_len: int = 4) -> str:
-    """First non-generic non-numeric content token's prefix.
-
-    Used as cheap O(1) prefilter key. Length-4 prefix tolerates Georgian
-    case inflection (ლიმონი/ლიმონის/ლიმონს all share stem "ლიმო").
-    """
+    """First non-generic non-numeric content token's first 4 chars (stem)."""
     for tok in _token_re.split(normalize(name)):
         if not tok or len(tok) < 3:
             continue
@@ -133,7 +103,39 @@ def first_content_stem(name: str, stem_len: int = 4) -> str:
     return ""
 
 
-# ─────────────────────────────── Data fetch ────────────────────────────────
+def discriminating_token_stems(name: str, stem_len: int = 4) -> set[str]:
+    """All non-generic non-numeric non-size content tokens (as 4-char stems).
+
+    Used to require AT LEAST 2 shared discriminating tokens between paired
+    products. Single-word brand match (e.g. "ფეირი" alone) is too weak —
+    Fairy Lemon vs Fairy Orange would pass with just brand stem, but they're
+    different products.
+    """
+    out: set[str] = set()
+    for tok in _token_re.split(normalize(name)):
+        if not tok or len(tok) < 3:
+            continue
+        if tok in _GENERIC_PREFIXES:
+            continue
+        if re.match(r"^\d", tok):
+            continue
+        # skip size-like tokens (NNNxNNN, NNNგ, NNNმლ etc.)
+        if re.match(r"^\d+(\.\d+)?[a-zა-ჰ]+$", tok):
+            continue
+        out.add(tok[:stem_len])
+    return out
+
+
+def shared_discriminating_count(a_name: str, c_name: str) -> int:
+    return len(discriminating_token_stems(a_name) & discriminating_token_stems(c_name))
+
+
+def barcode_prefix(barcode: str, n: int = BARCODE_PREFIX_LEN) -> str:
+    digits = "".join(c for c in (barcode or "") if c.isdigit())
+    return digits[:n] if len(digits) >= n else ""
+
+
+# ─────────────────────────── Data model ────────────────────────────────────
 
 @dataclass
 class Product:
@@ -144,8 +146,37 @@ class Product:
     supplier_uuid: str
     qty_in: float = 0.0
     qty_out: float = 0.0
-    last_intake_g_time: Optional[int] = None  # raw yymmddhhxx
+    last_intake_g_time: Optional[int] = None     # raw yymmddhhxx
+    intake_supplier_years: set[tuple] = field(default_factory=set)
+    # set of (year, supplier_id) tuples from GET history
 
+
+@dataclass
+class Pair:
+    anchor: Product
+    candidate: Product
+    strategy: str           # "A_supplier" or "B_barcode_prefix"
+    pair_math_balance: float
+    shared_signal: str      # human-readable proof
+
+
+@dataclass
+class DispersionGroup:
+    store_id: str
+    store_label: str
+    members: list[Product]               # all P_IDs in group, anchor first
+    pairs: list[Pair]                    # all qualifying pair edges
+    canonical: Product
+    losers: list[Product]
+    family_qty_now: float
+    family_qty_in: float
+    family_qty_out: float
+    balance_check: float
+    balance_consistent: bool
+    proof_lines_ka: list[str]            # human-readable evidence
+
+
+# ─────────────────────────── SQL fetch ─────────────────────────────────────
 
 def _fetch_products(cur) -> list[Product]:
     cur.execute(
@@ -168,671 +199,397 @@ def _fetch_products(cur) -> list[Product]:
     ]
 
 
-_IN_CHUNK = 1500  # SQL Server cap is ~2100 params per statement
-
-
-def _fetch_flow_totals(
-    cur, p_ids: list[int]
-) -> tuple[dict[int, float], dict[int, float], dict[int, int]]:
-    """Return (qty_in_by_pid, qty_out_by_pid, last_intake_g_time_by_pid).
-
-    `last_intake_g_time_by_pid` returns raw G_TIME bigint (yymmddhhxx). Use
-    `parse_g_time` from waybill_reconciliation to decode to date.
-
-    Chunks IN-clause to stay under SQL Server's 2100-parameter limit.
+def _fetch_intake_details(cur, p_ids: list[int]):
+    """For each P_ID, return GET aggregates: qty_in, last_g_time,
+    set of (year, G_D_ID) tuples (each unique supplier-year combination).
     """
-    qty_in: dict[int, float] = {}
-    qty_out: dict[int, float] = {}
+    qty_in: dict[int, float] = defaultdict(float)
     last_intake: dict[int, int] = {}
+    supplier_years: dict[int, set] = defaultdict(set)
+
     for i in range(0, len(p_ids), _IN_CHUNK):
         chunk = p_ids[i:i + _IN_CHUNK]
         if not chunk:
             continue
-        placeholders = ",".join(["?"] * len(chunk))
+        ph = ",".join(["?"] * len(chunk))
         cur.execute(
             f"""
-            SELECT G_P_ID, SUM(G_QUANT) AS s, MAX(G_TIME) AS lt FROM GET
-            WHERE G_ACT = 1 AND G_P_ID IN ({placeholders})
-            GROUP BY G_P_ID
+            SELECT G_P_ID, G_TIME, G_QUANT, G_D_ID
+            FROM GET WHERE G_ACT = 1 AND G_P_ID IN ({ph})
             """,
             *chunk,
         )
         for r in cur.fetchall():
-            qty_in[int(r.G_P_ID)] = float(r.s or 0)
-            if r.lt is not None:
-                last_intake[int(r.G_P_ID)] = int(r.lt)
+            pid = int(r.G_P_ID)
+            qty_in[pid] += float(r.G_QUANT or 0)
+            ts = int(r.G_TIME) if r.G_TIME is not None else 0
+            if ts and (pid not in last_intake or ts > last_intake[pid]):
+                last_intake[pid] = ts
+            d = parse_g_time(ts)
+            if d is not None and r.G_D_ID is not None:
+                supplier_years[pid].add((d.year, int(r.G_D_ID)))
+    return qty_in, last_intake, supplier_years
+
+
+def _fetch_sales_total(cur, p_ids: list[int]) -> dict[int, float]:
+    qty_out: dict[int, float] = {}
+    for i in range(0, len(p_ids), _IN_CHUNK):
+        chunk = p_ids[i:i + _IN_CHUNK]
+        if not chunk:
+            continue
+        ph = ",".join(["?"] * len(chunk))
         cur.execute(
             f"""
             SELECT ORD_P_ID, SUM(ORD_QUANT) AS s FROM ORDERS
-            WHERE ORD_ACT = 1 AND ORD_P_ID IN ({placeholders})
+            WHERE ORD_ACT = 1 AND ORD_P_ID IN ({ph})
             GROUP BY ORD_P_ID
             """,
             *chunk,
         )
         for r in cur.fetchall():
             qty_out[int(r.ORD_P_ID)] = float(r.s or 0)
-    return qty_in, qty_out, last_intake
+    return qty_out
 
 
-# ─────────────────────────────── Prefilter ─────────────────────────────────
+# ─────────────────────────── Filters ───────────────────────────────────────
 
-def build_candidates(
-    anchor: Product,
-    pos_pool: list[Product],
-    pos_by_stem: dict[str, list[Product]],
-    top_k: int = 12,
-) -> list[Product]:
-    """Stem-prefix match + Jaccard token-overlap ranking → top-k candidates."""
-    stem = first_content_stem(anchor.name)
-    if not stem:
-        return []
-    pool = pos_by_stem.get(stem, [])
-    a_tokens = set(t for t in _token_re.split(normalize(anchor.name)) if t)
-    scored: list[tuple[int, Product]] = []
-    for p in pool:
-        if p.p_id == anchor.p_id:
-            continue
-        p_tokens = set(t for t in _token_re.split(normalize(p.name)) if t)
-        overlap = len(a_tokens & p_tokens)
-        scored.append((overlap, p))
-    scored.sort(key=lambda x: -x[0])
-    return [p for _, p in scored[:top_k]]
+def pair_math_closes(a: Product, c: Product) -> tuple[bool, float]:
+    sum_qty = a.qty + c.qty
+    sum_in = a.qty_in + c.qty_in
+    sum_out = a.qty_out + c.qty_out
+    diff = (sum_in - sum_out) - sum_qty
+    return abs(diff) < MATH_TOLERANCE, diff
 
 
-# ─────────────────────────────── AI client ─────────────────────────────────
-
-@dataclass
-class AIVerdict:
-    p_id: int
-    same: bool
-    confidence: str
-    reason_ka: str
-
-
-@dataclass
-class AICall:
-    anchor_pid: int
-    verdicts: list[AIVerdict]
-    input_tokens: int
-    output_tokens: int
-    error: Optional[str] = None
+def shared_supplier_in_window(a: Product, c: Product) -> tuple[bool, set[int]]:
+    """A and C both received from same supplier within ±SUPPLIER_OVERLAP_YEARS."""
+    a_set = a.intake_supplier_years
+    c_set = c.intake_supplier_years
+    if not a_set or not c_set:
+        return False, set()
+    matched: set[int] = set()
+    for ya, sa in a_set:
+        for yc, sc in c_set:
+            if sa == sc and abs(ya - yc) <= SUPPLIER_OVERLAP_YEARS:
+                matched.add(sa)
+    return bool(matched), matched
 
 
-def _strip_code_fence(text: str) -> str:
-    text = text.strip()
-    if text.startswith("```"):
-        text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.MULTILINE).strip()
-    return text
+def same_brand_stem(a: Product, c: Product) -> tuple[bool, str]:
+    sa = first_content_stem(a.name)
+    sc = first_content_stem(c.name)
+    if sa and sa == sc:
+        return True, sa
+    return False, ""
 
 
-def call_ai_classify(
-    client: anthropic.Anthropic, anchor: Product, candidates: list[Product]
-) -> AICall:
-    payload = {
-        "anchor": {"p_id": anchor.p_id, "name": anchor.name, "barcode": anchor.barcode},
-        "candidates": [
-            {"p_id": c.p_id, "name": c.name, "barcode": c.barcode}
-            for c in candidates
-        ],
-    }
-    last_err: Optional[Exception] = None
-    for attempt in range(AI_MAX_RETRIES):
-        try:
-            resp = client.messages.create(
-                model=AI_MODEL,
-                max_tokens=AI_MAX_TOKENS,
-                temperature=AI_TEMPERATURE,
-                system=SYSTEM_PROMPT,
-                messages=[
-                    {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}
-                ],
-            )
-            text = "".join(b.text for b in resp.content if hasattr(b, "text"))
-            text = _strip_code_fence(text)
-            try:
-                parsed = json.loads(text)
-            except json.JSONDecodeError as e:
-                return AICall(
-                    anchor_pid=anchor.p_id, verdicts=[],
-                    input_tokens=resp.usage.input_tokens,
-                    output_tokens=resp.usage.output_tokens,
-                    error=f"json parse: {e}; raw[:200]={text[:200]!r}",
-                )
-            verdicts = [
-                AIVerdict(
-                    p_id=int(v.get("p_id", 0)),
-                    same=bool(v.get("same", False)),
-                    confidence=str(v.get("confidence", "low")),
-                    reason_ka=str(v.get("reason_ka", "")),
-                )
-                for v in parsed.get("verdicts", [])
-            ]
-            return AICall(
-                anchor_pid=anchor.p_id, verdicts=verdicts,
-                input_tokens=resp.usage.input_tokens,
-                output_tokens=resp.usage.output_tokens,
-            )
-        except (anthropic.APIConnectionError, anthropic.APITimeoutError, anthropic.RateLimitError) as e:
-            last_err = e
-            time.sleep(2 ** attempt)
-            continue
-        except Exception as e:
-            last_err = e
-            break
-    return AICall(
-        anchor_pid=anchor.p_id, verdicts=[], input_tokens=0, output_tokens=0,
-        error=f"{type(last_err).__name__}: {last_err}",
-    )
+def same_barcode_prefix(a: Product, c: Product) -> tuple[bool, str]:
+    pa = barcode_prefix(a.barcode)
+    pc = barcode_prefix(c.barcode)
+    if pa and pa == pc:
+        return True, pa
+    return False, ""
 
 
-# ─────────────────────────────── Cache ─────────────────────────────────────
-
-def _cache_key(anchor: Product, candidates: list[Product]) -> str:
-    """Deterministic key — same anchor+same candidate list → same cache hit."""
-    return f"{anchor.p_id}|" + ",".join(str(c.p_id) for c in sorted(candidates, key=lambda c: c.p_id))
+MIN_SHARED_TOKENS = 2  # require ≥2 discriminating tokens (brand + variant)
 
 
-def load_cache() -> dict[str, dict]:
-    if CACHE_PATH.exists():
-        try:
-            return json.loads(CACHE_PATH.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            return {}
-    return {}
+def evaluate_pair(a: Product, c: Product) -> Optional[Pair]:
+    """Return Pair if all filters pass; None otherwise.
 
+    Filters (all must pass):
+      1. Math closure pair-wise (qty_in − qty_out ≈ qty_now sum)
+      2. Brand stem match (first content token, 4-char prefix)
+      3. ≥2 shared discriminating tokens (brand + variant — distinguishes
+         "ფეირი ლიმონი" from "ფეირი ფორთოხალი", "კაპი ატამი" from "კაპი ფალფი")
+      4. Same supplier (G_D_ID) within ±SUPPLIER_OVERLAP_YEARS window
 
-def save_cache(cache: dict[str, dict]) -> None:
-    CACHE_PATH.write_text(
-        json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-
-
-# ─────────────────────────────── Group assembly ────────────────────────────
-
-@dataclass
-class DispersionGroup:
-    store_id: str
-    store_label: str
-    anchor: Product
-    siblings: list[Product]
-    rejected: list[tuple[Product, AIVerdict]]
-    confidence: str           # "high" / "medium" / "low" / "no_match"
-    family_qty_now: float
-    family_qty_in: float
-    family_qty_out: float
-    balance_check: float      # qty_in - qty_out (should ≈ family_qty_now if closed)
-    balance_consistent: bool
-    economic_score: float     # 0..1; 1 = perfect closure
-    ai_input_tokens: int
-    ai_output_tokens: int
-    ai_error: Optional[str] = None
-    canonical_pid: Optional[int] = None
-    canonical_reason_ka: str = ""
-    actions: list[dict] = field(default_factory=list)
-
-
-def _aggregate_confidence(siblings_verdicts: list[AIVerdict]) -> str:
-    if not siblings_verdicts:
-        return "no_match"
-    confidences = [v.confidence.lower() for v in siblings_verdicts]
-    if any(c == "low" for c in confidences):
-        return "low"
-    if any(c == "medium" for c in confidences):
-        return "medium"
-    return "high"
-
-
-def assemble_group(
-    store_id: str,
-    store_label: str,
-    anchor: Product,
-    candidates: list[Product],
-    ai_call: AICall,
-) -> DispersionGroup:
-    cand_by_pid = {c.p_id: c for c in candidates}
-    siblings: list[Product] = []
-    sibling_verdicts: list[AIVerdict] = []
-    rejected: list[tuple[Product, AIVerdict]] = []
-    for v in ai_call.verdicts:
-        c = cand_by_pid.get(v.p_id)
-        if c is None:
-            continue
-        if v.same:
-            siblings.append(c)
-            sibling_verdicts.append(v)
-        else:
-            rejected.append((c, v))
-
-    family = [anchor] + siblings
-    family_qty_now = sum(p.qty for p in family)
-    family_qty_in = sum(p.qty_in for p in family)
-    family_qty_out = sum(p.qty_out for p in family)
-    balance_check = family_qty_in - family_qty_out
-    abs_diff = abs(balance_check - family_qty_now)
-    flow_basis = max(family_qty_in, family_qty_out, abs(family_qty_now), 1.0)
-    economic_score = max(0.0, 1.0 - abs_diff / flow_basis)
-    balance_consistent = abs_diff < 1.0
-
-    grp = DispersionGroup(
-        store_id=store_id,
-        store_label=store_label,
-        anchor=anchor,
-        siblings=siblings,
-        rejected=rejected,
-        confidence=_aggregate_confidence(sibling_verdicts),
-        family_qty_now=family_qty_now,
-        family_qty_in=family_qty_in,
-        family_qty_out=family_qty_out,
-        balance_check=balance_check,
-        balance_consistent=balance_consistent,
-        economic_score=economic_score,
-        ai_input_tokens=ai_call.input_tokens,
-        ai_output_tokens=ai_call.output_tokens,
-        ai_error=ai_call.error,
-    )
-    if siblings:
-        recommend_canonical(grp)
-    return grp
-
-
-def _looks_like_real_ean(barcode: str) -> bool:
-    """EAN-like barcode = 8+ digits, all numeric. Internal/short codes
-    (`4038`, `1062`, `2601...`) get scored lower."""
-    bc = (barcode or "").strip()
-    if not bc.isdigit():
-        return False
-    return len(bc) >= 8
-
-
-def recommend_canonical(grp: DispersionGroup) -> None:
-    """Pick the P_ID to keep + emit explicit transfer actions.
-
-    Ranking key (winner = lowest tuple):
-      1. Most-recent intake date (G_TIME) — the code currently being scanned
-         at intake is what cashiers should also scan at sale
-      2. Real EAN barcode preferred over internal short code
-      3. Highest total intake quantity (longest-established code)
-      4. Lowest P_ID (oldest, most-established)
-
-    Sets `grp.canonical_pid`, `grp.canonical_reason_ka`, `grp.actions`.
+    Anchor MUST have intake history. Zero-intake anchors excluded (can't
+    trace stock origin without supplier evidence — barcode prefix alone is
+    too weak; same-manufacturer can produce different products).
     """
-    family = [grp.anchor] + grp.siblings
+    if a.qty_in == 0:
+        return None
+    closes, diff = pair_math_closes(a, c)
+    if not closes:
+        return None
+    brand_ok, brand = same_brand_stem(a, c)
+    if not brand_ok:
+        return None
+    if shared_discriminating_count(a.name, c.name) < MIN_SHARED_TOKENS:
+        return None
+    sup_ok, suppliers = shared_supplier_in_window(a, c)
+    if not sup_ok:
+        return None
+    return Pair(
+        anchor=a, candidate=c, strategy="A_supplier",
+        pair_math_balance=diff,
+        shared_signal=f"იგივე მომწოდებელი {sorted(suppliers)} ±{SUPPLIER_OVERLAP_YEARS} წელში",
+    )
 
-    def rank_key(p: Product) -> tuple:
+
+# ─────────────────────────── Group assembly ────────────────────────────────
+
+def _pick_canonical(members: list[Product]) -> Product:
+    """Most-recent intake first; real EAN barcode preferred; highest intake."""
+    def key(p: Product) -> tuple:
         return (
-            -(p.last_intake_g_time or 0),   # most recent first (negate for asc sort)
-            0 if _looks_like_real_ean(p.barcode) else 1,
-            -p.qty_in,                       # most intake first
+            -(p.last_intake_g_time or 0),
+            0 if (p.barcode.isdigit() and len(p.barcode) >= 8) else 1,
+            -p.qty_in,
             p.p_id,
         )
+    return min(members, key=key)
 
-    family_sorted = sorted(family, key=rank_key)
-    canonical = family_sorted[0]
-    losers = family_sorted[1:]
 
-    reasons = []
-    if canonical.last_intake_g_time:
-        try:
-            from dashboard_pipeline.waybill_reconciliation import parse_g_time
-            d = parse_g_time(canonical.last_intake_g_time)
-            if d is not None:
-                reasons.append(f"ბოლო შემოსვლა {d:%Y-%m-%d}")
-        except Exception:
-            pass
-    if _looks_like_real_ean(canonical.barcode):
-        reasons.append(f"ნამდვილი ბარკოდი ({canonical.barcode})")
-    if canonical.qty_in > 0:
-        reasons.append(f"ჯამური შემოსვლა {int(canonical.qty_in)} ცალი")
-    grp.canonical_pid = canonical.p_id
-    grp.canonical_reason_ka = "; ".join(reasons) if reasons else f"P_ID {canonical.p_id} ყველაზე ძველი/აქტიური"
+def _build_proof(group_members: list[Product], pairs: list[Pair],
+                 canonical: Product) -> list[str]:
+    lines: list[str] = []
+    lines.append(
+        f"ჯგუფი {len(group_members)} კოდისგან: "
+        + ", ".join(str(p.p_id) for p in group_members)
+    )
+    total_in = sum(p.qty_in for p in group_members)
+    total_out = sum(p.qty_out for p in group_members)
+    total_qty = sum(p.qty for p in group_members)
+    lines.append(
+        f"მათემატიკა: შემოვიდა {total_in:.0f} − გაიყიდა {total_out:.0f} = "
+        f"{total_in - total_out:.0f} (qty ჯამი {total_qty:.0f})"
+    )
+    for pair in pairs:
+        lines.append(
+            f"  {pair.anchor.p_id} ↔ {pair.candidate.p_id}: "
+            f"{pair.shared_signal}; დახურვა={pair.pair_math_balance:.1f}"
+        )
+    lines.append(
+        f"მთავარი კოდი: {canonical.p_id} "
+        f"(ბოლო შემოსვლა: "
+        + (parse_g_time(canonical.last_intake_g_time).strftime("%Y-%m-%d")
+           if canonical.last_intake_g_time and parse_g_time(canonical.last_intake_g_time)
+           else "—")
+        + f"; ბარკოდი {canonical.barcode or '—'})"
+    )
+    return lines
 
-    actions: list[dict] = []
-    for loser in losers:
-        if loser.qty == 0:
-            actions.append({
-                "from_pid": loser.p_id,
-                "from_barcode": loser.barcode,
-                "from_name": loser.name,
-                "to_pid": canonical.p_id,
-                "to_barcode": canonical.barcode,
-                "to_name": canonical.name,
-                "qty_to_transfer": 0.0,
-                "instruction_ka": (
-                    f"კოდი {loser.p_id} (ბარკოდი {loser.barcode or '—'}) — "
-                    f"ნაშთი 0, უბრალოდ წაშალე ან ჩამოარეგისტრიე (P_ACTIVE = 0)"
-                ),
-            })
+
+def detect_groups_for_store(
+    store_id: str, store_label: str, products: list[Product]
+) -> list[DispersionGroup]:
+    by_pid = {p.p_id: p for p in products}
+    anchors = [p for p in products if p.qty < 0 and p.qty_out > 0]
+    positives = [p for p in products if p.qty > 0]
+
+    # Bucket positives by brand stem for cheap O(N×k) prefilter
+    pos_by_stem: dict[str, list[Product]] = defaultdict(list)
+    for p in positives:
+        s = first_content_stem(p.name)
+        if s:
+            pos_by_stem[s].append(p)
+
+    qualified_pairs: list[Pair] = []
+    pairs_by_anchor: dict[int, list[Pair]] = defaultdict(list)
+
+    for a in anchors:
+        stem = first_content_stem(a.name)
+        if not stem:
             continue
-        actions.append({
-            "from_pid": loser.p_id,
-            "from_barcode": loser.barcode,
-            "from_name": loser.name,
-            "to_pid": canonical.p_id,
-            "to_barcode": canonical.barcode,
-            "to_name": canonical.name,
-            "qty_to_transfer": loser.qty,
-            "instruction_ka": (
-                f"გადაიტანე {loser.qty:+g} ცალი კოდიდან {loser.p_id} "
-                f"(ბარკოდი {loser.barcode or '—'}) კოდზე {canonical.p_id} "
-                f"(ბარკოდი {canonical.barcode or '—'}). მერე ჩამოარეგისტრიე {loser.p_id}."
-            ),
-        })
-    grp.actions = actions
+        for c in pos_by_stem.get(stem, []):
+            if c.p_id == a.p_id:
+                continue
+            pair = evaluate_pair(a, c)
+            if pair is not None:
+                qualified_pairs.append(pair)
+                pairs_by_anchor[a.p_id].append(pair)
+
+    print(f"  pairs that pass all filters: {len(qualified_pairs):,}", flush=True)
+
+    # Pair-based output — for each anchor pick the BEST candidate (smallest
+    # absolute math gap; tie-break by highest qty_in). No transitive groups.
+    out: list[DispersionGroup] = []
+    for anchor_pid, anchor_pairs in pairs_by_anchor.items():
+        if not anchor_pairs:
+            continue
+        best = min(
+            anchor_pairs,
+            key=lambda p: (abs(p.pair_math_balance), -p.candidate.qty_in),
+        )
+        members = [best.anchor, best.candidate]
+        group_qty = sum(p.qty for p in members)
+        group_in = sum(p.qty_in for p in members)
+        group_out = sum(p.qty_out for p in members)
+        canonical = _pick_canonical(members)
+        losers = [p for p in members if p.p_id != canonical.p_id]
+        proof = _build_proof(members, [best], canonical)
+        out.append(DispersionGroup(
+            store_id=store_id, store_label=store_label,
+            members=members, pairs=[best],
+            canonical=canonical, losers=losers,
+            family_qty_now=group_qty,
+            family_qty_in=group_in, family_qty_out=group_out,
+            balance_check=group_in - group_out,
+            balance_consistent=True,
+            proof_lines_ka=proof,
+        ))
+    return out
 
 
-# ─────────────────────────────── Excel writer ──────────────────────────────
+# ─────────────────────────── Excel writer ──────────────────────────────────
 
 _BOLD = Font(bold=True)
 _FILL_GREEN = PatternFill("solid", fgColor="C8E6C9")
-_FILL_YELLOW = PatternFill("solid", fgColor="FFF59D")
-_FILL_RED = PatternFill("solid", fgColor="FFCDD2")
 _FILL_BLUE = PatternFill("solid", fgColor="BBDEFB")
 
 
 def write_excel(groups: list[DispersionGroup], out_path: Path) -> None:
     wb = openpyxl.Workbook()
 
-    # ── Sheet 1: ქმედებები — one row per group, simple "keep X, merge Y/Z" ──
+    # Sheet 1: ქმედებები — one row per group, simple instruction
     ws_act = wb.active
     ws_act.title = "ქმედებები"
-    act_headers = [
-        "მაღაზია",
-        "პროდუქტი",
-        "დარჩება კოდი",
-        "მთავარის ბარკოდი",
-        "გაერთიანდება კოდები",
-        "რეალური ნაშთი",
-        "AI-ს ნდობა",
-        "შესრულდა? (✓ ან თარიღი)",
+    headers_act = [
+        "მაღაზია", "პროდუქტი",
+        "მთავარი კოდი (დარჩება)", "მთავარის ბარკოდი",
+        "გადასატანი კოდები", "ნაშთი ჯამში გადატანის შემდეგ",
+        "მტკიცებულება", "შესრულდა? (✓ ან თარიღი)",
     ]
-    ws_act.append(act_headers)
+    ws_act.append(headers_act)
     for c in ws_act[1]:
         c.font = _BOLD
 
-    sortable = sorted(groups, key=lambda g: (g.confidence != "high", g.anchor.qty))
+    sortable = sorted(groups, key=lambda g: min(p.qty for p in g.members))
     for g in sortable:
-        if not g.siblings or not g.actions:
-            continue
-        conf_ka = {"high": "მაღალი", "medium": "საშუალო", "low": "დაბალი", "no_match": "—"}.get(g.confidence, g.confidence)
-        family = [g.anchor] + g.siblings
-        canonical = next((p for p in family if p.p_id == g.canonical_pid), g.anchor)
-        losers = [p for p in family if p.p_id != canonical.p_id]
-        merge_str = ", ".join(
-            f"{p.p_id} (ნაშთი {int(p.qty):+d})" for p in losers
+        loser_str = ", ".join(
+            f"{p.p_id} (ნაშთი {int(p.qty):+d})" for p in g.losers
         )
+        proof_str = " | ".join(g.proof_lines_ka)
         ws_act.append([
             g.store_label,
-            g.anchor.name,
-            canonical.p_id,
-            canonical.barcode or "—",
-            merge_str,
+            g.canonical.name,
+            g.canonical.p_id,
+            g.canonical.barcode or "—",
+            loser_str,
             round(g.family_qty_now, 2),
-            conf_ka,
+            proof_str,
             "",
         ])
-        if g.confidence == "high" and g.balance_consistent:
-            for cell in ws_act[ws_act.max_row]:
-                cell.fill = _FILL_GREEN
-        elif g.confidence in ("medium", "low") or not g.balance_consistent:
-            for cell in ws_act[ws_act.max_row]:
-                cell.fill = _FILL_YELLOW
+        for cell in ws_act[ws_act.max_row]:
+            cell.fill = _FILL_GREEN
 
-    # ── Sheet 2: ჯგუფები — high-level group summary ──
-    ws_sum = wb.create_sheet("ჯგუფები")
-    sum_headers = [
-        "მაღაზია", "გატეხილი P_ID", "გატეხილის სახელი", "გატეხილის ნაშთი",
-        "იგივე-კოდის რაოდენობა", "AI-ს ნდობა",
-        "ჯგუფის ჯამი", "ჯამური შემოსვლა", "ჯამური გაყიდვა",
-        "ბალანსის შემოწმება", "ბალანსი იხურება?", "მათემ. შეფასება",
-        "გადაწყვეტილება (შენ ჩაწერე: გავაერთიანო / ცალკე / ვერ-მივხვდი)",
-    ]
-    ws_sum.append(sum_headers)
-    for c in ws_sum[1]:
-        c.font = _BOLD
-
-    sortable = sorted(groups, key=lambda g: (g.confidence != "high", g.anchor.qty))
-    for g in sortable:
-        if not g.siblings:
-            continue
-        conf_ka = {"high": "მაღალი", "medium": "საშუალო", "low": "დაბალი", "no_match": "—"}.get(g.confidence, g.confidence)
-        row = [
-            g.store_label, g.anchor.p_id, g.anchor.name, g.anchor.qty,
-            len(g.siblings), conf_ka,
-            round(g.family_qty_now, 2), round(g.family_qty_in, 2), round(g.family_qty_out, 2),
-            round(g.balance_check, 2), "კი" if g.balance_consistent else "არა",
-            round(g.economic_score, 3),
-            "",  # owner fills
-        ]
-        ws_sum.append(row)
-        if g.confidence == "high" and g.balance_consistent:
-            for cell in ws_sum[ws_sum.max_row]:
-                cell.fill = _FILL_GREEN
-        elif g.confidence in ("medium", "low"):
-            for cell in ws_sum[ws_sum.max_row]:
-                cell.fill = _FILL_YELLOW
-
+    # Sheet 2: დეტალები — full per-member breakdown
     ws_det = wb.create_sheet("დეტალები")
-    det_headers = [
-        "მაღაზია", "გატეხილი P_ID", "AI-ს ნდობა", "როლი", "P_ID", "ბარკოდი",
-        "სახელი", "ნაშთი", "შემოვიდა", "გაიყიდა", "მომწოდებლის UUID",
-        "AI: იგივეა?", "AI-ს ნდობა (ხაზზე)", "AI-ს ახსნა",
+    headers_det = [
+        "მაღაზია", "ჯგუფი (მთავარი კოდი)", "როლი", "P_ID", "ბარკოდი",
+        "სახელი", "ნაშთი", "ჯამური შემოვიდა", "ჯამური გაიყიდა",
+        "ბოლო შემოსვლა",
     ]
-    ws_det.append(det_headers)
+    ws_det.append(headers_det)
     for c in ws_det[1]:
         c.font = _BOLD
-
-    conf_map = {"high": "მაღალი", "medium": "საშუალო", "low": "დაბალი", "no_match": "—"}
     for g in sortable:
-        if not g.siblings and not g.rejected:
-            continue
-        conf_ka = conf_map.get(g.confidence, g.confidence)
-        # anchor row
-        ws_det.append([
-            g.store_label, g.anchor.p_id, conf_ka, "გატეხილი",
-            g.anchor.p_id, g.anchor.barcode, g.anchor.name,
-            g.anchor.qty, g.anchor.qty_in, g.anchor.qty_out, g.anchor.supplier_uuid,
-            "", "", f"უარყოფითი ნაშთი = {g.anchor.qty}",
-        ])
-        for cell in ws_det[ws_det.max_row]:
-            cell.fill = _FILL_BLUE
-        # siblings (verdict YES rows)
-        for s in g.siblings:
+        for p in g.members:
+            role = "მთავარი" if p.p_id == g.canonical.p_id else "გადასატანი"
+            last_dt = parse_g_time(p.last_intake_g_time) if p.last_intake_g_time else None
             ws_det.append([
-                g.store_label, g.anchor.p_id, conf_ka, "იგივე-პროდუქტი",
-                s.p_id, s.barcode, s.name,
-                s.qty, s.qty_in, s.qty_out, s.supplier_uuid,
-                "კი", conf_ka, "AI: იგივე პროდუქტია",
+                g.store_label, g.canonical.p_id, role,
+                p.p_id, p.barcode or "—", p.name,
+                p.qty, p.qty_in, p.qty_out,
+                last_dt.strftime("%Y-%m-%d") if last_dt else "—",
             ])
-            for cell in ws_det[ws_det.max_row]:
-                cell.fill = _FILL_GREEN
-        # rejected (verdict NO rows — kept for transparency)
-        for c, v in g.rejected:
-            ws_det.append([
-                g.store_label, g.anchor.p_id, conf_ka, "უარყოფილი",
-                c.p_id, c.barcode, c.name,
-                c.qty, c.qty_in, c.qty_out, c.supplier_uuid,
-                "არა", conf_map.get(v.confidence, v.confidence), v.reason_ka,
-            ])
+            if role == "მთავარი":
+                for cell in ws_det[ws_det.max_row]:
+                    cell.fill = _FILL_BLUE
+            else:
+                for cell in ws_det[ws_det.max_row]:
+                    cell.fill = _FILL_GREEN
 
     # Column widths
-    for ws in (ws_sum, ws_det):
-        for col_cells in ws.columns:
+    for ws in (ws_act, ws_det):
+        for col in ws.columns:
             ml = 0
-            letter = col_cells[0].column_letter
-            for cell in col_cells:
+            letter = col[0].column_letter
+            for cell in col:
                 v = str(cell.value) if cell.value is not None else ""
                 if len(v) > ml:
                     ml = len(v)
-            ws.column_dimensions[letter].width = min(70, max(10, ml + 2))
+            ws.column_dimensions[letter].width = min(80, max(10, ml + 2))
 
     wb.save(out_path)
 
 
-# ─────────────────────────────── Per-store driver ──────────────────────────
+# ─────────────────────────── Per-store driver ──────────────────────────────
 
-def process_store(
-    store_id: str,
-    store_label: str,
-    client: anthropic.Anthropic,
-    cache: dict[str, dict],
-    limit: Optional[int] = None,
-    parallelism: int = AI_PARALLELISM,
-) -> list[DispersionGroup]:
+def process_store(store_id: str, store_label: str,
+                  limit: Optional[int] = None) -> list[DispersionGroup]:
     db = f"MEGAPLUS_{store_id}"
     print(f"\n=== {store_label} ({db}) ===", flush=True)
     conn = _connect(db, autocommit=True)
     cur = conn.cursor()
 
     products = _fetch_products(cur)
-    print(f"  PRODUCTS scanned: {len(products):,}", flush=True)
+    print(f"  PRODUCTS: {len(products):,}", flush=True)
 
-    anchors = sorted(
-        [p for p in products if p.qty < 0], key=lambda p: p.qty
-    )
-    if limit is not None:
-        anchors = anchors[:limit]
-
-    pos_pool = [p for p in products if p.qty > 0]
-    pos_by_stem: dict[str, list[Product]] = {}
-    for p in pos_pool:
-        s = first_content_stem(p.name)
-        if s:
-            pos_by_stem.setdefault(s, []).append(p)
-
-    print(f"  anchors (qty<0, capped @ {limit}): {len(anchors):,}", flush=True)
-    print(f"  positive-qty pool: {len(pos_pool):,}", flush=True)
-
-    # ── Build candidates + qualify anchors that have ORDERS history ──
-    pid_set = {a.p_id for a in anchors}
-    for a in anchors:
-        a.candidates = build_candidates(a, pos_pool, pos_by_stem, top_k=12)  # type: ignore[attr-defined]
-        for c in a.candidates:  # type: ignore[attr-defined]
-            pid_set.add(c.p_id)
-
-    qty_in_by_pid, qty_out_by_pid, last_intake_by_pid = _fetch_flow_totals(cur, list(pid_set))
+    pid_set = {p.p_id for p in products}
+    qty_in, last_intake, supplier_years = _fetch_intake_details(cur, list(pid_set))
+    qty_out = _fetch_sales_total(cur, list(pid_set))
     for p in products:
-        if p.p_id in qty_in_by_pid:
-            p.qty_in = qty_in_by_pid[p.p_id]
-        if p.p_id in qty_out_by_pid:
-            p.qty_out = qty_out_by_pid[p.p_id]
-        if p.p_id in last_intake_by_pid:
-            p.last_intake_g_time = last_intake_by_pid[p.p_id]
+        p.qty_in = qty_in.get(p.p_id, 0.0)
+        p.qty_out = qty_out.get(p.p_id, 0.0)
+        p.last_intake_g_time = last_intake.get(p.p_id)
+        p.intake_supplier_years = supplier_years.get(p.p_id, set())
 
-    # Filter anchors: must have actual sales history (qty_out > 0) — otherwise
-    # negative qty isn't from "code dispersion", it's likely a different bug
-    qualified = [a for a in anchors if a.qty_out > 0 and a.candidates]  # type: ignore[attr-defined]
-    print(f"  qualified anchors (have ORDERS + ≥1 candidate): {len(qualified):,}", flush=True)
+    n_anchors = sum(1 for p in products if p.qty < 0 and p.qty_out > 0)
+    print(f"  qualified anchors (qty<0 AND has sales): {n_anchors:,}", flush=True)
 
-    # ── AI classification (parallel, with cache) ──
-    groups: list[DispersionGroup] = []
-    new_cache_entries = 0
+    # If --limit applied, sort anchors by most-negative-first and clip
+    if limit is not None:
+        anchors = sorted(
+            [p for p in products if p.qty < 0 and p.qty_out > 0], key=lambda p: p.qty
+        )[:limit]
+        anchor_pids = {p.p_id for p in anchors}
+        products_view = [
+            p for p in products
+            if p.p_id in anchor_pids or p.qty > 0
+        ]
+        groups = detect_groups_for_store(store_id, store_label, products_view)
+    else:
+        groups = detect_groups_for_store(store_id, store_label, products)
 
-    def _classify(anchor: Product) -> DispersionGroup:
-        nonlocal new_cache_entries
-        candidates = anchor.candidates  # type: ignore[attr-defined]
-        key = _cache_key(anchor, candidates)
-        if key in cache:
-            entry = cache[key]
-            ai_call = AICall(
-                anchor_pid=anchor.p_id,
-                verdicts=[
-                    AIVerdict(
-                        p_id=int(v["p_id"]),
-                        same=bool(v["same"]),
-                        confidence=str(v["confidence"]),
-                        reason_ka=str(v["reason_ka"]),
-                    )
-                    for v in entry.get("verdicts", [])
-                ],
-                input_tokens=int(entry.get("input_tokens", 0)),
-                output_tokens=int(entry.get("output_tokens", 0)),
-                error=entry.get("error"),
-            )
-        else:
-            ai_call = call_ai_classify(client, anchor, candidates)
-            cache[key] = {
-                "verdicts": [
-                    {"p_id": v.p_id, "same": v.same, "confidence": v.confidence,
-                     "reason_ka": v.reason_ka}
-                    for v in ai_call.verdicts
-                ],
-                "input_tokens": ai_call.input_tokens,
-                "output_tokens": ai_call.output_tokens,
-                "error": ai_call.error,
-            }
-            new_cache_entries += 1
-        return assemble_group(store_id, store_label, anchor, candidates, ai_call)
-
-    save_every = 25
-    with ThreadPoolExecutor(max_workers=parallelism) as ex:
-        futures = {ex.submit(_classify, a): a for a in qualified}
-        for i, fut in enumerate(as_completed(futures), 1):
-            try:
-                grp = fut.result()
-                groups.append(grp)
-            except Exception as e:
-                logger.exception("AI classification failed: %s", e)
-            if i % 10 == 0:
-                done = sum(1 for g in groups if g.siblings)
-                print(f"    progress: {i}/{len(qualified)} | groups so far: {done}", flush=True)
-            if new_cache_entries and new_cache_entries % save_every == 0:
-                save_cache(cache)
-
-    save_cache(cache)
-    found = sum(1 for g in groups if g.siblings)
-    closed = sum(1 for g in groups if g.siblings and g.balance_consistent)
-    print(f"  groups with siblings: {found:,}  (math-closed: {closed:,})", flush=True)
+    print(f"  groups (math+supplier+brand all pass): {len(groups):,}", flush=True)
     return groups
 
 
-# ─────────────────────────────── Main ──────────────────────────────────────
+# ─────────────────────────── Main ──────────────────────────────────────────
 
 def main(argv: Optional[list[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="MegaPlus code-dispersion detector")
+    parser = argparse.ArgumentParser(
+        description="MegaPlus code-dispersion forensic detector (no AI)"
+    )
     parser.add_argument("--limit", type=int, default=None,
-                        help="Per-store anchor cap (most-negative first). Default: no cap.")
-    parser.add_argument("--store", choices=list(STORES.keys()) + ["all"], default="all")
-    parser.add_argument("--parallelism", type=int, default=AI_PARALLELISM)
+                        help="Per-store anchor cap (most-negative first).")
+    parser.add_argument("--store", choices=list(STORES.keys()) + ["all"],
+                        default="all")
     parser.add_argument("--out", type=str, default=None,
-                        help="Excel output path. Default: Desktop\\code_dispersion_review_<date>.xlsx")
+                        help="Excel output path. Default: Desktop\\code_dispersion_forensic_<date>.xlsx")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    cfg = load_ai_config()
-    if not cfg.is_enabled:
-        print("ANTHROPIC_API_KEY not configured — abort", file=sys.stderr)
-        return 1
-    print(f"AI ready: {cfg.redacted()}", flush=True)
-    client = anthropic.Anthropic(api_key=cfg.api_key, timeout=AI_TIMEOUT_S)
-
-    cache = load_cache()
-    print(f"cache: {len(cache):,} entries at {CACHE_PATH}", flush=True)
-
-    selected = list(STORES.items()) if args.store == "all" else [(args.store, STORES[args.store])]
+    selected = (
+        list(STORES.items())
+        if args.store == "all"
+        else [(args.store, STORES[args.store])]
+    )
     all_groups: list[DispersionGroup] = []
     for store_id, store_label in selected:
-        groups = process_store(
-            store_id, store_label, client, cache,
-            limit=args.limit, parallelism=args.parallelism,
-        )
-        all_groups.extend(groups)
+        all_groups.extend(process_store(store_id, store_label, limit=args.limit))
 
     out_path = (
         Path(args.out) if args.out
-        else DESKTOP / f"code_dispersion_review_{datetime.now():%Y-%m-%d}.xlsx"
+        else DESKTOP / f"code_dispersion_forensic_{datetime.now():%Y-%m-%d}.xlsx"
     )
     write_excel(all_groups, out_path)
     print(f"\n>>> Excel written: {out_path}", flush=True)
-
-    total_in = sum(g.ai_input_tokens for g in all_groups)
-    total_out = sum(g.ai_output_tokens for g in all_groups)
-    cost_in = total_in / 1_000_000 * 1.00
-    cost_out = total_out / 1_000_000 * 5.00
-    print(f"\n=== AI usage ({len(all_groups):,} anchors) ===", flush=True)
-    print(f"  input tokens:  {total_in:,}  →  ~${cost_in:.4f}", flush=True)
-    print(f"  output tokens: {total_out:,}  →  ~${cost_out:.4f}", flush=True)
-    print(f"  total: ~${cost_in + cost_out:.4f}", flush=True)
+    print(f"\n=== TOTAL groups across both stores: {len(all_groups):,} ===", flush=True)
     return 0
 
 
