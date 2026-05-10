@@ -144,6 +144,7 @@ class Product:
     supplier_uuid: str
     qty_in: float = 0.0
     qty_out: float = 0.0
+    last_intake_g_time: Optional[int] = None  # raw yymmddhhxx
 
 
 def _fetch_products(cur) -> list[Product]:
@@ -170,13 +171,19 @@ def _fetch_products(cur) -> list[Product]:
 _IN_CHUNK = 1500  # SQL Server cap is ~2100 params per statement
 
 
-def _fetch_flow_totals(cur, p_ids: list[int]) -> tuple[dict[int, float], dict[int, float]]:
-    """Return (qty_in_by_pid, qty_out_by_pid) for ACT=1 rows only.
+def _fetch_flow_totals(
+    cur, p_ids: list[int]
+) -> tuple[dict[int, float], dict[int, float], dict[int, int]]:
+    """Return (qty_in_by_pid, qty_out_by_pid, last_intake_g_time_by_pid).
+
+    `last_intake_g_time_by_pid` returns raw G_TIME bigint (yymmddhhxx). Use
+    `parse_g_time` from waybill_reconciliation to decode to date.
 
     Chunks IN-clause to stay under SQL Server's 2100-parameter limit.
     """
     qty_in: dict[int, float] = {}
     qty_out: dict[int, float] = {}
+    last_intake: dict[int, int] = {}
     for i in range(0, len(p_ids), _IN_CHUNK):
         chunk = p_ids[i:i + _IN_CHUNK]
         if not chunk:
@@ -184,7 +191,7 @@ def _fetch_flow_totals(cur, p_ids: list[int]) -> tuple[dict[int, float], dict[in
         placeholders = ",".join(["?"] * len(chunk))
         cur.execute(
             f"""
-            SELECT G_P_ID, SUM(G_QUANT) AS s FROM GET
+            SELECT G_P_ID, SUM(G_QUANT) AS s, MAX(G_TIME) AS lt FROM GET
             WHERE G_ACT = 1 AND G_P_ID IN ({placeholders})
             GROUP BY G_P_ID
             """,
@@ -192,6 +199,8 @@ def _fetch_flow_totals(cur, p_ids: list[int]) -> tuple[dict[int, float], dict[in
         )
         for r in cur.fetchall():
             qty_in[int(r.G_P_ID)] = float(r.s or 0)
+            if r.lt is not None:
+                last_intake[int(r.G_P_ID)] = int(r.lt)
         cur.execute(
             f"""
             SELECT ORD_P_ID, SUM(ORD_QUANT) AS s FROM ORDERS
@@ -202,7 +211,7 @@ def _fetch_flow_totals(cur, p_ids: list[int]) -> tuple[dict[int, float], dict[in
         )
         for r in cur.fetchall():
             qty_out[int(r.ORD_P_ID)] = float(r.s or 0)
-    return qty_in, qty_out
+    return qty_in, qty_out, last_intake
 
 
 # ─────────────────────────────── Prefilter ─────────────────────────────────
@@ -357,6 +366,9 @@ class DispersionGroup:
     ai_input_tokens: int
     ai_output_tokens: int
     ai_error: Optional[str] = None
+    canonical_pid: Optional[int] = None
+    canonical_reason_ka: str = ""
+    actions: list[dict] = field(default_factory=list)
 
 
 def _aggregate_confidence(siblings_verdicts: list[AIVerdict]) -> str:
@@ -401,7 +413,7 @@ def assemble_group(
     economic_score = max(0.0, 1.0 - abs_diff / flow_basis)
     balance_consistent = abs_diff < 1.0
 
-    return DispersionGroup(
+    grp = DispersionGroup(
         store_id=store_id,
         store_label=store_label,
         anchor=anchor,
@@ -418,6 +430,94 @@ def assemble_group(
         ai_output_tokens=ai_call.output_tokens,
         ai_error=ai_call.error,
     )
+    if siblings:
+        recommend_canonical(grp)
+    return grp
+
+
+def _looks_like_real_ean(barcode: str) -> bool:
+    """EAN-like barcode = 8+ digits, all numeric. Internal/short codes
+    (`4038`, `1062`, `2601...`) get scored lower."""
+    bc = (barcode or "").strip()
+    if not bc.isdigit():
+        return False
+    return len(bc) >= 8
+
+
+def recommend_canonical(grp: DispersionGroup) -> None:
+    """Pick the P_ID to keep + emit explicit transfer actions.
+
+    Ranking key (winner = lowest tuple):
+      1. Most-recent intake date (G_TIME) — the code currently being scanned
+         at intake is what cashiers should also scan at sale
+      2. Real EAN barcode preferred over internal short code
+      3. Highest total intake quantity (longest-established code)
+      4. Lowest P_ID (oldest, most-established)
+
+    Sets `grp.canonical_pid`, `grp.canonical_reason_ka`, `grp.actions`.
+    """
+    family = [grp.anchor] + grp.siblings
+
+    def rank_key(p: Product) -> tuple:
+        return (
+            -(p.last_intake_g_time or 0),   # most recent first (negate for asc sort)
+            0 if _looks_like_real_ean(p.barcode) else 1,
+            -p.qty_in,                       # most intake first
+            p.p_id,
+        )
+
+    family_sorted = sorted(family, key=rank_key)
+    canonical = family_sorted[0]
+    losers = family_sorted[1:]
+
+    reasons = []
+    if canonical.last_intake_g_time:
+        try:
+            from dashboard_pipeline.waybill_reconciliation import parse_g_time
+            d = parse_g_time(canonical.last_intake_g_time)
+            if d is not None:
+                reasons.append(f"ბოლო შემოსვლა {d:%Y-%m-%d}")
+        except Exception:
+            pass
+    if _looks_like_real_ean(canonical.barcode):
+        reasons.append(f"ნამდვილი ბარკოდი ({canonical.barcode})")
+    if canonical.qty_in > 0:
+        reasons.append(f"ჯამური შემოსვლა {int(canonical.qty_in)} ცალი")
+    grp.canonical_pid = canonical.p_id
+    grp.canonical_reason_ka = "; ".join(reasons) if reasons else f"P_ID {canonical.p_id} ყველაზე ძველი/აქტიური"
+
+    actions: list[dict] = []
+    for loser in losers:
+        if loser.qty == 0:
+            actions.append({
+                "from_pid": loser.p_id,
+                "from_barcode": loser.barcode,
+                "from_name": loser.name,
+                "to_pid": canonical.p_id,
+                "to_barcode": canonical.barcode,
+                "to_name": canonical.name,
+                "qty_to_transfer": 0.0,
+                "instruction_ka": (
+                    f"კოდი {loser.p_id} (ბარკოდი {loser.barcode or '—'}) — "
+                    f"ნაშთი 0, უბრალოდ წაშალე ან ჩამოარეგისტრიე (P_ACTIVE = 0)"
+                ),
+            })
+            continue
+        actions.append({
+            "from_pid": loser.p_id,
+            "from_barcode": loser.barcode,
+            "from_name": loser.name,
+            "to_pid": canonical.p_id,
+            "to_barcode": canonical.barcode,
+            "to_name": canonical.name,
+            "qty_to_transfer": loser.qty,
+            "instruction_ka": (
+                f"გადაიტანე {loser.qty:+g} ცალი კოდიდან {loser.p_id} "
+                f"(ბარკოდი {loser.barcode or '—'}) კოდზე {canonical.p_id} "
+                f"(ბარკოდი {canonical.barcode or '—'}). მერე ჩამოარეგისტრიე {loser.p_id}."
+            ),
+        })
+    grp.actions = actions
 
 
 # ─────────────────────────────── Excel writer ──────────────────────────────
@@ -432,8 +532,47 @@ _FILL_BLUE = PatternFill("solid", fgColor="BBDEFB")
 def write_excel(groups: list[DispersionGroup], out_path: Path) -> None:
     wb = openpyxl.Workbook()
 
-    ws_sum = wb.active
-    ws_sum.title = "ჯგუფები"
+    # ── Sheet 1: ქმედებები — action-oriented prescription, owner reads first ──
+    ws_act = wb.active
+    ws_act.title = "ქმედებები"
+    act_headers = [
+        "მაღაზია", "გატეხილი პროდუქტი (სახელი)", "გატეხილის ნაშთი",
+        "AI-ს ნდობა", "ბალანსი იხურება?",
+        "მთავარი კოდი (დარჩება)", "მთავარის ბარკოდი", "რატომ ეს კოდი",
+        "კოდი წასაშლელი", "წასაშლელის ბარკოდი", "წასაშლელის ნაშთი",
+        "ცხადი ინსტრუქცია",
+        "შესრულდა? (✓ ან თარიღი)",
+    ]
+    ws_act.append(act_headers)
+    for c in ws_act[1]:
+        c.font = _BOLD
+
+    sortable = sorted(groups, key=lambda g: (g.confidence != "high", g.anchor.qty))
+    for g in sortable:
+        if not g.siblings or not g.actions:
+            continue
+        conf_ka = {"high": "მაღალი", "medium": "საშუალო", "low": "დაბალი", "no_match": "—"}.get(g.confidence, g.confidence)
+        family = [g.anchor] + g.siblings
+        canonical = next((p for p in family if p.p_id == g.canonical_pid), g.anchor)
+        bal_ka = "კი" if g.balance_consistent else "არა"
+        for a in g.actions:
+            ws_act.append([
+                g.store_label, g.anchor.name, g.anchor.qty,
+                conf_ka, bal_ka,
+                canonical.p_id, canonical.barcode or "—", g.canonical_reason_ka,
+                a["from_pid"], a["from_barcode"] or "—", a["qty_to_transfer"],
+                a["instruction_ka"],
+                "",
+            ])
+            if g.confidence == "high" and g.balance_consistent:
+                for cell in ws_act[ws_act.max_row]:
+                    cell.fill = _FILL_GREEN
+            elif g.confidence in ("medium", "low") or not g.balance_consistent:
+                for cell in ws_act[ws_act.max_row]:
+                    cell.fill = _FILL_YELLOW
+
+    # ── Sheet 2: ჯგუფები — high-level group summary ──
+    ws_sum = wb.create_sheet("ჯგუფები")
     sum_headers = [
         "მაღაზია", "გატეხილი P_ID", "გატეხილის სახელი", "გატეხილის ნაშთი",
         "იგივე-კოდის რაოდენობა", "AI-ს ნდობა",
@@ -564,12 +703,14 @@ def process_store(
         for c in a.candidates:  # type: ignore[attr-defined]
             pid_set.add(c.p_id)
 
-    qty_in_by_pid, qty_out_by_pid = _fetch_flow_totals(cur, list(pid_set))
+    qty_in_by_pid, qty_out_by_pid, last_intake_by_pid = _fetch_flow_totals(cur, list(pid_set))
     for p in products:
         if p.p_id in qty_in_by_pid:
             p.qty_in = qty_in_by_pid[p.p_id]
         if p.p_id in qty_out_by_pid:
             p.qty_out = qty_out_by_pid[p.p_id]
+        if p.p_id in last_intake_by_pid:
+            p.last_intake_g_time = last_intake_by_pid[p.p_id]
 
     # Filter anchors: must have actual sales history (qty_out > 0) — otherwise
     # negative qty isn't from "code dispersion", it's likely a different bug

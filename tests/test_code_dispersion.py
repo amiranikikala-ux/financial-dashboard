@@ -175,6 +175,71 @@ def test_assemble_group_fairy_lemon_balance_closes():
     assert grp.confidence == "high"
 
 
+def test_recommend_canonical_picks_most_recent_intake():
+    """Canonical = P_ID with most-recent intake date (the code being scanned now)."""
+    from dashboard_pipeline.code_dispersion import recommend_canonical
+    anchor = Product(
+        p_id=20754, barcode="5413149798946", name="ფეირი ლიმონი 21x450მლ",
+        qty=-350.0, supplier_uuid="", qty_in=76.0, qty_out=426.0,
+        last_intake_g_time=2603310001,  # 2026-03-31 — most recent
+    )
+    sib1 = Product(
+        p_id=89755, barcode="8001090931191", name="ფეირი (1) ლიმონი 0.450მლ",
+        qty=336.0, supplier_uuid="", qty_in=374.0, qty_out=38.0,
+        last_intake_g_time=2508050001,  # 2025-08-05
+    )
+    sib2 = Product(
+        p_id=93297, barcode="4038", name="ფეირი ლიმონის 450 მლ 21ც",
+        qty=42.0, supplier_uuid="", qty_in=42.0, qty_out=0.0,
+        last_intake_g_time=2506210001,  # 2025-06-21
+    )
+    grp = DispersionGroup(
+        store_id="1329", store_label="დვაბზუ", anchor=anchor,
+        siblings=[sib1, sib2], rejected=[], confidence="high",
+        family_qty_now=28.0, family_qty_in=492.0, family_qty_out=464.0,
+        balance_check=28.0, balance_consistent=True, economic_score=1.0,
+        ai_input_tokens=0, ai_output_tokens=0,
+    )
+    recommend_canonical(grp)
+    # 20754 wins on most-recent-intake AND has real EAN — both signals agree
+    assert grp.canonical_pid == 20754
+    assert "2026-03-31" in grp.canonical_reason_ka
+    assert len(grp.actions) == 2
+    pids_to_drain = {a["from_pid"] for a in grp.actions}
+    assert pids_to_drain == {89755, 93297}
+    # Each action has explicit Georgian instruction
+    for a in grp.actions:
+        assert "გადაიტანე" in a["instruction_ka"]
+        assert str(20754) in a["instruction_ka"]
+
+
+def test_recommend_canonical_zero_qty_loser_gets_deactivate_instruction():
+    """A sibling with qty=0 doesn't need a transfer — just deactivate."""
+    from dashboard_pipeline.code_dispersion import recommend_canonical
+    anchor = Product(
+        p_id=100, barcode="1234567890123", name="ფეირი", qty=-50.0,
+        supplier_uuid="", qty_in=10.0, qty_out=60.0,
+        last_intake_g_time=2603310001,
+    )
+    sib = Product(
+        p_id=200, barcode="9999999999999", name="ფეირი", qty=0.0,
+        supplier_uuid="", qty_in=0.0, qty_out=0.0,
+        last_intake_g_time=None,
+    )
+    grp = DispersionGroup(
+        store_id="1329", store_label="დვაბზუ", anchor=anchor,
+        siblings=[sib], rejected=[], confidence="high",
+        family_qty_now=-50.0, family_qty_in=10.0, family_qty_out=60.0,
+        balance_check=-50.0, balance_consistent=True, economic_score=1.0,
+        ai_input_tokens=0, ai_output_tokens=0,
+    )
+    recommend_canonical(grp)
+    assert grp.canonical_pid == 100
+    assert len(grp.actions) == 1
+    assert grp.actions[0]["qty_to_transfer"] == 0.0
+    assert "ჩამოარეგისტრიე" in grp.actions[0]["instruction_ka"] or "წაშალე" in grp.actions[0]["instruction_ka"]
+
+
 def test_assemble_group_no_siblings_when_ai_rejects_all():
     anchor = _p(100, qty=-50.0)
     cand = _p(200, qty=10.0)
@@ -220,17 +285,22 @@ def test_write_excel_produces_two_sheets_with_expected_headers(tmp_path: Path):
     out = tmp_path / "out.xlsx"
     write_excel([grp], out)
     wb = openpyxl.load_workbook(out, read_only=True)
-    assert set(wb.sheetnames) == {"ჯგუფები", "დეტალები"}
+    assert set(wb.sheetnames) == {"ქმედებები", "ჯგუფები", "დეტალები"}
+
+    # ქმედებები — action sheet
+    action_rows = list(wb["ქმედებები"].iter_rows(values_only=True))
+    assert action_rows[0][0] == "მაღაზია"
+    assert "ცხადი ინსტრუქცია" in action_rows[0]
+    # 2 sibling P_IDs ⇒ 2 transfer rows (canonical decided, both losers acted upon)
+    assert len(action_rows) == 1 + 2
 
     summary_rows = list(wb["ჯგუფები"].iter_rows(values_only=True))
     assert summary_rows[0][0] == "მაღაზია"
     assert summary_rows[0][1] == "გატეხილი P_ID"
     assert "გადაწყვეტილება" in summary_rows[0][-1]
-    # one data row for our one group
     assert summary_rows[1][1] == 20754
 
     detail_rows = list(wb["დეტალები"].iter_rows(values_only=True))
-    # 1 anchor + 2 siblings + 1 rejected = 4 data rows
     assert len(detail_rows) == 1 + 4
     roles = [r[3] for r in detail_rows[1:]]
     assert "გატეხილი" in roles
