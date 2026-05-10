@@ -532,15 +532,17 @@ _FILL_BLUE = PatternFill("solid", fgColor="BBDEFB")
 def write_excel(groups: list[DispersionGroup], out_path: Path) -> None:
     wb = openpyxl.Workbook()
 
-    # ── Sheet 1: ქმედებები — action-oriented prescription, owner reads first ──
+    # ── Sheet 1: ქმედებები — one row per group, simple "keep X, merge Y/Z" ──
     ws_act = wb.active
     ws_act.title = "ქმედებები"
     act_headers = [
-        "მაღაზია", "გატეხილი პროდუქტი (სახელი)", "გატეხილის ნაშთი",
-        "AI-ს ნდობა", "ბალანსი იხურება?",
-        "მთავარი კოდი (დარჩება)", "მთავარის ბარკოდი", "რატომ ეს კოდი",
-        "კოდი წასაშლელი", "წასაშლელის ბარკოდი", "წასაშლელის ნაშთი",
-        "ცხადი ინსტრუქცია",
+        "მაღაზია",
+        "პროდუქტი",
+        "დარჩება კოდი",
+        "მთავარის ბარკოდი",
+        "გაერთიანდება კოდები",
+        "რეალური ნაშთი",
+        "AI-ს ნდობა",
         "შესრულდა? (✓ ან თარიღი)",
     ]
     ws_act.append(act_headers)
@@ -554,22 +556,26 @@ def write_excel(groups: list[DispersionGroup], out_path: Path) -> None:
         conf_ka = {"high": "მაღალი", "medium": "საშუალო", "low": "დაბალი", "no_match": "—"}.get(g.confidence, g.confidence)
         family = [g.anchor] + g.siblings
         canonical = next((p for p in family if p.p_id == g.canonical_pid), g.anchor)
-        bal_ka = "კი" if g.balance_consistent else "არა"
-        for a in g.actions:
-            ws_act.append([
-                g.store_label, g.anchor.name, g.anchor.qty,
-                conf_ka, bal_ka,
-                canonical.p_id, canonical.barcode or "—", g.canonical_reason_ka,
-                a["from_pid"], a["from_barcode"] or "—", a["qty_to_transfer"],
-                a["instruction_ka"],
-                "",
-            ])
-            if g.confidence == "high" and g.balance_consistent:
-                for cell in ws_act[ws_act.max_row]:
-                    cell.fill = _FILL_GREEN
-            elif g.confidence in ("medium", "low") or not g.balance_consistent:
-                for cell in ws_act[ws_act.max_row]:
-                    cell.fill = _FILL_YELLOW
+        losers = [p for p in family if p.p_id != canonical.p_id]
+        merge_str = ", ".join(
+            f"{p.p_id} (ნაშთი {int(p.qty):+d})" for p in losers
+        )
+        ws_act.append([
+            g.store_label,
+            g.anchor.name,
+            canonical.p_id,
+            canonical.barcode or "—",
+            merge_str,
+            round(g.family_qty_now, 2),
+            conf_ka,
+            "",
+        ])
+        if g.confidence == "high" and g.balance_consistent:
+            for cell in ws_act[ws_act.max_row]:
+                cell.fill = _FILL_GREEN
+        elif g.confidence in ("medium", "low") or not g.balance_consistent:
+            for cell in ws_act[ws_act.max_row]:
+                cell.fill = _FILL_YELLOW
 
     # ── Sheet 2: ჯგუფები — high-level group summary ──
     ws_sum = wb.create_sheet("ჯგუფები")

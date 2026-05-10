@@ -128,18 +128,25 @@ def test_cache_key_distinguishes_anchors():
 # ─────────────────────────── assemble_group ────────────────────────────────
 
 def _fairy_lemon_setup() -> tuple[Product, list[Product], AICall]:
-    """The flagship validation case: 3 codes, math closes at +28."""
+    """The flagship validation case: 3 codes, math closes at +28.
+
+    last_intake_g_time set so canonical is deterministic — anchor 20754 wins
+    (most recent: 2026-03-31), matching live-data ordering.
+    """
     anchor = Product(
         p_id=20754, barcode="5413149798946", name="ფეირი ლიმონი 21x450მლ",
         qty=-350.0, supplier_uuid="8502", qty_in=76.0, qty_out=426.0,
+        last_intake_g_time=2603310001,
     )
     sib1 = Product(
         p_id=89755, barcode="8001090931191", name="ფეირი (1) ლიმონი 0.450მლ ყ*21",
         qty=336.0, supplier_uuid="8502", qty_in=374.0, qty_out=38.0,
+        last_intake_g_time=2508050001,
     )
     sib2 = Product(
         p_id=93297, barcode="4038", name="ფეირი ლიმონის 450 მლ 21ც",
         qty=42.0, supplier_uuid="8240", qty_in=42.0, qty_out=0.0,
+        last_intake_g_time=2506210001,
     )
     other = Product(
         p_id=43244, barcode="4084500213029", name="ფეირი ფორთოხალი 21x450მლ",
@@ -287,12 +294,17 @@ def test_write_excel_produces_two_sheets_with_expected_headers(tmp_path: Path):
     wb = openpyxl.load_workbook(out, read_only=True)
     assert set(wb.sheetnames) == {"ქმედებები", "ჯგუფები", "დეტალები"}
 
-    # ქმედებები — action sheet
+    # ქმედებები — action sheet (one row per GROUP, not per action)
     action_rows = list(wb["ქმედებები"].iter_rows(values_only=True))
     assert action_rows[0][0] == "მაღაზია"
-    assert "ცხადი ინსტრუქცია" in action_rows[0]
-    # 2 sibling P_IDs ⇒ 2 transfer rows (canonical decided, both losers acted upon)
-    assert len(action_rows) == 1 + 2
+    assert "გაერთიანდება კოდები" in action_rows[0]
+    assert "რეალური ნაშთი" in action_rows[0]
+    # one group → one row
+    assert len(action_rows) == 1 + 1
+    # the merge_str column should list both losing P_IDs
+    merge_str = action_rows[1][4]
+    assert "89755" in merge_str
+    assert "93297" in merge_str
 
     summary_rows = list(wb["ჯგუფები"].iter_rows(values_only=True))
     assert summary_rows[0][0] == "მაღაზია"
