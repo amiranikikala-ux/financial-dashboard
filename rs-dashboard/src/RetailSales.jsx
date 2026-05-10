@@ -76,6 +76,7 @@ const TIPS = {
   discountLift: 'რა მოგება იქნებოდა ფასდაკლების გარეშე — actual vs hypothetical. დაკარგული მარჟა = ფასდაკლების ჯამი (cost ცვლილებას არ ექვემდებარება).',
   discountByCat: 'რომელი კატეგორია იღებს ფასდაკლებას. დიდი ფასდაკლება + დაბალი ფასდაკლების % = ფართო პოლიტიკა. მცირე ფასდაკლება + მაღალი % = სელექტიური clearance.',
   crossStore: 'მაღაზია vs მაღაზია — იგივე SKU. გვიჩვენებს რომელი პროდუქტი ორივე მაღაზიაში იყიდება განსხვავებული ფასით ან მარჟით. გაფილტრულია მხოლოდ რეალური EAN შტრიხკოდი (>=8 ციფრი). მაღაზიის ფილტრს არ ემორჩილება — comparison-ის არსი თვითონ cross-store-ია. ცხოვრების ჯამი (period filter არ ვრცელდება).',
+  deadStock: 'მკვდარი მარაგი — პროდუქტი რომელიც ნაშთშია (P_QUANT > 0), მაგრამ დიდი ხანია არ გაყიდულა. წყარო: PRODUCTS.P_QUANT × P_GETPRICE = ნაშთის ღირებულება. ბუჩქი ბოლო გაყიდვის თარიღით განისაზღვრება (snapshot — ბოლო backup-ის თარიღი). უარყოფითი ნაშთი (P_QUANT < 0) = POS შეცდომა (გაყიდულია, მაგრამ ფაქტურით არ ჩამოსულა). უფასო პოზიციები (P_PRICE = 0) = ოპერაციული (მაგ. „უფასო პარკი"). მაღაზიის ფილტრს ემორჩილება. პერიოდის ფილტრი არ ვრცელდება — snapshot-ია, არა flow.',
 };
 
 const GEL = new Intl.NumberFormat('ka-GE', { style: 'currency', currency: 'GEL', maximumFractionDigits: 0 });
@@ -251,6 +252,7 @@ export default function RetailSales({ retailSales, responseMeta }) {
   const [storeFilter, setStoreFilter] = useState('all');
   const [productSearch, setProductSearch] = useState('');
   const [crossStoreSortBy, setCrossStoreSortBy] = useState('price_gap');
+  const [deadStockBucket, setDeadStockBucket] = useState('dead_365d_plus');
   // Period filter — applies to time-series + KPI block. Aggregate
   // top-product / hour / dow lists stay lifetime (banner indicates).
   const [periodPreset, setPeriodPreset] = useState('all');
@@ -355,6 +357,23 @@ export default function RetailSales({ retailSales, responseMeta }) {
     if (crossStoreSortBy === 'combined_rev') return asArray(crossStore.top_by_combined_revenue);
     return asArray(crossStore.top_by_price_gap);
   })();
+
+  // Dead stock — snapshot, follows store filter (period filter does NOT apply).
+  const deadStock = view.dead_stock_summary || summary.dead_stock_summary || {};
+  const deadStockBuckets = deadStock.buckets || {};
+  const deadStockNeg = deadStock.negative_stock_alert || {};
+  const deadStockBucketDef = {
+    dead_365d_plus: { label: '🔴 365+ დღე', color: '#ef4444' },
+    dead_180_365d:  { label: '🟠 180-365 დღე', color: '#f59e0b' },
+    slow_90_180d:   { label: '🟡 90-180 დღე', color: '#facc15' },
+    free_stock:     { label: '💸 უფასო (P_PRICE=0)', color: '#94a3b8' },
+    negative_stock: { label: '⚠ უარყოფითი ნაშთი', color: '#f43f5e' },
+  };
+  const deadStockActiveItems = (() => {
+    if (deadStockBucket === 'negative_stock') return asArray(deadStockNeg.top_items);
+    return asArray((deadStockBuckets[deadStockBucket] || {}).top_items);
+  })();
+  const deadStockHasData = Boolean(deadStock.snapshot_date);
 
   // Filter helper — applies store filter to per-object lists
   const matchStore = (obj) => storeFilter === 'all' || obj === storeFilter;
@@ -2297,6 +2316,134 @@ export default function RetailSales({ retailSales, responseMeta }) {
                           {marginDiff >= 0 ? '+' : ''}{toNum(marginDiff).toFixed(2)}pp
                         </td>
                         <td style={{ textAlign: 'right' }}>{fmtMoney(row.revenue_combined_ge)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CollapsibleSection>
+        </div>
+      )}
+
+      {/* ── Dead stock — inventory aging snapshot ──────────────────────── */}
+      {deadStockHasData && (
+        <div style={{ marginTop: 24 }}>
+          <h3 style={{ marginBottom: 12, color: '#e2e8f0' }}>
+            მკვდარი მარაგი (Dead Stock)
+            <InfoTip text={TIPS.deadStock} />
+          </h3>
+
+          <div style={{
+            padding: '8px 12px', marginBottom: 12,
+            background: '#1e293b', border: '1px solid #334155', borderRadius: 6,
+            fontSize: 13, color: '#cbd5e1',
+          }}>
+            ნაშთი = backup-ის <strong>{(deadStock.snapshot_date || '').slice(0, 10) || '—'}</strong> მდგომარეობით.
+            მაღაზიის ფილტრს ემორჩილება. პერიოდის ფილტრი არ ვრცელდება — snapshot-ია, არა flow.
+            {storeFilter === 'all' && deadStock.snapshot_dates_per_store && (
+              <span style={{ marginLeft: 8, fontSize: 12, color: '#94a3b8' }}>
+                (per-store: {Object.entries(deadStock.snapshot_dates_per_store).map(([s, d]) => `${s} ${(d || '').slice(0, 10)}`).join(' · ')})
+              </span>
+            )}
+          </div>
+
+          {/* KPI cards — total stock / dead value / dead pct / 365+ count */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+            <div className="kpi-card" style={{ flex: '1 1 200px', padding: 12, background: '#1e293b', borderRadius: 8 }}>
+              <div style={{ fontSize: 12, color: '#94a3b8' }}>სულ ნაშთის ღირებულება</div>
+              <div style={{ fontSize: 24, fontWeight: 600, color: '#e2e8f0' }}>{fmtMoney(deadStock.total_stock_value)}</div>
+            </div>
+            <div className="kpi-card" style={{ flex: '1 1 200px', padding: 12, background: '#1e293b', borderRadius: 8 }}>
+              <div style={{ fontSize: 12, color: '#94a3b8' }}>მკვდარი + ნელი (90+ დღე)</div>
+              <div style={{ fontSize: 24, fontWeight: 600, color: '#ef4444' }}>{fmtMoney(deadStock.dead_stock_value)}</div>
+            </div>
+            <div className="kpi-card" style={{ flex: '1 1 200px', padding: 12, background: '#1e293b', borderRadius: 8 }}>
+              <div style={{ fontSize: 12, color: '#94a3b8' }}>მკვდარი წილი ნაშთიდან</div>
+              <div style={{ fontSize: 24, fontWeight: 600, color: '#f59e0b' }}>{toNum(deadStock.dead_stock_pct).toFixed(1)}%</div>
+            </div>
+            <div className="kpi-card" style={{ flex: '1 1 200px', padding: 12, background: '#1e293b', borderRadius: 8 }}>
+              <div style={{ fontSize: 12, color: '#94a3b8' }}>365+ დღე გაუყიდველი SKU</div>
+              <div style={{ fontSize: 24, fontWeight: 600, color: '#ef4444' }}>{fmtInt((deadStockBuckets.dead_365d_plus || {}).count)}</div>
+            </div>
+          </div>
+
+          {/* Bucket breakdown — counts + values per bucket */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+            {Object.entries(deadStockBucketDef).map(([key, def]) => {
+              const isNeg = key === 'negative_stock';
+              const data = isNeg ? deadStockNeg : (deadStockBuckets[key] || {});
+              const count = toNum(data.count);
+              const value = isNeg ? toNum(data.abs_value_total) : toNum(data.stock_value);
+              const isActive = deadStockBucket === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setDeadStockBucket(key)}
+                  style={{
+                    flex: '1 1 180px', textAlign: 'left',
+                    padding: 10, background: isActive ? '#0f172a' : '#1e293b',
+                    border: `1px solid ${isActive ? def.color : '#334155'}`,
+                    borderLeft: `4px solid ${def.color}`,
+                    borderRadius: 6, cursor: 'pointer', color: '#e2e8f0',
+                  }}
+                >
+                  <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>{def.label}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <span style={{ fontSize: 18, fontWeight: 600 }}>{fmtInt(count)} SKU</span>
+                    <span style={{ fontSize: 13, color: def.color, fontWeight: 600 }}>{fmtMoney(value)}</span>
+                  </div>
+                  {!isNeg && toNum((deadStockBuckets[key] || {}).never_sold_count) > 0 && (
+                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                      აქედან {fmtInt((deadStockBuckets[key] || {}).never_sold_count)} — არასოდეს გაყიდულა
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Items table for selected bucket */}
+          <CollapsibleSection
+            title={`${deadStockBucketDef[deadStockBucket].label} — top ${deadStockActiveItems.length} SKU`}
+            badge={`${deadStockActiveItems.length}`}
+          >
+            <div className="table-wrapper cashflow-table retail-sales-table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    {storeFilter === 'all' && <th>მაღაზია</th>}
+                    <th>კოდი</th>
+                    <th>შტრიხკოდი</th>
+                    <th>დასახელება</th>
+                    <th>კატეგორია</th>
+                    <th style={{ textAlign: 'right' }}>რაოდ.</th>
+                    <th style={{ textAlign: 'right' }}>თვითღ.</th>
+                    <th style={{ textAlign: 'right' }}>გასაყ. ფასი</th>
+                    <th style={{ textAlign: 'right' }}>ნაშთის ღირებ.</th>
+                    <th>ბოლო გაყიდვა</th>
+                    <th style={{ textAlign: 'right' }}>დღე</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deadStockActiveItems.map((it, idx) => {
+                    const days = it.days_since_sale;
+                    const lastSale = it.last_sale_date ? (it.last_sale_date.slice(0, 10)) : 'არასოდეს';
+                    return (
+                      <tr key={`ds-${deadStockBucket}-${it.product_id}-${idx}`}>
+                        {storeFilter === 'all' && <td>{it.store || '—'}</td>}
+                        <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{it.product_code || '—'}</td>
+                        <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{it.barcode || '—'}</td>
+                        <td>{it.product_name || 'უცნობი'}</td>
+                        <td>{it.category || '—'}</td>
+                        <td style={{ textAlign: 'right' }}>{fmtNum(it.qty)}</td>
+                        <td style={{ textAlign: 'right' }}>{fmtMoney2(it.getprice)}</td>
+                        <td style={{ textAlign: 'right' }}>{fmtMoney2(it.sellprice)}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600, color: deadStockBucketDef[deadStockBucket].color }}>
+                          {fmtMoney(it.stock_value)}
+                        </td>
+                        <td style={{ fontSize: 12, color: it.last_sale_date ? '#cbd5e1' : '#94a3b8' }}>{lastSale}</td>
+                        <td style={{ textAlign: 'right', color: '#94a3b8' }}>{days != null ? fmtInt(days) : '—'}</td>
                       </tr>
                     );
                   })}

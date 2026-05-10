@@ -1242,6 +1242,117 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 "markdown_pct": round((rb_f - ra_f) / rb_f * 100, 2) if rb_f else 0.0,
             })
 
+        # ─── Dead stock — per-SKU inventory snapshot with last-sale aging ────
+        # PRODUCTS.P_QUANT is the per-store stock snapshot (decimal). LEFT JOIN
+        # to ORDERS yields last_sale_date (NULL = never sold). Bucket logic in
+        # Python — 4 dead/slow buckets + 2 special panels (free-stock and
+        # negative-stock are surfaced separately so they don't pollute totals).
+        # Snapshot anchor = max_ts (latest sale in DB) for consistency with the
+        # daily_trend anchor used elsewhere in this rollup.
+        cur.execute(
+            """
+            WITH last_sale AS (
+                SELECT ORD_P_ID, MAX(ORD_TIMESTAMP) AS last_sale_ts
+                FROM ORDERS
+                WHERE ORD_ACT = 1 AND ORD_TIMESTAMP IS NOT NULL
+                GROUP BY ORD_P_ID
+            )
+            SELECT
+                p.P_ID, p.P_CODE, p.P_BARCODE, p.P_NAME, p.P_GROUP,
+                p.P_QUANT, p.P_GETPRICE, p.P_PRICE, p.P_ACTIVE,
+                ls.last_sale_ts
+            FROM PRODUCTS p
+            LEFT JOIN last_sale ls ON ls.ORD_P_ID = p.P_ID
+            WHERE p.P_QUANT <> 0
+            """
+        )
+        ds_anchor = max_ts or datetime.now()
+        ds_buckets: dict[str, list[dict]] = {
+            "dead_365d_plus": [],
+            "dead_180_365d": [],
+            "slow_90_180d": [],
+            "active_under_90d": [],
+            "free_stock": [],
+            "negative_stock": [],
+        }
+        for pid, code, barcode, name, group, qty, getprice, sellprice, active, last_sale_ts in cur.fetchall():
+            qty_f = float(qty or 0)
+            getprice_f = float(getprice or 0)
+            sellprice_f = float(sellprice or 0)
+            stock_value = qty_f * getprice_f
+            days_since_sale = (ds_anchor - last_sale_ts).days if last_sale_ts else None
+            item = {
+                "product_id": int(pid),
+                "product_code": code or "",
+                "barcode": barcode or "",
+                "product_name": name or "",
+                "category": group or "(უცნობი)",
+                "qty": qty_f,
+                "getprice": getprice_f,
+                "sellprice": sellprice_f,
+                "stock_value": stock_value,
+                "active": int(active or 0),
+                "last_sale_date": last_sale_ts.isoformat() if last_sale_ts else None,
+                "days_since_sale": days_since_sale,
+            }
+            if qty_f < 0:
+                ds_buckets["negative_stock"].append(item)
+            elif sellprice_f == 0:
+                ds_buckets["free_stock"].append(item)
+            elif days_since_sale is None or days_since_sale >= 365:
+                ds_buckets["dead_365d_plus"].append(item)
+            elif days_since_sale >= 180:
+                ds_buckets["dead_180_365d"].append(item)
+            elif days_since_sale >= 90:
+                ds_buckets["slow_90_180d"].append(item)
+            else:
+                ds_buckets["active_under_90d"].append(item)
+
+        def _ds_summarize(items: list[dict], top_n: int = 50) -> dict:
+            items_sorted = sorted(items, key=lambda x: x["stock_value"], reverse=True)
+            return {
+                "count": len(items),
+                "stock_value": sum(it["stock_value"] for it in items),
+                "never_sold_count": sum(1 for it in items if it["last_sale_date"] is None),
+                "top_items": items_sorted[:top_n],
+            }
+
+        ds_total_positive = sum(
+            it["stock_value"]
+            for key in ("dead_365d_plus", "dead_180_365d", "slow_90_180d", "active_under_90d", "free_stock")
+            for it in ds_buckets[key]
+        )
+        ds_dead_value = sum(
+            it["stock_value"]
+            for key in ("dead_365d_plus", "dead_180_365d", "slow_90_180d")
+            for it in ds_buckets[key]
+        )
+        ds_neg = ds_buckets["negative_stock"]
+        negative_stock_alert = {
+            "count": len(ds_neg),
+            "abs_value_total": sum(abs(it["stock_value"]) for it in ds_neg),
+            "min_qty": min((it["qty"] for it in ds_neg), default=0.0),
+            "top_items": sorted(ds_neg, key=lambda x: abs(x["stock_value"]), reverse=True)[:50],
+        }
+        dead_stock_summary = {
+            "snapshot_date": ds_anchor.isoformat(),
+            "total_stock_value": ds_total_positive,
+            "dead_stock_value": ds_dead_value,
+            "dead_stock_pct": (ds_dead_value / ds_total_positive * 100) if ds_total_positive else 0.0,
+            "buckets": {
+                "dead_365d_plus": _ds_summarize(ds_buckets["dead_365d_plus"]),
+                "dead_180_365d":  _ds_summarize(ds_buckets["dead_180_365d"]),
+                "slow_90_180d":   _ds_summarize(ds_buckets["slow_90_180d"]),
+                "active_under_90d": {
+                    "count": len(ds_buckets["active_under_90d"]),
+                    "stock_value": sum(it["stock_value"] for it in ds_buckets["active_under_90d"]),
+                    "never_sold_count": sum(1 for it in ds_buckets["active_under_90d"] if it["last_sale_date"] is None),
+                },
+                "free_stock": _ds_summarize(ds_buckets["free_stock"]),
+            },
+            "negative_stock_alert": negative_stock_alert,
+        }
+
         # Operator-error detection on PRODUCTS table — empty / duplicate-variant
         # / PROTECTED-supplier review. Built on the same connection so it
         # joins the per-store snapshot the rest of this rollup is reading.
@@ -1296,6 +1407,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
         "by_category": by_category,
         "by_category_by_month": by_category_by_month,
         "by_product_by_month": by_product_by_month,
+        "dead_stock_summary": dead_stock_summary,
         "category_anomalies": anomaly_bundle,
         "waybill_data": waybill_data,
     }

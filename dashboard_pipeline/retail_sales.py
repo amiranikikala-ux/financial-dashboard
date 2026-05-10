@@ -1504,7 +1504,89 @@ def synthesize_from_megaplus(megaplus_live):
             "returns_by_month": view_returns_by_month,
             "discount_by_category": view_discount_by_category,
             "discount_lift_summary": view_discount_lift_summary,
+            "dead_stock_summary": rollup.get("dead_stock_summary") or {},
         }
+
+    # ─── Dead stock — combine per-store snapshots ──────────────────────────
+    # Each store rollup carries its own dead_stock_summary (bucket items
+    # already tagged for that store's snapshot date). Combined view: union
+    # the per-bucket items with a store label, re-rank by stock_value, sum
+    # totals. Negative-stock + free-stock surface as separate panels in the
+    # UI so they don't pollute the dead totals.
+    ds_combined_buckets: dict = {
+        "dead_365d_plus": {"count": 0, "stock_value": 0.0, "never_sold_count": 0, "items": []},
+        "dead_180_365d":  {"count": 0, "stock_value": 0.0, "never_sold_count": 0, "items": []},
+        "slow_90_180d":   {"count": 0, "stock_value": 0.0, "never_sold_count": 0, "items": []},
+        "active_under_90d": {"count": 0, "stock_value": 0.0, "never_sold_count": 0},
+        "free_stock":     {"count": 0, "stock_value": 0.0, "never_sold_count": 0, "items": []},
+    }
+    ds_combined_neg_items: list = []
+    ds_combined_total_value = 0.0
+    ds_combined_dead_value = 0.0
+    ds_combined_neg_count = 0
+    ds_combined_neg_abs = 0.0
+    ds_combined_neg_min_qty = 0.0
+    ds_snapshot_dates: dict = {}
+    for store_id, rollup in stores.items():
+        obj_label = store_label_for.get(str(store_id)) or f"store_{store_id}"
+        ds = rollup.get("dead_stock_summary") or {}
+        ds_combined_total_value += float(ds.get("total_stock_value") or 0)
+        ds_combined_dead_value += float(ds.get("dead_stock_value") or 0)
+        if ds.get("snapshot_date"):
+            ds_snapshot_dates[obj_label] = ds["snapshot_date"]
+        src_buckets = ds.get("buckets") or {}
+        for bkey, btarget in ds_combined_buckets.items():
+            bsrc = src_buckets.get(bkey) or {}
+            btarget["count"] += int(bsrc.get("count") or 0)
+            btarget["stock_value"] += float(bsrc.get("stock_value") or 0)
+            btarget["never_sold_count"] += int(bsrc.get("never_sold_count") or 0)
+            if "items" in btarget:
+                for it in (bsrc.get("top_items") or []):
+                    btarget["items"].append({**it, "store": obj_label})
+        nsa_src = ds.get("negative_stock_alert") or {}
+        ds_combined_neg_count += int(nsa_src.get("count") or 0)
+        ds_combined_neg_abs += float(nsa_src.get("abs_value_total") or 0)
+        src_min_qty = float(nsa_src.get("min_qty") or 0)
+        if src_min_qty < ds_combined_neg_min_qty:
+            ds_combined_neg_min_qty = src_min_qty
+        for it in (nsa_src.get("top_items") or []):
+            ds_combined_neg_items.append({**it, "store": obj_label})
+
+    # Re-rank top items pooled across stores (each store contributes its own
+    # top-50; pool of up-to-100 → take top-50 by stock_value).
+    ds_combined_buckets_out: dict = {}
+    for bkey, bdata in ds_combined_buckets.items():
+        if "items" in bdata:
+            top = sorted(bdata["items"], key=lambda x: x.get("stock_value", 0), reverse=True)[:50]
+            ds_combined_buckets_out[bkey] = {
+                "count": bdata["count"],
+                "stock_value": round(bdata["stock_value"], 2),
+                "never_sold_count": bdata["never_sold_count"],
+                "top_items": top,
+            }
+        else:
+            ds_combined_buckets_out[bkey] = {
+                "count": bdata["count"],
+                "stock_value": round(bdata["stock_value"], 2),
+                "never_sold_count": bdata["never_sold_count"],
+            }
+
+    dead_stock_summary_combined = {
+        "snapshot_date": max(ds_snapshot_dates.values()) if ds_snapshot_dates else None,
+        "snapshot_dates_per_store": ds_snapshot_dates,
+        "total_stock_value": round(ds_combined_total_value, 2),
+        "dead_stock_value": round(ds_combined_dead_value, 2),
+        "dead_stock_pct": round(
+            (ds_combined_dead_value / ds_combined_total_value * 100) if ds_combined_total_value else 0.0, 2
+        ),
+        "buckets": ds_combined_buckets_out,
+        "negative_stock_alert": {
+            "count": ds_combined_neg_count,
+            "abs_value_total": round(ds_combined_neg_abs, 2),
+            "min_qty": ds_combined_neg_min_qty,
+            "top_items": sorted(ds_combined_neg_items, key=lambda x: abs(x.get("stock_value", 0)), reverse=True)[:50],
+        },
+    }
 
     # ─── Cross-store SKU comparison ────────────────────────────────────────
     # Same SKU sold in BOTH stores: side-by-side qty / avg-price / margin
@@ -1928,6 +2010,7 @@ def synthesize_from_megaplus(megaplus_live):
         "discount_by_category": discount_by_category_combined,
         "discount_lift_summary": discount_lift_summary,
         "cross_store_comparison": cross_store_comparison,
+        "dead_stock_summary": dead_stock_summary_combined,
     }
 
 
