@@ -247,7 +247,11 @@ function CalendarHeatmap({ days }) {
 }
 
 export default function RetailSales({ retailSales, responseMeta }) {
-  const summary = retailSales && typeof retailSales === 'object' ? retailSales : null;
+  // Always-an-object so all useMemo hooks below run unconditionally
+  // (early-returning before hooks violates Rules of Hooks → React #310
+  // when the prop arrives async). Empty-state UI lives at the bottom.
+  const hasRetailData = !!(retailSales && typeof retailSales === 'object');
+  const summary = hasRetailData ? retailSales : {};
   const [topProductsLimit, setTopProductsLimit] = useState(20);
   const [storeFilter, setStoreFilter] = useState('all');
   const [productSearch, setProductSearch] = useState('');
@@ -259,18 +263,6 @@ export default function RetailSales({ retailSales, responseMeta }) {
   const [periodPreset, setPeriodPreset] = useState('all');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
-
-  if (!summary) {
-    return (
-      <div className="cashflow-page pnl-empty">
-        <div className="kpi-card" style={{ maxWidth: 520, margin: '48px auto', textAlign: 'center' }}>
-          <div className="kpi-label">Retail Sales summary ჯერ არ არის</div>
-          <div className="kpi-sub" style={{ marginTop: 12 }}>გაუშვი ტერმინალში:</div>
-          <code className="pnl-code-hint">python generate_dashboard_data.py</code>
-        </div>
-      </div>
-    );
-  }
 
   // Per-store view: when storeFilter !== 'all' we route every chart-/KPI-
   // bound source through per_object_view[store] so the page reflects ONLY
@@ -697,16 +689,21 @@ export default function RetailSales({ retailSales, responseMeta }) {
   }, [dailyFiltered, forecastRows, periodRange]);
 
   // Delta helper for KPI ▲▼ chip
-  const renderDelta = (delta, deltaPct) => {
+  const renderDelta = (delta, deltaPct, opts = {}) => {
     if (delta === undefined || delta === null) return null;
-    const positive = delta >= 0;
+    const inverted = opts.inverted === true;        // for cost: ▲ is bad
+    const unit = opts.unit || '%';                  // 'pp' for margin
+    const up = delta >= 0;
+    // "good" means the change is favorable for the owner (revenue up = good, cost down = good)
+    const good = inverted ? !up : up;
+    const value = unit === 'pp' ? `${fmtNum(Math.abs(deltaPct))}pp` : fmtPct(Math.abs(deltaPct));
     return (
       <span style={{
         marginLeft: 6, fontSize: 11, padding: '1px 6px', borderRadius: 4,
-        background: positive ? '#064e3b' : '#7f1d1d',
-        color: positive ? '#6ee7b7' : '#fca5a5',
+        background: good ? '#064e3b' : '#7f1d1d',
+        color: good ? '#6ee7b7' : '#fca5a5',
       }}>
-        {positive ? '▲' : '▼'} {fmtPct(Math.abs(deltaPct))}
+        {up ? '▲' : '▼'} {value}
       </span>
     );
   };
@@ -721,6 +718,63 @@ export default function RetailSales({ retailSales, responseMeta }) {
       margin: toNum(m.gross_margin_pct),
     }));
   }, [byMonth, byMonthFiltered, periodRange]);
+
+  // KPI deltas — current vs previous-equivalent period from byMonth.
+  // Only computed when a period filter is active (lifetime totals don't
+  // have a meaningful "previous" — the dedicated MoM panel below covers
+  // the no-filter case).
+  const kpiDeltas = useMemo(() => {
+    const empty = { label: null };
+    if (!periodRange || !byMonth || byMonth.length < 2) return empty;
+    const fromD = new Date(periodRange.from);
+    const toD = new Date(periodRange.to);
+    const lengthMs = toD.getTime() - fromD.getTime() + 86400000;
+    const prevToD = new Date(fromD.getTime() - 86400000);
+    const prevFromD = new Date(prevToD.getTime() - lengthMs + 86400000);
+    const fmt = (d) => d.toISOString().slice(0, 7);
+    const curr = { fromM: periodRange.from.slice(0, 7), toM: periodRange.to.slice(0, 7) };
+    const prev = { fromM: fmt(prevFromD), toM: fmt(prevToD) };
+    const label = `vs ${prev.fromM === prev.toM ? prev.fromM : `${prev.fromM} → ${prev.toM}`}`;
+    const sumRange = (range) => byMonth
+      .filter((m) => m.month && m.month >= range.fromM && m.month <= range.toM)
+      .reduce((acc, m) => ({
+        revenue: acc.revenue + toNum(m.revenue_ge),
+        cost: acc.cost + toNum(m.cost_ge),
+        profit: acc.profit + toNum(m.profit_ge),
+        receipts: acc.receipts + toNum(m.receipts),
+        lines: acc.lines + toNum(m.row_count),
+        quantity: acc.quantity + toNum(m.total_quantity),
+      }), { revenue: 0, cost: 0, profit: 0, receipts: 0, lines: 0, quantity: 0 });
+    const c = sumRange(curr);
+    const p = sumRange(prev);
+    const pctDelta = (cv, pv) => (pv ? ((cv - pv) / Math.abs(pv)) * 100 : null);
+    const ratio = (num, den) => (den ? num / den : 0);
+    const cMargin = ratio(c.profit, c.revenue) * 100;
+    const pMargin = ratio(p.profit, p.revenue) * 100;
+    return {
+      label,
+      revenue: pctDelta(c.revenue, p.revenue),
+      cost: pctDelta(c.cost, p.cost),
+      profit: pctDelta(c.profit, p.profit),
+      marginPp: (c.revenue && p.revenue) ? cMargin - pMargin : null,
+      receipts: pctDelta(c.receipts, p.receipts),
+      aov: pctDelta(ratio(c.revenue, c.receipts), ratio(p.revenue, p.receipts)),
+      itemsPerBasket: pctDelta(ratio(c.lines, c.receipts), ratio(p.lines, p.receipts)),
+      lines: pctDelta(c.lines, p.lines),
+    };
+  }, [byMonth, periodRange]);
+
+  if (!hasRetailData) {
+    return (
+      <div className="cashflow-page pnl-empty">
+        <div className="kpi-card" style={{ maxWidth: 520, margin: '48px auto', textAlign: 'center' }}>
+          <div className="kpi-label">Retail Sales summary ჯერ არ არის</div>
+          <div className="kpi-sub" style={{ marginTop: 12 }}>გაუშვი ტერმინალში:</div>
+          <code className="pnl-code-hint">python generate_dashboard_data.py</code>
+        </div>
+      </div>
+    );
+  }
 
   if (!hasRows) {
     return (
@@ -983,48 +1037,72 @@ export default function RetailSales({ retailSales, responseMeta }) {
       <div className="kpi-grid retail-sales-kpi-grid">
         <div className="kpi-card kpi-card--accent">
           <div className="kpi-label">სულ შემოსავალი<InfoTip text={TIPS.revenue} /></div>
-          <div className="kpi-value amount-positive">{fmtMoney(eff.revenue_ge)}</div>
+          <div className="kpi-value amount-positive">
+            {fmtMoney(eff.revenue_ge)}
+            {renderDelta(kpiDeltas.revenue, kpiDeltas.revenue)}
+          </div>
           <div className="kpi-sub">{
             periodKpis
               ? (periodKpis.source === 'daily'
                   ? `${periodKpis.day_count} დღე`
                   : `${periodKpis.month_count} თვე`)
               : 'POS-რეგისტრირებული'
-          }</div>
+          }{kpiDeltas.label ? ` · ${kpiDeltas.label}` : ''}</div>
         </div>
         <div className="kpi-card kpi-card--warn">
           <div className="kpi-label">სულ თვითღირებულება<InfoTip text={TIPS.cost} /></div>
-          <div className="kpi-value amount-negative">{fmtMoney(eff.cost_ge)}</div>
+          <div className="kpi-value amount-negative">
+            {fmtMoney(eff.cost_ge)}
+            {renderDelta(kpiDeltas.cost, kpiDeltas.cost, { inverted: true })}
+          </div>
           <div className="kpi-sub">ფაქტურიდან გათვლილი</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-label">სულ მოგება<InfoTip text={TIPS.profit} /></div>
-          <div className={`kpi-value ${renderMoneyClass(eff.profit_ge)}`}>{fmtMoney(eff.profit_ge)}</div>
+          <div className={`kpi-value ${renderMoneyClass(eff.profit_ge)}`}>
+            {fmtMoney(eff.profit_ge)}
+            {renderDelta(kpiDeltas.profit, kpiDeltas.profit)}
+          </div>
           <div className="kpi-sub">შემოსავალი − imputed cost</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-label">Gross Margin<InfoTip text={TIPS.margin} /></div>
-          <div className="kpi-value amount-neutral">{fmtPct(eff.gross_margin_pct)}</div>
+          <div className="kpi-value amount-neutral">
+            {fmtPct(eff.gross_margin_pct)}
+            {renderDelta(kpiDeltas.marginPp, kpiDeltas.marginPp, { unit: 'pp' })}
+          </div>
           <div className="kpi-sub">{fmtInt(overall.distinct_object_count)} ობიექტი</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-label">ჩეკები<InfoTip text={TIPS.receipts} /></div>
-          <div className="kpi-value amount-neutral">{fmtInt(eff.receipts)}</div>
+          <div className="kpi-value amount-neutral">
+            {fmtInt(eff.receipts)}
+            {renderDelta(kpiDeltas.receipts, kpiDeltas.receipts)}
+          </div>
           <div className="kpi-sub">უნიკალური ORD_N</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-label">საშუალო ჩეკი (AOV)<InfoTip text={TIPS.aov} /></div>
-          <div className="kpi-value amount-neutral">{fmtMoney2(eff.aov)}</div>
+          <div className="kpi-value amount-neutral">
+            {fmtMoney2(eff.aov)}
+            {renderDelta(kpiDeltas.aov, kpiDeltas.aov)}
+          </div>
           <div className="kpi-sub">ერთ ჩეკზე საშ. თანხა</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-label">პროდუქტი / ჩეკი<InfoTip text={TIPS.itemsPerBasket} /></div>
-          <div className="kpi-value amount-neutral">{fmtNum(eff.items_per_basket)}</div>
+          <div className="kpi-value amount-neutral">
+            {fmtNum(eff.items_per_basket)}
+            {renderDelta(kpiDeltas.itemsPerBasket, kpiDeltas.itemsPerBasket)}
+          </div>
           <div className="kpi-sub">საშ. ხაზი ერთ ჩეკში</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-label">ხაზები / რაოდენობა<InfoTip text={TIPS.rows} /></div>
-          <div className="kpi-value amount-neutral">{fmtInt(eff.lines)}</div>
+          <div className="kpi-value amount-neutral">
+            {fmtInt(eff.lines)}
+            {renderDelta(kpiDeltas.lines, kpiDeltas.lines)}
+          </div>
           <div className="kpi-sub">{periodKpis ? '(მხოლოდ პერიოდში)' : `${fmtNum(overall.total_quantity)} ცალი / კგ`}</div>
         </div>
         <div className="kpi-card">
