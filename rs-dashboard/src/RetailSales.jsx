@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { Fragment, useState, useMemo } from 'react';
 import {
   ResponsiveContainer,
   LineChart, Line,
@@ -253,6 +253,7 @@ export default function RetailSales({ retailSales, responseMeta }) {
   const [productSearch, setProductSearch] = useState('');
   const [crossStoreSortBy, setCrossStoreSortBy] = useState('price_gap');
   const [deadStockBucket, setDeadStockBucket] = useState('dead_365d_plus');
+  const [drillCategory, setDrillCategory] = useState(null);
   // Period filter — applies to time-series + KPI block. Aggregate
   // top-product / hour / dow lists stay lifetime (banner indicates).
   const [periodPreset, setPeriodPreset] = useState('all');
@@ -589,6 +590,42 @@ export default function RetailSales({ retailSales, responseMeta }) {
     if (!periodRange) return topProductsByProfitAllLifetime;
     return [...topProductsByRevenueAll].sort((a, b) => b.profit_ge - a.profit_ge);
   }, [periodRange, topProductsByRevenueAll, topProductsByProfitAllLifetime]);
+
+  // Drill-down — products inside the clicked category. Period-aware: aggregates
+  // from byProductByMonth in period mode (full source), or filters lifetime
+  // by_product (1000 SKU coverage) in lifetime mode. Top 50 by revenue.
+  const drillDownProducts = useMemo(() => {
+    if (!drillCategory) return [];
+    if (periodRange) {
+      const fromM = periodRange.from.slice(0, 7);
+      const toM = periodRange.to.slice(0, 7);
+      const acc = {};
+      for (const r of byProductByMonth) {
+        if (!r.month || r.month < fromM || r.month > toM) continue;
+        if ((r.category || '') !== drillCategory) continue;
+        const k = r.barcode || r.product_code || r.product_name;
+        if (!k) continue;
+        const cur = acc[k] || {
+          product_code: r.product_code, barcode: r.barcode,
+          product_name: r.product_name, category: r.category,
+          qty_sold: 0, revenue_ge: 0, cost_ge: 0, profit_ge: 0,
+        };
+        cur.qty_sold += toNum(r.qty_sold);
+        cur.revenue_ge += toNum(r.revenue_ge);
+        cur.cost_ge += toNum(r.cost_ge);
+        cur.profit_ge += toNum(r.profit_ge);
+        acc[k] = cur;
+      }
+      const out = Object.values(acc);
+      out.forEach((r) => { r.gross_margin_pct = r.revenue_ge > 0 ? (r.profit_ge / r.revenue_ge) * 100 : 0; });
+      return out.sort((a, b) => b.revenue_ge - a.revenue_ge).slice(0, 50);
+    }
+    const allProducts = asArray(view.by_product || summary.by_product);
+    return allProducts
+      .filter((p) => (p.category || '') === drillCategory)
+      .sort((a, b) => toNum(b.revenue_ge) - toNum(a.revenue_ge))
+      .slice(0, 50);
+  }, [drillCategory, periodRange, byProductByMonth, view, summary]);
 
   // Search-filtered + sliced top product lists (consumed by the UI tables).
   const topProductsByRevenue = topProductsByRevenueAll.filter(matchesSearch).slice(0, topProductsLimit);
@@ -2151,15 +2188,70 @@ export default function RetailSales({ retailSales, responseMeta }) {
                 </tr>
               </thead>
               <tbody>
-                {topCategoriesByProfit.map((row) => (
-                  <tr key={`retail-cat-${row.category || 'unknown'}`}>
-                    <td>{row.category || 'უცნობი კატეგორია'}</td>
-                    <td className="amount-positive">{fmtMoney(row.revenue_ge)}</td>
-                    <td className="amount-negative">{fmtMoney(row.cost_ge)}</td>
-                    <td className={renderMoneyClass(row.profit_ge)}>{fmtMoney(row.profit_ge)}</td>
-                    <td>{fmtPct(row.gross_margin_pct)}</td>
-                  </tr>
-                ))}
+                {topCategoriesByProfit.map((row) => {
+                  const catKey = row.category || 'unknown';
+                  const isOpen = drillCategory === (row.category || 'უცნობი კატეგორია');
+                  return (
+                    <Fragment key={`retail-cat-${catKey}`}>
+                      <tr
+                        onClick={() => setDrillCategory(isOpen ? null : (row.category || 'უცნობი კატეგორია'))}
+                        style={{ cursor: 'pointer', background: isOpen ? '#0f172a' : undefined }}
+                        title={isOpen ? 'დახურვა' : 'პროდუქტების ნახვა'}
+                      >
+                        <td>
+                          <span style={{ display: 'inline-block', width: 14, color: '#64748b', marginRight: 4 }}>
+                            {isOpen ? '▼' : '▶'}
+                          </span>
+                          {row.category || 'უცნობი კატეგორია'}
+                        </td>
+                        <td className="amount-positive">{fmtMoney(row.revenue_ge)}</td>
+                        <td className="amount-negative">{fmtMoney(row.cost_ge)}</td>
+                        <td className={renderMoneyClass(row.profit_ge)}>{fmtMoney(row.profit_ge)}</td>
+                        <td>{fmtPct(row.gross_margin_pct)}</td>
+                      </tr>
+                      {isOpen && (
+                        <tr>
+                          <td colSpan={5} style={{ padding: 0, background: '#0b1220' }}>
+                            <div style={{ padding: '8px 12px' }}>
+                              <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 6 }}>
+                                ამ კატეგორიის top {drillDownProducts.length} პროდუქტი
+                                {periodRange ? ` · ${periodKpis ? periodKpis.label_ka : ''}` : ' · ცხოვრების ჯამი'}
+                              </div>
+                              {drillDownProducts.length === 0 ? (
+                                <div style={{ color: '#64748b', fontSize: 12, padding: 8 }}>პროდუქტი ვერ მოიძებნა.</div>
+                              ) : (
+                                <table style={{ width: '100%', fontSize: 12 }}>
+                                  <thead>
+                                    <tr style={{ color: '#94a3b8' }}>
+                                      <th style={{ textAlign: 'left' }}>კოდი</th>
+                                      <th style={{ textAlign: 'left' }}>დასახელება</th>
+                                      <th style={{ textAlign: 'right' }}>რაოდ.</th>
+                                      <th style={{ textAlign: 'right' }}>შემოსავ.</th>
+                                      <th style={{ textAlign: 'right' }}>მოგება</th>
+                                      <th style={{ textAlign: 'right' }}>Margin</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {drillDownProducts.map((p, idx) => (
+                                      <tr key={`drill-${catKey}-${p.barcode || p.product_code || idx}`}>
+                                        <td style={{ fontFamily: 'monospace', color: '#94a3b8' }}>{p.product_code || p.barcode || '—'}</td>
+                                        <td>{p.product_name || 'უცნობი'}</td>
+                                        <td style={{ textAlign: 'right' }}>{fmtNum(p.qty_sold || p.total_quantity)}</td>
+                                        <td style={{ textAlign: 'right' }} className="amount-positive">{fmtMoney(p.revenue_ge)}</td>
+                                        <td style={{ textAlign: 'right' }} className={renderMoneyClass(p.profit_ge)}>{fmtMoney(p.profit_ge)}</td>
+                                        <td style={{ textAlign: 'right' }}>{fmtPct(p.gross_margin_pct)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
