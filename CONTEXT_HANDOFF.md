@@ -1,12 +1,135 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-10 (საღამო) — **Sprint 3 cross-store SKU comparison done (1 of 6 items) + Dead Stock §8 preview written, sprint blocked on owner Excel cleanup.** Same SKU sold in both stores now surfaces side-by-side qty/price/margin with diff (3,340 eligible SKUs, 1,664 with ≥5% price gap, 1,491 with ≥5pp margin gap). Live-verified via Playwright. Dead Stock §8 preview identifies `PRODUCTS.P_QUANT` as the per-store inventory snapshot; owner has Excel review file on Desktop with 6 sheets covering 109,325 ₾ in dead/slow stock (~42% of inventory) — sprint resumes after POS cleanup + fresh backup. Branch is 14 commits ahead of `origin/main` (owner hasn't pushed).
+> **განახლდა**: 2026-05-10 (ღამე) — **4 sprints shipped: §8 Dead Stock + TOP-categories drill-down + ▲▼ KPI deltas + daily spike alerts.** All 4 commits pushed to origin/main (branch is now in sync). Dead Stock §8 unblocked itself — owner accepted "build the page now, MegaPlus fixes will reflect on next backup". Live-verified via Playwright; daily spike caught a real anomaly (2026-05-08, -2.86σ). Pre-existing latent bug fixed: Rules-of-Hooks violation (early return before useMemos → React #310 on async data load).
 >
-> Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`. Sprint preview → `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_DEAD_STOCK_2026-05-10_PREVIEW.md`.
+> Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-10 საღამო) — Sprint 3 cross-store comparison + Dead Stock §8 preview
+## 0. ბოლო session-ის შედეგი (2026-05-10 ღამე) — 4 sprints in one session
+
+### Headline (ღამე — 2026-05-10)
+
+**4 commits pushed to origin/main (branch synced):**
+| commit | რა მოიცავს |
+|---|---|
+| `345072e` | feat(retail-sales): §8 Dead Stock — inventory aging snapshot section |
+| `c8bdb4c` | feat(retail-sales): TOP კატეგორიები — inline drill-down to category products |
+| `043b43b` | feat(retail-sales): ▲▼ MoM delta on KPI cards + fix Rules-of-Hooks bug |
+| `d9f56b9` | feat(retail-sales): daily spike alerts (rolling 60-day baseline) |
+
+### Sprint 1 — §8 Dead Stock (Master Plan section closed 🟢)
+
+Owner reversed the "blocked on POS cleanup" stance — wants the dashboard page built NOW, fixes in MegaPlus will auto-reflect on next backup. Implementation matches `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_DEAD_STOCK_2026-05-10_PREVIEW.md` exactly.
+
+**Backend SQL (megaplus_backup.py, +90 lines):** new `_read_dead_stock`-style block in `_read_supplier_rollups`. PRODUCTS LEFT JOIN ORDERS computes per-SKU last_sale_date; Python buckets into 5 + 1 categories (`dead_365d_plus` / `dead_180_365d` / `slow_90_180d` / `active_under_90d` / `free_stock` + `negative_stock_alert` separate panel). Snapshot anchor = `max(ORD_TIMESTAMP)` consistent with daily_trend. Filter `WHERE P_QUANT <> 0` excludes zero-stock items.
+
+**Combined view (retail_sales.py, +90 lines):** pools per-store top-50 items per bucket with store label, re-ranks by stock_value, sums totals. Latest snapshot_date wins; per-store snapshots preserved for UI banner. Per-store `dead_stock_summary` passes through `per_object_view[store]`.
+
+**API projection (api_contracts.py, +1 line):** explicit pass-through (per `feedback_pipeline_registry_override.md` — silent drop risk if implicit).
+
+**Frontend (RetailSales.jsx, +180 lines):** new CollapsibleSection at page bottom — 4 KPI cards + 5 clickable bucket chips + items table with snapshot banner. Follows store filter; period filter does NOT apply (snapshot, not flow). Negative-stock + free-stock as bucket chips, separate from totals.
+
+**Tests (test_retail_sales_dead_stock.py, +220 lines):** 7 integration tests: combined totals / bucket counts / store-label preservation / negative alert / per_object_view passthrough / snapshot date max / div-by-zero. **All passing.**
+
+**Headline numbers (live-verified at /api/data?tab=retail_sales):**
+- Combined: 257,526 ₾ stock / 108,658 ₾ dead+slow (42.19%)
+- 365+ days: 1,942 SKU / 63,589 ₾ (669 never sold)
+- 180-365: 960 SKU / 28,165 ₾
+- 90-180: 597 SKU / 16,904 ₾
+- Free stock: 31 SKU / 3,548 ₾
+- Negative stock: 1,726 SKU / 36,384 ₾
+- Per-store: დვაბზუ 37.7%, ოზურგეთი 46.7%
+
+Top 365+ items match preview spot-checks (Cap atami 0.5L 1,596 qty / Agar shaqari 50kg 550 qty / Snikersi 80g 435 qty / Feiri Limoni 336 qty / Cap atami palpi 1L 228 qty).
+
+### Sprint 2 — TOP კატეგორიების drill-down
+
+Inline expansion under each TOP კატეგორიები — მოგებით row. Click row → expansion row with nested table of top 50 products in that category (sorted by revenue). Click again to collapse. Default collapsed; chevron (▶/▼) signals state.
+
+**Period-aware:** aggregates from `byProductByMonth` within active period range, falls back to lifetime `view.by_product` (1000-SKU coverage) when period filter off. Inherits store filter via the upstream view source.
+
+**Verified:** clicking "კოლა" expanded to 50 products; top items: Coca-Cola 2L (20,448 qty / 83K ₾), 0.5L (32,780 / 56K), 0.33L can (12,247 / 21K), 1.5L (4,823 / 17K). Chevron toggles correctly. 0 console errors.
+
+Single-file change (RetailSales.jsx +102 lines). Imports `Fragment` from react.
+
+### Sprint 3 — ▲▼ KPI deltas + Rules-of-Hooks bug fix
+
+**Feature:** 8 main KPI cards (revenue / cost / profit / margin / receipts / AOV / items-per-basket / lines) now show period-over-period delta when a period filter is active. ▲ green for revenue/profit/margin/receipts/etc. ▼ green for cost (inverted: lower cost = good). Margin shows `pp` delta instead of `%`.
+
+**Source:** `byMonth` aggregation. Previous block = equal-length immediately preceding the selected range. Lifetime mode shows no delta — dedicated MoM panel below already covers that case.
+
+**Verified:** April 2026 vs March 2026 → revenue ▲ 12.13% / cost ▲ 11.83% (red because cost up = bad) / profit ▲ 13.78% / margin ▲ 0.23pp / receipts ▲ 15.83% / AOV ▼ 3.19% / items-per-basket ▼ 1.68% / lines ▲ 13.88%.
+
+**Bug fix (latent, surfaced on cache-clear today):** `if (!summary) return …` ran BEFORE all 16 useMemo hooks. When `data.retail_sales` was null on first render and arrived async, hook count jumped 10 → 26 → React error #310. Fixed by making `summary = retailSales || {}` always-truthy and moving the empty-state check to AFTER all hooks (next to existing `if (!hasRows) return …`).
+
+This bug was present since the drill-down commit (which added a useMemo) but didn't manifest until cache-clear changed render timing. Worth knowing for future analogous components.
+
+### Sprint 4 — daily spike alerts
+
+Mirror of existing monthly z-score panel, but daily granularity. For each of last 14 days, computes revenue z-score against trailing 60-day baseline; surfaces days where |z| ≥ 2σ.
+
+**Day-of-week handling:** seasonality is absorbed into the 60-day window noise (~8-9 samples per weekday). Days with revenue=0 skipped on BOTH sides — closed days would emit false drops AND drag baseline mean down.
+
+**Live caught a real anomaly:** 2026-05-08 — 2,807 ₾ vs 60-day mean 6,072 ₾ (-2.86σ drop). Likely closure or shortened day; worth owner asking what happened.
+
+UI: orange-accent panel immediately below the purple monthly-anomaly panel. Same column layout (date / kind / revenue / mean / z-score / message).
+
+### Carry-overs from previous sessions (still open)
+
+- 🟡 **Sprint 3 retail polish — 2 of 6 items remain** (cross-store + drill-down + KPI delta + daily spikes done; mobile + PDF/email left):
+  - Mobile responsive polish (hard to verify without owner's phone)
+  - PDF / weekly email report (bigger sprint)
+- 🟢 **Dead Stock §8 — DONE this session.** Page lives at /#retail_sales bottom. Auto-updates on next MegaPlus backup as owner fixes POS data.
+- 🟡 **Period filter — items that still stay lifetime** (would need backend per-month versions; punted): საათობრივი / დღეების / hour×dow heatmap, Pareto / HHI / concentration, ფასდაკლების კატეგორიები, დაბრუნებული პროდუქტების top სია, დღგ-ის გარეშე ხაზი.
+- 🔴 **Lela-ს Foodmart cashback breakdown** — formula 90% incomplete, blocked on her email reply.
+- 🟡 **Future Gmail filters** — IMAP can't auto-filter; needs Gmail API + OAuth or cron labelling script.
+- 🟡 **Owner manual cash payments** — continues entering via UI as needed.
+- 🟡 **Pre-existing test failures unchanged** (test_expense_categories_incremental + test_foodmart_cashback_incremental).
+- 🟡 **Phase 3 — VAT input-side reconciliation** (Master Plan §18) — separate session.
+- 🟡 **Phase 4 — rs.ge SOAP automation** — blocked on rs.ge UI permission grant.
+- ⏸ **Mini PC** — owner cloud refused, deferred until hardware bought.
+- ✅ **Branch state**: local `main` synced with `origin/main` (4 commits pushed this session).
+
+### Verification commands (next session)
+
+```powershell
+# Dead Stock §8 — combined totals + per-store split
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
+import urllib.request, json
+api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=retail_sales', timeout=30).read())
+ds = api['retail_sales']['dead_stock_summary']
+print('total:', ds['total_stock_value'], 'dead:', ds['dead_stock_value'], 'pct:', ds['dead_stock_pct'])
+for st, v in api['retail_sales']['per_object_view'].items():
+    pds = v['dead_stock_summary']
+    print(f'  {st}: total={pds[\"total_stock_value\"]:.0f}, dead={pds[\"dead_stock_value\"]:.0f}')
+"
+# expect: 257525.58 / 108658.28 / 42.19% — დვაბზუ 128563/48458 — ოზურგეთი 128962/60200
+
+# Daily spike alerts
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
+import urllib.request, json
+api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=retail_sales', timeout=30).read())
+for a in api['retail_sales'].get('daily_spike_alerts') or []:
+    print(a['day'], a['kind'], 'rev', a['revenue_ge'], 'mean', a['mean_revenue_ge'], 'z', a['z_score'])
+"
+# expect at least: 2026-05-08 drop -2.86σ
+```
+
+### Implementation reminder — patching data.json + tab-data after backend changes
+
+Same procedure as previous session (still applies):
+
+1. Edit `synthesize_from_megaplus` to compute the new field.
+2. Edit `_project_retail_sales_summary` projection tuple.
+3. Use `_scratch_refresh_megaplus_live.py` (existing helper) to re-run SQL on existing DBs and refresh per-store `_megaplus_live.json` caches — needed when adding NEW SQL queries to the backend.
+4. Re-synthesize on cached megaplus_live and patch `data["retail_sales"]` in `rs-dashboard/public/data.json`.
+5. Re-build the static artifact via `api_contracts.build_response_for_tab(cache, "retail_sales")` and write to `tab-data/retail_sales.json` (both `public/` and `dist/` copies).
+6. Service auto-reloads on mtime change — **no Restart-Service needed** for new data files. Only needed if Python code itself changes.
+
+---
+
+## 0a. წინა session-ის შედეგი (2026-05-10 საღამო) — Sprint 3 cross-store comparison + Dead Stock §8 preview
 
 ### Headline (საღამო — 2026-05-10)
 
