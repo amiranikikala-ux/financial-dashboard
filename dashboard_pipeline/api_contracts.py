@@ -1041,6 +1041,7 @@ def _project_retail_sales_summary(bundle):
         "slow_movers",
         "top_recent_movers",
         "hour_dow_grid",
+        "hour_dow_grid_by_month",
         "per_object_view",
         "shifts",
         "shift_summary",

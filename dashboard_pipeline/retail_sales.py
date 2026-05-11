@@ -822,6 +822,34 @@ def synthesize_from_megaplus(megaplus_live):
             "receipts": c["receipts"],
             "revenue_ge": round(c["revenue"], 2),
         })
+
+    # Per-month hour×dow grid — combined across stores.
+    hdgbm_acc: dict = {}
+    for store_id, rollup in stores.items():
+        for cell in rollup.get("hour_dow_grid_by_month") or []:
+            month = cell.get("month"); dw = cell.get("dow"); hr = cell.get("hour")
+            if not month or dw is None or hr is None:
+                continue
+            key = (month, dw, hr)
+            cur_row = hdgbm_acc.setdefault(key, {
+                "month": month, "dow": dw, "hour": hr,
+                "lines": 0, "receipts": 0, "revenue": 0.0,
+            })
+            cur_row["lines"] += int(cell.get("lines") or 0)
+            cur_row["receipts"] += int(cell.get("receipts") or 0)
+            cur_row["revenue"] += float(cell.get("revenue") or 0)
+    hour_dow_grid_by_month = []
+    for (month, dw, hr) in sorted(hdgbm_acc.keys()):
+        c = hdgbm_acc[(month, dw, hr)]
+        hour_dow_grid_by_month.append({
+            "month": month,
+            "dow": dw,
+            "dow_label_ka": DOW_LABEL.get(dw, str(dw)),
+            "hour": hr,
+            "lines": c["lines"],
+            "receipts": c["receipts"],
+            "revenue_ge": round(c["revenue"], 2),
+        })
     daily_trend = []
     for k in sorted(daily_acc.keys()):
         d = daily_acc[k]
@@ -1409,6 +1437,20 @@ def synthesize_from_megaplus(megaplus_live):
                 "receipts": int(cell.get("receipts") or 0),
                 "revenue_ge": round(float(cell.get("revenue") or 0), 2),
             })
+        view_hour_dow_by_month = []
+        for cell in rollup.get("hour_dow_grid_by_month") or []:
+            dw = cell.get("dow"); hr = cell.get("hour"); month = cell.get("month")
+            if not month or dw is None or hr is None:
+                continue
+            view_hour_dow_by_month.append({
+                "month": month,
+                "dow": dw,
+                "dow_label_ka": DOW_LABEL.get(dw, str(dw)),
+                "hour": hr,
+                "lines": int(cell.get("lines") or 0),
+                "receipts": int(cell.get("receipts") or 0),
+                "revenue_ge": round(float(cell.get("revenue") or 0), 2),
+            })
         # Per-store concentration (Pareto + HHI + 50/80/90/95% thresholds).
         # Built from this store's product list only — each shop has its own
         # assortment + sales mix so combined HHI is misleading when filtered.
@@ -1615,6 +1657,7 @@ def synthesize_from_megaplus(megaplus_live):
             "hour_breakdown": view_hour,
             "dow_breakdown": view_dow,
             "hour_dow_grid": view_hour_dow,
+            "hour_dow_grid_by_month": view_hour_dow_by_month,
             "daily_trend": view_daily,
             "calendar_heatmap": view_cal,
             "returns_voids": view_returns,
@@ -2177,6 +2220,7 @@ def synthesize_from_megaplus(megaplus_live):
         "slow_movers": slow_movers,
         "top_recent_movers": top_recent_movers,
         "hour_dow_grid": hour_dow_grid,
+        "hour_dow_grid_by_month": hour_dow_grid_by_month,
         "per_object_view": per_object_view,
         "shifts": combined_shifts,
         "shift_summary": combined_shift_summary,

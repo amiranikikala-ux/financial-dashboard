@@ -304,9 +304,10 @@ export default function RetailSales({ retailSales, responseMeta }) {
   // Per-store-filterable analytics blocks
   const basket = view.basket_metrics || summary.basket_metrics || {};
   const paymentBreakdown = asArray(view.payment_breakdown || summary.payment_breakdown);
-  const dowBreakdown = asArray(view.dow_breakdown || summary.dow_breakdown);
-  const hourBreakdown = asArray(view.hour_breakdown || summary.hour_breakdown);
-  const hourDowGrid = asArray(view.hour_dow_grid || summary.hour_dow_grid);
+  const dowBreakdownLifetime = asArray(view.dow_breakdown || summary.dow_breakdown);
+  const hourBreakdownLifetime = asArray(view.hour_breakdown || summary.hour_breakdown);
+  const hourDowGridLifetime = asArray(view.hour_dow_grid || summary.hour_dow_grid);
+  const hourDowGridByMonth = asArray(view.hour_dow_grid_by_month || summary.hour_dow_grid_by_month);
   const dailyTrend = asArray(view.daily_trend || summary.daily_trend);
   const calendarHeatmap = asArray(view.calendar_heatmap || summary.calendar_heatmap);
   const returnsVoids = asArray(view.returns_voids || summary.returns_voids);
@@ -708,6 +709,39 @@ export default function RetailSales({ retailSales, responseMeta }) {
     return out.sort((a, b) => b.markdown_total_ge - a.markdown_total_ge).slice(0, 15);
   }, [periodRange, discountByCategoryByMonth, discountByCategoryLifetime]);
 
+  // Period-scoped hour/dow/grid (filter hour_dow_grid_by_month to the active
+  // window, then derive 24 hour bars + 7 dow bars + 168-cell grid).
+  const hourDowAggregates = useMemo(() => {
+    if (!periodRange) return null;
+    const fromM = periodRange.from.slice(0, 7);
+    const toM = periodRange.to.slice(0, 7);
+    const hourAcc = {};   // hour -> {lines, receipts, revenue_ge}
+    const dowAcc = {};    // dow -> {lines, receipts, revenue_ge, label_ka}
+    const gridAcc = {};   // `${dow}-${hour}` -> cell
+    for (const c of hourDowGridByMonth) {
+      if (!c.month || c.month < fromM || c.month > toM) continue;
+      const hr = c.hour;
+      const dw = c.dow;
+      if (hr == null || dw == null) continue;
+      const h = hourAcc[hr] || (hourAcc[hr] = { hour: hr, lines: 0, receipts: 0, revenue_ge: 0 });
+      h.lines += toNum(c.lines); h.receipts += toNum(c.receipts); h.revenue_ge += toNum(c.revenue_ge);
+      const d = dowAcc[dw] || (dowAcc[dw] = { dow: dw, label_ka: c.dow_label_ka, lines: 0, receipts: 0, revenue_ge: 0 });
+      d.lines += toNum(c.lines); d.receipts += toNum(c.receipts); d.revenue_ge += toNum(c.revenue_ge);
+      const gk = `${dw}-${hr}`;
+      const g = gridAcc[gk] || (gridAcc[gk] = { dow: dw, dow_label_ka: c.dow_label_ka, hour: hr, lines: 0, receipts: 0, revenue_ge: 0 });
+      g.lines += toNum(c.lines); g.receipts += toNum(c.receipts); g.revenue_ge += toNum(c.revenue_ge);
+    }
+    return {
+      hour: Object.values(hourAcc).sort((a, b) => a.hour - b.hour),
+      dow: Object.values(dowAcc).sort((a, b) => a.dow - b.dow),
+      grid: Object.values(gridAcc),
+    };
+  }, [periodRange, hourDowGridByMonth]);
+
+  const hourBreakdown = hourDowAggregates ? hourDowAggregates.hour : hourBreakdownLifetime;
+  const dowBreakdown = hourDowAggregates ? hourDowAggregates.dow : dowBreakdownLifetime;
+  const hourDowGrid = hourDowAggregates ? hourDowAggregates.grid : hourDowGridLifetime;
+
   // Period-scoped returns by product (sum per-month rows in range, re-rank).
   const returnsByProduct = useMemo(() => {
     if (!periodRange) return returnsByProductLifetime;
@@ -1062,8 +1096,7 @@ export default function RetailSales({ retailSales, responseMeta }) {
 
       {periodKpis && (
         <div className="trust-banner-sub" style={{ background: '#1e293b', borderLeft: '3px solid #3b82f6', padding: '8px 12px', marginBottom: 8, fontSize: 12 }}>
-          ⓘ პერიოდი <strong>{periodKpis.label_ka}</strong> ვრცელდება: KPI ბარათები, თვიური / დღიური ცემპი, კალენდარი, TOP კატეგორია, TOP პროდუქტი, ცვლები, დღგ, დღგ-ის გარეშე ხაზი, ფასდაკლების კატეგორიები, Pareto / HHI, დაბრუნებული პროდუქტები.
-          ლიფტაიმისაა: საათობრივი / დღის.
+          ⓘ პერიოდი <strong>{periodKpis.label_ka}</strong> ვრცელდება: KPI ბარათები, თვიური / დღიური ცემპი, კალენდარი, TOP კატეგორია, TOP პროდუქტი, ცვლები, დღგ, დღგ-ის გარეშე ხაზი, ფასდაკლების კატეგორიები, Pareto / HHI, დაბრუნებული პროდუქტები, საათობრივი / დღის / heatmap.
         </div>
       )}
 
@@ -1406,7 +1439,7 @@ export default function RetailSales({ retailSales, responseMeta }) {
       <div className="retail-sales-grid-2">
         {hourBreakdown.length > 0 && (
           <div className="chart-card">
-            <h3>საათობრივი ცემპი<InfoTip text={TIPS.hour} /></h3>
+            <h3>საათობრივი ცემპი {hourDowAggregates && periodKpis ? `— ${periodKpis.label_ka}` : ''}<InfoTip text={TIPS.hour} /></h3>
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={hourBreakdown}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -1424,7 +1457,7 @@ export default function RetailSales({ retailSales, responseMeta }) {
         )}
         {dowBreakdown.length > 0 && (
           <div className="chart-card">
-            <h3>კვირის დღე<InfoTip text={TIPS.dow} /></h3>
+            <h3>კვირის დღე {hourDowAggregates && periodKpis ? `— ${periodKpis.label_ka}` : ''}<InfoTip text={TIPS.dow} /></h3>
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={dowBreakdown}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -1444,7 +1477,7 @@ export default function RetailSales({ retailSales, responseMeta }) {
       {/* ─── Hour × Day-of-week heatmap (combined 7×24 grid) ─── */}
       {hourDowGrid.length > 0 && (
         <div className="chart-card">
-          <h3>საათი × კვირის-დღე რუკა<InfoTip text="168 უჯრედი (7 დღე × 24 საათი). წითელი = ყველაზე დაკავებული, მუქი = ცარიელი. სამუშაო გრაფიკის გადაწყობისთვის გამოგადგება — ცხადად ჩანს, რომელ კომბინაციაში ხდება ყველაზე მეტი გაყიდვა." /></h3>
+          <h3>საათი × კვირის-დღე რუკა {hourDowAggregates && periodKpis ? `— ${periodKpis.label_ka}` : ''}<InfoTip text="168 უჯრედი (7 დღე × 24 საათი). წითელი = ყველაზე დაკავებული, მუქი = ცარიელი. სამუშაო გრაფიკის გადაწყობისთვის გამოგადგება — ცხადად ჩანს, რომელ კომბინაციაში ხდება ყველაზე მეტი გაყიდვა." /></h3>
           <p className="chart-desc">ცხადყოფს, კვირის რომელ დღეს და რომელ საათში მაქსიმუმი გაყიდვა. გადაატანე მაუსი უჯრაზე — დეტალი.</p>
           <HourDowHeatmap grid={hourDowGrid} />
         </div>
