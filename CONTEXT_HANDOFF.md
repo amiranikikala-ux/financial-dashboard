@@ -1,6 +1,6 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-11 (დღის შემდგომი სესია) — **Retail Sales period-filter expansion: 4 sections made period-aware.** Added: discount-by-category, Pareto/HHI, returns-by-product, VAT-exempt-lines. Backend SQL changes: `discount_by_category_by_month`, `returns_by_product_by_month`, `vat_by_month` (+ exempt_lines/exempt_revenue), `by_product_by_month` cap 50→500. Frontend: period-aware useMemo aggregators that fall back to lifetime when no period selected. Verified in browser at /#retail_sales across "all" / "April 2026" / "last 90 days" / per-store combinations. 22 tests passing (5 new). Pre-existing carry-over: **earlier 2026-05-11 morning Code Dispersion detector** (commits `33b776a → b8337cb`) — owner reviewed Excel manually.
+> **განახლდა**: 2026-05-11 (დღის შემდგომი სესია) — **Retail Sales period-filter expansion COMPLETE: all 5 sections now follow the period filter.** No more lifetime-only sections in /#retail_sales. Two commits on local main: `f9a78e2` (4 sections — discount, Pareto/HHI, returns, VAT-exempt) and `d0b924f` (hour/dow/heatmap). Backend SQL added: `discount_by_category_by_month`, `returns_by_product_by_month`, `hour_dow_grid_by_month`, plus `vat_by_month` extended with exempt_lines/exempt_revenue, and `by_product_by_month` cap raised 50→500. Frontend: period-aware useMemo aggregators with lifetime fallback. Verified in browser across "all" / "April 2026" / "last 90 days" / per-store combinations. 22 tests passing (5 new). Pre-existing carry-over: **earlier 2026-05-11 morning Code Dispersion detector** (commits `33b776a → b8337cb`) — owner reviewed Excel manually.
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
@@ -20,12 +20,14 @@ Sprint 3 carry-over closed: 4 of the 5 sections that previously stayed lifetime 
 | Pareto/HHI | HHI 44.94 / 7,988 SKU / 801→80% | HHI 82.78 / 742 SKU / 440→80% |
 | დაბრუნებული პროდუქტები | 30 SKU / 114 ₾ | 4 SKU / 12 ₾ |
 | დღგ-ის გარეშე ხაზი | 192,923 ხაზი / 6.56% | 9,527 / 8.68% |
+| საათობრივი / დღის / heatmap | 168 cells (lifetime) | 168 cells (აპრილი) |
 
 Per-store × period combo also verified (e.g. დვაბზუ × April 2026 = 3,526 ₾ ფასდაკლება).
 
 **Backend SQL changes (`dashboard_pipeline/megaplus_backup.py`):**
 - New: `discount_by_category_by_month` — per-month per-category discount aggregate, no cap (sparse, ~3k rows combined).
 - New: `returns_by_product_by_month` — per-month per-product returns, no cap (returns are sparse — 138 rows lifetime).
+- New: `hour_dow_grid_by_month` — per-month hour×dow×revenue grid (~5,947 cells combined). Frontend derives 24 hour bars + 7 dow bars + 168-cell heatmap from this single source.
 - Existing `vat_by_month` extended: added `lines`, `exempt_lines`, `exempt_revenue`, `exempt_share_pct`.
 - `by_product_by_month` cap raised 50→500. **Important:** at top-50 coverage was only ~50% of monthly revenue (Pareto unusable); at top-500 coverage is 86-88% (HHI/Pareto reasonably accurate; long-tail 10-15% ცდომილება documented in UI caveat).
 
@@ -48,9 +50,10 @@ Per-store × period combo also verified (e.g. დვაბზუ × April 2026 =
 - Empty bundle does not insert a placeholder key.
 
 **Pending decision (Sprint Step 6 user review):**
-- Owner has not yet said „გადავიდეთ" — sections shown but not formally signed off.
-- 1 of 5 original items remaining: **საათობრივი / დღეების / hour×dow heatmap** (user didn't pick it this session).
-- Local main has uncommitted changes across 4 backend files + 1 frontend file + 1 test file + 3 _scratch helpers. **Not yet committed.**
+- Owner verified each section in the browser as it shipped and said „დასრულდა". Sprint considered closed for owner UX purposes; MASTER_PLAN.md §5 status row not yet flipped to 🟢 (separate edit if needed).
+- All 5 original items complete. **No retail_sales section remains lifetime-only.**
+- 2 commits on local `main` ahead of `origin/main`: `f9a78e2` + `d0b924f`. Not yet pushed — owner has not authorized push.
+- `Financial_Analysis/manual_payments_journal.csv` has 1 owner-entered line (2026-05-10) uncommitted; owner data, not a Claude change.
 
 ### Implementation reminder — refresh procedure when adding new megaplus SQL
 
