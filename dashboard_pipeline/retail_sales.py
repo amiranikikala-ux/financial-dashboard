@@ -952,9 +952,15 @@ def synthesize_from_megaplus(megaplus_live):
             key = m.get("month")
             if not key:
                 continue
-            cur = vat_month_acc.setdefault(key, {"month": key, "vat_collected": 0.0, "revenue": 0.0})
+            cur = vat_month_acc.setdefault(key, {
+                "month": key, "vat_collected": 0.0, "revenue": 0.0,
+                "lines": 0, "exempt_lines": 0, "exempt_revenue": 0.0,
+            })
             cur["vat_collected"] += float(m.get("vat_collected") or 0)
             cur["revenue"] += float(m.get("revenue") or 0)
+            cur["lines"] += int(m.get("lines") or 0)
+            cur["exempt_lines"] += int(m.get("exempt_lines") or 0)
+            cur["exempt_revenue"] += float(m.get("exempt_revenue") or 0)
         for c in rollup.get("vat_by_category") or []:
             key = c.get("category") or "(უცნობი)"
             cur = vat_cat_acc.setdefault(key, {
@@ -978,11 +984,16 @@ def synthesize_from_megaplus(megaplus_live):
     for k in sorted(vat_month_acc.keys()):
         row = vat_month_acc[k]
         rev = row["revenue"]
+        exempt_rev = row["exempt_revenue"]
         vat_by_month_combined.append({
             "month": k,
             "vat_collected_ge": round(row["vat_collected"], 2),
             "revenue_ge": round(rev, 2),
             "effective_rate_pct": round(row["vat_collected"] / rev * 100, 2) if rev else 0.0,
+            "lines": row["lines"],
+            "exempt_lines": row["exempt_lines"],
+            "exempt_revenue_ge": round(exempt_rev, 2),
+            "exempt_share_pct": round(exempt_rev / rev * 100, 2) if rev else 0.0,
         })
     vat_by_category_combined = []
     for row in sorted(vat_cat_acc.values(), key=lambda r: -r["vat_collected"]):
@@ -1052,6 +1063,44 @@ def synthesize_from_megaplus(megaplus_live):
             cur["receipts"] += int(m.get("receipts") or 0)
             cur["revenue"] += float(m.get("revenue") or 0)
             cur["quantity"] += float(m.get("quantity") or 0)
+    # Per-month variant — combined across stores. UI period filter sums
+    # rows in a date range and re-ranks for that window.
+    rbpbm_acc: dict = {}
+    for store_id, rollup in stores.items():
+        for r in rollup.get("returns_by_product_by_month") or []:
+            month = r.get("month")
+            if not month:
+                continue
+            barcode = r.get("barcode") or ""
+            code = r.get("product_code") or ""
+            key = (month, barcode or code or f"pid_{r.get('product_id')}")
+            cur_row = rbpbm_acc.setdefault(key, {
+                "month": month,
+                "product_code": code,
+                "barcode": barcode,
+                "product_name": r.get("product_name") or "",
+                "category": r.get("category") or "",
+                "return_lines": 0, "return_receipts": 0,
+                "return_revenue": 0.0, "return_quantity": 0.0,
+            })
+            cur_row["return_lines"] += int(r.get("return_lines") or 0)
+            cur_row["return_receipts"] += int(r.get("return_receipts") or 0)
+            cur_row["return_revenue"] += float(r.get("return_revenue") or 0)
+            cur_row["return_quantity"] += float(r.get("return_quantity") or 0)
+    returns_by_product_by_month_combined = []
+    for (month, _), row in sorted(rbpbm_acc.items()):
+        returns_by_product_by_month_combined.append({
+            "month": row["month"],
+            "product_code": row["product_code"],
+            "barcode": row["barcode"],
+            "product_name": row["product_name"],
+            "category": row["category"],
+            "return_lines": row["return_lines"],
+            "return_receipts": row["return_receipts"],
+            "return_revenue_ge": round(row["return_revenue"], 2),
+            "return_quantity": round(row["return_quantity"], 2),
+        })
+
     returns_by_product_combined = []
     for key, row in sorted(returns_prod_acc.items(), key=lambda kv: abs(kv[1]["return_revenue"]), reverse=True)[:30]:
         breakdown = sorted(row["by_object"].values(), key=lambda x: abs(x["return_revenue"]), reverse=True)
@@ -1141,6 +1190,47 @@ def synthesize_from_megaplus(megaplus_live):
         "profit_lost_ge": round(total_md, 2),  # markdown directly translates to lost margin (cost unchanged)
         "categories_with_discount": len(disc_cat_acc),
     }
+
+    # Per-month discount-by-category — combined across stores so the UI period
+    # filter can aggregate within a date range.
+    dcbm_acc: dict = {}
+    for store_id, rollup in stores.items():
+        for c in rollup.get("discount_by_category_by_month") or []:
+            month = c.get("month")
+            cat = c.get("category") or "(უცნობი)"
+            if not month:
+                continue
+            key = (month, cat)
+            cur_row = dcbm_acc.setdefault(key, {
+                "month": month, "category": cat,
+                "lines": 0, "receipts": 0,
+                "markdown_total": 0.0, "revenue_after": 0.0,
+                "revenue_before": 0.0, "cost": 0.0,
+            })
+            cur_row["lines"] += int(c.get("lines") or 0)
+            cur_row["receipts"] += int(c.get("receipts") or 0)
+            cur_row["markdown_total"] += float(c.get("markdown_total") or 0)
+            cur_row["revenue_after"] += float(c.get("revenue_after_markdown") or 0)
+            cur_row["revenue_before"] += float(c.get("revenue_before_markdown") or 0)
+            cur_row["cost"] += float(c.get("cost") or 0)
+    discount_by_category_by_month_combined = []
+    for (month, cat) in sorted(dcbm_acc.keys()):
+        row = dcbm_acc[(month, cat)]
+        rb = row["revenue_before"]; ra = row["revenue_after"]; c = row["cost"]
+        discount_by_category_by_month_combined.append({
+            "month": month,
+            "category": cat,
+            "lines": row["lines"],
+            "receipts": row["receipts"],
+            "markdown_total_ge": round(row["markdown_total"], 2),
+            "revenue_after_markdown_ge": round(ra, 2),
+            "revenue_before_markdown_ge": round(rb, 2),
+            "cost_ge": round(c, 2),
+            "profit_actual_ge": round(ra - c, 2),
+            "profit_if_no_discount_ge": round(rb - c, 2),
+            "lift_lost_ge": round(rb - ra, 2),
+            "markdown_pct": round((rb - ra) / rb * 100, 2) if rb else 0.0,
+        })
 
     # ─── Per-store views (filterable dataset) ─────────────────────────────
     # Build a parallel "view" per store so the UI store filter swaps the
@@ -1378,11 +1468,16 @@ def synthesize_from_megaplus(megaplus_live):
         view_vat_by_month = []
         for m in rollup.get("vat_by_month") or []:
             rev = float(m.get("revenue") or 0)
+            exempt_rev = float(m.get("exempt_revenue") or 0)
             view_vat_by_month.append({
                 "month": m.get("month"),
                 "vat_collected_ge": round(float(m.get("vat_collected") or 0), 2),
                 "revenue_ge": round(rev, 2),
                 "effective_rate_pct": float(m.get("effective_rate_pct") or 0),
+                "lines": int(m.get("lines") or 0),
+                "exempt_lines": int(m.get("exempt_lines") or 0),
+                "exempt_revenue_ge": round(exempt_rev, 2),
+                "exempt_share_pct": round(exempt_rev / rev * 100, 2) if rev else 0.0,
             })
         view_vat_by_category = []
         for c_row in rollup.get("vat_by_category") or []:
@@ -1426,6 +1521,19 @@ def synthesize_from_megaplus(megaplus_live):
                 "revenue_ge": round(float(m.get("revenue") or 0), 2),
                 "quantity": round(float(m.get("quantity") or 0), 2),
             })
+        view_returns_by_product_by_month = []
+        for r in rollup.get("returns_by_product_by_month") or []:
+            view_returns_by_product_by_month.append({
+                "month": r.get("month"),
+                "product_code": r.get("product_code"),
+                "barcode": r.get("barcode"),
+                "product_name": r.get("product_name"),
+                "category": r.get("category"),
+                "return_lines": int(r.get("return_lines") or 0),
+                "return_receipts": int(r.get("return_receipts") or 0),
+                "return_revenue_ge": round(float(r.get("return_revenue") or 0), 2),
+                "return_quantity": round(float(r.get("return_quantity") or 0), 2),
+            })
         view_discount_by_category = []
         v_total_md = 0.0; v_total_ra = 0.0; v_total_rb = 0.0; v_total_cost_d = 0.0
         for c_row in rollup.get("discount_by_category") or []:
@@ -1456,6 +1564,29 @@ def synthesize_from_megaplus(megaplus_live):
             "profit_lost_ge": round(v_total_md, 2),
             "categories_with_discount": len(view_discount_by_category),
         }
+        view_discount_by_category_by_month = []
+        for c_row in rollup.get("discount_by_category_by_month") or []:
+            month_v = c_row.get("month")
+            if not month_v:
+                continue
+            md_v = float(c_row.get("markdown_total") or 0)
+            ra_v = float(c_row.get("revenue_after_markdown") or 0)
+            rb_v = float(c_row.get("revenue_before_markdown") or 0)
+            cost_v = float(c_row.get("cost") or 0)
+            view_discount_by_category_by_month.append({
+                "month": month_v,
+                "category": c_row.get("category") or "(უცნობი)",
+                "lines": int(c_row.get("lines") or 0),
+                "receipts": int(c_row.get("receipts") or 0),
+                "markdown_total_ge": round(md_v, 2),
+                "revenue_after_markdown_ge": round(ra_v, 2),
+                "revenue_before_markdown_ge": round(rb_v, 2),
+                "cost_ge": round(cost_v, 2),
+                "profit_actual_ge": round(ra_v - cost_v, 2),
+                "profit_if_no_discount_ge": round(rb_v - cost_v, 2),
+                "lift_lost_ge": round(rb_v - ra_v, 2),
+                "markdown_pct": round((rb_v - ra_v) / rb_v * 100, 2) if rb_v else 0.0,
+            })
 
         # Period-aware top products for this store (raw rows; UI sums by range)
         view_by_product_by_month = []
@@ -1500,9 +1631,11 @@ def synthesize_from_megaplus(megaplus_live):
             "vat_by_month": view_vat_by_month,
             "vat_by_category": view_vat_by_category,
             "returns_by_product": view_returns_by_product,
+            "returns_by_product_by_month": view_returns_by_product_by_month,
             "returns_by_cashier": view_returns_by_cashier,
             "returns_by_month": view_returns_by_month,
             "discount_by_category": view_discount_by_category,
+            "discount_by_category_by_month": view_discount_by_category_by_month,
             "discount_lift_summary": view_discount_lift_summary,
             "dead_stock_summary": rollup.get("dead_stock_summary") or {},
         }
@@ -2052,9 +2185,11 @@ def synthesize_from_megaplus(megaplus_live):
         "vat_by_month": vat_by_month_combined,
         "vat_by_category": vat_by_category_combined,
         "returns_by_product": returns_by_product_combined,
+        "returns_by_product_by_month": returns_by_product_by_month_combined,
         "returns_by_cashier": returns_by_cashier_combined,
         "returns_by_month": returns_by_month_combined,
         "discount_by_category": discount_by_category_combined,
+        "discount_by_category_by_month": discount_by_category_by_month_combined,
         "discount_lift_summary": discount_lift_summary,
         "cross_store_comparison": cross_store_comparison,
         "dead_stock_summary": dead_stock_summary_combined,

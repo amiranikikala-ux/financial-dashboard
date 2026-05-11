@@ -558,11 +558,12 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 "margin_pct": (profit / rev_f * 100) if rev_f else None,
             })
 
-        # ─── By-product × month — top 50 per (store, month) ────────────────
+        # ─── By-product × month — top 500 per (store, month) ──────────────
         # Lets the UI compute period-scoped top products for any picked
         # month/year by summing rows within the requested date range.
-        # Capped at top-50 per month to keep payload bounded (~37 months ×
-        # 50 × 2 stores ≈ 3,700 rows per store rollup).
+        # Capped at top-500 per month to keep payload bounded (~37 months ×
+        # 500 × 2 stores ≈ 37k rows). Raised from 50 → 500 so period-scoped
+        # Pareto + HHI cover 95%+ of revenue instead of ~50% at top-50.
         cur.execute(
             """
             WITH ranked AS (
@@ -593,7 +594,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
             SELECT month, product_id, product_code, barcode, product_name, category,
                    qty_sold, revenue, cogs_imputed, row_count, receipts, rk
             FROM ranked
-            WHERE rk <= 50
+            WHERE rk <= 500
             ORDER BY month, rk
             """
         )
@@ -1048,14 +1049,19 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
             "exempt_share_pct": round(v_exempt_rev_f / v_rev_f * 100, 2) if v_rev_f else 0.0,
         }
 
-        # VAT by month
+        # VAT by month — includes per-month exempt counts so the UI period
+        # filter can show "VAT-exempt lines" for any picked window (was
+        # lifetime-only on the rollup totals).
         cur.execute(
             """
             SELECT
                 CAST(YEAR(o.ORD_TIMESTAMP) AS varchar(4)) + '-'
                     + RIGHT('0' + CAST(MONTH(o.ORD_TIMESTAMP) AS varchar(2)), 2) AS month,
                 ISNULL(SUM(o.ORD_VAT), 0)                  AS vat_total,
-                ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue
+                ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue,
+                COUNT(*)                                   AS lines,
+                SUM(CASE WHEN o.ORD_VAT = 0 THEN 1 ELSE 0 END) AS exempt_lines,
+                ISNULL(SUM(CASE WHEN o.ORD_VAT = 0 THEN o.ORD_jamjam ELSE 0 END), 0) AS exempt_revenue
             FROM ORDERS o
             WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP IS NOT NULL
             GROUP BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP)
@@ -1063,14 +1069,21 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
             """
         )
         vat_by_month = []
-        for month, vat_t, rev in cur.fetchall():
+        for month, vat_t, rev, lines, exempt_lines, exempt_rev in cur.fetchall():
             vat_t_f = float(vat_t or 0)
             rev_f = float(rev or 0)
+            lines_i = int(lines or 0)
+            exempt_lines_i = int(exempt_lines or 0)
+            exempt_rev_f = float(exempt_rev or 0)
             vat_by_month.append({
                 "month": month,
                 "vat_collected": vat_t_f,
                 "revenue": rev_f,
                 "effective_rate_pct": round(vat_t_f / rev_f * 100, 2) if rev_f else 0.0,
+                "lines": lines_i,
+                "exempt_lines": exempt_lines_i,
+                "exempt_revenue": exempt_rev_f,
+                "exempt_share_pct": round(exempt_rev_f / rev_f * 100, 2) if rev_f else 0.0,
             })
 
         # VAT by category
@@ -1146,6 +1159,49 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 "return_quantity": float(qty or 0),
                 "first_return": first_at.isoformat() if first_at else None,
                 "last_return": last_at.isoformat() if last_at else None,
+            })
+
+        # Per-month variant — emits every (month, product) where a return
+        # happened so the UI period filter can re-rank returns in a date
+        # range. Returns are sparse (~200 lines lifetime), so no cap needed.
+        cur.execute(
+            """
+            SELECT
+                CAST(YEAR(o.ORD_TIMESTAMP) AS varchar(4)) + '-'
+                    + RIGHT('0' + CAST(MONTH(o.ORD_TIMESTAMP) AS varchar(2)), 2) AS month,
+                p.P_ID                                     AS product_id,
+                p.P_CODE                                   AS product_code,
+                p.P_BARCODE                                AS barcode,
+                p.P_NAME                                   AS product_name,
+                p.P_GROUP                                  AS category,
+                COUNT(*)                                   AS return_lines,
+                COUNT(DISTINCT o.ORD_N)                    AS return_receipts,
+                ISNULL(SUM(o.ORD_jamjam), 0)               AS return_revenue,
+                ISNULL(SUM(o.ORD_quant), 0)                AS return_qty
+            FROM ORDERS o
+            JOIN PRODUCTS p ON o.ORD_P_ID = p.P_ID
+            WHERE o.ORD_ACT = 2 AND o.ORD_TIMESTAMP IS NOT NULL
+            GROUP BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP),
+                     p.P_ID, p.P_CODE, p.P_BARCODE, p.P_NAME, p.P_GROUP
+            ORDER BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP),
+                     ABS(ISNULL(SUM(o.ORD_jamjam), 0)) DESC
+            """
+        )
+        returns_by_product_by_month = []
+        for row in cur.fetchall():
+            (month, pid, code, barcode, name, category,
+             lines, receipts, rev, qty) = row
+            returns_by_product_by_month.append({
+                "month": month,
+                "product_id": int(pid),
+                "product_code": code or "",
+                "barcode": barcode or "",
+                "product_name": name or "",
+                "category": category or "",
+                "return_lines": int(lines or 0),
+                "return_receipts": int(receipts or 0),
+                "return_revenue": float(rev or 0),
+                "return_quantity": float(qty or 0),
             })
 
         # Returns by cashier — which user accepts most returns + ratio to
@@ -1239,6 +1295,52 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 "profit_actual": profit_actual,
                 "profit_if_no_discount": profit_no_discount,
                 "lift_lost_ge": md_f,  # = revenue_before − revenue_after, by definition
+                "markdown_pct": round((rb_f - ra_f) / rb_f * 100, 2) if rb_f else 0.0,
+            })
+
+        # Per-month variant of discount_by_category so the UI period filter can
+        # aggregate within a date range (lifetime totals above stay for the
+        # no-filter case).
+        cur.execute(
+            """
+            SELECT
+                CAST(YEAR(o.ORD_TIMESTAMP) AS varchar(4)) + '-'
+                    + RIGHT('0' + CAST(MONTH(o.ORD_TIMESTAMP) AS varchar(2)), 2) AS month,
+                ISNULL(p.P_GROUP, '(უცნობი)')              AS category,
+                COUNT(*)                                   AS lines,
+                COUNT(DISTINCT o.ORD_N)                    AS receipts,
+                ISNULL(SUM(o.ORD_FASDAKLEBAMDE - o.ORD_jamjam), 0) AS markdown,
+                ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue_after,
+                ISNULL(SUM(o.ORD_FASDAKLEBAMDE), 0)        AS revenue_before,
+                ISNULL(SUM(o.ORD_quant * pec.effective_unit_cost), 0) AS cogs_imputed
+            FROM ORDERS o
+            JOIN PRODUCTS p ON o.ORD_P_ID = p.P_ID
+            LEFT JOIN #pec pec ON p.P_ID = pec.p_id
+            WHERE o.ORD_ACT = 1
+              AND o.ORD_FASDAKLEBAMDE > o.ORD_jamjam
+              AND o.ORD_TIMESTAMP IS NOT NULL
+            GROUP BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP), p.P_GROUP
+            ORDER BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP),
+                     ISNULL(SUM(o.ORD_FASDAKLEBAMDE - o.ORD_jamjam), 0) DESC
+            """
+        )
+        discount_by_category_by_month = []
+        for month, cat, lines, receipts, md, rev_after, rev_before, cogs in cur.fetchall():
+            md_f = float(md or 0)
+            ra_f = float(rev_after or 0)
+            rb_f = float(rev_before or 0)
+            cogs_f = float(cogs or 0)
+            discount_by_category_by_month.append({
+                "month": month,
+                "category": cat or "(უცნობი)",
+                "lines": int(lines or 0),
+                "receipts": int(receipts or 0),
+                "markdown_total": md_f,
+                "revenue_after_markdown": ra_f,
+                "revenue_before_markdown": rb_f,
+                "cost": cogs_f,
+                "profit_actual": ra_f - cogs_f,
+                "profit_if_no_discount": rb_f - cogs_f,
                 "markdown_pct": round((rb_f - ra_f) / rb_f * 100, 2) if rb_f else 0.0,
             })
 
@@ -1397,9 +1499,11 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
         "vat_by_month": vat_by_month,
         "vat_by_category": vat_by_category,
         "returns_by_product": returns_by_product,
+        "returns_by_product_by_month": returns_by_product_by_month,
         "returns_by_cashier": returns_by_cashier,
         "returns_by_month": returns_by_month,
         "discount_by_category": discount_by_category,
+        "discount_by_category_by_month": discount_by_category_by_month,
         "suppliers": sorted(suppliers.values(), key=lambda s: s["lifetime"]["revenue"], reverse=True),
         "by_product": by_product,
         "by_product_recent": by_product_recent,

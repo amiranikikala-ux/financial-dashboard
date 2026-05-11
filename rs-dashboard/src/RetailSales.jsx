@@ -315,10 +315,7 @@ export default function RetailSales({ retailSales, responseMeta }) {
   // → a global HHI is misleading when scoped). Other cross-cutting blocks
   // (spike alerts, prev-period compare, slow movers, top recent movers,
   // forecast) stay global for now.
-  const concentration = view.concentration || summary.concentration || {};
-  // Sample for the line chart: 0-50 every step, then 50-500 every 10th rank.
-  const paretoFull = asArray(concentration.pareto_top500);
-  const paretoChart = paretoFull.filter((p, i) => i < 50 || i % 10 === 0);
+  const concentrationLifetime = view.concentration || summary.concentration || {};
   const registers = asArray(summary.registers_per_object);
   const cashiers = asArray(summary.cashiers_per_object);
   const prevCompare = summary.prev_period_compare || {};
@@ -339,11 +336,13 @@ export default function RetailSales({ retailSales, responseMeta }) {
   const vatTotals = view.vat_totals || summary.vat_totals || {};
   const vatByMonth = asArray(view.vat_by_month || summary.vat_by_month);
   const vatByCategory = asArray(view.vat_by_category || summary.vat_by_category).slice(0, 12);
-  const returnsByProduct = asArray(view.returns_by_product || summary.returns_by_product);
+  const returnsByProductLifetime = asArray(view.returns_by_product || summary.returns_by_product);
+  const returnsByProductByMonth = asArray(view.returns_by_product_by_month || summary.returns_by_product_by_month);
   const returnsByCashier = asArray(view.returns_by_cashier || summary.returns_by_cashier);
   const returnsByMonth = asArray(view.returns_by_month || summary.returns_by_month);
-  const discountByCategory = asArray(view.discount_by_category || summary.discount_by_category).slice(0, 15);
-  const discountLiftSummary = view.discount_lift_summary || summary.discount_lift_summary || {};
+  const discountByCategoryLifetime = asArray(view.discount_by_category || summary.discount_by_category);
+  const discountByCategoryByMonth = asArray(view.discount_by_category_by_month || summary.discount_by_category_by_month);
+  const discountLiftSummaryLifetime = view.discount_lift_summary || summary.discount_lift_summary || {};
   // Cross-store comparison — combined-view only (the comparison itself is cross-store).
   const crossStore = summary.cross_store_comparison || {};
   const crossStoreItems = (() => {
@@ -643,10 +642,17 @@ export default function RetailSales({ retailSales, responseMeta }) {
     if (!filtered.length) return null;
     const sumVat = filtered.reduce((s, m) => s + toNum(m.vat_collected_ge), 0);
     const sumRev = filtered.reduce((s, m) => s + toNum(m.revenue_ge), 0);
+    const sumLines = filtered.reduce((s, m) => s + toNum(m.lines), 0);
+    const sumExemptLines = filtered.reduce((s, m) => s + toNum(m.exempt_lines), 0);
+    const sumExemptRev = filtered.reduce((s, m) => s + toNum(m.exempt_revenue_ge), 0);
     return {
       vat_collected_ge: sumVat,
       revenue_ge: sumRev,
       effective_rate_pct: sumRev > 0 ? sumVat / sumRev * 100 : 0,
+      lines: sumLines,
+      exempt_lines: sumExemptLines,
+      exempt_revenue_ge: sumExemptRev,
+      exempt_share_pct: sumRev > 0 ? (sumExemptRev / sumRev) * 100 : 0,
       months: filtered.length,
     };
   }, [periodRange, vatByMonth]);
@@ -666,6 +672,172 @@ export default function RetailSales({ retailSales, responseMeta }) {
       months: filtered.length,
     };
   }, [periodRange, returnsByMonth]);
+
+  // Period-scoped discount-by-category (sum per-month rows in range, re-rank).
+  // Without an active period we fall back to lifetime rows from the backend.
+  const discountByCategory = useMemo(() => {
+    if (!periodRange) return discountByCategoryLifetime.slice(0, 15);
+    const fromM = periodRange.from.slice(0, 7);
+    const toM = periodRange.to.slice(0, 7);
+    const acc = {};
+    for (const r of discountByCategoryByMonth) {
+      if (!r.month || r.month < fromM || r.month > toM) continue;
+      const k = r.category || '(უცნობი)';
+      const cur = acc[k] || {
+        category: k, lines: 0, receipts: 0,
+        markdown_total_ge: 0, revenue_after_markdown_ge: 0,
+        revenue_before_markdown_ge: 0, cost_ge: 0,
+      };
+      cur.lines += toNum(r.lines);
+      cur.receipts += toNum(r.receipts);
+      cur.markdown_total_ge += toNum(r.markdown_total_ge);
+      cur.revenue_after_markdown_ge += toNum(r.revenue_after_markdown_ge);
+      cur.revenue_before_markdown_ge += toNum(r.revenue_before_markdown_ge);
+      cur.cost_ge += toNum(r.cost_ge);
+      acc[k] = cur;
+    }
+    const out = Object.values(acc);
+    out.forEach((r) => {
+      const rb = r.revenue_before_markdown_ge;
+      const ra = r.revenue_after_markdown_ge;
+      r.profit_actual_ge = ra - r.cost_ge;
+      r.profit_if_no_discount_ge = rb - r.cost_ge;
+      r.lift_lost_ge = rb - ra;
+      r.markdown_pct = rb > 0 ? (rb - ra) / rb * 100 : 0;
+    });
+    return out.sort((a, b) => b.markdown_total_ge - a.markdown_total_ge).slice(0, 15);
+  }, [periodRange, discountByCategoryByMonth, discountByCategoryLifetime]);
+
+  // Period-scoped returns by product (sum per-month rows in range, re-rank).
+  const returnsByProduct = useMemo(() => {
+    if (!periodRange) return returnsByProductLifetime;
+    const fromM = periodRange.from.slice(0, 7);
+    const toM = periodRange.to.slice(0, 7);
+    const acc = {};
+    for (const r of returnsByProductByMonth) {
+      if (!r.month || r.month < fromM || r.month > toM) continue;
+      const k = r.barcode || r.product_code || r.product_name;
+      if (!k) continue;
+      const cur = acc[k] || {
+        product_code: r.product_code, barcode: r.barcode,
+        product_name: r.product_name, category: r.category,
+        return_lines: 0, return_receipts: 0,
+        return_revenue_ge: 0, return_quantity: 0,
+        last_return_month: null,
+      };
+      cur.return_lines += toNum(r.return_lines);
+      cur.return_receipts += toNum(r.return_receipts);
+      cur.return_revenue_ge += toNum(r.return_revenue_ge);
+      cur.return_quantity += toNum(r.return_quantity);
+      if (!cur.last_return_month || r.month > cur.last_return_month) cur.last_return_month = r.month;
+      acc[k] = cur;
+    }
+    return Object.values(acc)
+      .sort((a, b) => Math.abs(b.return_revenue_ge) - Math.abs(a.return_revenue_ge))
+      .slice(0, 30);
+  }, [periodRange, returnsByProductByMonth, returnsByProductLifetime]);
+
+  // Period-scoped Pareto + HHI (built from by_product_by_month, which only
+  // carries the top-50 SKUs per (store, month) — so the resulting figures
+  // miss the long tail by ~1-3% of revenue. HHI denominator uses the full
+  // period revenue (from by_month) so the missing tail surfaces as
+  // "unallocated share" instead of inflating concentration.
+  const concentrationPeriod = useMemo(() => {
+    if (!periodRange) return null;
+    const fromM = periodRange.from.slice(0, 7);
+    const toM = periodRange.to.slice(0, 7);
+    const acc = {};
+    for (const r of byProductByMonth) {
+      if (!r.month || r.month < fromM || r.month > toM) continue;
+      const k = r.barcode || r.product_code || r.product_name;
+      if (!k) continue;
+      const cur = acc[k] || { product_name: r.product_name, revenue_ge: 0 };
+      cur.revenue_ge += toNum(r.revenue_ge);
+      acc[k] = cur;
+    }
+    const sorted = Object.values(acc)
+      .filter((p) => p.revenue_ge > 0)
+      .sort((a, b) => b.revenue_ge - a.revenue_ge);
+    // Denominator: total revenue across the period (from byMonth — covers all
+    // SKUs, not just top-50). Falls back to top-50 sum if byMonth is empty.
+    let totalRev = byMonth
+      .filter((m) => m.month >= fromM && m.month <= toM)
+      .reduce((s, m) => s + toNum(m.revenue_ge), 0);
+    if (totalRev <= 0) totalRev = sorted.reduce((s, p) => s + p.revenue_ge, 0);
+    let cum = 0;
+    let p50 = null; let p80 = null; let p90 = null; let p95 = null;
+    const pareto = [];
+    let hhi = 0;
+    for (let i = 0; i < sorted.length; i += 1) {
+      const r = sorted[i];
+      cum += r.revenue_ge;
+      const cumPct = totalRev > 0 ? (cum / totalRev) * 100 : 0;
+      if (p50 === null && cumPct >= 50) p50 = i + 1;
+      if (p80 === null && cumPct >= 80) p80 = i + 1;
+      if (p90 === null && cumPct >= 90) p90 = i + 1;
+      if (p95 === null && cumPct >= 95) p95 = i + 1;
+      const share = totalRev > 0 ? (r.revenue_ge / totalRev) * 100 : 0;
+      hhi += share * share;
+      if (i < 500) {
+        pareto.push({
+          rank: i + 1,
+          product_name: r.product_name,
+          revenue_ge: Math.round(r.revenue_ge * 100) / 100,
+          cum_revenue_ge: Math.round(cum * 100) / 100,
+          cum_share_pct: Math.round(cumPct * 100) / 100,
+        });
+      }
+    }
+    const hhi_class = hhi < 1500 ? 'low' : hhi < 2500 ? 'moderate' : 'high';
+    return {
+      total_products_in_revenue: sorted.length,
+      products_for_50pct_revenue: p50,
+      products_for_80pct_revenue: p80,
+      products_for_90pct_revenue: p90,
+      products_for_95pct_revenue: p95,
+      hhi: Math.round(hhi * 100) / 100,
+      hhi_class,
+      pareto_top500: pareto,
+      total_revenue_ge: totalRev,
+    };
+  }, [periodRange, byProductByMonth, byMonth]);
+
+  const concentration = concentrationPeriod || concentrationLifetime;
+  const paretoChart = useMemo(() => {
+    const full = asArray(concentration.pareto_top500);
+    return full.filter((p, i) => i < 50 || i % 10 === 0);
+  }, [concentration]);
+
+  const discountLiftSummary = useMemo(() => {
+    if (!periodRange) return discountLiftSummaryLifetime;
+    const fromM = periodRange.from.slice(0, 7);
+    const toM = periodRange.to.slice(0, 7);
+    const filtered = discountByCategoryByMonth.filter(
+      (r) => r.month && r.month >= fromM && r.month <= toM,
+    );
+    if (!filtered.length) {
+      return {
+        markdown_total_ge: 0, revenue_after_markdown_ge: 0,
+        revenue_before_markdown_ge: 0, profit_actual_ge: 0,
+        profit_if_no_discount_ge: 0, profit_lost_ge: 0,
+        categories_with_discount: 0,
+      };
+    }
+    const md = filtered.reduce((s, r) => s + toNum(r.markdown_total_ge), 0);
+    const ra = filtered.reduce((s, r) => s + toNum(r.revenue_after_markdown_ge), 0);
+    const rb = filtered.reduce((s, r) => s + toNum(r.revenue_before_markdown_ge), 0);
+    const cost = filtered.reduce((s, r) => s + toNum(r.cost_ge), 0);
+    const cats = new Set(filtered.map((r) => r.category || '(უცნობი)'));
+    return {
+      markdown_total_ge: md,
+      revenue_after_markdown_ge: ra,
+      revenue_before_markdown_ge: rb,
+      profit_actual_ge: ra - cost,
+      profit_if_no_discount_ge: rb - cost,
+      profit_lost_ge: md,
+      categories_with_discount: cats.size,
+    };
+  }, [periodRange, discountByCategoryByMonth, discountLiftSummaryLifetime]);
 
   const hasRows = toNum(overall.row_count) > 0 || byObject.length > 0 || byMonth.length > 0;
   const periodLabel = periodMeta.label_ka || (periodMeta.applied ? 'არჩეული პერიოდი' : 'ყველა პერიოდი');
@@ -890,8 +1062,8 @@ export default function RetailSales({ retailSales, responseMeta }) {
 
       {periodKpis && (
         <div className="trust-banner-sub" style={{ background: '#1e293b', borderLeft: '3px solid #3b82f6', padding: '8px 12px', marginBottom: 8, fontSize: 12 }}>
-          ⓘ პერიოდი <strong>{periodKpis.label_ka}</strong> ვრცელდება: KPI ბარათები, თვიური / დღიური ცემპი, კალენდარი, TOP კატეგორია, TOP პროდუქტი, ცვლები, დღგ.
-          ლიფტაიმისაა: საათობრივი / დღის / Pareto / ფასდაკლების კატეგორიები / დაბრუნებული პროდუქტები / დღგ-ის გარეშე ხაზი.
+          ⓘ პერიოდი <strong>{periodKpis.label_ka}</strong> ვრცელდება: KPI ბარათები, თვიური / დღიური ცემპი, კალენდარი, TOP კატეგორია, TOP პროდუქტი, ცვლები, დღგ, დღგ-ის გარეშე ხაზი, ფასდაკლების კატეგორიები, Pareto / HHI, დაბრუნებული პროდუქტები.
+          ლიფტაიმისაა: საათობრივი / დღის.
         </div>
       )}
 
@@ -1167,7 +1339,7 @@ export default function RetailSales({ retailSales, responseMeta }) {
         </div>
         <div className="kpi-card">
           <div className="kpi-label">80/20 პროდუქტი<InfoTip text={TIPS.pareto} /></div>
-          <div className="kpi-value amount-neutral">{fmtInt(concentration.products_for_80pct_revenue)}</div>
+          <div className="kpi-value amount-neutral">{concentration.products_for_80pct_revenue ? fmtInt(concentration.products_for_80pct_revenue) : '—'}</div>
           <div className="kpi-sub">პროდუქტი = 80% შემოს. (HHI {fmtNum(concentration.hhi)} {concentration.hhi_class})</div>
         </div>
       </div>
@@ -1392,13 +1564,18 @@ export default function RetailSales({ retailSales, responseMeta }) {
       {/* ─── Pareto + concentration ─── */}
       {paretoChart.length > 0 && (
         <div className="chart-card">
-          <h3>Pareto — შემოსავლის კუმულატიური წილი<InfoTip text={TIPS.pareto} /></h3>
+          <h3>Pareto — შემოსავლის კუმულატიური წილი {concentrationPeriod && periodKpis ? `— ${periodKpis.label_ka}` : ''}<InfoTip text={TIPS.pareto} /></h3>
           <p className="chart-desc">
             HHI = <strong>{fmtNum(concentration.hhi)}</strong> ({concentration.hhi_class}).
             ჯამური {fmtInt(concentration.total_products_in_revenue)} პროდუქტიდან:{' '}
-            <strong>{fmtInt(concentration.products_for_50pct_revenue)}</strong> = 50% შემოს. ·{' '}
-            <strong>{fmtInt(concentration.products_for_80pct_revenue) || '>500'}</strong> = 80% ·{' '}
-            <strong>{fmtInt(concentration.products_for_90pct_revenue) || '>500'}</strong> = 90%.
+            <strong>{concentration.products_for_50pct_revenue ? fmtInt(concentration.products_for_50pct_revenue) : '—'}</strong> = 50% შემოს. ·{' '}
+            <strong>{concentration.products_for_80pct_revenue ? fmtInt(concentration.products_for_80pct_revenue) : '—'}</strong> = 80% ·{' '}
+            <strong>{concentration.products_for_90pct_revenue ? fmtInt(concentration.products_for_90pct_revenue) : '—'}</strong> = 90%.
+            {concentrationPeriod && (
+              <span style={{ color: '#94a3b8', fontSize: 12, display: 'block', marginTop: 4 }}>
+                პერიოდის ჭრილში — top-500 პროდუქტი/თვე-დან გათვლილი (long-tail ~10-15% ცდომილებაა, ცარიელი „—" ნიშნავს რომ ციფრს ვერ მიაღწია).
+              </span>
+            )}
           </p>
           <ResponsiveContainer width="100%" height={240}>
             <LineChart data={paretoChart}>
@@ -1659,7 +1836,7 @@ export default function RetailSales({ retailSales, responseMeta }) {
       {/* ─── Returns by product / cashier / month ─── */}
       {returnsByProduct.length > 0 && (
         <CollapsibleSection
-          title="დაბრუნებული პროდუქტების top სია"
+          title={`დაბრუნებული პროდუქტების top სია${periodRange && periodKpis ? ` — ${periodKpis.label_ka}` : ''}`}
           badge={`${returnsByProduct.length}`}
         >
           <p className="chart-desc"><InfoTip text={TIPS.returnsByProduct} />ORD_ACT=2 ჯგუფირებული პროდუქტის მიხედვით.</p>
@@ -1685,7 +1862,7 @@ export default function RetailSales({ retailSales, responseMeta }) {
                     <td>{fmtInt(r.return_receipts)}</td>
                     <td className="amount-negative">{fmtMoney(r.return_revenue_ge)}</td>
                     <td>{fmtNum(r.return_quantity)}</td>
-                    <td style={{ fontSize: 12 }}>{(r.last_return || '').slice(0, 10) || '—'}</td>
+                    <td style={{ fontSize: 12 }}>{(r.last_return || r.last_return_month || '').slice(0, 10) || '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1783,7 +1960,7 @@ export default function RetailSales({ retailSales, responseMeta }) {
       {/* ─── Discount lift — actual vs hypothetical-without-discount ─── */}
       {toNum(discountLiftSummary.markdown_total_ge) > 0 && (
         <div className="chart-card">
-          <h3>ფასდაკლების შედეგი (Lift)<InfoTip text={TIPS.discountLift} /></h3>
+          <h3>ფასდაკლების შედეგი (Lift) {periodKpis ? `— ${periodKpis.label_ka}` : ''}<InfoTip text={TIPS.discountLift} /></h3>
           <div className="kpi-grid retail-sales-kpi-grid" style={{ marginTop: 8 }}>
             <div className="kpi-card">
               <div className="kpi-label">ფაქტობრივი მოგება</div>
@@ -1860,9 +2037,9 @@ export default function RetailSales({ retailSales, responseMeta }) {
               <div className="kpi-sub">{vatTotalsPeriod ? `${vatTotalsPeriod.months} თვე` : 'ლიფტაიმი'}</div>
             </div>
             <div className="kpi-card">
-              <div className="kpi-label">დღგ-ის გარეშე ხაზი (ლიფტაიმი)</div>
-              <div className="kpi-value amount-neutral">{fmtInt(vatTotals.exempt_lines)}</div>
-              <div className="kpi-sub">სულ {fmtInt(vatTotals.lines)} ხაზიდან · {fmtPct(vatTotals.exempt_share_pct)}</div>
+              <div className="kpi-label">{vatTotalsPeriod ? 'დღგ-ის გარეშე ხაზი' : 'დღგ-ის გარეშე ხაზი (ლიფტაიმი)'}</div>
+              <div className="kpi-value amount-neutral">{fmtInt(vatTotalsPeriod ? vatTotalsPeriod.exempt_lines : vatTotals.exempt_lines)}</div>
+              <div className="kpi-sub">სულ {fmtInt(vatTotalsPeriod ? vatTotalsPeriod.lines : vatTotals.lines)} ხაზიდან · {fmtPct(vatTotalsPeriod ? vatTotalsPeriod.exempt_share_pct : vatTotals.exempt_share_pct)}</div>
             </div>
             <div className="kpi-card">
               <div className="kpi-label">ეფექტური განაკვეთი</div>

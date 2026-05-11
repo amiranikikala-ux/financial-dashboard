@@ -1,12 +1,149 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-10 (ღამე) — **4 sprints shipped: §8 Dead Stock + TOP-categories drill-down + ▲▼ KPI deltas + daily spike alerts.** All 4 commits pushed to origin/main (branch is now in sync). Dead Stock §8 unblocked itself — owner accepted "build the page now, MegaPlus fixes will reflect on next backup". Live-verified via Playwright; daily spike caught a real anomaly (2026-05-08, -2.86σ). Pre-existing latent bug fixed: Rules-of-Hooks violation (early return before useMemos → React #310 on async data load).
+> **განახლდა**: 2026-05-11 (დღის შემდგომი სესია) — **Retail Sales period-filter expansion: 4 sections made period-aware.** Added: discount-by-category, Pareto/HHI, returns-by-product, VAT-exempt-lines. Backend SQL changes: `discount_by_category_by_month`, `returns_by_product_by_month`, `vat_by_month` (+ exempt_lines/exempt_revenue), `by_product_by_month` cap 50→500. Frontend: period-aware useMemo aggregators that fall back to lifetime when no period selected. Verified in browser at /#retail_sales across "all" / "April 2026" / "last 90 days" / per-store combinations. 22 tests passing (5 new). Pre-existing carry-over: **earlier 2026-05-11 morning Code Dispersion detector** (commits `33b776a → b8337cb`) — owner reviewed Excel manually.
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-10 ღამე) — 4 sprints in one session
+## 0. ბოლო session-ის შედეგი (2026-05-11 დღე) — Retail Sales period-filter sprint
+
+### Headline
+
+Sprint 3 carry-over closed: 4 of the 5 sections that previously stayed lifetime when user picked a period now follow the period filter. Owner picked sections in this order: discount categories → Pareto/HHI → returns → VAT-exempt lines.
+
+**Verified ბრაუზერში (Playwright):**
+
+| სექცია | სრული ცხოვრება | აპრილი 2026 |
+|---|---|---|
+| ფასდაკლების კატეგორიები | 146,899 ₾ / 260 კატ. | 5,211 ₾ / 104 კატ. |
+| Pareto/HHI | HHI 44.94 / 7,988 SKU / 801→80% | HHI 82.78 / 742 SKU / 440→80% |
+| დაბრუნებული პროდუქტები | 30 SKU / 114 ₾ | 4 SKU / 12 ₾ |
+| დღგ-ის გარეშე ხაზი | 192,923 ხაზი / 6.56% | 9,527 / 8.68% |
+
+Per-store × period combo also verified (e.g. დვაბზუ × April 2026 = 3,526 ₾ ფასდაკლება).
+
+**Backend SQL changes (`dashboard_pipeline/megaplus_backup.py`):**
+- New: `discount_by_category_by_month` — per-month per-category discount aggregate, no cap (sparse, ~3k rows combined).
+- New: `returns_by_product_by_month` — per-month per-product returns, no cap (returns are sparse — 138 rows lifetime).
+- Existing `vat_by_month` extended: added `lines`, `exempt_lines`, `exempt_revenue`, `exempt_share_pct`.
+- `by_product_by_month` cap raised 50→500. **Important:** at top-50 coverage was only ~50% of monthly revenue (Pareto unusable); at top-500 coverage is 86-88% (HHI/Pareto reasonably accurate; long-tail 10-15% ცდომილება documented in UI caveat).
+
+**Pipeline + API contracts:**
+- `dashboard_pipeline/retail_sales.py` — combined accumulators + per-store view passthroughs for all 4 new fields.
+- `dashboard_pipeline/api_contracts.py` — `discount_by_category_by_month` and `returns_by_product_by_month` added to retail_sales allowlist.
+
+**Frontend (`rs-dashboard/src/RetailSales.jsx`):**
+- New useMemo aggregators that filter by `periodRange.from/to` (YYYY-MM slice) and re-rank within the active window.
+- All 4 sections fall back to lifetime data when periodRange is null (so the "ყველა დრო" preset is identical to before).
+- Trust banner updated: applied list now includes ფასდაკლების კატ. / Pareto/HHI / დაბრუნებები / დღგ-ის გარეშე; lifetime list reduced to "საათობრივი / დღის".
+- Section titles append `— {periodKpis.label_ka}` when period is active.
+- Pareto section shows caveat note in period mode: "top-500 პროდუქტი/თვე-დან გათვლილი (long-tail ~10-15% ცდომილებაა)".
+
+**Tests** (`tests/test_retail_sales_discount_by_category_by_month.py`, +5 tests):
+- Combined per-month aggregation math (March + April separately, April sums two stores).
+- Per-store view passthrough.
+- Junk-month row filtering (None / "" / non-conforming).
+- api_contract exposes the field.
+- Empty bundle does not insert a placeholder key.
+
+**Pending decision (Sprint Step 6 user review):**
+- Owner has not yet said „გადავიდეთ" — sections shown but not formally signed off.
+- 1 of 5 original items remaining: **საათობრივი / დღეების / hour×dow heatmap** (user didn't pick it this session).
+- Local main has uncommitted changes across 4 backend files + 1 frontend file + 1 test file + 3 _scratch helpers. **Not yet committed.**
+
+### Implementation reminder — refresh procedure when adding new megaplus SQL
+
+Same as documented earlier — confirmed this session for 3 new SQL queries:
+1. Edit `megaplus_backup.py` to emit new field.
+2. Run `_scratch_refresh_megaplus_live.py` (~3-5 min per refresh, hits both SQL Server DBs).
+3. Run `_scratch_resynth_retail_sales.py` to regenerate `data.json["retail_sales"]` + `tab-data/retail_sales.json` (both `public/` and `dist/`).
+4. `npm run build` in `rs-dashboard/`.
+5. Service auto-reloads on file mtime — no Restart-Service needed for data file changes. Python code changes DO need restart for `/api/data?...&from_date=...` filtered path (but the no-filter static-artifact path picks up automatically).
+
+### Verification commands (next session)
+
+```powershell
+# Period-aware discount totals (April 2026)
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
+import urllib.request, json
+api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=retail_sales', timeout=30).read())
+rs = api['retail_sales']
+apr = [r for r in rs['discount_by_category_by_month'] if r['month'] == '2026-04']
+print(f'April: {sum(r[\"markdown_total_ge\"] for r in apr):.2f} GEL / {len({r[\"category\"] for r in apr})} cats')
+"
+# expect: 5211.03 GEL / 104 cats
+
+# Pareto coverage check
+"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
+import urllib.request, json
+api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=retail_sales', timeout=30).read())
+rs = api['retail_sales']
+total_bpbm = sum(r.get('revenue_ge') or 0 for r in rs['by_product_by_month'])
+total_bm = sum(r.get('revenue_ge') or 0 for r in rs['by_month'])
+print(f'by_product_by_month coverage: {total_bpbm/total_bm*100:.1f}% (target 86%+)')
+"
+```
+
+---
+
+## 0. ბოლო session-ის შედეგი (2026-05-10 → 2026-05-11) — Code Dispersion sprint
+
+### Headline (2026-05-11)
+
+Owner had inventory mess: same physical product registered under multiple different MegaPlus codes, causing one code to go heavily negative while siblings hold compensating positive stock. Built forensic detector that emits actionable Excel review file.
+
+**Ground truth validation case — ფეირი ლიმონი 21x450მლ (დვაბზუ):**
+- P_ID 20754 (bc 5413149798946) qty -350, P_ID 89755 (bc 8001090931191) qty +336, P_ID 93297 (bc 4038) qty +42
+- Math: in 492 − out 464 = +28 (matches all-3 sum) — true physical stock ≈ +28
+- Detector pairs 20754+89755 (math closes pair-wise to -14, supplier 8502 shared); 93297 correctly excluded from auto-merge (different supplier 8240)
+
+**Final filter set (after 3 iterations):**
+1. Anchor must have intake history (qty_in > 0) — zero-intake anchors excluded since stock origin can't be traced from supplier evidence
+2. Pair math closes within ±1 unit
+3. Brand stem match (first content token, 4-char prefix; generic prefixes like "ყავა"/"ხსნადი"/"ნამცხვარი" skipped)
+4. ≥2 shared discriminating tokens (brand + variant — distinguishes Fairy Lemon from Fairy Orange, კაპი ატამი from კაპი ფალფი)
+5. Same supplier (G_D_ID) within ±2 year window
+
+**Live results (full dataset):**
+- დვაბზუ: 701 anchors → 301 pairs detected (885 candidate pairs evaluated)
+- ოზურგეთი: 1019 anchors → 387 pairs detected (1298 candidate pairs evaluated)
+- Total: 688 pairs in Excel
+- Each row: store · product · canonical_pid · canonical_barcode · merge_codes · final_qty · evidence · done?
+- Action: owner does manual stock transfer in MegaPlus; both codes stay ACTIVE (prevents cashier-scan failures on physically-shelved old-barcode boxes)
+
+**Iteration trail (commits):**
+- `33b776a` — v1: AI Haiku 4.5 classifier (342 groups, $7.60 spend). Worked for Fairy Lemon, but over-merged Spilo+Leopardi matchsticks (both contain "ასანთი", AI saw same brand)
+- `bbaf5e3` — added action sheet with per-action transfer instructions
+- `4d4ed6c` — simplified to one row per group (less dense)
+- `b8337cb` — **scrapped AI**, rewrote as forensic timeline-based detector. Owner explicitly demanded data-based verification, not AI guessing
+
+**Owner feedback during session (saved as memory):**
+- `feedback_no_hedge_words.md` — don't say "შესაძლოა"/"maybe" on AI/algorithmic outputs; either show with confidence or filter out
+- `feedback_ai_for_complex_classification.md` — AI works for Georgian morphology + brand recognition with structured prompts (BUT: don't trust on weak signals like single-shared-token; eliminate via hard filters)
+
+**Still open (owner mentioned but not built):**
+- Barcode lookup tool — owner uses external sites (openfoodfacts, Google) to verify barcodes case-by-case; no local tool needed
+- Dashboard UI integration — owner explicitly said Excel is sufficient, no need to duplicate in dashboard
+- Pack-vs-unit barcode case — owner accepts these are different SKUs (e.g. 7622210702104 outer pack vs 46187857 inner unit on Dirol gum), handles manually
+
+**Verification commands (next session):**
+```powershell
+# Re-run detector on fresh data
+& "C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -m dashboard_pipeline.code_dispersion
+
+# Targeted Fairy Lemon spot-check
+& "C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" "C:\financial-dashboard\_scratch_dogfood_barcode_5413149798946.py"
+
+# Run tests
+& "C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -m pytest tests/test_code_dispersion.py -v
+```
+
+**Test count:** 27/27 passing.
+
+---
+
+## 0a. წინა session-ის შედეგი (2026-05-10 ღამე) — 4 sprints in one session
 
 ### Headline (ღამე — 2026-05-10)
 
