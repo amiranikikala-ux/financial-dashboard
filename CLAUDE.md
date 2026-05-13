@@ -26,6 +26,15 @@
 - სრულყოფილი ანალიზი ნიშნავს — ცარიელი slot-ი არასოდეს silent არ ხდება. არც skipped row, არც unparsed file, არც ignored field.
 - "no silent gap" Proof Gate Layer 3 (`AGENTS.md`) უკვე არსებობდა — ეს მისი გაძლიერებაა skipped data-ზე. memory: `feedback_no_silent_data_drops.md`.
 
+## 🔴 CRITICAL — Aggregate ციფრი ცოცხალ წყაროს უნდა ემთხვეოდეს
+
+**წესი (set 2026-05-13): ნებისმიერი headline / KPI / summary ციფრი, რომელიც კოდი ანგარიშობს, უნდა შემოწმდეს ცოცხალ წყაროსთან 1:1. სხვაგვარად — silent drift.**
+
+- **რა მოხდა 2026-05-13:** Home გვერდის „ბანკში შემოვიდა" სათაურს ეწერა 86,361 ₾ აპრილში, ცოცხალ ბანკში იყო 163,918 ₾. ე.ი. 77,556 ₾ (90%!) დაიკარგა, რადგან კოდი headline-ს ცარიელი category subset-ით თვლიდა. იგივე ბაგ-ი OUT-ზე — 35,899 ₾ გამოტოვებული. **ვერც კოდმა, ვერც AI-მ ვერ შემოწმდა.** Owner-მა შენიშნა.
+- **წესი ხელახლა:** headline = raw accumulator (loop-ში += ხაზობრივად). categories = display only. ყოველ დღეს raw vs categorized_sum შემოწმდება — diff > 0.01 → წითელი badge UI-ში + log error.
+- **სად ვრცელდება:** ნებისმიერი pipeline/aggregator (sum, count, average); ნებისმიერი KPI ცხრილი; per-period/per-store/per-supplier breakdown — aggregate-ი row-ების ჯამს უნდა შეესაბამებოდეს.
+- **„ფუნქცია სავარაუდოდ მუშაობს" = ცრუ ვარაუდი.** ცოცხალი წყაროდან გადამოწმების გარეშე ციფრი არ უნდა გადავცე owner-ს. memory: `feedback_aggregate_vs_source_verification.md` + `feedback_proactive_verification.md`.
+
 ## 🔴 CRITICAL — სესიის წესები
 
 - **სესიის დაწყების სავალდებულო read** (SessionStart hook აიძულებს): 3 ფაილი თანმიმდევრობით — `CONTEXT_HANDOFF.md` (ცოცხალი state) → `docs/MASTER_PLAN.md` (roadmap) → `AGENTS.md` (წესები).
