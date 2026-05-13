@@ -35,6 +35,7 @@ from dashboard_pipeline._validate_aliases import (
     append_alias_atomic,
 )
 from dashboard_pipeline import (
+    cash_expenses_journal,
     manual_payments_journal,
     orphan_user_status,
     supplier_archive,
@@ -1248,6 +1249,82 @@ async def delete_manual_payment(request: Request, entry_id: str):
         ok = manual_payments_journal.soft_delete_entry(eid)
     except OSError as exc:
         logger.error("manual_payments journal delete failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"წაშლა ვერ მოხერხდა: {exc}")
+    if not ok:
+        raise HTTPException(status_code=404, detail="Entry not found or already deleted.")
+    return {"success": True, "id": eid}
+
+
+# ---------------------------------------------------------------------------
+# Cash expenses journal — non-bank cash outflows by category
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/cash-expenses")
+@limiter.limit("60/minute")
+async def get_cash_expenses(request: Request):
+    """Return all active (non-deleted) cash-expense entries."""
+    try:
+        entries = cash_expenses_journal.read_active_entries()
+    except OSError as exc:
+        logger.error("cash_expenses_journal read failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"წაკითხვა ვერ მოხერხდა: {exc}")
+    return {"entries": entries}
+
+
+@app.post("/api/cash-expenses")
+@limiter.limit("60/minute")
+async def post_cash_expense(request: Request, payload: dict = Body(...)):
+    """Append one cash-expense entry to the journal.
+
+    Body:
+        {
+            "category": "salary",       (required, one of: salary, rent, owner, service, supplier_cash, other)
+            "amount":   1500.00,        (required, > 0)
+            "date":     "2026-04-30",   (optional, ISO date; defaults to today UTC)
+            "comment":  "ხელფასი — დვაბზუ აპრილი"  (optional)
+        }
+    """
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Body must be a JSON object.")
+    category = payload.get("category")
+    amount = payload.get("amount")
+    date = payload.get("date") or ""
+    comment = payload.get("comment") or ""
+    if not isinstance(category, str) or not category.strip():
+        raise HTTPException(status_code=400, detail="`category` (string) is required.")
+    if not isinstance(amount, (int, float)):
+        raise HTTPException(status_code=400, detail="`amount` (number) is required.")
+    if not isinstance(date, str):
+        raise HTTPException(status_code=400, detail="`date` must be a string.")
+    if not isinstance(comment, str):
+        raise HTTPException(status_code=400, detail="`comment` must be a string.")
+    try:
+        saved = cash_expenses_journal.append_entry(
+            category=category.strip(),
+            amount=float(amount),
+            date=date.strip(),
+            comment=comment.strip(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except OSError as exc:
+        logger.error("cash_expenses_journal write failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"ჩაწერა ვერ მოხერხდა: {exc}")
+    return {"success": True, "entry": saved}
+
+
+@app.delete("/api/cash-expenses/{entry_id}")
+@limiter.limit("60/minute")
+async def delete_cash_expense(request: Request, entry_id: str):
+    """Soft-delete one cash-expense entry by ID."""
+    eid = (entry_id or "").strip()
+    if not eid:
+        raise HTTPException(status_code=400, detail="entry_id is required.")
+    try:
+        ok = cash_expenses_journal.soft_delete_entry(eid)
+    except OSError as exc:
+        logger.error("cash_expenses_journal delete failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"წაშლა ვერ მოხერხდა: {exc}")
     if not ok:
         raise HTTPException(status_code=404, detail="Entry not found or already deleted.")

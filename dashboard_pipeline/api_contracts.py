@@ -69,6 +69,7 @@ FIELD_DEFAULTS = {
     "our_seller_invoices": [],
     "invoice_waybill_match": [],
     "supplier_invoices_meta": {},
+    "daily_money_flow_index": {},
 }
 
 # ერთი ჭერი: სრული rollup/API პასუხები დიდი მოცულობისას (OOM-ისგან დასაცავად ზედა საზღვარი).
@@ -109,6 +110,7 @@ TAB_ALLOWLIST = {
     "supplier_reconciliation": ["supplier_reconciliation"],
     "orphan_products": ["orphan_products"],
     "duplicate_products": ["duplicate_products"],
+    "daily_money_flow": ["daily_money_flow_index"],
     "executive_export": [
         "monthly_pnl",
         "budget",
@@ -1046,6 +1048,8 @@ def _project_retail_sales_summary(bundle):
         "shifts",
         "shift_summary",
         "shift_anomalies",
+        "cashier_day_breakdown",
+        "cashier_hour_breakdown",
         "vat_totals",
         "vat_by_month",
         "vat_by_category",
@@ -2264,6 +2268,15 @@ def _build_pnl_summary_response(cache, period_filter=None, **_kwargs):
     supplier_payment_lines = (
         cache.get("supplier_payment_lines") if isinstance(cache, dict) else None
     )
+    try:
+        from dashboard_pipeline import cash_expenses_journal as _cej
+        _all_cash_exp = _cej.read_active_entries()
+    except Exception:
+        _all_cash_exp = []
+    _filtered_cash_exp = [
+        e for e in _all_cash_exp
+        if str((e or {}).get("date") or "")[:7] in allowed_months
+    ]
     return {
         "monthly_pnl": build_monthly_pnl(
             {"pnl_lines": pos_lines},
@@ -2272,6 +2285,7 @@ def _build_pnl_summary_response(cache, period_filter=None, **_kwargs):
             bog_expenses_bundle=filtered_bog_expenses,
             retail_sales_bundle=filtered_retail_bundle,
             supplier_payment_lines=supplier_payment_lines,
+            cash_expenses_entries=_filtered_cash_exp,
         ),
         "pnl_period_meta": period_meta,
     }

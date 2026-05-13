@@ -537,6 +537,11 @@ def _build_analytics(data, inc, object_mapping, budget_config, sector_benchmarks
         **pos_terminal_income_bundle,
         "pnl_lines": pos_terminal_all_rows,
     }
+    try:
+        from dashboard_pipeline import cash_expenses_journal as _cej
+        _cash_exp_entries = _cej.read_active_entries()
+    except Exception:
+        _cash_exp_entries = []
     data["monthly_pnl"] = build_monthly_pnl(
         pos_terminal_pnl_bundle,
         tbc_expenses_bundle,
@@ -544,6 +549,7 @@ def _build_analytics(data, inc, object_mapping, budget_config, sector_benchmarks
         bog_expenses_bundle=bog_expenses_bundle,
         retail_sales_bundle=data.get("retail_sales"),
         supplier_payment_lines=data.get("supplier_payment_lines"),
+        cash_expenses_entries=_cash_exp_entries,
     )
     data["financial_ratios"] = build_financial_ratios(
         data.get("monthly_pnl", []),
@@ -563,6 +569,24 @@ def _build_analytics(data, inc, object_mapping, budget_config, sector_benchmarks
         sector_benchmarks,
     )
     data["executive_summary"] = build_executive_summary(data)
+
+    # Daily money flow — per-day breakdown of money in/out/internal for last 90 days
+    try:
+        from dashboard_pipeline.daily_money_flow import compute_daily_money_flow
+        data["daily_money_flow_index"] = compute_daily_money_flow(
+            retail_sales_data=data.get("retail_sales") or {},
+            waybills_data=data.get("waybills") or [],
+            supplier_payment_lines=data.get("supplier_payment_lines") or {},
+            suppliers_list=data.get("suppliers") or [],
+            days_back=90,
+        )
+        logger.info(
+            "daily_money_flow_index: %d days",
+            len(data["daily_money_flow_index"]),
+        )
+    except Exception as exc:
+        logger.exception("daily_money_flow_index build failed: %s", exc)
+        data["daily_money_flow_index"] = {}
 
     # --- Logging ---
     monthly_pnl_total_net = sum(
@@ -1248,7 +1272,7 @@ def _process_rs_suppliers(df, agg_df, rs_files, supplier_registry_cfg, script_di
     write_bank_overrides_audit_excel(bank_unmatched_analysis, download_dir)
 
     safe_cols = {
-        'გააქტიურების თარ.': 'date',
+        'ტრანსპ. დაწყება': 'date',
         'ორგანიზაცია': 'supplier',
         'ზედნადები': 'waybill_number',
         'თანხა': 'nominal_amount',

@@ -259,7 +259,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
 
         cur.execute(
             "SELECT MIN(ORD_TIMESTAMP), MAX(ORD_TIMESTAMP), COUNT(*) "
-            "FROM ORDERS WHERE ORD_ACT = 1"
+            "FROM ORDERS WHERE ORD_ACT = 1 AND ORD_TIMESTAMP >= '2023-01-01'"
         )
         min_ts, max_ts, total_rows = cur.fetchone()
 
@@ -283,7 +283,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
             JOIN PRODUCTS p ON o.ORD_P_ID = p.P_ID
             JOIN DISTRIBUTORS d ON p.P_DAFAULTSUPPLIER = d.DIST_UUID
             LEFT JOIN #pec pec ON p.P_ID = pec.p_id
-            WHERE o.ORD_ACT = 1
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP >= '2023-01-01'
             GROUP BY d.DIST_UUID, d.saidentifikacio, d.dasaxeleba
             """
         )
@@ -352,7 +352,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 COUNT(*)                                     AS sale_lines
             FROM ORDERS o
             LEFT JOIN #pec pec ON o.ORD_P_ID = pec.p_id
-            WHERE o.ORD_ACT = 1
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP >= '2023-01-01'
             """
         )
         rev_t, cogs_imp_t, cogs_rec_t, lines_t = cur.fetchone()
@@ -463,7 +463,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 SUM(o.ORD_GETPRICE * o.ORD_quant)            AS cogs_recorded
             FROM ORDERS o
             LEFT JOIN #pec pec ON o.ORD_P_ID = pec.p_id
-            WHERE o.ORD_ACT = 1
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP >= '2023-01-01'
             GROUP BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP)
             ORDER BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP)
             """
@@ -499,7 +499,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
             FROM ORDERS o
             JOIN PRODUCTS p ON o.ORD_P_ID = p.P_ID
             LEFT JOIN #pec pec ON p.P_ID = pec.p_id
-            WHERE o.ORD_ACT = 1
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP >= '2023-01-01'
             GROUP BY p.P_GROUP
             ORDER BY SUM(o.ORD_jamjam) DESC
             """
@@ -536,7 +536,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
             FROM ORDERS o
             JOIN PRODUCTS p ON o.ORD_P_ID = p.P_ID
             LEFT JOIN #pec pec ON p.P_ID = pec.p_id
-            WHERE o.ORD_ACT = 1
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP >= '2023-01-01'
             GROUP BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP), p.P_GROUP
             ORDER BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP), SUM(o.ORD_jamjam) DESC
             """
@@ -587,7 +587,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 FROM ORDERS o
                 JOIN PRODUCTS p ON o.ORD_P_ID = p.P_ID
                 LEFT JOIN #pec pec ON p.P_ID = pec.p_id
-                WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP IS NOT NULL
+                WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP >= '2023-01-01'
                 GROUP BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP),
                          p.P_ID, p.P_CODE, p.P_BARCODE, p.P_NAME, p.P_GROUP
             )
@@ -679,7 +679,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue,
                 ISNULL(SUM(o.ORD_quant), 0)                AS qty
             FROM ORDERS o
-            WHERE o.ORD_ACT = 1
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP >= '2023-01-01'
             """
         )
         bm_lines, bm_receipts, bm_rev, bm_qty = cur.fetchone()
@@ -707,7 +707,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 COUNT(DISTINCT o.ORD_N)                    AS receipts,
                 ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue
             FROM ORDERS o
-            WHERE o.ORD_ACT = 1
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP >= '2023-01-01'
             GROUP BY o.ORD_PAY_TYP
             """
         )
@@ -720,27 +720,31 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 "revenue": float(rev or 0),
             })
 
-        # Cashier-level breakdown (top 30 by revenue). STAFF table is empty
-        # in this DB so we can only show ORD_USER_ID — UI maps to "მოლარე #N".
+        # Cashier-level breakdown (top 30 by revenue). USERS table holds the
+        # human name (column `username`); STAFF is empty. JOIN to surface
+        # "დოდო დარჩია" / "ლია შკუბულიანი" rather than just user_id.
         cur.execute(
             """
             SELECT TOP 30
                 o.ORD_USER_ID                              AS user_id,
+                MAX(u.username)                            AS cashier_name,
                 COUNT(*)                                   AS lines,
                 COUNT(DISTINCT o.ORD_N)                    AS receipts,
                 ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue,
                 MIN(o.ORD_TIMESTAMP)                       AS first_sale,
                 MAX(o.ORD_TIMESTAMP)                       AS last_sale
             FROM ORDERS o
-            WHERE o.ORD_ACT = 1
+            LEFT JOIN USERS u ON u.U_ID = o.ORD_USER_ID
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP >= '2023-01-01'
             GROUP BY o.ORD_USER_ID
             ORDER BY ISNULL(SUM(o.ORD_jamjam), 0) DESC
             """
         )
         cashiers = []
-        for uid, lines, receipts, rev, fs, ls in cur.fetchall():
+        for uid, name, lines, receipts, rev, fs, ls in cur.fetchall():
             cashiers.append({
                 "user_id": int(uid) if uid is not None else None,
+                "cashier_name": (name or "").strip() or None,
                 "lines": int(lines or 0),
                 "receipts": int(receipts or 0),
                 "revenue": float(rev or 0),
@@ -758,7 +762,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 COUNT(DISTINCT o.ORD_N)                    AS receipts,
                 ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue
             FROM ORDERS o
-            WHERE o.ORD_ACT = 1
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP >= '2023-01-01'
             GROUP BY o.ORD_TAB_ID
             ORDER BY ISNULL(SUM(o.ORD_jamjam), 0) DESC
             """
@@ -783,7 +787,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 COUNT(DISTINCT o.ORD_N)                    AS receipts,
                 ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue
             FROM ORDERS o
-            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP IS NOT NULL
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP >= '2023-01-01'
             GROUP BY DATEPART(HOUR, o.ORD_TIMESTAMP)
             ORDER BY 1
             """
@@ -807,7 +811,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 COUNT(DISTINCT o.ORD_N)                    AS receipts,
                 ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue
             FROM ORDERS o
-            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP IS NOT NULL
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP >= '2023-01-01'
             GROUP BY DATEPART(WEEKDAY, o.ORD_TIMESTAMP)
             ORDER BY 1
             """
@@ -833,7 +837,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 COUNT(DISTINCT o.ORD_N)                    AS receipts,
                 ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue
             FROM ORDERS o
-            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP IS NOT NULL
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP >= '2023-01-01'
             GROUP BY DATEPART(WEEKDAY, o.ORD_TIMESTAMP), DATEPART(HOUR, o.ORD_TIMESTAMP)
             ORDER BY 1, 2
             """
@@ -862,7 +866,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 COUNT(DISTINCT o.ORD_N)                    AS receipts,
                 ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue
             FROM ORDERS o
-            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP IS NOT NULL
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP >= '2023-01-01'
             GROUP BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP),
                      DATEPART(WEEKDAY, o.ORD_TIMESTAMP),
                      DATEPART(HOUR,    o.ORD_TIMESTAMP)
@@ -893,7 +897,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 ISNULL(SUM(o.ORD_quant * pec.effective_unit_cost), 0) AS cogs_imputed
             FROM ORDERS o
             LEFT JOIN #pec pec ON o.ORD_P_ID = pec.p_id
-            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP IS NOT NULL AND o.ORD_TIMESTAMP >= ?
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP >= '2023-01-01' AND o.ORD_TIMESTAMP >= ?
             GROUP BY CAST(o.ORD_TIMESTAMP AS DATE)
             ORDER BY 1
             """,
@@ -924,7 +928,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 MIN(o.ORD_TIMESTAMP)                       AS first_at,
                 MAX(o.ORD_TIMESTAMP)                       AS last_at
             FROM ORDERS o
-            WHERE o.ORD_ACT IN (0, 2)
+            WHERE o.ORD_ACT IN (0, 2) AND o.ORD_TIMESTAMP >= '2023-01-01'
             GROUP BY o.ORD_ACT
             """
         )
@@ -953,7 +957,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue_after,
                 ISNULL(SUM(o.ORD_FASDAKLEBAMDE), 0)        AS revenue_before
             FROM ORDERS o
-            WHERE o.ORD_ACT = 1 AND o.ORD_FASDAKLEBAMDE > o.ORD_jamjam
+            WHERE o.ORD_ACT = 1 AND o.ORD_FASDAKLEBAMDE > o.ORD_jamjam AND o.ORD_TIMESTAMP >= '2023-01-01'
             """
         )
         d_lines, d_receipts, d_total, d_after, d_before = cur.fetchone()
@@ -977,6 +981,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
             SELECT
                 o.ORD_SHIFT                                AS shift_id,
                 o.ORD_USER_ID                              AS user_id,
+                MAX(u.username)                            AS cashier_name,
                 o.ORD_TAB_ID                               AS tab_id,
                 MIN(o.ORD_TIMESTAMP)                       AS shift_start,
                 MAX(o.ORD_TIMESTAMP)                       AS shift_end,
@@ -986,7 +991,8 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 ISNULL(SUM(o.ORD_quant), 0)                AS qty,
                 ISNULL(SUM(o.ORD_FASDAKLEBAMDE - o.ORD_jamjam), 0) AS markdown
             FROM ORDERS o
-            WHERE o.ORD_ACT = 1 AND o.ORD_SHIFT IS NOT NULL AND o.ORD_TIMESTAMP IS NOT NULL
+            LEFT JOIN USERS u ON u.U_ID = o.ORD_USER_ID
+            WHERE o.ORD_ACT = 1 AND o.ORD_SHIFT IS NOT NULL AND o.ORD_TIMESTAMP >= '2023-01-01'
             GROUP BY o.ORD_SHIFT, o.ORD_USER_ID, o.ORD_TAB_ID
             ORDER BY o.ORD_SHIFT DESC
             """
@@ -1002,7 +1008,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
         normal_revenues = []
         normal_durations = []
         for row in cur.fetchall():
-            sid, uid, tid, ts_start, ts_end, lines, receipts, rev, qty, md = row
+            sid, uid, cname, tid, ts_start, ts_end, lines, receipts, rev, qty, md = row
             rev_f = float(rev or 0)
             dur_h = 0.0
             if ts_start and ts_end:
@@ -1011,6 +1017,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
             entry = {
                 "shift_id": int(sid) if sid is not None else None,
                 "user_id": int(uid) if uid is not None else None,
+                "cashier_name": (cname or "").strip() or None,
                 "tab_id": int(tid) if tid is not None else None,
                 "shift_start": ts_start.isoformat() if ts_start else None,
                 "shift_end": ts_end.isoformat() if ts_end else None,
@@ -1052,6 +1059,86 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
         # Surface up to 10 worst anomalies (longest first) for owner review.
         shift_anomalies = sorted(anomalous_shifts, key=lambda s: -s["duration_hours"])[:10]
 
+        # Per-DAY per-cashier breakdown — mirrors MegaPlus's own "სალარო"
+        # window which filters by calendar day (00:00–23:59), not by shift.
+        # Shifts cross midnight so a "May 8" filter on shifts wrongly includes
+        # May 7 evening transactions. This aggregate gives the same totals
+        # MegaPlus shows on screen. Window capped at 2025-01-01 to keep payload
+        # bounded; widen if the dashboard period filter ever reaches back.
+        cur.execute(
+            """
+            SELECT
+                CAST(o.ORD_TIMESTAMP AS DATE)              AS day,
+                o.ORD_USER_ID                              AS user_id,
+                MAX(u.username)                            AS cashier_name,
+                COUNT(*)                                   AS lines,
+                COUNT(DISTINCT o.ORD_N)                    AS receipts,
+                ISNULL(SUM(CASE WHEN o.ORD_PAY_TYP = 0 THEN o.ORD_jamjam ELSE 0 END), 0) AS cash,
+                ISNULL(SUM(CASE WHEN o.ORD_PAY_TYP = 1 THEN o.ORD_jamjam ELSE 0 END), 0) AS card,
+                ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue
+            FROM ORDERS o
+            LEFT JOIN USERS u ON u.U_ID = o.ORD_USER_ID
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP >= '2025-01-01'
+            GROUP BY CAST(o.ORD_TIMESTAMP AS DATE), o.ORD_USER_ID
+            ORDER BY CAST(o.ORD_TIMESTAMP AS DATE) DESC, ISNULL(SUM(o.ORD_jamjam), 0) DESC
+            """
+        )
+        cashier_day_breakdown = []
+        for d, uid, cname, lines, receipts, cash, card, rev in cur.fetchall():
+            rev_f = float(rev or 0)
+            receipts_i = int(receipts or 0)
+            cashier_day_breakdown.append({
+                "day": d.isoformat() if d else None,
+                "user_id": int(uid) if uid is not None else None,
+                "cashier_name": (cname or "").strip() or None,
+                "lines": int(lines or 0),
+                "receipts": receipts_i,
+                "cash": float(cash or 0),
+                "card": float(card or 0),
+                "revenue": rev_f,
+                "aov": round(rev_f / receipts_i, 2) if receipts_i else 0.0,
+            })
+
+        # Per-day-per-hour-per-cashier breakdown. Drives the Salaro page's
+        # hourly-distribution chart + transactions-per-hour metric. Window
+        # capped to last 180 days to bound payload (~2MB worst case at
+        # ~10 cashiers × 12 active hours × 180 days × 2 stores). Frontend
+        # rebuckets to 24-hour bars for the active period filter.
+        cur.execute(
+            """
+            SELECT
+                CAST(o.ORD_TIMESTAMP AS DATE)              AS day,
+                DATEPART(HOUR, o.ORD_TIMESTAMP)            AS hr,
+                o.ORD_USER_ID                              AS user_id,
+                MAX(u.username)                            AS cashier_name,
+                COUNT(DISTINCT o.ORD_N)                    AS receipts,
+                ISNULL(SUM(CASE WHEN o.ORD_PAY_TYP = 0 THEN o.ORD_jamjam ELSE 0 END), 0) AS cash,
+                ISNULL(SUM(CASE WHEN o.ORD_PAY_TYP = 1 THEN o.ORD_jamjam ELSE 0 END), 0) AS card,
+                ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue
+            FROM ORDERS o
+            LEFT JOIN USERS u ON u.U_ID = o.ORD_USER_ID
+            WHERE o.ORD_ACT = 1
+              AND o.ORD_TIMESTAMP >= DATEADD(day, -180, CAST(GETDATE() AS DATE))
+            GROUP BY CAST(o.ORD_TIMESTAMP AS DATE),
+                     DATEPART(HOUR, o.ORD_TIMESTAMP),
+                     o.ORD_USER_ID
+            ORDER BY CAST(o.ORD_TIMESTAMP AS DATE) DESC,
+                     DATEPART(HOUR, o.ORD_TIMESTAMP)
+            """
+        )
+        cashier_hour_breakdown = []
+        for d, hr, uid, cname, receipts, cash, card, rev in cur.fetchall():
+            cashier_hour_breakdown.append({
+                "day": d.isoformat() if d else None,
+                "hour": int(hr) if hr is not None else None,
+                "user_id": int(uid) if uid is not None else None,
+                "cashier_name": (cname or "").strip() or None,
+                "receipts": int(receipts or 0),
+                "cash": float(cash or 0),
+                "card": float(card or 0),
+                "revenue": float(rev or 0),
+            })
+
         # Per-line VAT (ORD_VAT) — total VAT collected, by month, by category.
         # Effective rate = ORD_VAT / ORD_jamjam. ORD_VAT = 0 indicates a
         # VAT-exempt line (e.g. cigarettes / specific food categories).
@@ -1064,7 +1151,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 SUM(CASE WHEN o.ORD_VAT = 0 THEN 1 ELSE 0 END)         AS exempt_lines,
                 ISNULL(SUM(CASE WHEN o.ORD_VAT = 0 THEN o.ORD_jamjam ELSE 0 END), 0) AS exempt_revenue
             FROM ORDERS o
-            WHERE o.ORD_ACT = 1
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP >= '2023-01-01'
             """
         )
         v_total, v_rev, v_lines, v_exempt_lines, v_exempt_rev = cur.fetchone()
@@ -1095,7 +1182,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 SUM(CASE WHEN o.ORD_VAT = 0 THEN 1 ELSE 0 END) AS exempt_lines,
                 ISNULL(SUM(CASE WHEN o.ORD_VAT = 0 THEN o.ORD_jamjam ELSE 0 END), 0) AS exempt_revenue
             FROM ORDERS o
-            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP IS NOT NULL
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP >= '2023-01-01'
             GROUP BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP)
             ORDER BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP)
             """
@@ -1129,7 +1216,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 SUM(CASE WHEN o.ORD_VAT = 0 THEN 1 ELSE 0 END) AS exempt_lines
             FROM ORDERS o
             JOIN PRODUCTS p ON o.ORD_P_ID = p.P_ID
-            WHERE o.ORD_ACT = 1
+            WHERE o.ORD_ACT = 1 AND o.ORD_TIMESTAMP >= '2023-01-01'
             GROUP BY p.P_GROUP
             ORDER BY SUM(o.ORD_VAT) DESC
             """
@@ -1170,7 +1257,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 MAX(o.ORD_TIMESTAMP)                       AS last_return
             FROM ORDERS o
             JOIN PRODUCTS p ON o.ORD_P_ID = p.P_ID
-            WHERE o.ORD_ACT = 2
+            WHERE o.ORD_ACT = 2 AND o.ORD_TIMESTAMP >= '2023-01-01'
             GROUP BY p.P_ID, p.P_CODE, p.P_BARCODE, p.P_NAME, p.P_GROUP
             ORDER BY ABS(ISNULL(SUM(o.ORD_jamjam), 0)) DESC
             """
@@ -1212,7 +1299,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 ISNULL(SUM(o.ORD_quant), 0)                AS return_qty
             FROM ORDERS o
             JOIN PRODUCTS p ON o.ORD_P_ID = p.P_ID
-            WHERE o.ORD_ACT = 2 AND o.ORD_TIMESTAMP IS NOT NULL
+            WHERE o.ORD_ACT = 2 AND o.ORD_TIMESTAMP >= '2023-01-01'
             GROUP BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP),
                      p.P_ID, p.P_CODE, p.P_BARCODE, p.P_NAME, p.P_GROUP
             ORDER BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP),
@@ -1246,7 +1333,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 COUNT(DISTINCT o.ORD_N)                    AS return_receipts,
                 ISNULL(SUM(o.ORD_jamjam), 0)               AS return_revenue
             FROM ORDERS o
-            WHERE o.ORD_ACT = 2
+            WHERE o.ORD_ACT = 2 AND o.ORD_TIMESTAMP >= '2023-01-01'
             GROUP BY o.ORD_USER_ID
             ORDER BY ABS(ISNULL(SUM(o.ORD_jamjam), 0)) DESC
             """
@@ -1271,7 +1358,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
                 ISNULL(SUM(o.ORD_jamjam), 0)               AS revenue,
                 ISNULL(SUM(o.ORD_quant), 0)                AS qty
             FROM ORDERS o
-            WHERE o.ORD_ACT = 2 AND o.ORD_TIMESTAMP IS NOT NULL
+            WHERE o.ORD_ACT = 2 AND o.ORD_TIMESTAMP >= '2023-01-01'
             GROUP BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP)
             ORDER BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP)
             """
@@ -1303,7 +1390,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
             FROM ORDERS o
             JOIN PRODUCTS p ON o.ORD_P_ID = p.P_ID
             LEFT JOIN #pec pec ON p.P_ID = pec.p_id
-            WHERE o.ORD_ACT = 1 AND o.ORD_FASDAKLEBAMDE > o.ORD_jamjam
+            WHERE o.ORD_ACT = 1 AND o.ORD_FASDAKLEBAMDE > o.ORD_jamjam AND o.ORD_TIMESTAMP >= '2023-01-01'
             GROUP BY p.P_GROUP
             ORDER BY ISNULL(SUM(o.ORD_FASDAKLEBAMDE - o.ORD_jamjam), 0) DESC
             """
@@ -1350,7 +1437,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
             LEFT JOIN #pec pec ON p.P_ID = pec.p_id
             WHERE o.ORD_ACT = 1
               AND o.ORD_FASDAKLEBAMDE > o.ORD_jamjam
-              AND o.ORD_TIMESTAMP IS NOT NULL
+              AND o.ORD_TIMESTAMP >= '2023-01-01'
             GROUP BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP), p.P_GROUP
             ORDER BY YEAR(o.ORD_TIMESTAMP), MONTH(o.ORD_TIMESTAMP),
                      ISNULL(SUM(o.ORD_FASDAKLEBAMDE - o.ORD_jamjam), 0) DESC
@@ -1388,7 +1475,7 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
             WITH last_sale AS (
                 SELECT ORD_P_ID, MAX(ORD_TIMESTAMP) AS last_sale_ts
                 FROM ORDERS
-                WHERE ORD_ACT = 1 AND ORD_TIMESTAMP IS NOT NULL
+                WHERE ORD_ACT = 1 AND ORD_TIMESTAMP >= '2023-01-01'
                 GROUP BY ORD_P_ID
             )
             SELECT
@@ -1528,6 +1615,8 @@ def _read_supplier_rollups(backup_meta: BackupFile, db_name: str) -> dict:
         "shifts": shifts,
         "shift_summary": shift_summary,
         "shift_anomalies": shift_anomalies,
+        "cashier_day_breakdown": cashier_day_breakdown,
+        "cashier_hour_breakdown": cashier_hour_breakdown,
         "vat_totals": vat_totals,
         "vat_by_month": vat_by_month,
         "vat_by_category": vat_by_category,

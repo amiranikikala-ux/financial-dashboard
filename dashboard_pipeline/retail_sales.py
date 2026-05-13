@@ -674,8 +674,9 @@ def synthesize_from_megaplus(megaplus_live):
             "revenue_ge": round(dq_null_rev, 2),
             "quantity": round(dq_null_qty, 2),
             "note_ka": (
-                "ხაზები რომელთა თარიღი DB-ში NULL-ია — ჩათვლილია overall ჯამში, "
-                "მაგრამ თვიური/დღიური ცხრილ-გრაფიკიდან ცვივა (თვის bucket-ი ვერ მიენიჭა)."
+                "ხაზები რომელთა თარიღი DB-ში NULL-ია — ცალკე ცხრილში აღრიცხულია, "
+                "მაგრამ ყველა ანალიზიდან ცვივა (overall, cashier, shifts, daily, monthly, VAT, etc.). "
+                "ციფრი აქ ჩანს იმისთვის რომ ცარიელი slot silently არ გადახდეს."
             ),
         },
         "legacy_pre_2023": {
@@ -683,9 +684,10 @@ def synthesize_from_megaplus(megaplus_live):
             "revenue_ge": round(dq_legacy_rev, 2),
             "quantity": round(dq_legacy_qty, 2),
             "note_ka": (
-                "2023-01-01-მდე ხაზები — სავარაუდოდ DB-ის ისტორიული სატესტო/seed "
-                "მონაცემი. ჩათვლილია overall ჯამში და by_month-ში; რეალური "
-                "ოპერაციული პერიოდი 2023-01-დან იწყება."
+                "2023-01-01-მდე ხაზები — DB-ის ისტორიული სატესტო/seed მონაცემი. "
+                "ცალკე ცხრილში აღრიცხულია, მაგრამ ყველა ანალიზიდან ცვივა "
+                "(overall, cashier, shifts, daily, monthly, VAT, returns, discount). "
+                "რეალური ოპერაციული პერიოდი 2023-01-დან იწყება."
             ),
         },
         "per_object": dq_per_store,
@@ -960,6 +962,24 @@ def synthesize_from_megaplus(megaplus_live):
         "avg_duration_hours": round(weighted_dur_sum / sum_normal, 2) if sum_normal else 0.0,
         "last_shift_start": last_start_combined,
     }
+
+    # ─── Cashier × day × store (MegaPlus-aligned, calendar-day window) ─────
+    all_cashier_days: list = []
+    for store_id, rollup in stores.items():
+        obj_label = store_label_for.get(str(store_id)) or f"store_{store_id}"
+        for r in rollup.get("cashier_day_breakdown") or []:
+            all_cashier_days.append({**r, "object": obj_label})
+    all_cashier_days.sort(key=lambda r: (r.get("day") or "", -(r.get("revenue") or 0)), reverse=True)
+    combined_cashier_day_breakdown = all_cashier_days
+
+    # ─── Cashier × day × hour × store (drives hourly distribution + TPH) ───
+    all_cashier_hours: list = []
+    for store_id, rollup in stores.items():
+        obj_label = store_label_for.get(str(store_id)) or f"store_{store_id}"
+        for r in rollup.get("cashier_hour_breakdown") or []:
+            all_cashier_hours.append({**r, "object": obj_label})
+    all_cashier_hours.sort(key=lambda r: ((r.get("day") or ""), r.get("hour") or 0), reverse=True)
+    combined_cashier_hour_breakdown = all_cashier_hours
 
     # ─── VAT — combined ─────────────────────────────────────────────────────
     vat_total_acc = 0.0
@@ -2223,6 +2243,8 @@ def synthesize_from_megaplus(megaplus_live):
         "hour_dow_grid_by_month": hour_dow_grid_by_month,
         "per_object_view": per_object_view,
         "shifts": combined_shifts,
+        "cashier_day_breakdown": combined_cashier_day_breakdown,
+        "cashier_hour_breakdown": combined_cashier_hour_breakdown,
         "shift_summary": combined_shift_summary,
         "shift_anomalies": combined_shift_anomalies,
         "vat_totals": vat_totals_combined,

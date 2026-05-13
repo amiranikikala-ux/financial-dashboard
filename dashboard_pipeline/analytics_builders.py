@@ -120,6 +120,7 @@ def build_monthly_pnl(
     bog_expenses_bundle=None,
     retail_sales_bundle=None,
     supplier_payment_lines=None,
+    cash_expenses_entries=None,
 ):
     """
     თვიური P&L: POS შემოსავალი (ბანკი) + ნაღდი ფული (Megaplus სალარო) +
@@ -174,6 +175,25 @@ def build_monthly_pnl(
                 month = _month_key(line.get("თარიღი"))
                 obj = str(line.get("object") or OBJECT_COMMON)
                 month_expenses[month][obj] += float(line.get("თანხა") or 0)
+
+    # Owner-entered cash expenses (salary / rent / owner / service / other)
+    # booked to OBJECT_COMMON. Without this, monthly_pnl sees only bank-side
+    # expenses and net_margin / forecasts / executive KPIs underestimate burn.
+    # supplier_cash skipped: handled via supplier_payment_lines path below.
+    for entry in cash_expenses_entries or []:
+        try:
+            amt = float(entry.get("amount") or 0)
+        except (TypeError, ValueError):
+            continue
+        if amt <= 0:
+            continue
+        cat = (entry.get("category") or "").lower()
+        if cat == "supplier_cash":
+            continue
+        month = _month_key(entry.get("date"))
+        if not month or month == "უცნობი თვე":
+            continue
+        month_expenses[month][OBJECT_COMMON] += amt
 
     max_pos_by_month = _retail_sales_max_pos_by_object_month(retail_sales_bundle)
     cogs_by_month = _retail_sales_cogs_by_object_month(retail_sales_bundle)
