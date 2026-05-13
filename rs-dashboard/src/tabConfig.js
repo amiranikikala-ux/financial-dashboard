@@ -3,6 +3,7 @@ export const TAB_GROUPS = [
     id: 'daily',
     label: 'ყოველდღიური',
     items: [
+      { id: 'home', label: '🏠 მთავარი' },
       { id: 'suppliers', label: '🏢 მომწოდებლები' },
       { id: 'waybills', label: '📄 ზედნადებები' },
       { id: 'waybill_reconciliation', label: '🔍 ზედნადებების შემოწმება' },
@@ -15,6 +16,7 @@ export const TAB_GROUPS = [
     label: 'გაყიდვები',
     items: [
       { id: 'retail_sales', label: '🛒 გაყიდვები' },
+      { id: 'cashiers', label: '👤 სალარო' },
       { id: 'imported_products', label: '📦 პროდუქცია' },
       { id: 'orphan_products', label: '⚠️ შეუსაბამო პროდუქცია' },
       { id: 'duplicate_products', label: '👥 დუბლიკატები' },

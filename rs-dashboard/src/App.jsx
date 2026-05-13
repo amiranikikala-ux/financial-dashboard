@@ -20,6 +20,7 @@ import DateTimeCalendarPicker from './components/DateTimeCalendarPicker.jsx';
 import ChatAssistant from './components/ChatAssistant.jsx';
 
 const Analytics = lazy(() => import('./Analytics.jsx'));
+const Home = lazy(() => import('./Home.jsx'));
 const DeadStock = lazy(() => import('./DeadStock.jsx'));
 const DebtPlan = lazy(() => import('./DebtPlan.jsx'));
 const PnL = lazy(() => import('./PnL.jsx'));
@@ -33,6 +34,7 @@ const ImportedProducts = lazy(() => import('./ImportedProducts.jsx'));
 const OrphanProducts = lazy(() => import('./OrphanProducts.jsx'));
 const DuplicateProducts = lazy(() => import('./DuplicateProducts.jsx'));
 const RetailSales = lazy(() => import('./RetailSales.jsx'));
+const Cashiers = lazy(() => import('./Cashiers.jsx'));
 const Cashflow = lazy(() => import('./Cashflow.jsx'));
 const SupplierModal = lazy(() => import('./SupplierModal.jsx'));
 const Suppliers = lazy(() => import('./Suppliers.jsx'));
@@ -46,6 +48,9 @@ const Foodmart360 = lazy(() => import('./Foodmart360.jsx'));
 const Reconciliation = lazy(() => import('./Reconciliation.jsx'));
 
 const SAFE_PERIOD_REQUEST_TABS = new Set([
+  // 'home' deliberately excluded — Home.jsx receives the full retail_sales
+  // payload (with daily_trend + cashier_day_breakdown) and filters by date
+  // client-side, so the API stays cheap and consistent.
   'suppliers',
   'retail_sales',
   'imported_products',
@@ -58,9 +63,11 @@ const SAFE_PERIOD_REQUEST_TABS = new Set([
 ]);
 
 const PERIOD_PICKER_TABS = new Set([
+  'home',
   'suppliers',
   'waybills',
   'retail_sales',
+  'cashiers',
   'imported_products',
   'working_capital',
   'forecast',
@@ -77,7 +84,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [activeTab, setActiveTab] = useHashTab('suppliers');
+  const [activeTab, setActiveTab] = useHashTab('home');
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [localPayments, setLocalPayments] = useState({});
   const [deletedManualPaymentIds, setDeletedManualPaymentIds] = useState(() => new Set());
@@ -156,9 +163,11 @@ function App() {
   useEffect(() => {
     if (activeTab === 'imported_products' || activeTab === 'waybills' || activeTab === 'cashflow' || activeTab === 'insights' || activeTab === 'debt_plan' || activeTab === 'vat_audit') return undefined;
     let active = true;
-    const requestTab = activeTab === 'pnl' ? 'pnl_summary' : activeTab === 'analytics' ? 'suppliers' : activeTab === 'store_compare' ? 'retail_sales' : activeTab === 'foodmart_360' ? 'suppliers' : activeTab === 'reconciliation' ? 'suppliers' : activeTab;
+    const requestTab = activeTab === 'pnl' ? 'pnl_summary' : activeTab === 'analytics' ? 'suppliers' : activeTab === 'store_compare' ? 'retail_sales' : activeTab === 'cashiers' ? 'retail_sales' : activeTab === 'home' ? 'retail_sales' : activeTab === 'foodmart_360' ? 'suppliers' : activeTab === 'reconciliation' ? 'suppliers' : activeTab;
     const params = new URLSearchParams({ tab: requestTab });
-    appendCanonicalPeriodParams(params, requestTab);
+    // Use activeTab (not requestTab) for period-param decision so the home
+    // tab can opt out even though it physically requests retail_sales.
+    appendCanonicalPeriodParams(params, activeTab === 'home' ? 'home' : requestTab);
     setTimeout(() => {
       if (active) {
         if (!hasInitialLoadRef.current) {
@@ -339,7 +348,7 @@ function App() {
     );
   };
 
-  const expectedTab = activeTab === 'pnl' ? 'pnl_summary' : activeTab === 'cashflow' ? 'cashflow_summary' : activeTab === 'analytics' ? 'suppliers' : activeTab === 'store_compare' ? 'retail_sales' : activeTab === 'foodmart_360' ? 'suppliers' : activeTab === 'reconciliation' ? 'suppliers' : activeTab;
+  const expectedTab = activeTab === 'pnl' ? 'pnl_summary' : activeTab === 'cashflow' ? 'cashflow_summary' : activeTab === 'analytics' ? 'suppliers' : activeTab === 'store_compare' ? 'retail_sales' : activeTab === 'cashiers' ? 'retail_sales' : activeTab === 'home' ? 'retail_sales' : activeTab === 'foodmart_360' ? 'suppliers' : activeTab === 'reconciliation' ? 'suppliers' : activeTab;
   const currentResponseMeta = activeTab === 'imported_products'
     ? importedProductsResponse?.response_meta ?? null
     : data.response_meta?.tab === expectedTab
@@ -432,7 +441,18 @@ function App() {
           />
         )}
 
-        {activeTab === 'suppliers' ? (
+        {activeTab === 'home' ? (
+          <Suspense fallback={tabSuspenseFallback}>
+            <Home
+              retailSales={data.retail_sales}
+              fromDate={globalFromDate}
+              fromTime={globalFromTime}
+              toDate={globalToDate}
+              toTime={globalToTime}
+              reloadKey={reloadKey}
+            />
+          </Suspense>
+        ) : activeTab === 'suppliers' ? (
           <Suspense fallback={tabSuspenseFallback}>
             <Suppliers
               suppliers={data.suppliers}
@@ -509,6 +529,16 @@ function App() {
         ) : activeTab === 'retail_sales' ? (
           <Suspense fallback={tabSuspenseFallback}>
             <RetailSales retailSales={data.retail_sales} responseMeta={currentResponseMeta} />
+          </Suspense>
+        ) : activeTab === 'cashiers' ? (
+          <Suspense fallback={tabSuspenseFallback}>
+            <Cashiers
+              retailSales={data.retail_sales}
+              fromDate={globalFromDate}
+              fromTime={globalFromTime}
+              toDate={globalToDate}
+              toTime={globalToTime}
+            />
           </Suspense>
         ) : activeTab === 'dead_stock' ? (
           <Suspense fallback={tabSuspenseFallback}>

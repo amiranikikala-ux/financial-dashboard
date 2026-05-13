@@ -1897,13 +1897,18 @@
 }
 
 .dtcp-popup--classic {
-  width: min(100%, 31rem);
+  width: 38rem;
   max-width: calc(100vw - 2rem);
   background: #d7dde7;
   border: 1px solid #96a2b4;
   border-radius: 6px;
   box-shadow: 0 18px 40px rgba(0,0,0,0.45);
-  padding: 0.35rem 0.4rem 0.75rem;
+  padding: 0.6rem 0.7rem 0.85rem;
+  /* Center the popup horizontally under the trigger so it doesn't clip
+     off the viewport on narrow header areas. */
+  left: 50% !important;
+  right: auto !important;
+  transform: translateX(-50%) !important;
 }
 
 .dtcp-calendar-panel--classic {
@@ -2298,8 +2303,13 @@
   border: 1px solid #9aa5b7 !important;
   border-radius: 2px !important;
   color: #24418b !important;
-  font-size: 0.95rem !important;
-  font-weight: 400 !important;
+  font-size: 0.78rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  overflow: hidden !important;
+  text-overflow: clip !important;
+  white-space: nowrap !important;
+  min-width: 0 !important;
 }
 
 .classic-inline-datepicker .react-datepicker__day-name:first-child,
@@ -4068,4 +4078,189 @@
 .bank-refresh-launcher__age {
   color: var(--text-secondary);
   font-size: 0.88rem;
+}
+
+/* ======================================================
+   DateTimeCalendarPicker — DARK THEME OVERRIDES
+   (overrides the legacy classic light theme to match the
+    rest of the dark dashboard)
+====================================================== */
+.dtcp-popup--classic {
+  background: var(--bg-secondary, #0f172a) !important;
+  border: 1px solid var(--border-accent, rgba(255,255,255,0.12)) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 18px 40px rgba(0,0,0,0.65) !important;
+  color: var(--text-primary, #e2e8f0) !important;
+}
+
+.dtcp-popup--classic .classic-cal__close {
+  color: var(--text-secondary, #94a3b8) !important;
+}
+.dtcp-popup--classic .classic-cal__close:hover {
+  color: #ef4444 !important;
+}
+
+.dtcp-popup--classic .dtcp-preset-btn {
+  background: rgba(255,255,255,0.06) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  border-radius: 6px !important;
+  color: var(--text-primary, #e2e8f0) !important;
+}
+.dtcp-popup--classic .dtcp-preset-btn:hover,
+.dtcp-popup--classic .dtcp-preset-active {
+  background: rgba(59,130,246,0.18) !important;
+  border-color: var(--accent, #3b82f6) !important;
+  color: var(--accent, #60a5fa) !important;
+}
+
+.dtcp-popup--classic .dtcp-time-row--classic {
+  border-top: 1px solid rgba(255,255,255,0.08) !important;
+}
+.dtcp-popup--classic .dtcp-time-label {
+  color: var(--text-muted, #94a3b8) !important;
+}
+.dtcp-popup--classic .dtcp-date-pill,
+.dtcp-popup--classic .dtcp-time-select {
+  background: rgba(255,255,255,0.05) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  border-radius: 6px !important;
+  color: var(--text-primary, #e2e8f0) !important;
+  font-size: 0.82rem !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.dtcp-popup--classic .dtcp-time-select {
+  width: 6rem !important;
+  min-width: 6rem !important;
+}
+.dtcp-popup--classic .dtcp-date-pill {
+  padding: 0.35rem 0.5rem !important;
+  min-width: 0 !important;
+}
+.dtcp-popup--classic .dtcp-footer--classic {
+  flex-wrap: wrap !important;
+  gap: 0.5rem !important;
+}
+.dtcp-popup--classic .dtcp-footer-info {
+  flex: 1 1 60% !important;
+  min-width: 0 !important;
+}
+.dtcp-popup--classic .dtcp-footer-actions {
+  flex-wrap: nowrap !important;
+}
+.dtcp-popup--classic .dtcp-time-select option {
+  background: var(--bg-secondary, #0f172a) !important;
+  color: var(--text-primary, #e2e8f0) !important;
+}
+
+.dtcp-popup--classic .dtcp-footer--classic {
+  border-top: 1px solid rgba(255,255,255,0.08) !important;
+}
+.dtcp-popup--classic .dtcp-footer-info {
+  color: var(--text-muted, #94a3b8) !important;
+}
+.dtcp-popup--classic .dtcp-footer-info strong {
+  color: var(--text-primary, #e2e8f0) !important;
+}
+
+.dtcp-popup--classic .dtcp-cancel-btn {
+  background: rgba(255,255,255,0.05) !important;
+  color: var(--text-primary, #e2e8f0) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  box-shadow: none !important;
+}
+.dtcp-popup--classic .dtcp-cancel-btn:hover {
+  background: rgba(255,255,255,0.09) !important;
+}
+
+.dtcp-popup--classic .dtcp-done-btn--classic {
+  background: linear-gradient(180deg, #3b82f6, #2563eb) !important;
+  color: #ffffff !important;
+  border: 1px solid #1d4ed8 !important;
+  box-shadow: 0 2px 8px rgba(59,130,246,0.35) !important;
+}
+.dtcp-popup--classic .dtcp-done-btn--classic:hover {
+  background: linear-gradient(180deg, #60a5fa, #3b82f6) !important;
+}
+
+/* Inline calendar inside popup — repaint Windows-classic light into dark */
+.classic-inline-datepicker.react-datepicker {
+  background: transparent !important;
+  color: var(--text-primary, #e2e8f0) !important;
+}
+.classic-inline-datepicker .react-datepicker__header {
+  background: transparent !important;
+}
+.classic-inline-datepicker .react-datepicker__day-name {
+  background: rgba(255,255,255,0.05) !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  color: var(--text-secondary, #cbd5e1) !important;
+}
+.classic-inline-datepicker .react-datepicker__day-name:first-child,
+.classic-inline-datepicker .react-datepicker__day-name:last-child {
+  color: #f87171 !important;
+}
+.classic-inline-datepicker .react-datepicker__day {
+  background: rgba(255,255,255,0.04) !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  color: var(--text-primary, #e2e8f0) !important;
+  box-shadow: none !important;
+}
+.classic-inline-datepicker .react-datepicker__day:hover {
+  background: rgba(59,130,246,0.18) !important;
+  color: var(--accent, #60a5fa) !important;
+  border-color: rgba(59,130,246,0.4) !important;
+}
+.classic-inline-datepicker .react-datepicker__day--today {
+  box-shadow: inset 0 0 0 2px var(--accent, #3b82f6) !important;
+}
+.classic-inline-datepicker .react-datepicker__day--in-range,
+.classic-inline-datepicker .react-datepicker__day--in-selecting-range {
+  background: rgba(59,130,246,0.18) !important;
+  color: var(--accent, #60a5fa) !important;
+  border-color: rgba(59,130,246,0.35) !important;
+}
+.classic-inline-datepicker .react-datepicker__day--selected,
+.classic-inline-datepicker .react-datepicker__day--range-start,
+.classic-inline-datepicker .react-datepicker__day--range-end {
+  background: linear-gradient(180deg, #3b82f6, #2563eb) !important;
+  color: #ffffff !important;
+  border-color: #1d4ed8 !important;
+  box-shadow: 0 2px 8px rgba(59,130,246,0.45) !important;
+}
+.classic-inline-datepicker .react-datepicker__day--keyboard-selected {
+  background: rgba(59,130,246,0.12) !important;
+  color: var(--accent, #60a5fa) !important;
+}
+.classic-inline-datepicker .react-datepicker__day--disabled {
+  color: var(--text-muted, #64748b) !important;
+  background: rgba(255,255,255,0.02) !important;
+  opacity: 0.4 !important;
+}
+
+.dtcp-popup--classic .classic-cal__month-box,
+.dtcp-popup--classic .classic-cal__year-box {
+  background: rgba(255,255,255,0.05) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  box-shadow: none !important;
+  color: var(--text-primary, #e2e8f0) !important;
+}
+.dtcp-popup--classic .classic-cal__month-select {
+  color: var(--text-primary, #e2e8f0) !important;
+}
+.dtcp-popup--classic .classic-cal__month-select option {
+  background: var(--bg-secondary, #0f172a) !important;
+  color: var(--text-primary, #e2e8f0) !important;
+}
+.dtcp-popup--classic .classic-cal__spin-btn {
+  background: rgba(255,255,255,0.05) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  color: var(--text-secondary, #cbd5e1) !important;
+  box-shadow: none !important;
+}
+.dtcp-popup--classic .classic-cal__spin-btn:hover:not(:disabled) {
+  background: rgba(59,130,246,0.18) !important;
+  color: var(--accent, #60a5fa) !important;
+  border-color: rgba(59,130,246,0.4) !important;
 }

@@ -16,6 +16,11 @@ const fmtPct = (v, decimals = 1) => {
 
 const OBJECT_COLORS = { 'ოზურგეთი': '#4f8ef7', 'დვაბზუ': '#34c97e' };
 
+// Suppliers paid in cash on each waybill receipt — each waybill needs a
+// matching cash entry in the manual journal. UI surfaces ✅/❌ buttons
+// per waybill so the owner can confirm payments as goods arrive.
+const CASH_ON_RECEIPT_TAX_IDS = new Set(['406181616']); // ჯიდიაი
+
 // მარჟის ფერი — მკვეთრად მაღალი მწვანე, საშუალო ცისფერი, დაბალი ყვითელი, უარყოფითი წითელი.
 // "Perfect or silent" — მცირე ცდომილების ფერი (≤2pp 0-დან) ნეიტრალურად.
 function marginColor(pct) {
@@ -285,6 +290,8 @@ export default function SupplierModal({
   const [importedResult, setImportedResult] = useState({ key: '', detail: null, error: '' });
   const [payAmount, setPayAmount] = useState('');
   const [recordedFlash, setRecordedFlash] = useState(false);
+  const [confirmingWaybillKey, setConfirmingWaybillKey] = useState('');
+  const [autoConfirmedKeys, setAutoConfirmedKeys] = useState(() => new Set());
   // per-store toggle: 'total' = ყველა მაღაზია; სხვა მნიშვნელობა = კონკრეტული object (ოზურგეთი / დვაბზუ / ...)
   const [profitStoreFilter, setProfitStoreFilter] = useState('total');
   // Sprint C — alias confirmation state. confirmedAliases: Set<imported_code> that
@@ -694,6 +701,70 @@ export default function SupplierModal({
   const payVal = parseMoney(payAmount);
   const canRecord = Boolean(taxId && payVal > 0 && persistLocalPayments);
 
+  // Cash-on-receipt flow: index payments by date for fast same-day lookup.
+  const isCashOnReceiptSupplier = Boolean(taxId && CASH_ON_RECEIPT_TAX_IDS.has(taxId));
+  const paymentsByDate = useMemo(() => {
+    if (!isCashOnReceiptSupplier) return null;
+    const m = new Map();
+    for (const p of supplierPayments || []) {
+      const d = String(p?.date || '').slice(0, 10);
+      const amt = Number(p?.amount) || 0;
+      if (!d || amt <= 0) continue;
+      if (!m.has(d)) m.set(d, []);
+      m.get(d).push(amt);
+    }
+    return m;
+  }, [isCashOnReceiptSupplier, supplierPayments]);
+
+  const waybillIsPending = (w) => {
+    if (!isCashOnReceiptSupplier || !paymentsByDate) return false;
+    if (w?.is_return) return false;
+    if ((w?.status || '') === 'გაუქმებული') return false;
+    const d = String(w?.date || '').slice(0, 10);
+    const wbAmt = Number(w?.amount) || 0;
+    if (!d || wbAmt <= 0) return false;
+    const key = `${d}|${Math.round(wbAmt * 100)}`;
+    if (autoConfirmedKeys.has(key)) return false;
+    // Match: same-day payment within 5% (handles auto-backfill scaling and exact-match)
+    const dayPayments = paymentsByDate.get(d) || [];
+    for (const p of dayPayments) {
+      if (Math.abs(p - wbAmt) / wbAmt <= 0.05) return false;
+    }
+    return true;
+  };
+
+  const handleConfirmWaybillPayment = async (w) => {
+    if (!taxId) return;
+    const d = String(w?.date || '').slice(0, 10);
+    const amt = Number(w?.amount) || 0;
+    if (!d || amt <= 0) return;
+    const key = `${d}|${Math.round(amt * 100)}`;
+    setConfirmingWaybillKey(key);
+    try {
+      const res = await fetch('/api/manual-payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tax_id: taxId,
+          amount: amt,
+          date: d,
+          comment: `ხელზე გადახდა — ზედნადები ${w?.waybill_number || ''}`.trim(),
+        }),
+      });
+      if (res.ok) {
+        setAutoConfirmedKeys((prev) => new Set([...prev, key]));
+        setJournalRefreshTick((t) => t + 1);
+        if (typeof onJournalChange === 'function') onJournalChange();
+      } else {
+        window.alert('გადახდის დაფიქსირება ვერ მოხერხდა');
+      }
+    } catch {
+      window.alert('სერვერთან კავშირი ვერ მოხერხდა');
+    } finally {
+      setConfirmingWaybillKey('');
+    }
+  };
+
   const handleRecordPayment = async () => {
     if (!canRecord) return;
     let serverOk = false;
@@ -1039,6 +1110,9 @@ export default function SupplierModal({
                     <th style={{ padding: '6px 8px', borderBottom: '1px solid #334155' }}>მაღაზია</th>
                     <th style={{ padding: '6px 8px', borderBottom: '1px solid #334155' }}>ტიპი</th>
                     <th style={{ padding: '6px 8px', borderBottom: '1px solid #334155' }}>სტატუსი</th>
+                    {isCashOnReceiptSupplier && (
+                      <th style={{ padding: '6px 8px', borderBottom: '1px solid #334155' }}>ხელზე გადახდა</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -1072,11 +1146,45 @@ export default function SupplierModal({
                         ) : (w.type || '—')}
                       </td>
                       <td style={{ padding: '6px 8px', color: '#94a3b8', fontSize: 12 }}>{w.status || '—'}</td>
+                      {isCashOnReceiptSupplier && (
+                        <td style={{ padding: '6px 8px' }}>
+                          {(() => {
+                            const d = String(w?.date || '').slice(0, 10);
+                            const amt = Number(w?.amount) || 0;
+                            const key = `${d}|${Math.round(amt * 100)}`;
+                            if (autoConfirmedKeys.has(key)) {
+                              return <span style={{ color: '#10b981', fontSize: 12 }}>✓ დადასტურდა</span>;
+                            }
+                            if (!waybillIsPending(w)) {
+                              return <span style={{ color: '#64748b', fontSize: 11 }}>—</span>;
+                            }
+                            const isBusy = confirmingWaybillKey === key;
+                            return (
+                              <button
+                                onClick={() => handleConfirmWaybillPayment(w)}
+                                disabled={isBusy}
+                                style={{
+                                  background: isBusy ? '#475569' : '#10b981',
+                                  color: '#ffffff',
+                                  border: 'none',
+                                  borderRadius: 4,
+                                  padding: '4px 10px',
+                                  fontSize: 12,
+                                  cursor: isBusy ? 'wait' : 'pointer',
+                                  fontWeight: 500,
+                                }}
+                              >
+                                {isBusy ? '...' : '✅ ვეთანხმები'}
+                              </button>
+                            );
+                          })()}
+                        </td>
+                      )}
                     </tr>
                   ))}
                   {filteredWaybills.length === 0 && (
                     <tr>
-                      <td colSpan="6" style={{ padding: 14, textAlign: 'center', color: '#94a3b8', fontStyle: 'italic' }}>
+                      <td colSpan={isCashOnReceiptSupplier ? 7 : 6} style={{ padding: 14, textAlign: 'center', color: '#94a3b8', fontStyle: 'italic' }}>
                         ამ თვეში ზედნადები არ არის.
                       </td>
                     </tr>

@@ -2,10 +2,10 @@ import { useState } from 'react';
 import { TAB_GROUPS } from '../tabConfig.js';
 
 const QUICK_TABS = [
+  { id: 'home', icon: '🏠', label: 'მთავარი' },
   { id: 'suppliers', icon: '🏢', label: 'მომწოდ.' },
   { id: 'waybills', icon: '📄', label: 'ზედნად.' },
   { id: 'cashflow', icon: '💳', label: 'ბანკი' },
-  { id: 'executive', icon: '👔', label: 'Exec' },
 ];
 
 const ALL_TABS = TAB_GROUPS.flatMap((g) => g.items);
