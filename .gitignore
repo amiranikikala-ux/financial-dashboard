@@ -80,6 +80,11 @@ _scratch_*.parquet
 
 # Bank-statement parquet cache (rebuilt via dashboard_pipeline._backfill_bog)
 Financial_Analysis/cache/
+# Machine-local backup + sample folders (manual snapshots, regenerable)
+Financial_Analysis/_backups/
+Financial_Analysis/_samples/
+# Backup snapshots of generated files (one-off restore points)
+*.bak_pre_*
 temp.json
 headers_log.txt
 headers_output.json
