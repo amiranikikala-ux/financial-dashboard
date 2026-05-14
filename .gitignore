@@ -117,3 +117,7 @@ rs-dashboard/playwright-report/
 
 # Code dispersion AI response cache (machine-local, regenerable)
 .code_dispersion_cache.json
+
+# Playwright MCP page snapshots (machine-local browser DOM dumps)
+home-loaded.yml
+home-snapshot.yml
