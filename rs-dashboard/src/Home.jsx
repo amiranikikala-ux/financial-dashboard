@@ -1261,6 +1261,48 @@ export default function Home({ retailSales, fromDate, fromTime, toDate, toTime, 
                 {totals.till_change > 0 ? '+' : ''}{fmtGel2(totals.till_change)}
               </span>
             </div>
+            {(totals.unattributed_deposits || 0) > 0 && (() => {
+              const lines = totals.unattributed_deposit_lines || [];
+              const unattrTable = lines.length > 0 ? (
+                <table style={tblS}>
+                  <thead><tr>
+                    <th style={thS}>გაყიდვის დღე</th>
+                    <th style={thS}>ბანკი</th>
+                    <th style={thS}>დანიშნულება</th>
+                    <th style={{ ...thS, textAlign: 'right' }}>თანხა</th>
+                  </tr></thead>
+                  <tbody>
+                    {lines.map((r, i) => (
+                      <tr key={i}>
+                        <td style={tdS}>
+                          {fmtDayKa(r.day)}
+                          {r.bank_day && r.bank_day !== r.day && (
+                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>ბანკში: {fmtDayKa(r.bank_day)}</div>
+                          )}
+                        </td>
+                        <td style={tdS}>{bankBadge(r.bank)}</td>
+                        <td style={{ ...tdS, fontSize: '0.78rem', color: '#94a3b8' }}>{r.purpose}</td>
+                        <td style={{ ...tdS, textAlign: 'right' }}>{fmtGel2(r.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : null;
+              return (
+                <div style={{ marginTop: 4, padding: '6px 10px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 6 }}>
+                  <CashTillRow
+                    label={`⚠️ მაღაზიის გარეშე ჩარიცხული (${lines.length} ჩანაწერი)`}
+                    amount={totals.unattributed_deposits}
+                    valueColor="#fbbf24"
+                    expanded={!!cashTillExpanded.unattributed}
+                    onToggle={() => toggleCashTill('unattributed')}
+                    indent={0}
+                  >
+                    {unattrTable}
+                  </CashTillRow>
+                </div>
+              );
+            })()}
             {totals.cash_supplier_paid > 0 && (() => {
               const lines = totals.supplier_paid_lines || [];
               const supplierTable = lines.length > 0 ? (
