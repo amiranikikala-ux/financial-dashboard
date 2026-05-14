@@ -686,7 +686,16 @@ async def get_cash_till(request: Request):
             status_code=500, detail=f"could not load retail_sales: {exc}"
         )
 
-    return compute_cash_till(cdb, start=start, end=end)
+    import re as _re
+    _PFX = _re.compile(r"^\(\d+\)\s*")
+    name_map: dict[str, str] = {}
+    for s in (data.get("supplier_aging") or []):
+        tid = str(s.get("tax_id") or "").split(".")[0]
+        if tid:
+            org = " ".join(_PFX.sub("", (s.get("org") or "").strip()).split())
+            name_map[tid] = org or tid
+
+    return compute_cash_till(cdb, start=start, end=end, supplier_name_map=name_map)
 
 
 @app.get("/api/freshness")

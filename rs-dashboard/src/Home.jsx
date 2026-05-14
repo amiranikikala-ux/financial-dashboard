@@ -344,6 +344,42 @@ function ProfitExpenseRow({ label, amount, items, expanded, onToggle, note, yell
   );
 }
 
+function CashTillRow({ label, amount, negative, expanded, onToggle, children, valueColor, indent }) {
+  const fmt = (v) => `${(Number(v) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₾`;
+  const hasDetail = !!children;
+  const color = valueColor || (negative ? '#94a3b8' : '#cbd5e1');
+  return (
+    <div>
+      <div
+        onClick={hasDetail ? onToggle : undefined}
+        role={hasDetail ? 'button' : undefined}
+        tabIndex={hasDetail ? 0 : undefined}
+        onKeyDown={hasDetail ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } } : undefined}
+        style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', color, fontSize: '0.92rem', cursor: hasDetail ? 'pointer' : 'default', userSelect: 'none', alignItems: 'baseline' }}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {hasDetail && (
+            <span style={{ color: '#64748b', fontSize: '0.7rem', display: 'inline-block', width: 10, transition: 'transform 0.15s ease', transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+          )}
+          <span>{label}</span>
+        </span>
+        <span>{negative ? '−' : ''}{fmt(amount)}</span>
+      </div>
+      {expanded && hasDetail && (
+        <div style={{ marginTop: 4, marginBottom: 6, marginLeft: indent ?? 16, overflowX: 'auto', maxHeight: 240, overflowY: 'auto' }}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function bankBadge(bank) {
+  if (bank === 'TBC') return <span style={{ background: 'rgba(59,130,246,0.18)', color: '#60a5fa', padding: '1px 6px', borderRadius: 4, fontSize: '0.75rem' }}>TBC</span>;
+  if (bank === 'BOG') return <span style={{ background: 'rgba(249,115,22,0.18)', color: '#fb923c', padding: '1px 6px', borderRadius: 4, fontSize: '0.75rem' }}>BOG</span>;
+  return <span>{bank}</span>;
+}
+
 function FlowRow({ label, value, hint, bold, danger, size }) {
   const fontSize = size === 'small' ? '0.85rem' : '0.92rem';
   const color = danger ? '#ef4444' : (bold ? '#f1f5f9' : '#cbd5e1');
@@ -593,6 +629,8 @@ export default function Home({ retailSales, fromDate, fromTime, toDate, toTime, 
 
   // Per-store cash till — uses active period from picker, falls back to last 14 days
   const [cashTill, setCashTill] = useState(null);
+  const [cashTillExpanded, setCashTillExpanded] = useState({});
+  const toggleCashTill = (key) => setCashTillExpanded((p) => ({ ...p, [key]: !p[key] }));
   useEffect(() => {
     let active = true;
     const qs = periodActive ? `?from=${periodFrom}&to=${periodTo}` : '';
@@ -1124,6 +1162,9 @@ export default function Home({ retailSales, fromDate, fromTime, toDate, toTime, 
         const periodLabel2 = `${fmtDayKa(cashTill.period.from)} → ${fmtDayKa(cashTill.period.to)}`;
         const storeEntries = Object.entries(stores).filter(([_, s]) => (s.cash_sales || 0) > 0 || (s.cash_deposits || 0) > 0);
         if (storeEntries.length === 0) return null;
+        const thS = { color: '#94a3b8', textAlign: 'left', padding: '4px 6px', fontWeight: 500, borderBottom: '1px solid rgba(255,255,255,0.08)', fontSize: '0.78rem' };
+        const tdS = { padding: '4px 6px', color: '#e2e8f0', borderBottom: '1px solid rgba(255,255,255,0.04)' };
+        const tblS = { width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', minWidth: 220 };
         return (
           <div style={{
             background: 'rgba(255,255,255,0.03)',
@@ -1141,17 +1182,67 @@ export default function Home({ retailSales, fromDate, fromTime, toDate, toTime, 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
               {storeEntries.map(([name, s]) => {
                 const tillColor = s.till_change >= 0 ? '#10b981' : '#ef4444';
+                const salesLines = s.sales_lines || [];
+                const depositLines = s.deposit_lines || [];
+                const salesTable = salesLines.length > 0 ? (
+                  <table style={tblS}>
+                    <thead><tr>
+                      <th style={thS}>დღე</th>
+                      <th style={{ ...thS, textAlign: 'right' }}>თანხა</th>
+                    </tr></thead>
+                    <tbody>
+                      {salesLines.map((r, i) => (
+                        <tr key={i}>
+                          <td style={tdS}>{fmtDayKa(r.day)}</td>
+                          <td style={{ ...tdS, textAlign: 'right' }}>{fmtGel2(r.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : null;
+                const depositTable = depositLines.length > 0 ? (
+                  <table style={tblS}>
+                    <thead><tr>
+                      <th style={thS}>გაყიდვის დღე</th>
+                      <th style={thS}>ბანკი</th>
+                      <th style={{ ...thS, textAlign: 'right' }}>თანხა</th>
+                    </tr></thead>
+                    <tbody>
+                      {depositLines.map((r, i) => (
+                        <tr key={i}>
+                          <td style={tdS}>
+                            {fmtDayKa(r.day)}
+                            {r.bank_day && r.bank_day !== r.day && (
+                              <div style={{ fontSize: '0.72rem', color: '#64748b' }}>ბანკში: {fmtDayKa(r.bank_day)}</div>
+                            )}
+                          </td>
+                          <td style={tdS}>{bankBadge(r.bank)}</td>
+                          <td style={{ ...tdS, textAlign: 'right' }}>{fmtGel2(r.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : null;
                 return (
                   <div key={name}>
                     <div style={{ color: '#f1f5f9', fontSize: '1rem', fontWeight: 600, marginBottom: 8 }}>{name}</div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', color: '#cbd5e1', fontSize: '0.92rem' }}>
-                      <span>გაიყიდა ნაღდად</span>
-                      <span>{fmtGel2(s.cash_sales)}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', color: '#94a3b8', fontSize: '0.92rem' }}>
-                      <span>− ბანკში ჩაიდო</span>
-                      <span>−{fmtGel2(s.cash_deposits)}</span>
-                    </div>
+                    <CashTillRow
+                      label="გაიყიდა ნაღდად"
+                      amount={s.cash_sales}
+                      expanded={!!cashTillExpanded[`sales_${name}`]}
+                      onToggle={() => toggleCashTill(`sales_${name}`)}
+                    >
+                      {salesTable}
+                    </CashTillRow>
+                    <CashTillRow
+                      label="− ბანკში ჩაიდო"
+                      amount={s.cash_deposits}
+                      negative
+                      expanded={!!cashTillExpanded[`deposits_${name}`]}
+                      onToggle={() => toggleCashTill(`deposits_${name}`)}
+                    >
+                      {depositTable}
+                    </CashTillRow>
                     <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', margin: '6px 0' }} />
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', color: tillColor, fontWeight: 700, fontSize: '1.05rem' }}>
                       <span>საფიცარში დარჩა</span>
@@ -1167,12 +1258,76 @@ export default function Home({ retailSales, fromDate, fromTime, toDate, toTime, 
                 {totals.till_change > 0 ? '+' : ''}{fmtGel2(totals.till_change)}
               </span>
             </div>
-            {totals.cash_supplier_paid > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', color: '#94a3b8', fontSize: '0.92rem' }}>
-                <span>− ხელით მომწოდებლებს ნაღდად</span>
-                <span style={{ color: '#f87171' }}>−{fmtGel2(totals.cash_supplier_paid)}</span>
-              </div>
-            )}
+            {totals.cash_supplier_paid > 0 && (() => {
+              const lines = totals.supplier_paid_lines || [];
+              const supplierTable = lines.length > 0 ? (
+                <table style={tblS}>
+                  <thead><tr>
+                    <th style={thS}>თარიღი</th>
+                    <th style={thS}>მომწოდებელი</th>
+                    <th style={{ ...thS, textAlign: 'right' }}>თანხა</th>
+                  </tr></thead>
+                  <tbody>
+                    {lines.map((r, i) => (
+                      <tr key={i}>
+                        <td style={tdS}>{fmtDayKa(r.date)}</td>
+                        <td style={tdS}>{r.name}</td>
+                        <td style={{ ...tdS, textAlign: 'right', color: '#f87171' }}>−{fmtGel2(r.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : null;
+              return (
+                <CashTillRow
+                  label="− ხელით მომწოდებლებს ნაღდად"
+                  amount={totals.cash_supplier_paid}
+                  negative
+                  valueColor="#f87171"
+                  expanded={!!cashTillExpanded.supplier_paid}
+                  onToggle={() => toggleCashTill('supplier_paid')}
+                  indent={0}
+                >
+                  {supplierTable}
+                </CashTillRow>
+              );
+            })()}
+            {totals.cash_expenses_paid > 0 && (() => {
+              const lines = totals.cash_expense_lines || [];
+              const expenseTable = lines.length > 0 ? (
+                <table style={tblS}>
+                  <thead><tr>
+                    <th style={thS}>თარიღი</th>
+                    <th style={thS}>კატეგორია</th>
+                    <th style={thS}>კომენტარი</th>
+                    <th style={{ ...thS, textAlign: 'right' }}>თანხა</th>
+                  </tr></thead>
+                  <tbody>
+                    {lines.map((r, i) => (
+                      <tr key={i}>
+                        <td style={tdS}>{fmtDayKa(r.date)}</td>
+                        <td style={tdS}>{r.category_label}</td>
+                        <td style={{ ...tdS, fontSize: '0.78rem', color: '#94a3b8' }}>{r.comment}</td>
+                        <td style={{ ...tdS, textAlign: 'right', color: '#f87171' }}>−{fmtGel2(r.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : null;
+              return (
+                <CashTillRow
+                  label="− ნაღდი ხარჯი (ხელფასი / ქირა / სხვა)"
+                  amount={totals.cash_expenses_paid}
+                  negative
+                  valueColor="#f87171"
+                  expanded={!!cashTillExpanded.cash_expenses}
+                  onToggle={() => toggleCashTill('cash_expenses')}
+                  indent={0}
+                >
+                  {expenseTable}
+                </CashTillRow>
+              );
+            })()}
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.10)', marginTop: 6, paddingTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <span style={{ color: '#f1f5f9', fontWeight: 600, fontSize: '0.95rem' }}>რეალური სალაროს ცვლილება</span>
               <span style={{ color: totals.real_till_change >= 0 ? '#10b981' : '#ef4444', fontWeight: 700, fontSize: '1.2rem' }}>
@@ -1324,6 +1479,120 @@ export default function Home({ retailSales, fromDate, fromTime, toDate, toTime, 
             )}
             <div style={{ color: '#64748b', fontSize: '0.78rem', marginTop: 4, fontStyle: 'italic' }}>
               მომწოდებლების გადახდა ცალკე ანგარიშია — COGS-ში უკვე ჩათვლილია საქონლის ფასი, ე.ი. დუბლი არ ხდება.
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ----- Month-end summary: where did the money go ----- */}
+      {periodActive && moneyFlow && moneyFlow.day_count > 1 && moneyFlow.profit_breakdown && (() => {
+        const pb = moneyFlow.profit_breakdown;
+        const profit = pb.real_net_profit || 0;
+        const netPurchases = (moneyFlow.info.waybills_regular_total || 0) + (moneyFlow.info.waybills_returns_total || 0);
+        const inventoryChange = netPurchases - (pb.cogs || 0);
+        const ownerPocket = moneyFlow.out.owner_withdraw || 0;
+        const tillResidual = cashTill?.totals?.real_till_change || 0;
+        const apChange = moneyFlow.ap_change || 0;
+        const bankNet = moneyFlow.bank_net || 0;
+
+        const apUp = apChange > 0;
+        const tillNeg = tillResidual < -50;
+        const bankUp = bankNet > 0;
+        let verdict, verdictColor;
+        if (apUp && tillNeg) {
+          verdict = '⚠️ ვალი იზრდება და სალაროდან გვაკლია — გადასამოწმებელია';
+          verdictColor = '#ef4444';
+        } else if (!apUp && bankUp && inventoryChange >= 0) {
+          verdict = '✅ ბიზნესი იზრდება — მოგება ბალანსირებულად ჩაიდო ბანკში და მარაგში';
+          verdictColor = '#10b981';
+        } else if (apUp || tillNeg) {
+          verdict = '🟡 მოგებაა, მაგრამ ფული თაროზე ან ვალში გადადის';
+          verdictColor = '#fbbf24';
+        } else {
+          verdict = 'ℹ️ მონაცემები შერეულია — გადახედე ცალკეულ ციფრს';
+          verdictColor = '#94a3b8';
+        }
+
+        const rowS = { display: 'flex', justifyContent: 'space-between', padding: '8px 0', alignItems: 'baseline', borderBottom: '1px solid rgba(255,255,255,0.05)', gap: 12 };
+        const labelS = { color: '#cbd5e1', fontSize: '0.95rem' };
+        const hintS = { color: '#64748b', fontSize: '0.78rem', display: 'block', marginTop: 2 };
+
+        return (
+          <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '18px 20px', marginBottom: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#f1f5f9' }}>
+                🎯 თვის შემაჯამე — ფული სად წავიდა
+              </h3>
+              <div style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
+                {fmtDayKa(periodFrom)} → {fmtDayKa(periodTo)} ({moneyFlow.day_count} დღე)
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 14, padding: '12px 14px', background: 'rgba(16,185,129,0.06)', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8 }}>
+              <span style={{ color: '#94a3b8', fontSize: '0.92rem' }}>წმინდა მოგება (P&L)</span>
+              <span style={{ color: profit >= 0 ? '#10b981' : '#ef4444', fontSize: '1.3rem', fontWeight: 700 }}>
+                {profit >= 0 ? '+' : ''}{fmtGel2(profit)}
+              </span>
+            </div>
+
+            <div style={{ color: '#94a3b8', fontSize: '0.85rem', marginBottom: 8 }}>ფული ფაქტობრივად სად მოექცა:</div>
+
+            <div style={rowS}>
+              <div>
+                <span style={labelS}>💵 ჯიბეში (შენ აიღე)</span>
+                <span style={hintS}>სამეურნეო ხარჯიდან, შიდა გადარიცხვა გამოაკლდა</span>
+              </div>
+              <span style={{ color: '#fbbf24', fontWeight: 600, fontSize: '1.05rem' }}>
+                {ownerPocket > 0 ? '+' : ''}{fmtGel2(ownerPocket)}
+              </span>
+            </div>
+
+            <div style={rowS}>
+              <div>
+                <span style={labelS}>📦 საქონელში (თაროზე)</span>
+                <span style={hintS}>ნაყიდი ზედნადებები − გაყიდულის COGS</span>
+              </div>
+              <span style={{ color: inventoryChange > 0 ? '#cbd5e1' : '#10b981', fontWeight: 600, fontSize: '1.05rem' }}>
+                {inventoryChange > 0 ? '+' : ''}{fmtGel2(inventoryChange)}
+              </span>
+            </div>
+
+            <div style={rowS}>
+              <div>
+                <span style={labelS}>🪙 სალაროებში / უხსნელი</span>
+                <span style={hintS}>ნაღდი ფული, ბანკში/ხარჯში ვერ ვიპოვეთ</span>
+              </div>
+              <span style={{ color: Math.abs(tillResidual) <= 50 ? '#10b981' : '#fbbf24', fontWeight: 600, fontSize: '1.05rem' }}>
+                {tillResidual > 0 ? '+' : ''}{fmtGel2(tillResidual)}
+              </span>
+            </div>
+
+            <div style={rowS}>
+              <div>
+                <span style={labelS}>📈 ვალში გადადო</span>
+                <span style={hintS}>მომწოდებლების ვალის ცვლილება</span>
+              </div>
+              <span style={{ color: apChange > 0 ? '#ef4444' : '#10b981', fontWeight: 600, fontSize: '1.05rem' }}>
+                {apChange > 0 ? '+' : ''}{fmtGel2(apChange)}
+              </span>
+            </div>
+
+            <div style={{ ...rowS, borderBottom: 'none' }}>
+              <div>
+                <span style={labelS}>🏦 ბანკში დარჩა</span>
+                <span style={hintS}>TBC + BOG ნაშთის ცვლილება</span>
+              </div>
+              <span style={{ color: bankNet >= 0 ? '#10b981' : '#ef4444', fontWeight: 600, fontSize: '1.05rem' }}>
+                {bankNet > 0 ? '+' : ''}{fmtGel2(bankNet)}
+              </span>
+            </div>
+
+            <div style={{ color: verdictColor, fontSize: '0.98rem', fontWeight: 600, padding: '12px 14px', background: 'rgba(255,255,255,0.04)', borderRadius: 6, marginTop: 14 }}>
+              {verdict}
+            </div>
+
+            <div style={{ color: '#64748b', fontSize: '0.78rem', marginTop: 8, fontStyle: 'italic' }}>
+              ⓘ ეს 5 ცხრილი მოგებას 1:1 არ ჯამდება — სხვადასხვა შრე ფინანსური სურათისა. სრული თვისთვის მონიშნე 1-დან 30/31-მდე.
             </div>
           </div>
         );
