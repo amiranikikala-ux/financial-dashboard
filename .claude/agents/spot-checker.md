@@ -59,15 +59,33 @@ What number / KPI / breakdown is being verified? Write it down explicitly:
 - Period (date range)
 - Scope (which store / supplier / category)
 - Claimed value
+- **Surface** — is the claim about a raw API field, or a UI-displayed value? These often differ.
 
-### Step 2 — Find the canonical source
+### Step 2 — Project context awareness (CRITICAL — do BEFORE source comparison)
+
+Before computing any diff or labeling drift, check whether the claim involves a documented netting, transformation, or UI-side adjustment. False-positive "stale claim" / "drift" verdicts happen when the dashboard intentionally transforms raw API data for display.
+
+1. **Search project memory** for keywords from the claim:
+   - Memory directory: `C:\Users\tengiz\.claude\projects\C--financial-dashboard\memory\`
+   - Read `MEMORY.md` index first, then any `project_*.md` matching the topic
+   - Common netting keywords: `samurneo`, `internal transfer`, `netting`, `lag-fix`, `cashback`, `cash deposit`, `owner withdraw`
+2. **If claim references UI display** (Home page, dashboard widget):
+   - Read the relevant `C:\financial-dashboard\rs-dashboard\src\*.jsx` to find JS-side aggregation / netting logic
+   - Common JS-only transformations: same-month samurneo netting, owner-withdraw reduction, cashback inclusion in BOG total, cash residual computation
+   - Look for arithmetic on `agg.in.bank_total` / `agg.out.bank_total` AFTER the API fetch
+3. **If documented adjustment exists** (memory entry OR JS line):
+   - State explicitly: "Apparent diff of X ₾ is explained by documented [adjustment name] at [file:line or memory pointer]"
+   - Treat this as INTENTIONAL behavior, not drift
+4. **If no documented adjustment found** AND diff > 0.01 — proceed to Layer 1 source comparison treating it as real drift.
+
+### Step 3 — Find the canonical source
 
 NEVER verify from data.json or a derived JSON. Walk to the source:
 - Excel files in `Financial_Analysis/`
 - Parquet caches (verify against original Excel if drift suspected)
 - RS.ge live API responses (saved under `cache/`)
 
-### Step 3 — Spot-check 5 representative rows
+### Step 4 — Spot-check 5 representative rows
 
 Pick rows that span:
 - Different stores (if applicable)
@@ -81,7 +99,7 @@ For each row, show:
 - How it flows into the claimed metric
 - Expected contribution to total
 
-### Step 4 — Compute independently
+### Step 5 — Compute independently
 
 Don't trust the pipeline's computation. Re-compute from the raw source:
 
@@ -91,9 +109,9 @@ raw_total = sum(row[amount_col] for row in source_rows if filter_matches(row))
 diff = abs(claimed_value - raw_total)
 ```
 
-If diff > 0.01 — investigate. Find the cause before reporting.
+If diff > 0.01 — investigate. Find the cause before reporting. Cross-reference Step 2 findings: is the diff documented netting, or a real bug?
 
-### Step 5 — Check for silent gaps
+### Step 6 — Check for silent gaps
 
 Scan for skipped rows, ignored files, unparsed entries:
 - Did the loader skip any rows? Show count + reason + sample.
@@ -102,7 +120,7 @@ Scan for skipped rows, ignored files, unparsed entries:
 
 If yes — surface them. Do NOT proceed to PROOFED state with unaccounted rows.
 
-### Step 6 — Output
+### Step 7 — Output
 
 One of three verdicts:
 
@@ -132,6 +150,7 @@ One of three verdicts:
 - 🚫 Reporting "OK" when any skipped rows exist
 - 🚫 Treating false-zero (0 ₾) as real zero without source confirmation
 - 🚫 Hedge words ("შესაძლოა", "სავარაუდოდ", "maybe"). Either PROOFED, PARTIAL with explicit gap, or FAILED with root cause.
+- 🚫 **Labeling "drift" / "stale claim" / "FAILED" without first running Step 2 (project context awareness).** A documented netting in memory or `.jsx` UI logic is NOT drift — it is intentional dashboard behavior. Skipping Step 2 produces false-positive verdicts that mislead the owner.
 
 ## Output to caller
 
