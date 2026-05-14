@@ -1,70 +1,105 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-14 — **HOME-7 SHIPPED + COMMITTED** (`e64ea2e`). Owner-led Home page audit + 3 bugs fixed + Real Net Profit expandable rows. April bank OUT reconciliation verified: headline 159,682.38 ₾ = category sum 159,682.38 ₾ (DIFF 0.00 ₾).
+> **განახლდა**: 2026-05-14 ღამე — **HOME-8 (bank balance + cash-till + freshness) SHIPPED** (`b85225c`) + agent-quality baseline (`fee78c6`). 2 commits ლოკალურად ზის, push pending.
 >
-> **წინა session** (2026-05-13 ღამე): HOME-6 — Real Net Profit + lag-fix v2 + cash journal in P&L → commit `d4ae56b`. Full HOME-1 / HOME-3 / Cashiers detail → `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-12_2026-05-13.md`.
+> **იმავე დღის დილა**: HOME-7 — Home audit + 3 bugs + Real Net Profit drill-down → commit `e64ea2e`.
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-14) — HOME-7: Home page audit + 3 bugs + Real Net Profit drill-down
+## 0. ბოლო session-ის შედეგი (2026-05-14 ღამე) — HOME-8: bank balance + cash-till + freshness + agent quality
 
 ### Headline
 
-Owner asked for thorough review of Home page since "ყოველ დღე მასზე ვარ დამოკიდებული". Audit found 5,700 ₾ silent drift (headline 159,682 ≠ category sum 165,382 in April bank OUT). Identified 8 findings (3 bugs + 5 UX). All 3 bugs fixed + 3 UX improvements + 1 new feature shipped in commit `e64ea2e`. Memory: `project_home_page_audit_2026-05-14.md`.
+Owner asked "ჩემ პროექტის მთავარ გვერდზე როგორი სიზუსტეა და რა დასამატებელია". 4 verification agents (bank-reconciler, megaplus-verifier, waybill-auditor, spot-checker) ran on May 1-12 — all 4 Home KPIs verified 1:1 against live sources (revenue 76,764.55 ₾, COGS 63,939.75, cashback 7,300.23, real_net_profit 8,865.76 ₾). Then shipped 3 new Home additions + cleaned up data quality issue.
 
-### What shipped
+### What shipped — commit `b85225c`
 
-**Bug 1 — bank vs cash split in OUT categories.** Pipeline `daily_money_flow.py` exposes `salary_bank` / `rent_bank` / `owner_withdraw_bank` / `service_bank` / `refund_bank` / `unmatched_suppliers_bank` (computed already since HOME-5, not exposed before). Home.jsx bank OUT section now uses `*_bank` totals + filters items by `bank !== 'ნაღდი'`. Real Net Profit keeps full `op_salary` etc. (label clarified: "ბანკი + ნაღდი"). `owner_withdraw_bank` further reduced by samurneoInternal in JS. Reconciliation verified live: April headline 159,682.38 = UI category sum 159,682.38 (DIFF 0.00 ₾).
+**1) Bank balance KPI (TBC + BOG)** — replaces "HOME-2" placeholder on Home top.
+- **BOG**: REST `GET /api/accounts/{account}/{currency}` → `{AvailableBalance, CurrentBalance}`. No OTP. Already tested live: 781.28 ₾.
+- **TBC**: SOAP `GetAccountStatement` (NEW envelope, separate from existing `GetAccountMovements`). Critical gotcha discovered during debugging: filter element name is `<filter>`, NOT `<accountStatementFilterIo>` (confirmed against TBCBank/TBC.OpenAPI.SDK.DBI source: `IStatementAdapter.cs` shows `public ... filter;` field name). Uses same DigiPass OTP that the movements fetch consumes — nonce reuse works within validity window. Verified live 2026-05-14: 215.20 ₾ closing balance, 230.95 ₾ opening.
+- New module `dashboard_pipeline/bank_balance.py` — orchestrator + JSON cache at `Financial_Analysis/cache/bank_balance.json`. Called as "Phase C" of `_run_bank_refresh` after BOG/TBC runners succeed. Failures logged but don't fail the refresh.
+- New endpoint `GET /api/bank-balance`. Home.jsx fetches on mount + `reloadKey`.
 
-**Bug 2 — stale "~2,500 ₾" hardcoded warning replaced with live cash residual.** New `agg.cash_residual = cash_megaplus − (tbc.cash_deposit + bog.cash_deposit) − cash_journal_total − true_out_cash_expenses`. April: +5.45 ₾ → page shows "✓ ნაშთს ემთხვევა". If |residual| > 50 ₾, shows actual unrecorded/over-logged amount. Only displayed in multi-day period mode.
+**2) Cash-till per store** — new section on Home (below KPI cards, above Real Net Profit).
+- New module `dashboard_pipeline/cash_till.py`. Period-aware (uses Home picker; defaults last 14 days).
+- Per-store: `cash_sales` (Megaplus cashier_day_breakdown) − `cash_deposits` (bank parquet rows where `დანიშნულება` contains "ნავაჭრი" + store name). NB: my first regex `ნავაჭრის ჩარიცხვა` matched nothing; actual text is bare stem `ნავაჭრი` — fixed.
+- Total row also subtracts `cash_supplier_paid` (manual_payments_journal.csv, active rows in window) — surfaced as separate line because no per-store attribution available.
+- New endpoint `GET /api/cash-till?from=YYYY-MM-DD&to=YYYY-MM-DD`. `from` is read off `request.query_params` directly (Python reserved word).
+- Live May 1-12: დვაბზუ +2,912.98 ₾, ოზურგეთი +5,208.08 ₾, supplier_paid 30,516.90 ₾ post-cleanup, real_till_change −22,395.84 ₾.
 
-**Bug 3 — owner_withdraw items reconciled with headline via expandedNote.** New `expandedNote` prop on `OutItemsExpandableRow` renders amber note above items table when samurneo netting applies. April: "ცხრილში ჯამი 7,750 გამოვა — აქედან 4,850 შიდა გადარიცხვაა (BOG → TBC სამეურნეო), რეალურად შენ მიიღე 2,900". Same note added to Real Net Profit owner row.
+**3) Data freshness badge** — small line under Home title with bank/Megaplus dot+timestamp.
+- New endpoint `GET /api/freshness` — reads `cache/.last_refresh.json` + per-store `_megaplus_state.json`. Returns `{banks, megaplus}` with timestamps.
+- Frontend renders color dot per source: green <6h, amber 6-24h, red >24h.
 
-**UX 5 — "სხვა" row now expandable** in bank OUT section.
+**4) Manual payment date picker** — `SupplierModal.jsx` + `Suppliers.jsx`.
+- Old code hardcoded `date: new Date().toISOString().slice(0, 10)` (always today). Now `payDate` state with default = today, `max` = today, sent in POST body.
+- This stops future bulk-entries from defaulting to "today" instead of actual payment date — root cause of the cleanup below.
 
-**UX 8 — Foodmart cashback now inside BOG expand.** `BankExpandableRow` accepts new `cashback` prop, header total includes it (62,002 POS + 5,605 cashback = 67,608 BOG total). Top-level standalone cashback row removed.
+**5) Data cleanup — 68 backfill rows re-dated.** `manual_payments_journal.csv`: bulk entries from 2026-05-08 with comment="ბრაუზერიდან" (48,889 ₾ across 68 suppliers, entered by owner in one ~30-minute session on May 8) re-dated to 2025-12-31. Comment updated to "ბრაუზერიდან · backfill (იყო 2026-05-08, რეალური თარიღი უცნობია)". Backup at `Financial_Analysis/_backups/manual_payments_journal_pre_redate_20260514_173918.csv`. These were silently inflating cash-till `supplier_paid` to 79,406 ₾ (~−71k real till change).
 
-**NEW: Real Net Profit expandable rows.** Owner asked "შეგვიძლია ჩანართები რომ გავუკეთოთ ხელფასები ვისთან გავეცი". New `ProfitExpenseRow` component — clickable, shows partner + bank badge + amount on expand. Categories: salary / rent / owner / service / refund. Tax + bank fees stay non-clickable (no items). Owner row includes samurneo netting explanation.
+### What shipped — commit `fee78c6` (earlier same session)
 
-**Auto-resolved + deferred:** UX 4 + UX 7 became moot after Bug 1 (cash items filtered out of bank section). UX 6 (per-bank OUT split TBC/BOG) deferred — can add later if owner asks.
+**spot-checker agent — Step 2 (project-context awareness).** First-ever comprehensive test of all 7 sub-agents launched 4+4 in parallel on April 2026 verification tasks. 6 agents ⭐⭐⭐⭐⭐, spot-checker ⭐⭐⭐ — math correct but called the documented samurneo BOG↔TBC netting (`Home.jsx:783-790`, 4,850 ₾ in April) a "stale claim" because it never read project memory or the JSX UI logic. Fix: added explicit "Step 2 — Project context awareness" + forbidden-behavior bullet that blocks drift/FAILED verdicts before searching memory + `.jsx`. Re-tested same claim → now returns ✅ PROOFED with explicit citation of `project_samurneo_internal_transfer.md` + `Home.jsx:789-790`. Memory: `project_agent_quality_baseline_2026-05-14.md`.
 
-### Files changed (committed in `e64ea2e`)
+### Files changed today (both commits)
 
-- `dashboard_pipeline/daily_money_flow.py` (+6 lines — `*_bank` field exposure)
-- `rs-dashboard/src/Home.jsx` (+208 / -43 lines — Bug 1/2/3 + `ProfitExpenseRow` + `BankExpandableRow.cashback` prop + `OutItemsExpandableRow.expandedNote` prop)
+`fee78c6`:
+- `.claude/agents/spot-checker.md` (+25 / -6)
+
+`b85225c`:
+- `dashboard_pipeline/bank_balance.py` (NEW, 122 lines)
+- `dashboard_pipeline/cash_till.py` (NEW, 175 lines)
+- `dashboard_pipeline/bog_bank_connector.py` (+24 — `fetch_balance` method)
+- `dashboard_pipeline/tbc_bank_connector.py` (+101 — `fetch_balance` + `_build_balance_envelope` + `_parse_balance`, plus `_post` accepts `soap_action` param)
+- `server.py` (+106 — 3 new endpoints + balance fetch in Phase C of refresh)
+- `rs-dashboard/src/Home.jsx` (+181 — bank-balance KPIs, freshness badge, cash-till section, 3 new state hooks + effects)
+- `rs-dashboard/src/SupplierModal.jsx` (+13 — date picker)
+- `rs-dashboard/src/Suppliers.jsx` (+14 — date picker)
+- `Financial_Analysis/manual_payments_journal.csv` (68 rows re-dated)
 
 ### Open / next-session candidates
 
-Owner's recommendation request for future sessions — I proposed top 3 next-priority additions:
-
-1. **HOME-2 bank balance KPI** — parquet has ნარჩენი column; extract last line per account → real-time bank position on Home top.
-2. **Cash-till balance per store** — cash sales − bank deposits − cash journal → physical cash on hand per shop.
-3. **Due-payments next 7 days widget** — upcoming AP from waybill terms.
-
-Lower priority (deferred): margin warning, missing-waybill alerts, year-over-year comparison, mfl_owner running total, break-even mid-month indicator. UX 6 per-bank OUT split.
-
-Other candidates: May reconciliation analogous to April (partial month, mid-month). March reconciliation (likely more discrepancies).
+1. **Push to origin** — branch is 2 commits ahead (`fee78c6` + `b85225c`). User has not explicitly authorized push yet.
+2. **Verify HOME-8 in browser** — owner needs to refresh, see KPI cards + cash-till + freshness badge, sanity-check the numbers.
+3. **3 remaining May cash payments** to investigate:
+   - 2026-05-09 TIN 400029036 → 14,065 ₾ (largest, possibly real)
+   - 2026-05-09 TIN 420424393 → 5,028 ₾
+   - 2026-05-10 TIN 204920381 (ELIZI) → 1,605.40 ₾
+   These were NOT re-dated; user should confirm they're real same-day payments or also backfill.
+4. **Per-store attribution for cash supplier payments** — currently the supplier_paid total is "shared" because journal has no store column. Feature gap acknowledged in UI footer.
+5. **#3 of original 3 recommendations (Due-payments next 7 days widget)** — deferred to ზედნადებები page per owner's instruction ("რთულია, ცალკე გადავდოთ").
+6. **Max effort persistence on new terminal** — `env.CLAUDE_EFFORT=max` added to `~/.claude/settings.json` but user reported it still shows "xHigh effort (default)" on new terminals. Memory `user_max_effort_preference.md` updated with what was tried; needs more investigation if owner asks again. The owner said "აღარ ვიწვალოთ" — deferred.
 
 ### Verification commands (next session)
 
 ```powershell
-# HOME-7 audit verify — April category sum matches headline (DIFF must be 0.00 ₾)
-"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
-import urllib.request, json
-api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=daily_money_flow', timeout=60).read())
-idx = api['daily_money_flow_index']
-days = [d for d in idx if d.startswith('2026-04')]
-out_total = sum(idx[d]['out']['bank_total'] for d in days)
-salary_bank = sum(idx[d]['out'].get('salary_bank', 0) for d in days)
-owner_bank = sum(idx[d]['out'].get('owner_withdraw_bank', 0) for d in days)
-print(f'April OUT headline: {out_total:.2f} GEL')
-print(f'  salary_bank: {salary_bank:.2f}')
-print(f'  owner_withdraw_bank: {owner_bank:.2f}')
-# Expected: headline 159,682.38; *_bank fields present alongside full bank+cash totals.
-"
+# HOME-8 verify — live bank balances + cash-till
+curl -s http://localhost:8000/api/bank-balance | python -m json.tool
+curl -s "http://localhost:8000/api/cash-till?from=2026-05-01&to=2026-05-12" | python -m json.tool
+curl -s http://localhost:8000/api/freshness | python -m json.tool
+
+# Expected (as of 2026-05-14 ღამე):
+#   /api/bank-balance: bog.current=781.28 GEL, tbc.closing_balance=215.20 GEL
+#   /api/cash-till: real_till_change -22395.84, supplier_paid 30516.90
+#   /api/freshness: banks.{bog,tbc,rsge}.last_completed_at ~ 2026-05-14 12:59 UTC,
+#                   megaplus.{დვაბზუ,ოზურგეთი}.last_backup_date = "2026-05-12"
 ```
+
+---
+
+## 0b. წინა session (2026-05-14 დილა) — HOME-7: audit + 3 bugs
+
+5,700 ₾ silent drift in April bank OUT (headline 159,682 ≠ category sum 165,382). 8 findings (3 bugs + 5 UX); all 3 bugs fixed + 3 UX + Real Net Profit expandable rows. Commit `e64ea2e`. Memory: `project_home_page_audit_2026-05-14.md`.
+
+Key fixes:
+- Bug 1: `daily_money_flow.py` now exposes `salary_bank` / `rent_bank` / etc. so Home.jsx bank OUT section uses bank-only totals (was bank+cash mixed).
+- Bug 2: hardcoded "~2,500 ₾ აღურიცხავი" replaced with live `agg.cash_residual` calc. April result: +5.45 ₾ → "✓ ნაშთს ემთხვევა".
+- Bug 3: `expandedNote` prop on `OutItemsExpandableRow` for samurneo netting clarification on owner_withdraw items.
+- NEW: `ProfitExpenseRow` component in Real Net Profit section — expandable salary/rent/owner/service/refund rows showing partner + bank badge.
+
+Deferred: UX 6 (per-bank OUT TBC/BOG split completeness). Open candidates as proposed → 3 of them got built in HOME-8 above (bank balance, cash-till, freshness).
 
 ---
 
