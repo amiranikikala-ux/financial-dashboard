@@ -1096,6 +1096,7 @@ def _project_waybill_row(item):
         "type": item.get("type"),
         "effective_amount": item.get("effective_amount"),
         "delivery_location": item.get("delivery_location"),
+        "origin_location": item.get("origin_location"),
         "store": item.get("store"),
         "is_return": bool(item.get("is_return")),
     }
@@ -1840,7 +1841,7 @@ def _build_waybills_response(
     # Fallback: pipeline-generated cache may be older than this code and
     # missing the store/is_return enrichment. Compute on the fly so KPIs and
     # the store filter work without waiting for the next pipeline regen.
-    needs_store = any(not row.get("store") and row.get("delivery_location") for row in projected_rows[:50])
+    needs_store = any(not row.get("store") and (row.get("delivery_location") or row.get("origin_location")) for row in projected_rows[:50])
     for row in projected_rows:
         row["is_return"] = "დაბრუნება" in str(row.get("type") or "")
     if needs_store:
@@ -1853,12 +1854,19 @@ def _build_waybills_response(
             for row in projected_rows:
                 if not row.get("store"):
                     delivery = str(row.get("delivery_location") or "").strip()
-                    if delivery and delivery != "N/A":
+                    origin = str(row.get("origin_location") or "").strip()
+                    # Return rows: rs.ge "მიწოდების ადგილი" is the supplier
+                    # warehouse — fall back to "ტრანსპორტ. დაწყება" (our side).
+                    if row.get("is_return") and origin and origin != "N/A":
+                        store_text = origin
+                    else:
+                        store_text = delivery
+                    if store_text and store_text != "N/A":
                         row["store"] = detect_object(
                             "rs_waybill",
-                            text=delivery,
+                            text=store_text,
                             object_mapping=object_mapping,
-                            rs_location=delivery,
+                            rs_location=store_text,
                         )
         except Exception:
             pass

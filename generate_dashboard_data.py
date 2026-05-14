@@ -1280,6 +1280,7 @@ def _process_rs_suppliers(df, agg_df, rs_files, supplier_registry_cfg, script_di
         'ტიპი': 'type',
         'ეფექტური თანხა': 'effective_amount',
         'მიწოდების ადგილი': 'delivery_location',
+        'ტრანსპორტ. დაწყება': 'origin_location',
     }
 
     waybills_df = df[[c for c in safe_cols.keys() if c in df.columns]].rename(columns=safe_cols)
@@ -1287,14 +1288,22 @@ def _process_rs_suppliers(df, agg_df, rs_files, supplier_registry_cfg, script_di
 
     waybills_data = waybills_df.to_dict(orient='records')
     for _row in waybills_data:
+        _row["is_return"] = "დაბრუნება" in str(_row.get("type") or "")
         _delivery = str(_row.get("delivery_location") or "").strip()
+        _origin = str(_row.get("origin_location") or "").strip()
+        # For return waybills, rs.ge puts the SUPPLIER warehouse in
+        # "მიწოდების ადგილი" and OUR store in "ტრანსპორტ. დაწყება" — so to
+        # attribute the return to the right store we flip the source.
+        if _row["is_return"] and _origin and _origin != "N/A":
+            _store_text = _origin
+        else:
+            _store_text = _delivery
         _row["store"] = detect_object(
             "rs_waybill",
-            text=_delivery,
+            text=_store_text,
             object_mapping=object_mapping,
-            rs_location=_delivery,
-        ) if _delivery and _delivery != "N/A" else ""
-        _row["is_return"] = "დაბრუნება" in str(_row.get("type") or "")
+            rs_location=_store_text,
+        ) if _store_text and _store_text != "N/A" else ""
     supplier_waybill_lines = _build_supplier_waybill_lines(
         waybills_data, object_mapping=object_mapping
     )
@@ -1340,20 +1349,24 @@ def _build_supplier_waybill_lines(waybills_data, object_mapping=None):
         except (TypeError, ValueError):
             amount = 0.0
         wb_type = str(row.get("type") or "").strip()
+        is_return = "დაბრუნება" in wb_type
         delivery = str(row.get("delivery_location") or "").strip()
+        origin = str(row.get("origin_location") or "").strip()
+        # Return rows: flip to origin (our store), see _read_and_parse_rs.
+        store_text = origin if is_return and origin and origin != "N/A" else delivery
         store = detect_object(
             "rs_waybill",
-            text=delivery,
+            text=store_text,
             object_mapping=object_mapping,
-            rs_location=delivery,
-        ) if delivery and delivery != "N/A" else ""
+            rs_location=store_text,
+        ) if store_text and store_text != "N/A" else ""
         by_tid.setdefault(tid, []).append({
             "date": date_str,
             "waybill_number": str(row.get("waybill_number") or ""),
             "amount": amount,
             "status": status,
             "type": wb_type,
-            "is_return": "დაბრუნება" in wb_type,
+            "is_return": is_return,
             "store": store,
             "delivery_location": delivery if delivery != "N/A" else "",
         })
