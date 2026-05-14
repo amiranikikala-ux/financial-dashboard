@@ -1,14 +1,100 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-14 ღამე — **HOME-8 (bank balance + cash-till + freshness) SHIPPED** (`b85225c`) + agent-quality baseline (`fee78c6`). 2 commits ლოკალურად ზის, push pending.
+> **განახლდა**: 2026-05-15 — **HOME-9: 10-ბაგ-batch + bookkeeping review.** 12 commit pushed (`1948676` ბოლო). სერვისი გადატვირთული, freshness API ცოცხალია.
 >
-> **იმავე დღის დილა**: HOME-7 — Home audit + 3 bugs + Real Net Profit drill-down → commit `e64ea2e`.
+> წინა: 2026-05-14 ღამე HOME-8 (bank balance + cash-till + freshness) `b85225c` + agent baseline `fee78c6` + handoff `a84f2fe`.
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-14 ღამე) — HOME-8: bank balance + cash-till + freshness + agent quality
+## 0. ბოლო session-ის შედეგი (2026-05-15) — HOME-9: 10 ბაგი + bookkeeping review
+
+### Headline
+
+Owner-მა Home გვერდი თვალით გადახედა და მოგვცა 10 ცდის სია (8 confirmed + 2 verify). შემოწმდა → ცხრიდან 9 ნამდვილია, ერთს მცირე ნიუანსი ჰქონდა. დახურა მთლიანი batch ერთ სესიაში — 9 fix-commit + 1 gitignore commit + უკვე ლოკალურად მზადებული cash-till drill-down commit. push origin-ში გავიდა, სერვისი გადატვირთული. ბოლოს — bookkeeping perspective review: 60% აქვს, 10 ფუნდამენტური field აკლია.
+
+### რა shipped — commit by commit
+
+| # | Commit | რა გავაკეთე |
+|---|---|---|
+| — | `28e5966` | **Pre-existing cash-till drill-down** — წინა სესიის uncommitted work: per-store sales_lines / deposit_lines / cash_expense_lines + lag-shift (`_infer_sales_date`) + ოზურგეტი typo + supplier name_map. Home.jsx-ში CashTillRow component + expand/collapse tables. manual_payments_journal.csv: 2 ახალი backdated April row (TIN 206335223). |
+| #1+#8 | `b4f520a` | **ფუტერი + freshness dot.** Home.jsx:2198 — წავშალე ძველი "HOME-2 placeholder" ბლოკი. Home.jsx:1056 — `Math.max` → `Math.min` ბანკის წერტილზე (ცარიელი ბანკი აღარ იმალება). |
+| #7 | `7c627ef` | **freshness API partial flag.** `/api/freshness` ცარიელ მხოლოდ `last_backup_date`-ს აბრუნებდა; ახალი `last_complete_day` + `partial:bool` — cashier_hour_breakdown-დან hour ≥ 22 რულით. |
+| #3 | `36d1e90` | **Unattributed cash deposits visible.** 2 ₾ Apr 8 row-ი totals.unattributed_deposit_lines-ში იყო მაგრამ Home-ში არ რენდერდებოდა. ახალი ⚠️ amber CashTillRow ცხრილით (date / bank / purpose / amount). |
+| #4 | `16edee0` | **Unconditional lag-shift in daily_money_flow.** ძველი ვერსია 20% amount-match guard-ით → partial deposits unshifted რჩებოდა (e.g. Apr 1 ოზურგ 648.50 ₾ inflated April). ახლა cash_till.py-ის ანალოგია: დვაბზუ -1 day, ოზურგეთი Mon→Fri (-3 days), სხვა -1 day. |
+| #5 | `b728d0c` | **Refund-in excluded from headline.** `REFUND_IN_PATTERN = r"შეცდომით ჩარიცხული\|უკან დაბრუნება\|დაბრუნებული თანხა"`. Detection-ი bank_in_total-ის accumulator-ის წინ ხდება; payload-ში refund_in / refund_in_tbc / refund_in_bog / refund_in_items გამოეცა. e.g. Apr 1 1,090.69 ₾ აღარ ჯდება "ბანკში შემოვიდა"-ში. |
+| #6 | `6dfe2da` | **Return waybill store flip.** rs.ge return-ის "მიწოდების ადგილი" = მომწოდებლის სასაწყობო; "ტრანსპორტ. დაწყება" = ჩვენი. is_return → flip to origin. Updated: generate_dashboard_data.py (waybills_data + _build_supplier_waybill_lines) + api_contracts.py fallback. e.g. April 88/95 returns აღარ ვარდება "გაუნაწილებელი"-ში. |
+| #2 | `3e45894` | **Cancelled waybill count.** `effective_amount` = 0 cancelled-ისთვის (sum სწორი), მაგრამ `len(wbs_regular)` cancelled რომ ითვლიდა. ფილტრი `status != "გაუქმებული"` დაემატა wbs_today-ის შემდეგ. April 2026 5 ცალი ნაკლები. |
+| #9 | `0d7ef80` | **cash_till last_complete_day cap.** Window-ის ბოლო Megaplus-ის partial day-ს არ უნდა გადააცილებდეს — lag-shift-ი ცარიელ Megaplus-day-ზე ბანკის სრულ deposit-ს ხატავდა (e.g. May 13: sales 1,789, deposits 3,623 = -1,834 phantom). compute_cash_till(..., last_complete_day=) param, server.py-ში min across stores-ით კალკულირდება. |
+| — | `1948676` | **.gitignore** — Playwright MCP home-*.yml snapshots (machine-local). |
+
+### Files touched (delta from `a84f2fe`)
+
+```
+.gitignore                              | + 4
+dashboard_pipeline/api_contracts.py     | + 14 / - 3
+dashboard_pipeline/cash_till.py         | + 144 / - 38  (drill-down + last_complete_day)
+dashboard_pipeline/daily_money_flow.py  | + 65 / - 30   (#4 + #5 + #2)
+generate_dashboard_data.py              | + 19 / - 9    (#6 origin flip)
+rs-dashboard/src/Home.jsx               | + 240 / - 16  (CashTillRow + unattributed + freshness)
+server.py                               | + 60 / - 1    (cash-till name_map + freshness + last_complete_day)
+Financial_Analysis/manual_payments_journal.csv  | + 2 rows (owner backdated)
+```
+
+### Verification done
+
+- service restart via `/restart-service` skill — HTTP 200 ✓
+- `/api/freshness` ცოცხალი: ორივე მაღაზია `partial: true`, `last_complete_day: 2026-05-12`, `last_backup_date: 2026-05-13` ✓
+- cash_till cap smoke test: window May 1-15 no-cap till=12,115; cap=2026-05-12 till=12,150 ✓
+- syntax check: 3 .py ფაილზე `ast.parse` ✓
+- Home browser render: page loads, all sections present ✓
+
+### ⚠️ STILL OPEN — Pipeline regen საჭიროა
+
+ცვლილებები #2, #4, #5, #6 **data.json-ს ცვლის**, მაგრამ pipeline regen ჯერ არ გავუშვი. ბრაუზერი ცარიელ data.json-ს ხედავს. user-ისთვის step:
+
+```
+Home → "ხელახლა გათვლა" ღილაკი (5-10 წთ) → F5 ბრაუზერში
+```
+
+### Bookkeeping review (post-fixes) — 10 ფუნდამენტური ხარვეზი
+
+Owner-მა მოითხოვა Home გვერდის ბუღალტრული შეფასება. ვერდიქტი: **60% აქვს**.
+
+**კარგად ცოცხალია:** ნავაჭრი, COGS, ბრუტო მოგება, ხელფასი, ბანკის საკომისიო, სალაროს მოძრაობა per-store, ბანკის ნაშთები, ნაღდი მომწოდებლისთვის, ზედნადებები (in/return).
+
+**ცარიელია (next-session candidates):**
+
+1. **AP headline** — რამდენი გვმართებს ჯამში დღეს (ბუღალტრის #1 კითხვა). data.json-ში არსებობს `supplier_aging`, მაგრამ Home-ზე ცარიელია.
+2. **Inventory value** — საქონლის ნაშთის ფასი თარეშოზე. Megaplus DB-ში ცოცხალია, Home არ ცდის.
+3. **Tax obligations** — დღგ/საშემოსავლო/საქონლის: რა გვერიცხება + რა გადავიხადეთ. VAT tab არსებობს, Home headline ცარიელია.
+4. **Rent (იჯარა)** — თვის ფიქსირებული. daily_money_flow აქ `rent_out` ცდის, Home-ის Real Profit-ში drill-down გვაქვს, magrამ თვის ჯამის headline ცარიელია.
+5. **Utilities (კომუნალურები)** — დენი/წყალი/ინტერნეტი თვის ჯამი. იგივე — drill-down გვაქვს, headline არა.
+6. **Owner withdraw** — დივიდენდი ან მფლობელის გატანა თვის ცხრილი.
+7. **Net liquidity** — ბანკი + სალარო + AP (−) = რეალური ფინანსური მდგომარეობა ერთ ციფრად. ცარიელია.
+8. **MTD ცხრილი** — დღევანდელი vs თვის ციკლი. ბუღალტერი თვის ჩარჩოს ცდის; Home "დღევანდელ"-ს ცდის.
+9. **Margin %** — ბრუტო/წმინდა მარჟა ფარდობით, არა მხოლოდ ლარით.
+10. **Refund-in display** — #5 commit-ი payload-ში გადმოაქცია `refund_in_items`, Home-ში არ რენდერდება.
+
+**Plus:** დროის კონტექსტი ერევა — Home ცდის ერთდროულად: დღევანდელ ნავაჭარს, 1-12 მაი სალაროს, ცოცხალ ბანკის ნაშთს, დღევანდელ ზედნადებებს. ბუღალტერი ვერ ცდის „მაისში როგორ მივდივართ?"-ს ერთი ხედვით.
+
+### User's state
+
+- Owner თქვა: „დღეს მეყო ძალიან გადავიტვირთე". სესია დახურა.
+- Bookkeeping review-ის გაგრძელება მომდევნო სესიაში.
+
+### Next-session candidates
+
+1. **Pipeline regen + browser verify** — user step, არ მოითხოვს ჩემს ჩარევას.
+2. **AP headline + Net liquidity card** — ბუღალტრის #1 + #7. ერთ KPI ცხრილში: ბანკი + სალარო + AP. ~1-2 ჰ.
+3. **MTD layout რეფაქტორი** — Home time-context unification. დიდი UI ცვლილება.
+4. **Tax + Inventory headlines** — VAT-tab/Megaplus DB-დან headline-ის ამოღება.
+5. **Refund-in display** — payload უკვე გადმოაქცია, UI რენდერი მცირე.
+
+---
+
+## 0a. წინა session (2026-05-14 ღამე) — HOME-8: bank balance + cash-till + freshness + agent quality
 
 ### Headline
 
@@ -89,7 +175,7 @@ curl -s http://localhost:8000/api/freshness | python -m json.tool
 
 ---
 
-## 0b. წინა session (2026-05-14 დილა) — HOME-7: audit + 3 bugs
+## 0b-prev. წინა session (2026-05-14 დილა) — HOME-7: audit + 3 bugs
 
 5,700 ₾ silent drift in April bank OUT (headline 159,682 ≠ category sum 165,382). 8 findings (3 bugs + 5 UX); all 3 bugs fixed + 3 UX + Real Net Profit expandable rows. Commit `e64ea2e`. Memory: `project_home_page_audit_2026-05-14.md`.
 
