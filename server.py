@@ -695,7 +695,44 @@ async def get_cash_till(request: Request):
             org = " ".join(_PFX.sub("", (s.get("org") or "").strip()).split())
             name_map[tid] = org or tid
 
-    return compute_cash_till(cdb, start=start, end=end, supplier_name_map=name_map)
+    # Derive global last_complete_day (min across stores) from the cashier
+    # hour breakdown — same rule as /api/freshness. The cash-till view is
+    # only meaningful for days where both stores have full sales data
+    # captured; without this cap, a same-day bank deposit shifted by the
+    # 1-day lag rule pairs against a Megaplus day with only morning sales,
+    # producing a phantom "out of till" amount (~2,330 ₾ on May 13 2026).
+    chb = (data.get("retail_sales") or {}).get("cashier_hour_breakdown") or []
+    _max_hour: dict[tuple[str, str], int] = {}
+    for r in chb:
+        day_s = str(r.get("day") or "")[:10]
+        obj = r.get("object") or ""
+        if not day_s or not obj:
+            continue
+        try:
+            h = int(r.get("hour") or 0)
+        except (TypeError, ValueError):
+            continue
+        key = (obj, day_s)
+        if h > _max_hour.get(key, -1):
+            _max_hour[key] = h
+    _by_store: dict[str, list[tuple[str, int]]] = {}
+    for (obj, day_s), h in _max_hour.items():
+        _by_store.setdefault(obj, []).append((day_s, h))
+    _lcd_per_store: list[str] = []
+    for obj, days in _by_store.items():
+        for day_s, h in sorted(days, reverse=True):
+            if h >= 22:
+                _lcd_per_store.append(day_s)
+                break
+    last_complete_day = min(_lcd_per_store) if _lcd_per_store else None
+
+    return compute_cash_till(
+        cdb,
+        start=start,
+        end=end,
+        supplier_name_map=name_map,
+        last_complete_day=last_complete_day,
+    )
 
 
 @app.get("/api/freshness")

@@ -206,6 +206,7 @@ def compute_cash_till(
     start: date,
     end: date,
     supplier_name_map: dict[str, str] | None = None,
+    last_complete_day: str | None = None,
 ) -> dict:
     """Compute per-store cash till change for the [start, end] window.
 
@@ -219,6 +220,14 @@ def compute_cash_till(
     supplier_name_map
         Optional ``tax_id → org name`` lookup used to label the cash
         supplier-paid drill-down lines.
+    last_complete_day
+        ISO date string of the last day for which Megaplus data is fully
+        loaded across all stores. When supplied, the effective end is
+        capped at this day so that the lag-shift logic doesn't pair
+        complete bank deposits against partial / missing Megaplus sales —
+        which previously produced phantom "outgoing till" amounts at the
+        window edge (e.g. 2,330 ₾ on May 13 because a May 14 bank deposit
+        shifted onto a Megaplus day with only morning sales captured).
 
     Returns
     -------
@@ -227,6 +236,9 @@ def compute_cash_till(
     """
     s_iso = start.strftime("%Y-%m-%d")
     e_iso = end.strftime("%Y-%m-%d")
+    if last_complete_day and last_complete_day < e_iso:
+        e_iso = last_complete_day
+        end = pd.to_datetime(last_complete_day).date()
 
     # Cash sales per store — aggregate per-day across cashiers for drill-down.
     sales_daily: dict[str, dict[str, float]] = {st: {} for st in KNOWN_STORES}
