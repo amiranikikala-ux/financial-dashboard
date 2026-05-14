@@ -993,7 +993,15 @@ def compute_daily_money_flow(
         other_out = [r for r in other_out if r["tax_id"] not in sup_tids]
 
         # ----- Info: waybills received -----
-        wbs_today = waybills_by_day.get(date, [])
+        # Drop "გაუქმებული" rows from BOTH the count and the sum — they didn't
+        # actually arrive (rs.ge operation aborted). effective_amount is already
+        # 0 for cancelled (see waybill_amounts.get_effective), so sums were
+        # right; the count was leaking the cancelled rows by ~5/month, e.g.
+        # April 2026 showed 5 extra ცალი in the "შემოვიდა" headline.
+        wbs_today = [
+            w for w in waybills_by_day.get(date, [])
+            if str(w.get("status") or "") != "გაუქმებული"
+        ]
         wbs_regular = [w for w in wbs_today if not w.get("is_return")]
         wbs_returns = [w for w in wbs_today if w.get("is_return")]
         wb_regular_total = sum(float(w.get("effective_amount") or 0) for w in wbs_regular)
