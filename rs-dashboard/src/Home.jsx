@@ -23,10 +23,11 @@ const fmtDayKa = (d) => {
   return `${parseInt(parts[2], 10)} ${months[m] || ''} ${parts[0]}`;
 };
 
-function BankExpandableRow({ bankName, breakdown, expanded, onToggle }) {
+function BankExpandableRow({ bankName, breakdown, expanded, onToggle, cashback }) {
   const fmt = (v) => `${(Number(v) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₾`;
   const b = breakdown || {};
-  const total = b.total || 0;
+  const cb = Number(cashback) || 0;
+  const total = (b.total || 0) + cb;
   return (
     <div style={{ padding: '4px 0' }}>
       <div
@@ -88,7 +89,13 @@ function BankExpandableRow({ bankName, breakdown, expanded, onToggle }) {
               <span style={{ color: '#cbd5e1' }}>{fmt(b.other_total)}</span>
             </div>
           )}
-          {b.samurneo === 0 && b.other_total === 0 && !(b.cash_deposit > 0) && (
+          {cb > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: '0.88rem' }}>
+              <span style={{ color: '#94a3b8' }}>ფუდმარტი ქეშბექი</span>
+              <span style={{ color: '#cbd5e1' }}>{fmt(cb)}</span>
+            </div>
+          )}
+          {b.samurneo === 0 && b.other_total === 0 && !(b.cash_deposit > 0) && cb === 0 && (
             <div style={{ color: '#64748b', fontSize: '0.82rem', padding: '4px 0', fontStyle: 'italic' }}>
               ამ პერიოდში მხოლოდ ბარათით გადახდაა
             </div>
@@ -99,7 +106,7 @@ function BankExpandableRow({ bankName, breakdown, expanded, onToggle }) {
   );
 }
 
-function OutItemsExpandableRow({ label, amount, items, expanded, onToggle }) {
+function OutItemsExpandableRow({ label, amount, items, expanded, onToggle, expandedNote }) {
   const fmt = (v) => `${(Number(v) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₾`;
   const safe = Array.isArray(items) ? items : [];
   // Group by partner+bank for cleaner display
@@ -128,6 +135,11 @@ function OutItemsExpandableRow({ label, amount, items, expanded, onToggle }) {
         </span>
         <span style={{ color: '#e2e8f0', fontSize: '0.92rem', fontWeight: 500 }}>{fmt(amount)}</span>
       </div>
+      {expanded && expandedNote && (
+        <div style={{ marginTop: 8, marginLeft: 16, padding: '8px 10px', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: 6, color: '#fbbf24', fontSize: '0.82rem', lineHeight: 1.5 }}>
+          {expandedNote}
+        </div>
+      )}
       {expanded && rows.length > 0 && (
         <div style={{ marginTop: 8, marginLeft: 16, overflowX: 'auto', maxHeight: 280, overflowY: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', minWidth: 300 }}>
@@ -256,6 +268,74 @@ function PosExpandableRow({ label, amount, lines, expanded, onToggle }) {
               {safeLines.length > visible.length && (
                 <tr><td colSpan={3} style={{ padding: '6px', textAlign: 'center', color: '#94a3b8' }}>+ {safeLines.length - visible.length} მეტი ხაზი</td></tr>
               )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProfitExpenseRow({ label, amount, items, expanded, onToggle, note, yellow }) {
+  const fmt = (v) => `${(Number(v) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₾`;
+  const safe = Array.isArray(items) ? items : [];
+  // Group by partner+bank for cleaner display
+  const grouped = {};
+  safe.forEach((it) => {
+    const key = `${it.partner || it.tax_id || '—'}|${it.bank || ''}`;
+    if (!grouped[key]) grouped[key] = { partner: it.partner || it.tax_id || '—', bank: it.bank || '', count: 0, sum: 0 };
+    grouped[key].count += 1;
+    grouped[key].sum += Number(it.amount) || 0;
+  });
+  const rows = Object.values(grouped).sort((a, b) => b.sum - a.sum);
+  const hasDetail = rows.length > 0;
+  const labelColor = yellow ? '#fbbf24' : '#cbd5e1';
+  return (
+    <div style={{ padding: '4px 0' }}>
+      <div
+        onClick={hasDetail ? onToggle : undefined}
+        role={hasDetail ? 'button' : undefined}
+        tabIndex={hasDetail ? 0 : undefined}
+        onKeyDown={hasDetail ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } } : undefined}
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', cursor: hasDetail ? 'pointer' : 'default', userSelect: 'none', color: labelColor }}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {hasDetail && (
+            <span style={{ color: '#64748b', fontSize: '0.7rem', display: 'inline-block', width: 10, transition: 'transform 0.15s ease', transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+          )}
+          {label}
+        </span>
+        <span>−{fmt(amount)}</span>
+      </div>
+      {expanded && note && (
+        <div style={{ marginTop: 6, marginLeft: 16, padding: '8px 10px', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: 6, color: '#fbbf24', fontSize: '0.82rem', lineHeight: 1.5 }}>
+          {note}
+        </div>
+      )}
+      {expanded && hasDetail && (
+        <div style={{ marginTop: 6, marginLeft: 16, overflowX: 'auto', maxHeight: 260, overflowY: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', minWidth: 280 }}>
+            <thead>
+              <tr style={{ color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                <th style={{ textAlign: 'left', padding: '5px 6px', fontWeight: 500 }}>ვის</th>
+                <th style={{ textAlign: 'left', padding: '5px 6px', fontWeight: 500 }}>ბანკი</th>
+                <th style={{ textAlign: 'right', padding: '5px 6px', fontWeight: 500 }}>თანხა</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', color: '#e2e8f0' }}>
+                  <td style={{ padding: '5px 6px', textAlign: 'left' }}>
+                    {r.partner}{r.count > 1 ? <span style={{ color: '#64748b', fontSize: '0.75rem' }}> ×{r.count}</span> : null}
+                  </td>
+                  <td style={{ padding: '5px 6px', textAlign: 'left' }}>
+                    {r.bank === 'TBC' && <span style={{ background: 'rgba(59,130,246,0.18)', color: '#60a5fa', padding: '1px 6px', borderRadius: 4, fontSize: '0.75rem' }}>TBC</span>}
+                    {r.bank === 'BOG' && <span style={{ background: 'rgba(249,115,22,0.18)', color: '#fb923c', padding: '1px 6px', borderRadius: 4, fontSize: '0.75rem' }}>BOG</span>}
+                    {r.bank === 'ნაღდი' && <span style={{ background: 'rgba(251,191,36,0.18)', color: '#fbbf24', padding: '1px 6px', borderRadius: 4, fontSize: '0.75rem' }}>💵 ნაღდი</span>}
+                  </td>
+                  <td style={{ padding: '5px 6px', textAlign: 'right', color: '#cbd5e1' }}>−{fmt(r.sum)}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -484,8 +564,10 @@ export default function Home({ retailSales, fromDate, fromTime, toDate, toTime, 
   useEffect(() => {
     if (cashExpenseModalOpen) loadCashExpenseEntries();
   }, [cashExpenseModalOpen]);
-  const [outCatExpanded, setOutCatExpanded] = useState({ salary: false, rent: false, owner: false, service: false, refund: false, unmatched: false });
+  const [outCatExpanded, setOutCatExpanded] = useState({ salary: false, rent: false, owner: false, service: false, refund: false, unmatched: false, other: false });
   const toggleOutCat = (k) => setOutCatExpanded((s) => ({ ...s, [k]: !s[k] }));
+  const [profitExpExpanded, setProfitExpExpanded] = useState({ salary: false, rent: false, owner: false, service: false, refund: false });
+  const toggleProfitExp = (k) => setProfitExpExpanded((s) => ({ ...s, [k]: !s[k] }));
 
   useEffect(() => {
     let active = true;
@@ -577,7 +659,7 @@ export default function Home({ retailSales, fromDate, fromTime, toDate, toTime, 
       date_label: days.length === 1 ? days[0] : `${days[0]} → ${days[days.length - 1]}`,
       day_count: days.length,
       in: { cash_megaplus: 0, card_megaplus: 0, pos_bank_deposit: 0, pos_bank_deposit_tbc: 0, pos_bank_deposit_bog: 0, pos_lines_tbc: [], pos_lines_bog: [], foodmart_cashback: 0, other: [], bank_total: 0, total: 0, tbc: { pos: 0, pos_gross: 0, pos_fee: 0, cash_deposit: 0, samurneo: 0, other_total: 0, total: 0 }, bog: { pos: 0, pos_gross: 0, pos_fee: 0, cash_deposit: 0, samurneo: 0, other_total: 0, total: 0 } },
-      out: { suppliers: {}, suppliers_total_bank: 0, suppliers_total_manual: 0, tax_treasury: 0, bank_fees: 0, salary: 0, salary_items: [], rent: 0, rent_items: [], owner_withdraw: 0, owner_withdraw_items: [], service: 0, service_items: [], refund: 0, refund_items: [], unmatched_suppliers: 0, unmatched_supplier_items: [], other: [], bank_total: 0, cash_journal_total: 0, total: 0, tbc: { suppliers: 0, tax_treasury: 0, bank_fees: 0, other_total: 0, total: 0 }, bog: { suppliers: 0, tax_treasury: 0, bank_fees: 0, other_total: 0, total: 0 } },
+      out: { suppliers: {}, suppliers_total_bank: 0, suppliers_total_manual: 0, tax_treasury: 0, bank_fees: 0, salary: 0, salary_bank: 0, salary_items: [], rent: 0, rent_bank: 0, rent_items: [], owner_withdraw: 0, owner_withdraw_bank: 0, owner_withdraw_items: [], service: 0, service_bank: 0, service_items: [], refund: 0, refund_bank: 0, refund_items: [], unmatched_suppliers: 0, unmatched_suppliers_bank: 0, unmatched_supplier_items: [], other: [], bank_total: 0, cash_journal_total: 0, total: 0, tbc: { suppliers: 0, tax_treasury: 0, bank_fees: 0, other_total: 0, total: 0 }, bog: { suppliers: 0, tax_treasury: 0, bank_fees: 0, other_total: 0, total: 0 } },
       internal: { own_bank_transfers: 0, cash_to_bank: 0 },
       info: { waybills_regular_count: 0, waybills_regular_total: 0, waybills_returns_count: 0, waybills_returns_total: 0 },
       bank_net: 0,
@@ -603,16 +685,22 @@ export default function Home({ retailSales, fromDate, fromTime, toDate, toTime, 
       agg.out.tax_treasury += m.out.tax_treasury;
       agg.out.bank_fees += m.out.bank_fees;
       agg.out.salary += (m.out.salary || 0);
+      agg.out.salary_bank += (m.out.salary_bank || 0);
       if (Array.isArray(m.out.salary_items)) agg.out.salary_items.push(...m.out.salary_items);
       agg.out.rent += (m.out.rent || 0);
+      agg.out.rent_bank += (m.out.rent_bank || 0);
       if (Array.isArray(m.out.rent_items)) agg.out.rent_items.push(...m.out.rent_items);
       agg.out.owner_withdraw += (m.out.owner_withdraw || 0);
+      agg.out.owner_withdraw_bank += (m.out.owner_withdraw_bank || 0);
       if (Array.isArray(m.out.owner_withdraw_items)) agg.out.owner_withdraw_items.push(...m.out.owner_withdraw_items);
       agg.out.service += (m.out.service || 0);
+      agg.out.service_bank += (m.out.service_bank || 0);
       if (Array.isArray(m.out.service_items)) agg.out.service_items.push(...m.out.service_items);
       agg.out.refund += (m.out.refund || 0);
+      agg.out.refund_bank += (m.out.refund_bank || 0);
       if (Array.isArray(m.out.refund_items)) agg.out.refund_items.push(...m.out.refund_items);
       agg.out.unmatched_suppliers += (m.out.unmatched_suppliers || 0);
+      agg.out.unmatched_suppliers_bank += (m.out.unmatched_suppliers_bank || 0);
       if (Array.isArray(m.out.unmatched_supplier_items)) agg.out.unmatched_supplier_items.push(...m.out.unmatched_supplier_items);
       agg.out.other.push(...m.out.other);
       agg.out.bank_total += (m.out.bank_total || 0);
@@ -701,8 +789,10 @@ export default function Home({ retailSales, fromDate, fromTime, toDate, toTime, 
     agg.in.bank_total -= samurneoInternal;
     agg.out.bank_total -= samurneoInternal;
     agg.bank_net = agg.in.bank_total - agg.out.bank_total;
-    // Subtract owner_withdraw portion that's actually internal
+    // Subtract owner_withdraw portion that's actually internal (applies to BOTH
+    // the total and the bank-only sub-total — internal is a bank-side movement).
     agg.out.owner_withdraw = Math.max(0, agg.out.owner_withdraw - samurneoInternal);
+    agg.out.owner_withdraw_bank = Math.max(0, agg.out.owner_withdraw_bank - samurneoInternal);
     // Subtract samurneo from per-bank totals (proportionally between TBC and BOG)
     const samurneoInTotal = (agg.in.tbc?.samurneo || 0) + (agg.in.bog?.samurneo || 0);
     if (samurneoInTotal > 0 && samurneoInternal > 0) {
@@ -750,6 +840,15 @@ export default function Home({ retailSales, fromDate, fromTime, toDate, toTime, 
       + (agg.out.other || []).filter((it) => it.bank === 'ნაღდი').reduce((a, it) => a + it.amount, 0);
     agg.true_out = agg.true_out_bank + agg.true_out_cash_journal + agg.true_out_cash_expenses;
     agg.true_net = agg.true_in - agg.true_out;
+
+    // Cash till residual — sum of cash sales minus all known cash outflows.
+    // Positive = cash unaccounted for (likely unlogged ops expense); near zero = all reconciled.
+    // Only meaningful for multi-day periods (single-day residual skewed by next-day deposit lag).
+    const tillCashDepositTotal = (agg.in.tbc?.cash_deposit || 0) + (agg.in.bog?.cash_deposit || 0);
+    agg.cash_residual = (agg.in.cash_megaplus || 0)
+      - tillCashDepositTotal
+      - (agg.out.cash_journal_total || 0)
+      - agg.true_out_cash_expenses;
 
     // Real Net Profit breakdown — what owner ACTUALLY earned in the period
     // after operating expenses, NOT counting supplier payments (those are
@@ -973,18 +1072,60 @@ export default function Home({ retailSales, fromDate, fromTime, toDate, toTime, 
               {/* OUT side */}
               <div>
                 <div style={{ color: '#ef4444', fontSize: '0.9rem', fontWeight: 600, marginBottom: 6 }}>↘ ოპერაციული ხარჯი</div>
-                {pb.op_salary > 0 && <div style={rowS}><span>ხელფასი (ბანკი + ნაღდი)</span><span>−{fmtGel2(pb.op_salary)}</span></div>}
-                {pb.op_rent > 0 && <div style={rowS}><span>ქირა</span><span>−{fmtGel2(pb.op_rent)}</span></div>}
-                {pb.op_owner > 0 && (
-                  <div style={{ ...rowS, color: '#fbbf24' }}>
-                    <span>⚠ მფლობელი (შენ მიიღე)</span>
-                    <span>−{fmtGel2(pb.op_owner)}</span>
-                  </div>
+                {pb.op_salary > 0 && (
+                  <ProfitExpenseRow
+                    label="ხელფასი (ბანკი + ნაღდი)"
+                    amount={pb.op_salary}
+                    items={moneyFlow.out.salary_items}
+                    expanded={profitExpExpanded.salary}
+                    onToggle={() => toggleProfitExp('salary')}
+                  />
                 )}
-                {pb.op_service > 0 && <div style={rowS}><span>სერვისები / კომუნ.</span><span>−{fmtGel2(pb.op_service)}</span></div>}
+                {pb.op_rent > 0 && (
+                  <ProfitExpenseRow
+                    label="ქირა"
+                    amount={pb.op_rent}
+                    items={moneyFlow.out.rent_items}
+                    expanded={profitExpExpanded.rent}
+                    onToggle={() => toggleProfitExp('rent')}
+                  />
+                )}
+                {pb.op_owner > 0 && (
+                  <ProfitExpenseRow
+                    label="⚠ მფლობელი (შენ მიიღე)"
+                    amount={pb.op_owner}
+                    items={moneyFlow.out.owner_withdraw_items}
+                    expanded={profitExpExpanded.owner}
+                    onToggle={() => toggleProfitExp('owner')}
+                    yellow
+                    note={moneyFlow.samurneo_internal > 0 ? (
+                      <>
+                        ⓘ ცხრილში ჯამი {fmtGel2(pb.op_owner + moneyFlow.samurneo_internal)} გამოვა — აქედან <strong>{fmtGel2(moneyFlow.samurneo_internal)}</strong> შიდა გადარიცხვაა (BOG-დან ნაღდად აიღე და TBC-ში დააბრუნე სამეურნეო-დ).<br/>
+                        ე.ი. რეალურად შენ მიიღე <strong>{fmtGel2(pb.op_owner)}</strong>.
+                      </>
+                    ) : null}
+                  />
+                )}
+                {pb.op_service > 0 && (
+                  <ProfitExpenseRow
+                    label="სერვისები / კომუნ."
+                    amount={pb.op_service}
+                    items={moneyFlow.out.service_items}
+                    expanded={profitExpExpanded.service}
+                    onToggle={() => toggleProfitExp('service')}
+                  />
+                )}
                 {pb.op_tax > 0 && <div style={rowS}><span>გადასახადი (ხაზინა)</span><span>−{fmtGel2(pb.op_tax)}</span></div>}
                 {pb.op_fees > 0 && <div style={rowS}><span>ბანკის საკომისიო</span><span>−{fmtGel2(pb.op_fees)}</span></div>}
-                {pb.op_refund > 0 && <div style={rowS}><span>დაბრუნება (refund)</span><span>−{fmtGel2(pb.op_refund)}</span></div>}
+                {pb.op_refund > 0 && (
+                  <ProfitExpenseRow
+                    label="დაბრუნება (refund)"
+                    amount={pb.op_refund}
+                    items={moneyFlow.out.refund_items}
+                    expanded={profitExpExpanded.refund}
+                    onToggle={() => toggleProfitExp('refund')}
+                  />
+                )}
                 <div style={sepS} />
                 <div style={{ ...rowS, color: '#ef4444', fontWeight: 600 }}>
                   <span>სულ ხარჯი</span>
@@ -1002,9 +1143,20 @@ export default function Home({ retailSales, fromDate, fromTime, toDate, toTime, 
                 {fmtGel2(pb.real_net_profit)}
               </span>
             </div>
-            <div style={{ color: '#94a3b8', fontSize: '0.82rem', marginTop: 4 }}>
-              ⚠ ეს არ ითვალისწინებს კატეგორიის გარეშე ჩაწერილ ნაღდს — თუ აპრილში არის ~2,500 ₾ აღურიცხავი, რეალური ციფრი ამდენით ნაკლები.
-            </div>
+            {periodActive && moneyFlow.day_count > 1 && Math.abs(moneyFlow.cash_residual) > 50 && (
+              <div style={{ color: '#fbbf24', fontSize: '0.82rem', marginTop: 4 }}>
+                {moneyFlow.cash_residual > 0 ? (
+                  <>⚠ შესაძლოა ~{fmtGel2(moneyFlow.cash_residual)} ნაღდი ჟურნალში ვერ ჩაიწერა — რეალური ციფრი ამდენით ნაკლები შეიძლება იყოს.</>
+                ) : (
+                  <>⚠ ჟურნალში ~{fmtGel2(Math.abs(moneyFlow.cash_residual))}-ით მეტი ნაღდი ხარჯი ჩანს, ვიდრე ფაქტობრივი ნაღდი — გადახედე ჩანაწერებს.</>
+                )}
+              </div>
+            )}
+            {periodActive && moneyFlow.day_count > 1 && Math.abs(moneyFlow.cash_residual) <= 50 && (
+              <div style={{ color: '#10b981', fontSize: '0.82rem', marginTop: 4 }}>
+                ✓ ნაღდის ჯამი ფაქტობრივ ნაშთს ემთხვევა — დამატებითი აღურიცხავი არ ჩანს.
+              </div>
+            )}
             <div style={{ color: '#64748b', fontSize: '0.78rem', marginTop: 4, fontStyle: 'italic' }}>
               მომწოდებლების გადახდა ცალკე ანგარიშია — COGS-ში უკვე ჩათვლილია საქონლის ფასი, ე.ი. დუბლი არ ხდება.
             </div>
@@ -1258,16 +1410,14 @@ export default function Home({ retailSales, fromDate, fromTime, toDate, toTime, 
                     onToggle={() => setMoneyFlowPosTbcExpanded((v) => !v)}
                   />
                 )}
-                {moneyFlow.in.bog.total > 0 && (
+                {(moneyFlow.in.bog.total > 0 || moneyFlow.in.foodmart_cashback > 0) && (
                   <BankExpandableRow
                     bankName="BOG"
                     breakdown={moneyFlow.in.bog}
+                    cashback={moneyFlow.in.foodmart_cashback}
                     expanded={moneyFlowPosBogExpanded}
                     onToggle={() => setMoneyFlowPosBogExpanded((v) => !v)}
                   />
-                )}
-                {moneyFlow.in.foodmart_cashback > 0 && (
-                  <FlowRow label="ფუდმარტი ქეშბექი" value={moneyFlow.in.foodmart_cashback} />
                 )}
                 {moneyFlow.in.other.length > 0 && (
                   <FlowRow label={`სხვა (${moneyFlow.in.other.length})`} value={moneyFlow.in.other.reduce((a, r) => a + r.amount, 0)} />
@@ -1279,38 +1429,44 @@ export default function Home({ retailSales, fromDate, fromTime, toDate, toTime, 
               <div style={{ background: 'rgba(239,68,68,0.04)', borderRadius: 10, padding: '14px 16px', border: '1px solid rgba(239,68,68,0.15)' }}>
                 <div style={{ color: '#ef4444', fontSize: '0.95rem', fontWeight: 600, marginBottom: 10 }}>↘ ბანკიდან გავიდა</div>
                 <FlowRow label="მომწოდებლები" value={moneyFlow.out.suppliers_total_bank} />
-                {moneyFlow.out.salary > 0 && (
+                {moneyFlow.out.salary_bank > 0 && (
                   <OutItemsExpandableRow
                     label="ხელფასი"
-                    amount={moneyFlow.out.salary}
-                    items={moneyFlow.out.salary_items}
+                    amount={moneyFlow.out.salary_bank}
+                    items={moneyFlow.out.salary_items.filter((it) => it.bank !== 'ნაღდი')}
                     expanded={outCatExpanded.salary}
                     onToggle={() => toggleOutCat('salary')}
                   />
                 )}
-                {moneyFlow.out.rent > 0 && (
+                {moneyFlow.out.rent_bank > 0 && (
                   <OutItemsExpandableRow
                     label="იჯარა"
-                    amount={moneyFlow.out.rent}
-                    items={moneyFlow.out.rent_items}
+                    amount={moneyFlow.out.rent_bank}
+                    items={moneyFlow.out.rent_items.filter((it) => it.bank !== 'ნაღდი')}
                     expanded={outCatExpanded.rent}
                     onToggle={() => toggleOutCat('rent')}
                   />
                 )}
-                {moneyFlow.out.owner_withdraw > 0 && (
+                {moneyFlow.out.owner_withdraw_bank > 0 && (
                   <OutItemsExpandableRow
                     label="სამეურნეო ხარჯი (შენი)"
-                    amount={moneyFlow.out.owner_withdraw}
-                    items={moneyFlow.out.owner_withdraw_items}
+                    amount={moneyFlow.out.owner_withdraw_bank}
+                    items={moneyFlow.out.owner_withdraw_items.filter((it) => it.bank !== 'ნაღდი')}
                     expanded={outCatExpanded.owner}
                     onToggle={() => toggleOutCat('owner')}
+                    expandedNote={moneyFlow.samurneo_internal > 0 ? (
+                      <>
+                        ⓘ ცხრილში ჯამი {fmtGel2(moneyFlow.out.owner_withdraw_bank + moneyFlow.samurneo_internal)} გამოვა — აქედან <strong>{fmtGel2(moneyFlow.samurneo_internal)}</strong> შიდა გადარიცხვაა (BOG-დან ნაღდად აიღე და TBC-ში დააბრუნე სამეურნეო-დ).<br/>
+                        ე.ი. რეალურად შენ მიიღე <strong>{fmtGel2(moneyFlow.out.owner_withdraw_bank)}</strong>.
+                      </>
+                    ) : null}
                   />
                 )}
-                {moneyFlow.out.service > 0 && (
+                {moneyFlow.out.service_bank > 0 && (
                   <OutItemsExpandableRow
                     label="საკომუნალო/მომსახურება"
-                    amount={moneyFlow.out.service}
-                    items={moneyFlow.out.service_items}
+                    amount={moneyFlow.out.service_bank}
+                    items={moneyFlow.out.service_items.filter((it) => it.bank !== 'ნაღდი')}
                     expanded={outCatExpanded.service}
                     onToggle={() => toggleOutCat('service')}
                   />
@@ -1335,27 +1491,36 @@ export default function Home({ retailSales, fromDate, fromTime, toDate, toTime, 
                     value={moneyFlow.out.bank_fees}
                   />
                 )}
-                {moneyFlow.out.refund > 0 && (
+                {moneyFlow.out.refund_bank > 0 && (
                   <OutItemsExpandableRow
                     label="გაუქმება / refund"
-                    amount={moneyFlow.out.refund}
-                    items={moneyFlow.out.refund_items}
+                    amount={moneyFlow.out.refund_bank}
+                    items={moneyFlow.out.refund_items.filter((it) => it.bank !== 'ნაღდი')}
                     expanded={outCatExpanded.refund}
                     onToggle={() => toggleOutCat('refund')}
                   />
                 )}
-                {moneyFlow.out.unmatched_suppliers > 0 && (
+                {moneyFlow.out.unmatched_suppliers_bank > 0 && (
                   <OutItemsExpandableRow
                     label="მომწოდებლები (ვერ ცნობილი)"
-                    amount={moneyFlow.out.unmatched_suppliers}
-                    items={moneyFlow.out.unmatched_supplier_items}
+                    amount={moneyFlow.out.unmatched_suppliers_bank}
+                    items={moneyFlow.out.unmatched_supplier_items.filter((it) => it.bank !== 'ნაღდი')}
                     expanded={outCatExpanded.unmatched}
                     onToggle={() => toggleOutCat('unmatched')}
                   />
                 )}
-                {moneyFlow.out.other.length > 0 && (
-                  <FlowRow label={`სხვა (${moneyFlow.out.other.length})`} value={moneyFlow.out.other.reduce((a, r) => a + r.amount, 0)} />
-                )}
+                {(() => {
+                  const bankOther = moneyFlow.out.other.filter((r) => r.bank !== 'ნაღდი');
+                  return bankOther.length > 0 && (
+                    <OutItemsExpandableRow
+                      label="სხვა"
+                      amount={bankOther.reduce((a, r) => a + r.amount, 0)}
+                      items={bankOther}
+                      expanded={outCatExpanded.other}
+                      onToggle={() => toggleOutCat('other')}
+                    />
+                  );
+                })()}
                 <FlowRow label="სულ ბანკიდან" value={moneyFlow.out.bank_total} bold />
               </div>
             </div>
