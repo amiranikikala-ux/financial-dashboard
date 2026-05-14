@@ -1,379 +1,68 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-13 ღამე — **HOME-6 SHIPPED: Real Net Profit + lag-fix + cash journal in P&L + 5+ sessions COMMITTED**. სესია დაიხურა April reconciliation-ით ~5 ₾ ცდომილებამდე. ცვლილებები: (1) **Lag-aware cash deposit reattribution** — `daily_money_flow.py` ახლა ბანკის ნავაჭრის ჩარიცხვებს გადააქვს inferred sales date-ზე (Dvabzu 1-day lag, Ozurgeti weekend bundle Fri+Sat+Sun → Mon). Algorithm v2: prefer SHORTEST lag within 20% tolerance (was: best %-match — owner-მა აღნიშნა 2 აპრ Dvabzu 1,774.50 deposit IS April's, not Mar 31's). Boundary fix: 30 აპრ ნაღდი 3,739.50 → ბანკი 1 მაი → ახლა აპრილში ცხდება, არა მაისში. (2) **Cash expenses journal → monthly_pnl** — `analytics_builders.build_monthly_pnl` ახალი `cash_expenses_entries` param. ერთი ცვლილება კვებავს 6 ჩანართს: P&L, Executive, Forecast, Budget, Ratios, Valuation. supplier_cash კატეგორია გამოტოვებულია (handled via supplier_payment_lines path). Both callers updated: `generate_dashboard_data.py` (lazy import) + `api_contracts._build_pnl_summary_response` (period-filtered by allowed_months). (3) **Real Net Profit UI block on Home** — new section "📊 რეალური მოგება — საიდან მოდის" შემოვიდა side-by-side breakdown: revenue − COGS = gross_profit + cashback − operating_expenses (salary/rent/owner⚠/service/tax/fees/refund, each bank+cash combined) = real_net_profit. agg.profit_breakdown computed in moneyFlow useMemo using dailyTrend filtered by period. Note: supplier_payments excluded (already in COGS via Megaplus per-sale cost). Owner withdraw flagged yellow ⚠ since 7,750 ₾ in April was eye-opening. (4) **Cash expense entries manager UI** — modal now lists existing entries with date/category/amount/comment + ✕ delete button. setCashExpenseEntries state + loadCashExpenseEntries() on modal open + reload after POST/DELETE. (5) **April reconciliation fixed** — 7,817 ₾ "missing cash" decomposed: 3,739.50 ₾ was bank-deposit lag (30 აპრ→1 მაი), 2,505 ₾ was actual unrecorded cash. Owner entered: 3,200 ₾ Dvabzu salary (April 13, already exist) + 2,500 ₾ Ozurgeti salary (moved from May 13 → April 13 via DELETE+POST). Final April residual: **5 ₾** ≈ zero ✅. (6) **April profit reliability verification (4 methods)** — Megaplus per-sale imputed lifetime: 30,900 ✅ (dashboard); Megaplus recorded ORD_GETPRICE: 35,357 (cashier-entered, less reliable); imputed period-restricted: 28,418; sales − purchases cash-flow: 17,737 ❌ (wrong methodology); barcode-level CSV: -39,356 ❌ (data quality). **Verdict: 30,900 ₾ gross profit is reliable**; this is GROSS not NET (operating expenses ~30k eat it). (7) **Leak analysis** — April +30,900 gross + 5,606 cashback − 30,542 operating = +5,964 net (- 2,500 unrecorded = +3,464 real). 325k AP cumulative over years; April delta only +1,029. Owner withdraw 7,750 from bank in April was a surprise data point. (8) **648.50 ₾ April 1 ოზურგეთი deposit** — algorithm couldn't auto-match (no day's sales matches 648.50). Owner identified as ჯიდიაი-refund leftover cash (supplier overpayment returned). Stays in April calendar — small classification imperfection (owner mental override). (9) **4 commits PUSHED**: `d69b936` (backend pipeline) + `8bea9a6` (frontend) + `4683d66` (docs/data) + `6bc05ed` (gitignore + delete obsolete files). 5+ sessions of accumulated work flushed to origin/main. Removed: `Financial_Analysis/cashier_names.json`, `data.json.bak_pre_csc_2026-05-10`. .gitignore extended: `_backups/`, `_samples/`, `*.bak_pre_*`. **OPEN — next session candidates**: (a) May reconciliation analogous to April (partial month, mid-month); (b) March reconciliation (likely more discrepancies); (c) Bank deposit re-categorization UI (manual override for cases like 648.50 ჯიდიაი refund); (d) HOME-2: bank balance KPI; (e) Net Profit trend chart over months. Working tree fully clean.
+> **განახლდა**: 2026-05-14 — **HOME-7 SHIPPED + COMMITTED** (`e64ea2e`). Owner-led Home page audit + 3 bugs fixed + Real Net Profit expandable rows. April bank OUT reconciliation verified: headline 159,682.38 ₾ = category sum 159,682.38 ₾ (DIFF 0.00 ₾).
 >
-> **წინა session-ის შედეგი (2026-05-13 დღე)** — **HOME-5 sprint SHIPPED: Bank money correctness deep-dive.** ვამოწმებდით აპრილს — Owner-მა იპოვა, რომ headline "ბანკში შემოვიდა 86,361 ₾" სრულიად არასწორი იყო (რეალურად 163,918 ₾, 90% სხვაობა). ეს გადაიშალა მთლიანი დაყაჩაღება. გასწორებები: (1) **Bank headline silent drift fixed** — `daily_money_flow.py:bank_in/bank_out` ცარიელ category subset-ს ითვლიდა; ახლა raw `bank_in_total`/`bank_out_total` accumulator-ი (loop-ში += უპირობოდ). + reconciliation sanity check ყოველ დღეს: categorized sum ≠ raw → red badge UI-ში + log error. (2) **სამეურნეო BOG↔TBC netting** — owner ფიზიკურად BOG-დან იღებს ნაღდს, TBC-ში შეიტანს „სამეურნეო" სახელით. იმავე თვეში დაბრუნებული = შიდა გადარიცხვა, არა ხარჯი. Home.jsx აგრეგაცია calendar-month bucketing-ით ნეთებს. აპრილი: 4,850 ₾ internal, real owner expense 2,900 ₾ (was 7,750). (3) **Supplier matching 15,893→0 ₾** — `daily_money_flow.py` extended: (a) `suppliers_list` parameter — known_supplier_tins ფაქტურა-based suppliers-ით expand, (b) quote stripping (ASCII "/' + HTML `&apos;`/`&quot;`), (c) hyphen ↔ space + `&` whitespace collapse, (d) cross-bank TIN inference (TBC empty + BOG TIN → propagate), (e) prefix-of-known-supplier match (single-candidate only), (f) `LEGACY_KNOWN_ALIASES` from supplier_matching.py integrated. (4) **AP delta = TOTAL not active-only** — was 250,467→227,073 (-23,394, misleading) showing 59 active suppliers; now 325,430→326,459 (+1,029, real) across all 261. New per-day fields `total_ap_before`/`total_ap_after`. (5) **TBC ნავაჭრი regex broader** — `TBC_CASH_DEPOSIT_PURPOSE_RE` ცნობს ახლა „დვაბზუ"/„ოზურგეთი"/„დუვაბზუ" + ნავაჭრი (was only ნავაჭრი). აპრილი: 72,706→74,279 ₾ correctly identified. (6) **Comprehensive financial summary on Home** — replaced compact summary with full IN↗ / OUT↘ side-by-side breakdown: sales (cash+card) + other; bank OUT (suppliers + other) + cash journal + cash expenses; true_net (no double-count) + AP change + verdict. `agg.true_in/true_out` formulas in Home.jsx. (7) **Cash expense entry** — POST'd 3,200 ₾ Dvabzu salary (date 2026-04-13, comment "მაისის ხელფასი წინასწარ"). Owner had paid by hand April 10-17. (8) **Cash deposit lag pattern documented** — დვაბზუ 1-day lag, ოზურგეთი weekend (Fri+Sat+Sun) bundles to Monday. Verified: დვაბზუ 30 აპრ 1,964.53 ↔ 1 მაი TBC 2,023.50; ოზურგეთი 1-3 მაი 4,347.80 ↔ 4 მაი 4,423.55. Memory: `project_cash_deposit_lag_pattern.md`. (9) **CLAUDE.md new 🔴 CRITICAL rule** — „Aggregate ციფრი ცოცხალ წყაროს უნდა ემთხვეოდეს" (with the 90%-drift incident as example). Plus memory `feedback_aggregate_vs_source_verification.md`. **APRIL FINAL NUMBERS (after all fixes)**: ნავაჭრი 191,909; ბანკში შემოვიდა 159,068 (after samurneo netting); ბანკიდან გავიდა 159,682; true_net +8,250 ₾ (or +433 if missing 7,817 ₾ unknown cash entered); AP change +1,029. Verdict 🟡 ფაქტობრივად ნულზე — ფული მცირედით მეტი, ვალი მცირედით გაიზარდა. **OPEN — next session**: enter remaining 7,817 ₾ unknown cash (ოზურგეთის ხელფასი + ბენზინი + წვრილი) via Home page modal so April reconciliation goes to ~0. The 1,091 ₾ TBC "შეცდომით ჩარიცხული თანხის უკან დაბრუნება" (1 აპრ.) still in "სხვა" bucket — ეს TBC-ის თვითონ შესწორებაა, არ არის owner-ის შემოსავალი. Memories saved: `project_cash_deposit_lag_pattern`, `project_samurneo_internal_transfer`, `feedback_aggregate_vs_source_verification`. All uncommitted on local main. Owner did NOT authorize commit.
->
-> **წინა session-ის შედეგი (2026-05-13 ღამე)** — **HOME-4 sprint SHIPPED: Bank Money rewrite + cash reconciliation.** Major session — owner asked "did I make progress this period?" and we built a complete cash-flow understanding. Key pieces: (1) **Bank IN per-bank** — TBC/BOG expand with ბარათით გადახდა (per-tx net) + გროსი/საკომისიო subdetail + Wallet swap; (2) **TBC „ნავაჭრი" reclassified as cash deposit** — owner physically deposits cash and bank labels it as "ნავაჭრი თანხა" via transit account. Pipeline `_is_tbc_cash_via_terminal()` routes these to `cash_deposit` field (April: 72,706 ₾ across both stores). Was misclassified as POS card before. (3) **Bank OUT full categorization** — salary / rent / owner_withdraw / service / refund / unmatched_suppliers / other. Each row expandable with item list (partner + bank badge). Detection patterns added in `daily_money_flow.py`. (4) **Supplier list with TBC/BOG bank badge** — `amount_bank_tbc`/`amount_bank_bog` per supplier shows which bank paid; both shown if mixed. (5) **ჯიდიაი cash-on-receipt flow** — 372,690 ₾ lump on May 8 soft-deleted; 533 backfill manual entries created (scaled by monthly gap, sums to 376,187 = total_wb − total_bank, debt now ≈ 0). SupplierModal has ✅ ვეთანხმები button on each pending ჯიდიაი waybill (POST /api/manual-payments, 5% amount tolerance for past matches). `CASH_ON_RECEIPT_TAX_IDS` constant in SupplierModal.jsx. (6) **Financial summary block** — replaced misleading yellow "ჯერ არ ბანკშია" with smart block for past periods: net cash flow + AP delta + 1-line verdict (✅ წახვედი წინ / ⚠️ წახვედი უკან). Owner's primary question per memory `project_owner_main_question.md`. (7) **Cash expenses journal** — new `cash_expenses_journal.csv` + module `dashboard_pipeline/cash_expenses_journal.py` + endpoints GET/POST/DELETE `/api/cash-expenses`. Categories: salary/rent/owner/service/supplier_cash/other. Wired into daily_money_flow OUT buckets. Home page "➕ ნაღდი ხარჯი ჩამიწერე" button + modal on bank-flow section header. **OPEN — tomorrow's task**: owner will determine exact cash salary figures (April: 3,200 Dvabzu + 3,200 Ozurgeti = 6,400 known so far, +rest TBD) and enter via modal. After that April reconciliation: cash remaining 4,616 ₾ minus actual cash expenses → 0. Service restart required (`Restart-Service FinancialDashboardBackend`) once before testing — owner confirmed done. Two big things: (1) **Waybill date semantics fix** — pipeline `safe_cols` mapping changed from `გააქტიურების თარ.` (ACTIVATE_DATE) to `ტრანსპ. დაწყება` (BEGIN_DATE). Owner's MegaPlus tool groups by transport start date, not activation date — so our dashboard now exactly matches his MegaPlus view (May 8: 16 regulars, 7,561.87 ₾, 2 returns -14.92 ₾). Open ambiguity from previous session RESOLVED. (2) **Daily Money Flow section** — new collapsible zone on Home page: `🏦 ბანკის ფული — შემოვიდა / გავიდა`. Pipeline `daily_money_flow.py` aggregates last 90 days per-day money flow with categories. Headline shows bank-only IN/OUT/NET. Per-bank breakdown (TBC, BOG) expandable to show ნავაჭრის შემოტანა + სამეურნეო + სხვა categories. Suppliers list shows AP balance change (იყო → დარჩა) per supplier with bank-vs-manual payment split. Cash + card revenue displayed separately in yellow block ("ჯერ არ ბანკშია"). Manual journal cash payments (e.g., ჯიდიაი 372,690 ₾ on May 8 — owner pays this supplier cash on receipt) shown separately. Today's waybills section made collapsible (default collapsed). **Pending UX restart**: 3 successive UI restructures this session as owner clarified intent — would benefit from a fresh session to evaluate the final HOME-3 shape with clear mind. **Service restart cycle**: every API contract change required user-side `Restart-Service FinancialDashboardBackend` (admin) — 3x this session.
+> **წინა session** (2026-05-13 ღამე): HOME-6 — Real Net Profit + lag-fix v2 + cash journal in P&L → commit `d4ae56b`. Full HOME-1 / HOME-3 / Cashiers detail → `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-12_2026-05-13.md`.
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-13) — HOME-3: Daily Money Flow + rs.ge waybill date fix
+## 0. ბოლო session-ის შედეგი (2026-05-14) — HOME-7: Home page audit + 3 bugs + Real Net Profit drill-down
 
 ### Headline
 
-Owner asked for daily bank-money picture: "8 მაისს სად მოხდა გადახდები, ერთი სიტყვით ყველა თანხის მიმოსვლა სად მოხდა და სად გავიდა". Built `🏦 ბანკის ფული` collapsible section on Home page — bank-only IN/OUT/NET with per-bank category expansion. Separately fixed rs.ge waybill date semantics to match owner's MegaPlus tool (previous session's open ambiguity).
+Owner asked for thorough review of Home page since "ყოველ დღე მასზე ვარ დამოკიდებული". Audit found 5,700 ₾ silent drift (headline 159,682 ≠ category sum 165,382 in April bank OUT). Identified 8 findings (3 bugs + 5 UX). All 3 bugs fixed + 3 UX improvements + 1 new feature shipped in commit `e64ea2e`. Memory: `project_home_page_audit_2026-05-14.md`.
 
-### Part 1 — rs.ge waybill date fix
+### What shipped
 
-**Root cause found:** `safe_cols` in `generate_dashboard_data.py:1251` was mapping `გააქტიურების თარ.` (ACTIVATE_DATE) → `date`. Owner's MegaPlus rs.ge UI groups by `დაწყ. თარიღი` (BEGIN_DATE = when transport starts). Many waybills activated late evening (e.g., 05-07 21:48) have BEGIN_DATE next day (05-08). MegaPlus shows them under 05-08, our dashboard showed them under 05-07.
+**Bug 1 — bank vs cash split in OUT categories.** Pipeline `daily_money_flow.py` exposes `salary_bank` / `rent_bank` / `owner_withdraw_bank` / `service_bank` / `refund_bank` / `unmatched_suppliers_bank` (computed already since HOME-5, not exposed before). Home.jsx bank OUT section now uses `*_bank` totals + filters items by `bank !== 'ნაღდი'`. Real Net Profit keeps full `op_salary` etc. (label clarified: "ბანკი + ნაღდი"). `owner_withdraw_bank` further reduced by samurneoInternal in JS. Reconciliation verified live: April headline 159,682.38 = UI category sum 159,682.38 (DIFF 0.00 ₾).
 
-**Fix:** Changed mapping to `ტრანსპ. დაწყება` → `date`. Verified May 8: 16 regular waybills / 7,561.87 ₾ + 2 returns / -14.92 ₾ — matches owner's MegaPlus tool exactly. The 4 "extras" that we previously had on May 8 (კოკა-კოლა 2 + სტარდი + ზედაზენი) correctly moved to May 9 (their BEGIN_DATE).
+**Bug 2 — stale "~2,500 ₾" hardcoded warning replaced with live cash residual.** New `agg.cash_residual = cash_megaplus − (tbc.cash_deposit + bog.cash_deposit) − cash_journal_total − true_out_cash_expenses`. April: +5.45 ₾ → page shows "✓ ნაშთს ემთხვევა". If |residual| > 50 ₾, shows actual unrecorded/over-logged amount. Only displayed in multi-day period mode.
 
-**Memory saved:** `project_rsge_waybill_date_semantics.md`.
+**Bug 3 — owner_withdraw items reconciled with headline via expandedNote.** New `expandedNote` prop on `OutItemsExpandableRow` renders amber note above items table when samurneo netting applies. April: "ცხრილში ჯამი 7,750 გამოვა — აქედან 4,850 შიდა გადარიცხვაა (BOG → TBC სამეურნეო), რეალურად შენ მიიღე 2,900". Same note added to Real Net Profit owner row.
 
-**Files:** `generate_dashboard_data.py` (1 line change in safe_cols).
+**UX 5 — "სხვა" row now expandable** in bank OUT section.
 
-### Part 2 — Daily Money Flow section (HOME-3)
+**UX 8 — Foodmart cashback now inside BOG expand.** `BankExpandableRow` accepts new `cashback` prop, header total includes it (62,002 POS + 5,605 cashback = 67,608 BOG total). Top-level standalone cashback row removed.
 
-#### New pipeline module — `dashboard_pipeline/daily_money_flow.py` (~370 lines)
+**NEW: Real Net Profit expandable rows.** Owner asked "შეგვიძლია ჩანართები რომ გავუკეთოთ ხელფასები ვისთან გავეცი". New `ProfitExpenseRow` component — clickable, shows partner + bank badge + amount on expand. Categories: salary / rent / owner / service / refund. Tax + bank fees stay non-clickable (no items). Owner row includes samurneo netting explanation.
 
-Reads TBC + BOG parquet caches directly, joins with waybills + supplier_payment_lines, and categorizes every bank line for the last 90 days. Output: `data["daily_money_flow_index"][YYYY-MM-DD] = { in, out, internal, info, bank_net, net }`.
+**Auto-resolved + deferred:** UX 4 + UX 7 became moot after Bug 1 (cash items filtered out of bank section). UX 6 (per-bank OUT split TBC/BOG) deferred — can add later if owner asks.
 
-Categorization logic:
-- **IN (bank)**: `pos_deposit` (Wallet/domestic + ნავაჭრი + per-customer card payment patterns), `samurneo_in` (purpose contains "სამეურნეო"), `foodmart_cashback` (TIN 404460187), `other`. Tracked per-bank (TBC/BOG).
-- **OUT (bank)**: `suppliers` (partner_tin matches known supplier TIN from waybills; name fallback for empty TIN), `tax_treasury` (TIN 200122900 / "სახაზინო" / TRESGE22), `bank_fees` (op=COM, not treasury), `other`.
-- **Internal**: partner = own TIN 400333858 → not counted as IN/OUT.
-- **Per-supplier AP roll**: cumulative sum of waybill amounts minus all payments (bank + manual) through date — gives `ap_before` (end of prior day) and `ap_after` (end of this day) per supplier.
+### Files changed (committed in `e64ea2e`)
 
-Bank-vs-manual payment split:
-- Bank payments derived from raw bank-line scan (authoritative — independent of bank_reconciliation match status).
-- Manual payments derived from `supplier_payment_lines` entries where `source.contains("manual")`.
-
-#### Wire-in
-
-- `generate_dashboard_data.py::_build_analytics` end — calls `compute_daily_money_flow(days_back=90)` after executive_summary, stores result on `data["daily_money_flow_index"]`.
-- `api_contracts.py` — added `"daily_money_flow_index": {}` to `FIELD_DEFAULTS` and `"daily_money_flow": ["daily_money_flow_index"]` to `TAB_ALLOWLIST`.
-
-#### Frontend — `rs-dashboard/src/Home.jsx`
-
-New collapsible zone (Zone 4) below today's waybills. Components added:
-- `BankExpandableRow` — header `{bank} ბანკი — {total} ₾`, click reveals subcategories (ნავაჭრის შემოტანა, სამეურნეო, სხვა). Used twice (TBC + BOG).
-- `PosExpandableRow` — kept in code (unused after final refactor) — could render per-customer card-transaction table with time/brand/amount. Owner initially asked for it, then changed direction.
-- `FlowRow` — simple label + value row, supports `bold`/`hint`/`danger`/`size`.
-
-Layout:
-- **Headline** (collapsed default): "🏦 ბანკის ფული — შემოვიდა / გავიდა" + ↗ ბანკში შემოვიდა X / ↘ ბანკიდან გავიდა Y / წმინდა Z.
-- **Expanded — IN column (green)**: TBC ბანკი row (expandable) → BOG ბანკი row (expandable) → ფუდმარტი ქეშბექი → სხვა → სულ ბანკში.
-- **Expanded — OUT column (red)**: მომწოდებლები + გადასახადი/ხაზინა + საკომისიო + სხვა + სულ ბანკიდან.
-- **Expandable suppliers list** (▶): per-supplier rows with bank/manual/returns/იყო/დარჩა columns. Top 50.
-- **Yellow context block**: "💰 დღევანდელი გაყიდვა (ჯერ არ ბანკშია)" — სალარო ნაღდი + ბარათით (Megaplus). Plus "📝 ნაღდი გადახდები (ჟურნალი)" — manual journal cash supplier payments.
-- **Bottom info row**: 🔁 შიდა მოძრაობა (own-bank transfers) + 📦 დღის ზედნადებები (waybill receipts info).
-
-#### May 8 verified output
-
-| metric | value |
-|---|---|
-| ბანკში შემოვიდა | 5,388.26 ₾ (TBC 3,025.45 + BOG 2,362.81) |
-| ბანკიდან გავიდა | 8,060.38 ₾ (მომწოდებლები 8,055.80 + tax 2.98 + fees 1.60) |
-| ბანკის წმინდა | -2,672.12 ₾ |
-| ნაღდი გადახდები (ჟურნალი) | 421,579 ₾ (ჯიდიაი 372,690 + others) |
-| სალარო ნაღდი (Megaplus) | 4,439.81 ₾ |
-| ბარათით (Megaplus) | 2,956.65 ₾ |
-
-Top bank-paid suppliers May 8: ელიზი ჯგუფი 2,665.80 ₾ (იყო 10,088 → დარჩა 7,794), საქართველოს დისტრიბუცია 2,000 ₾, აიდიეს ბორჯომი 990, კოკა-კოლა გურია 900, იფქლი 500 (returns -14.92), ვასაძის პური 400, კინგ ჯგუფი 300, ენგადი 300.
-
-#### Owner's iterative feedback during session (3 restructures)
-
-1. Initial build: aggregated bank IN included `cash_megaplus` + `card_megaplus` + `pos_bank_deposit` together. Owner asked: "12,712.45 ₾ — is this in bank?" — pointed out cash + card aren't in bank yet. Refactor: bank-only headline; cash/card moved to yellow context block.
-2. Owner wanted POS deposit rows clickable for per-transaction detail. Built `PosExpandableRow` with per-line table (time/card-brand/amount).
-3. Owner: "მყიდველის გადახდები ჯამი აჩვენე, არ არის საჭირო ცალკე" — wants aggregated total, not per-line. Removed expand.
-4. Owner: "TBC-ში დაჭერით უნდა გამოჩნდეს ნავაჭრის შემოტანა, სამეურნეო, სხვა" — wanted category breakdown on click. Built `BankExpandableRow` with category subrows. Final shape.
-
-#### Memory saved
-
-- `project_supplier_cash_payment_patterns.md` — ჯიდიაი + others are paid CASH on waybill receipt; large manual entries are normal (owner confirmed 372,690 single-day entry).
-- `project_rsge_waybill_date_semantics.md` (from Part 1).
-
-### Files changed this session — **all uncommitted on local main**
-
-- `dashboard_pipeline/daily_money_flow.py` (NEW, ~370 lines)
-- `dashboard_pipeline/api_contracts.py` (FIELD_DEFAULTS + TAB_ALLOWLIST entries)
-- `generate_dashboard_data.py` (waybill date column + daily_money_flow wire-in)
-- `rs-dashboard/src/Home.jsx` (Zone 4 + waybills collapsible + state/components)
-
-Joins earlier uncommitted Home-1 work + Cashiers work (now 5+ sessions accumulated without commit/push authorization).
+- `dashboard_pipeline/daily_money_flow.py` (+6 lines — `*_bank` field exposure)
+- `rs-dashboard/src/Home.jsx` (+208 / -43 lines — Bug 1/2/3 + `ProfitExpenseRow` + `BankExpandableRow.cashback` prop + `OutItemsExpandableRow.expandedNote` prop)
 
 ### Open / next-session candidates
 
-1. **3-restructure restart marker** — owner pivoted UI 3 times this session as scope clarified. Final HOME-3 shape works, but a fresh session would be useful for a clean review pass.
-2. **Service-restart automation** — every API contract change requires user-side admin `Restart-Service`. NSSM has `nssm restart FinancialDashboardBackend` — consider adding a `/restart-service` skill or a hook that prompts user during pipeline regen.
-3. **Per-bank OUT split** — currently OUT column aggregates across TBC+BOG. Same per-bank treatment as IN side would make symmetry clean.
-4. **More OUT categories** — currently: suppliers / tax / fees / other. Owner may want salary / rent / utilities / accountant / cash-withdrawal as named categories. `tbc_expenses_bundle` already has these; need to wire categorization rules into `daily_money_flow.py`.
-5. **POS deposit per-customer drill-down** — `PosExpandableRow` is built but unused; can be re-enabled later if owner asks.
-6. **Sales context inside TBC/BOG expand** — owner mentioned "გაყიდვების ჯამი" alongside "ნავაჭრის შემოტანა". Currently shown in yellow block (top-level). Could add Megaplus card revenue context line inside each bank expand for direct comparison.
-7. **HOME-2 sprint** — bank balance (top-level `cash_position` field) + cash-till vs bank-deposit variance with red-badge alert. Pipeline ~3h + frontend ~2h.
+Owner's recommendation request for future sessions — I proposed top 3 next-priority additions:
+
+1. **HOME-2 bank balance KPI** — parquet has ნარჩენი column; extract last line per account → real-time bank position on Home top.
+2. **Cash-till balance per store** — cash sales − bank deposits − cash journal → physical cash on hand per shop.
+3. **Due-payments next 7 days widget** — upcoming AP from waybill terms.
+
+Lower priority (deferred): margin warning, missing-waybill alerts, year-over-year comparison, mfl_owner running total, break-even mid-month indicator. UX 6 per-bank OUT split.
+
+Other candidates: May reconciliation analogous to April (partial month, mid-month). March reconciliation (likely more discrepancies).
 
 ### Verification commands (next session)
 
 ```powershell
-# Daily money flow endpoint
+# HOME-7 audit verify — April category sum matches headline (DIFF must be 0.00 ₾)
 "C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
 import urllib.request, json
 api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=daily_money_flow', timeout=60).read())
 idx = api['daily_money_flow_index']
-print(f'days: {len(idx)}')
-m8 = idx.get('2026-05-08', {})
-print(f'May 8 bank IN: {m8[\"in\"][\"bank_total\"]:.2f}')
-print(f'  TBC: pos={m8[\"in\"][\"tbc\"][\"pos\"]} samurneo={m8[\"in\"][\"tbc\"][\"samurneo\"]} other={m8[\"in\"][\"tbc\"][\"other_total\"]}')
-print(f'  BOG: pos={m8[\"in\"][\"bog\"][\"pos\"]} samurneo={m8[\"in\"][\"bog\"][\"samurneo\"]} other={m8[\"in\"][\"bog\"][\"other_total\"]}')
-print(f'May 8 bank OUT: {m8[\"out\"][\"bank_total\"]:.2f}')
-print(f'  suppliers_bank={m8[\"out\"][\"suppliers_total_bank\"]} suppliers_manual={m8[\"out\"][\"suppliers_total_manual\"]} tax={m8[\"out\"][\"tax_treasury\"]}')
-# Expected: bank IN 5388.26, bank OUT 8060.38, suppliers_manual 421579
-"
-
-# rs.ge date fix verification (May 8 regulars must match owner's MegaPlus 7,561.87)
-"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
-import urllib.request, json
-api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=waybills', timeout=60).read())
-m8 = [w for w in api['waybills'] if w['date'].startswith('2026-05-08')]
-regs = [w for w in m8 if not w['is_return']]
-print(f'May 8: {len(regs)} regulars, {sum(w[\"effective_amount\"] for w in regs):.2f} ₾')
-# Expected: 16 / 7561.87 ₾
-"
-```
-
----
-
-## 0. ბოლო session-ის შედეგი (2026-05-12 ღამე) — HOME-1: Owner's daily cockpit + governance cleanup
-
-### Headline
-
-Owner asked for "მთავარი გვერდი — დილით ჯერ ეს ვხსნა, რეალურ სახეს ვხედავ". Built `🏠 მთავარი` as the new default-first tab. 3 zones: top KPI strip (today's revenue + profit, bank balance placeholder for HOME-2), per-store comparison table (cash/card/total/receipts/AOV), today's waybills (returns in red, separated total). All 3 zones honour the global header date-picker — pick any date/range and entire page reflows. Sprint preview document at `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_HOME_PAGE_PREVIEW.md`.
-
-### Frontend changes
-
-- **NEW** `rs-dashboard/src/Home.jsx` (~530 lines) — KPI cards + stores table + waybills table. Self-fetches waybills via `/api/data?tab=waybills` (parallel to App.jsx's retail_sales fetch).
-- `rs-dashboard/src/tabConfig.js` — added `{ id: 'home', label: '🏠 მთავარი' }` as **first** entry in `daily` group.
-- `rs-dashboard/src/App.jsx` — 6 edits:
-  - lazy import `Home`
-  - `useHashTab('home')` (was `'suppliers'`) — new default tab
-  - `PERIOD_PICKER_TABS` += `'home'`
-  - `SAFE_PERIOD_REQUEST_TABS` deliberately **excludes** `'home'` (see bug-fix below)
-  - `requestTab` mapping: home → `retail_sales`
-  - routing case `activeTab === 'home'` renders `<Home />` with retail_sales + period props
-  - **Critical bug-fix**: `appendCanonicalPeriodParams(params, activeTab === 'home' ? 'home' : requestTab)` — without this, picker triggered a filtered `tab=retail_sales&from_date=...` request which strips `daily_trend` and `cashier_day_breakdown` from the response → Home spun on "იტვირთება" forever.
-- `rs-dashboard/src/components/MobileNav.jsx` — `home` replaces `executive` in `QUICK_TABS` (first slot).
-
-### Date-handling logic — "last complete day"
-
-The MegaPlus backup ZIP is created mid-day (~14:30 Dvabzu, ~16:30 Ozurgeti), so the **latest** day in `cashier_day_breakdown` is always partial. Home walks back through days and picks the latest day where every store's max hour reaches **≥22**. As of this session: data has May 9 (Dvabzu max hour 13, Ozurgeti max hour 16 — incomplete) → home anchors to **May 8** (both stores reached hour 23).
-
-Implementation: `lastCompleteDay(retailSales)` in `Home.jsx`. Fallback to latest available day if none complete.
-
-### Returns surfaced separately
-
-Owner: "დაბრუნება ცალკეა ორივეს ითვლის. ჩვენი დაბრუნება ცალკე წითელ ფერში გამოყავი ჯამის გვერდით". Implemented:
-- Waybills split into `regularWaybills` (filter `!w.is_return`) and `returnWaybills` (filter `w.is_return`)
-- Header shows: `14 ცალი · ჯამი 8,601.34 ₾` (regulars) AND `დაბრუნება: -14.92 ₾ (2)` in red.
-- Return rows in the table get red text + red-tinted background + ↩ arrow prefix.
-
-### Global picker — dark theme + sizing fixes
-
-The `DateTimeCalendarPicker` component had legacy Windows-classic light styles that didn't match the dark dashboard. Multiple iterations:
-
-1. **Dark theme overrides** appended to `rs-dashboard/src/styles/components.css` (~150 lines, end of file). Repaints `.dtcp-popup--classic` and the inline react-datepicker grid to dark using CSS vars (`--bg-secondary`, `--accent`, etc.).
-2. **Popup width**: was `min(100%, 31rem)` constrained by `dtcp-wrapper` parent width → way too narrow on the centered header trigger. Changed to fixed `38rem` + `left: 50%; transform: translateX(-50%)` for center positioning under the trigger. No longer clips off-screen.
-3. **Day-name overflow**: `კვირა / ორშ. / სამშ. / ოთხშ. / ხუთშ.` (mix of 3-5 chars with dots) overflowed the day cells. Shortened to 3-char consistent labels (`კვი ორშ სამ ოთხ ხუთ პარ შაბ`) in `DateTimeCalendarPicker.jsx::WEEKDAYS_KA`. Also: font-size 0.95→0.78rem, `overflow: hidden`, `white-space: nowrap`, `min-width: 0`.
-
-### Verification — numbers match source
-
-May 8 (last complete day, default anchor):
-
-| store | cash | card | revenue | receipts | AOV |
-|---|---|---|---|---|---|
-| დვაბზუ | 2,268.58 | 1,746.47 | **4,015.05 ₾** | 399 | 10.06 |
-| ოზურგეთი | 2,171.23 | 1,210.18 | **3,381.41 ₾** | 487 | 6.94 |
-| ჯამი | 4,439.81 | 2,956.65 | **7,396.46 ₾** | 886 | — |
-
-Cross-checked against `retail_sales.daily_trend[]` and `cashier_day_breakdown[]` row-by-row — all exact. May 8 ლია (Dvabzu): cash 95.48 + card 31.39 = 126.87 ₾ / 9 receipts ✅ (matches earlier Cashiers verification).
-
-### Open data ambiguity — RESOLVE FIRST in next session
-
-Owner's rs.ge `RS კაბინი` UI shows May 8 Dvabzu (filter 1329) total **7,561.87 ₾**. Our home page shows 8,586.42 ₾ (all stores, net of returns).
-
-Diagnostic findings:
-- Our rs.ge LIVE fetch via `fetch_buyer_waybills('2026-05-08 → 2026-05-08')` returns **16 waybills = 8,616.26 ₾** (raw, all amounts positive in the API).
-- Pipeline applies negative sign to 2 იფქლი returns (3.40 + 11.52 = 14.92) → net 8,586.42 ₾ in `data.json.waybills`.
-- Dvabzu only (5 rows): 2,208.13 ₾. Ozurgeti only (9 rows): 6,393.21 ₾. Neither matches owner's 7,561.87.
-- Diff 8,616.26 − 7,561.87 = 1,054.39 ₾ — no single waybill matches, no obvious subset sums to it.
-- **Smoking gun**: waybill `0976826734` from owner's screenshot (შპს კავკას სატრან., TIN 405159180, type **ექსპორ.**, 284.79 ₾, May 7 18:12) is **NOT** in our SOAP response across May 6–10. This is a transport-service waybill, not a goods-purchase waybill.
-
-Hypothesis: `fetch_buyer_waybills` only returns goods-purchase waybills where the requesting party is the buyer. rs.ge UI shows additional types (ექსპორი / ტრანსპორი / ვერსიული / etc.) — we don't fetch them. Owner's 7,561.87 may be a slice using different filters in the UI (status filter? date column? type filter?).
-
-**Action required next session:**
-1. Ask owner to scroll to bottom of `RS კაბინი` and screenshot the SUM row + visible row count.
-2. Ask owner what date column the filter is on (`თარიღი` vs `ფაქტ. თარიღი` vs `მიღების`).
-3. Decide whether to extend our connector to fetch other waybill types (export/transport) or keep "goods only" scope.
-
-### Pre-existing 2026-05-12 Cashiers ambiguity — STILL UNRESOLVED
-
-From earlier 2026-05-12 session (now §0a): owner said "მაღაზიების შედარება ეს არ გვჭირდება" but never clarified which element of the Cashiers page he meant. Open question still pending. Owner moved on to home-page work in this session.
-
-### Governance cleanup
-
-- **35 debug PNGs deleted** from project root (cashiers-*, drilldown-*, deadstock-*, retail-*, kpi-*, daily-spike-alert).
-- **CONTEXT_HANDOFF.md trimmed**: 2372 → 273 lines before this update. Sessions 2026-05-05 → 2026-05-11 (23 entries) moved to `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-05_2026-05-11.md`.
-- **Memory audit**: 18 files in `C:\Users\tengiz\.claude\projects\C--financial-dashboard\memory\` — all still valid (rs.ge SOAP facts, BOG dual-account, no-silent-data-drops, single-URL workflow, etc.). None deleted.
-
-### Files changed this session — **all uncommitted on local main**
-
-This session (HOME-1 + governance + picker):
-- `rs-dashboard/src/Home.jsx` (NEW)
-- `rs-dashboard/src/App.jsx`
-- `rs-dashboard/src/tabConfig.js`
-- `rs-dashboard/src/components/MobileNav.jsx`
-- `rs-dashboard/src/components/DateTimeCalendarPicker.jsx` (3-char weekday labels)
-- `rs-dashboard/src/styles/components.css` (dark theme + popup width + day-name CSS)
-- `CONTEXT_HANDOFF.md` (this update + earlier trim)
-- `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-05_2026-05-11.md` (NEW — archive)
-- `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_HOME_PAGE_PREVIEW.md` (NEW — preview doc)
-
-Still uncommitted from earlier 2026-05-12 (§0a — Cashiers analysis):
-- `dashboard_pipeline/megaplus_backup.py`
-- `dashboard_pipeline/retail_sales.py`
-- `dashboard_pipeline/api_contracts.py`
-- `rs-dashboard/src/Cashiers.jsx`
-
-Still uncommitted from 2026-05-11 ღამე (Cashiers/Salaro rebuild) — included above except for `Financial_Analysis/cashier_names.json` (still needs deletion). Plus commits `f9a78e2` + `d0b924f` (retail_sales period-filter) local main, not pushed.
-
-### Next-session candidates
-
-1. **Resolve rs.ge waybill type ambiguity** (open data issue above) — clarify with owner what 7,561.87 represents.
-2. **HOME-2 sprint** — bank balance (top-level `cash_position` field) + cash-till vs bank-deposit variance with red-badge alert. Pipeline work ~3h + frontend ~2h.
-3. **HOME-3 sprint** — daily money in/out (incoming vs outgoing). Pipeline daily aggregations + frontend 2-column. ~2 sessions.
-4. **Commit/push pending changes** — owner has not authorized commit on Cashiers, Salaro rebuild, OR home page yet. 4 + 5 + 6 + 2 changes accumulated across 4 sessions.
-5. **Delete obsolete `Financial_Analysis/cashier_names.json`** — still pending from 2026-05-11.
-
-### Verification commands (next session)
-
-```powershell
-# Home page numbers should match these exactly for May 8 (default anchor)
-"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
-import urllib.request, json
-api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=retail_sales', timeout=30).read())
-rs = api['retail_sales']
-dt = [r for r in rs['daily_trend'] if r['day'] == '2026-05-08'][0]
-print('May 8 revenue:', dt['revenue_ge'], 'profit:', dt['profit_ge'])
-# expect revenue=7396.46, profit=1241.05
-cdb = [r for r in rs['cashier_day_breakdown'] if r['day']=='2026-05-08']
-by_store = {}
-for r in cdb:
-    s = r['object']
-    by_store[s] = by_store.get(s,{'cash':0,'card':0,'rev':0,'rcpt':0})
-    by_store[s]['cash'] += r['cash']
-    by_store[s]['card'] += r['card']
-    by_store[s]['rev']  += r['revenue']
-    by_store[s]['rcpt'] += r['receipts']
-for s,v in by_store.items():
-    print(f'{s}: cash={v[\"cash\"]:.2f} card={v[\"card\"]:.2f} rev={v[\"rev\"]:.2f}')
-# expect: დვაბზუ 2268.58/1746.47/4015.05; ოზურგეთი 2171.23/1210.18/3381.41
-"
-
-# rs.ge LIVE waybill fetch — reproduces the open ambiguity
-"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
-import os
-from datetime import datetime
-from dotenv import load_dotenv
-load_dotenv()
-from dashboard_pipeline.rs_waybill_connector import RSWaybillConnector
-c = RSWaybillConnector(os.environ['RS_USER'], os.environ['RS_PASS'])
-wbs = c.fetch_buyer_waybills(datetime(2026,5,8,0,0,0), datetime(2026,5,8,23,59,59))
-total = sum(float(w.full_amount or 0) for w in wbs)
-print(f'{len(wbs)} waybills, total = {total:.2f}')
-# expect 16 / 8616.26 (raw positive). Owner sees 7,561.87 in his tool — diff = 1054.39.
-"
-```
-
----
-
-## 0a. წინა session-ის შედეგი (2026-05-12 დღე) — Cashiers/Salaro analysis section
-
-### Headline
-
-Owner asked for "ანალიზები რაც ამ გვერდს უკავშირდება. მოიძიე ისეთი კომპანიიდან რომელიც უმაღლეს დონეს წარმოადგენს". Agent researched NCR Voyix / Lightspeed / KORONA / Logile via Brave search and presented 8 candidate analyses split into three top-tier buckets: loss-prevention (discount/refund/voids), performance (AOV/TPH/UPT/hourly), comparison (period-over-period/leaderboard/cash-share). Owner rejected #1 and #2 (discount + refunds per cashier) and authorized the remaining 6. Agent built all 6, then owner rejected the period-over-period column. Final shipped state: 4 of original 8 (#3 AOV, #4 receipts/hour, #5 hourly distribution, #6 cash-share %, #8 rank). #7 (week-over-week) built then removed. #1/#2 never built.
-
-### Backend changes — `dashboard_pipeline/megaplus_backup.py`
-
-- **New SQL `cashier_hour_breakdown`** — per-day-per-hour-per-cashier rolling 180-day window. Window: `DATEADD(day, -180, CAST(GETDATE() AS DATE))`. Per-row: day, hour (0-23), user_id, cashier_name (USERS JOIN), receipts (COUNT DISTINCT ORD_N), cash (SUM where ORD_PAY_TYP=0), card (SUM where ORD_PAY_TYP=1), revenue (SUM ORD_jamjam).
-- Returns 7,464 rows total (3,208 დვაბზუ + 4,256 ოზურგეთი) at last refresh.
-- Added to return dict next to `cashier_day_breakdown`.
-
-### Pipeline + API contracts
-
-- `dashboard_pipeline/retail_sales.py` — combined accumulator `combined_cashier_hour_breakdown` across stores, each row tagged with `object` (store label). Sort by (day desc, hour). Added to return dict.
-- `dashboard_pipeline/api_contracts.py` — `cashier_hour_breakdown` added to retail_sales pass-through allowlist (line ~1050, next to `cashier_day_breakdown`).
-
-### Frontend changes — `rs-dashboard/src/Cashiers.jsx`
-
-Added two new sections BELOW the existing MegaPlus-mirroring table + KPI strip:
-
-**Section 1 — „მოლარეების ანალიზი" table:**
-- 5 columns: # (rank with gold/silver/bronze color for #1/#2/#3) · მოლარე · საშუალო კალათა (AOV) · ჩეკი/საათში (TPH) · ნაღდის წილი (% + progress bar)
-- TPH = receipts_in_period / distinct_active_hours_in_period (from `cashier_hour_breakdown`). Falls back to "—" or "პერიოდი მონიშნე" when no period selected or out of 180-day window.
-- Cash share % = `cash / (cash + card) * 100`. Renders as numeric + visual bar.
-
-**Section 2 — „საათობრივი აქტივობა" 24-bar chart:**
-- 24 vertical bars showing revenue per hour-of-day, aggregated across the period+store+cashier filter.
-- Hover tooltip: `HH:00 — {revenue} ₾ / {receipts} ჩეკი`.
-- Empty bars rendered as faint placeholders when no activity. Whole chart hidden behind "პერიოდი მონიშნე" prompt when no period selected.
-
-**Removed (built then reverted in same session):**
-- `prevRange` / `prevRevByKey` useMemos and the "წინა პერიოდთან" column. Owner rejected.
-
-### Verification — May 8 ლია (დვაბზუ), exact match
-
-| metric | expected (from cashier_day_breakdown) | derived (new analyses) |
-|---|---|---|
-| receipts | 9 | 9 ✅ |
-| revenue | 126.87 ₾ | 126.87 ₾ ✅ |
-| cash | 95.48 | 95.48 ✅ |
-| card | 31.39 | 31.39 ✅ |
-| **AOV** | — | **14.10 ₾** ✅ |
-| **cash share** | — | **75.26%** ✅ |
-| **TPH** | — | **4.50** (9 receipts / 2 active hours) ✅ |
-| hourly | — | hour 0: 8 receipts / 113.87 ₾ · hour 1: 1 receipt / 13.00 ₾ ✅ |
-
-Cross-midnight shift visible: ლია's "May 8" is actually 7 May late-night carried into 00:xx and 01:xx — MegaPlus-consistent calendar-day cutoff.
-
-### Files changed this session — **uncommitted on local main**
-
-- `dashboard_pipeline/megaplus_backup.py` (new SQL + return-dict entry)
-- `dashboard_pipeline/retail_sales.py` (combined accumulator + dict entry)
-- `dashboard_pipeline/api_contracts.py` (allowlist entry)
-- `rs-dashboard/src/Cashiers.jsx` (analysis table + hourly chart; styles block extended; previous-period code removed mid-session)
-
-### Open ambiguity — RESOLVE FIRST in next session
-
-Owner's final message before handoff: "დღეების შედარება მაღაზიების შედარება ეს არ გვჭირდება". Agent removed period-over-period column (covers "დღეების შედარება") but could NOT identify what "მაღაზიების შედარება" referred to. Possible interpretations agent asked owner (no answer):
-
-1. „· დვაბზუ / · ოზურგეთი" suffix next to each cashier name (in BOTH the existing main table AND the new analysis table)
-2. The unified leaderboard rank that mixes cashiers from both stores when "ყველა მაღაზია" filter active
-3. Hourly chart aggregating across both stores
-4. The new analysis table altogether (since it shows the same cashier × store pairing as the main table)
-5. Something else entirely
-
-**Action required:** ask owner explicitly „გვერდის რომელ ადგილს გულისხმობდი როცა თქვი 'მაღაზიების შედარება ეს არ გვჭირდება'?" Show concrete examples (e.g., screenshot crops). Do NOT guess.
-
-### Pending — other items
-
-- Owner did NOT authorize commit/push (per pattern). Local main has 4 + 5 + 2 changes accumulated across three sessions, none pushed.
-- Delete obsolete `Financial_Analysis/cashier_names.json` (from 2026-05-11 ღამე session — still unresolved).
-
-### Verification commands (next session)
-
-```powershell
-# AOV / cash% / TPH for May 8 ლია — should match table above
-"C:\Users\tengiz\OneDrive\Desktop\AI აგენტი\venv\Scripts\python.exe" -c "
-import urllib.request, json
-api = json.loads(urllib.request.urlopen('http://localhost:8000/api/data?tab=retail_sales', timeout=30).read())
-rs = api['retail_sales']
-chb = [r for r in rs['cashier_hour_breakdown'] if r['day']=='2026-05-08' and r['object']=='დვაბზუ' and r.get('cashier_name')=='ლია შკუბულიანი']
-for r in sorted(chb, key=lambda x: x['hour']):
-    print(f\"  hr={r['hour']:>2} rcp={r['receipts']:>3} rev={r['revenue']:>7.2f}\")
-# expect hour 0: 8 receipts / 113.87 · hour 1: 1 receipt / 13.00
+days = [d for d in idx if d.startswith('2026-04')]
+out_total = sum(idx[d]['out']['bank_total'] for d in days)
+salary_bank = sum(idx[d]['out'].get('salary_bank', 0) for d in days)
+owner_bank = sum(idx[d]['out'].get('owner_withdraw_bank', 0) for d in days)
+print(f'April OUT headline: {out_total:.2f} GEL')
+print(f'  salary_bank: {salary_bank:.2f}')
+print(f'  owner_withdraw_bank: {owner_bank:.2f}')
+# Expected: headline 159,682.38; *_bank fields present alongside full bank+cash totals.
 "
 ```
 
@@ -381,9 +70,9 @@ for r in sorted(chb, key=lambda x: x['hour']):
 
 ## ისტორიული session-ები — გადატანილია არქივში
 
-2026-05-05 → 2026-05-11 session-ების ანგარიშები → `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-05_2026-05-11.md`
-
-წინა ისტორია: `CONTEXT_HISTORY_2026-04_2026-05-02.md` + `CONTEXT_HISTORY_2026-05-03_2026-05-04.md`
+- 2026-05-12 → 2026-05-13 (HOME-1 / HOME-3 / Cashiers detail) → `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-12_2026-05-13.md`
+- 2026-05-05 → 2026-05-11 → `HANDOFF_ARCHIVE/CONTEXT_HISTORY_2026-05-05_2026-05-11.md`
+- წინა ისტორია: `CONTEXT_HISTORY_2026-04_2026-05-02.md` + `CONTEXT_HISTORY_2026-05-03_2026-05-04.md`
 
 ---
 
@@ -519,7 +208,7 @@ for r in sorted(chb, key=lambda x: x['hour']):
 | Tool surface | 29 (incl. `data_quality_guard`) |
 | Dashboard tabs | 18 (16 + ⚠️ შეუსაბამო პროდუქცია + 👥 დუბლიკატები — both added 2026-05-05 დღე) |
 | `data.json` | 116.00 MB (2026-05-08 build, public · dist not mirrored — pre-Session-1 stale) |
-| Local branch | `main`, 3 modified + 2 untracked (Megaplus Session 1 not yet pushed): `analytics_builders.py`, `api_contracts.py`, `generate_dashboard_data.py`, `tests/test_monthly_pnl_cash_income.py`, `HANDOFF_ARCHIVE/PREVIEWS/SPRINT_MEGAPLUS_CASH_INCOME_PREVIEW.md` |
+| Local branch | `main`, working tree clean post-HOME-7 commit `e64ea2e` |
 | Cache state | BOG: 171,869 rows (2023-2026) · rs.ge: 22,408 rows (2022-2026, last refresh 2026-05-05 14:52, no 2026-05-06 yet) · TBC: 50,924 rows (2023-2026, dedup by `ტრანზაქციის ID`) |
 | MegaPlus DB integration | LIVE — 53 tables / 282+308 suppliers across 2 stores / 720K active orders / 2024-03 → 2026-04 |
 | MegaPlus watch folder layout | `Financial_Analysis/მეგაპლიუსის არქიტექტურა/{დვაბზუ,ოზურგეთი}/` (legacy `მეგა პლუს backup*` glob still supported) |

@@ -112,5 +112,8 @@ rs-dashboard/playwright-report/
 .claude/regression_detected.flag
 .claude/regression_history/
 
+# Claude Code worktrees (per-agent isolated copies; machine-local, regenerable)
+.claude/worktrees/
+
 # Code dispersion AI response cache (machine-local, regenerable)
 .code_dispersion_cache.json
