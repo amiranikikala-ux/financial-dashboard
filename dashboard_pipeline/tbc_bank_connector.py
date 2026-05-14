@@ -229,6 +229,67 @@ def _iter_movements(xml: str) -> Iterable[Movement]:
         )
 
 
+def _build_balance_envelope(
+    user: str,
+    password: str,
+    nonce: str,
+    account: str,
+    currency: str,
+    period_from: date,
+    period_to: date,
+) -> str:
+    """SOAP envelope for StatementService.GetAccountStatement.
+
+    Filter fields per TBC SDK (`AccountStatementFilterIo`): periodFrom,
+    periodTo (XSD `date` — no time component), accountNumber, currency.
+    """
+    return (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        f'<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">\n'
+        f"  <s:Header>\n"
+        f'    <wsse:Security xmlns:wsse="{WSSE}">\n'
+        f"      <wsse:UsernameToken>\n"
+        f"        <wsse:Username>{html.escape(user)}</wsse:Username>\n"
+        f"        <wsse:Password>{html.escape(password)}</wsse:Password>\n"
+        f"        <wsse:Nonce>{html.escape(nonce)}</wsse:Nonce>\n"
+        f"      </wsse:UsernameToken>\n"
+        f"    </wsse:Security>\n"
+        f"  </s:Header>\n"
+        f"  <s:Body>\n"
+        f'    <GetAccountStatementRequestIo xmlns="{NS}">\n'
+        f"      <filter>\n"
+        f"        <periodFrom>{period_from.strftime('%Y-%m-%d')}</periodFrom>\n"
+        f"        <periodTo>{period_to.strftime('%Y-%m-%d')}</periodTo>\n"
+        f"        <accountNumber>{html.escape(account)}</accountNumber>\n"
+        f"        <currency>{html.escape(currency)}</currency>\n"
+        f"      </filter>\n"
+        f"    </GetAccountStatementRequestIo>\n"
+        f"  </s:Body>\n"
+        f"</s:Envelope>\n"
+    )
+
+
+def _parse_balance(xml: str) -> dict[str, float | str]:
+    """Extract closing balance + opening + sums from a GetAccountStatement response."""
+    def _f(tag: str) -> float:
+        m = re.search(rf"<ns2:{tag}>([^<]*)</ns2:{tag}>", xml)
+        return _parse_float(m.group(1)) if m else 0.0
+
+    def _s(tag: str) -> str:
+        m = re.search(rf"<ns2:{tag}>([^<]*)</ns2:{tag}>", xml)
+        return m.group(1).strip() if m else ""
+
+    return {
+        "opening_balance": _f("openingBalance"),
+        "closing_balance": _f("closingBalance"),
+        "opening_date": _s("openingDate"),
+        "closing_date": _s("closingDate"),
+        "credit_sum": _f("creditSum"),
+        "debit_sum": _f("debitSum"),
+        "currency": _s("currency"),
+    }
+
+
 class TBCBankConnector:
     """
     TBC DBI SOAP client — read-only.
@@ -268,13 +329,13 @@ class TBCBankConnector:
         self.timeout = timeout
         self._session = requests.Session()
 
-    def _post(self, envelope: str) -> str:
+    def _post(self, envelope: str, soap_action: str = "GetAccountMovements") -> str:
         r = self._session.post(
             self.endpoint,
             data=envelope.encode("utf-8"),
             headers={
                 "Content-Type": "text/xml; charset=utf-8",
-                "SOAPAction": f'"{NS}/GetAccountMovements"',
+                "SOAPAction": f'"{NS}/{soap_action}"',
             },
             timeout=self.timeout,
         )
@@ -287,6 +348,42 @@ class TBCBankConnector:
                 f"TBC SOAP returned HTTP {r.status_code}: {msg}"
             )
         return r.text
+
+    def fetch_balance(
+        self,
+        nonce: str | None = None,
+        as_of: date | None = None,
+    ) -> dict[str, float | str]:
+        """
+        Fetch current account balance via the StatementService.
+
+        Calls ``GetAccountStatement`` with a 1-day window ending on ``as_of``
+        (defaults to today) and returns the ``closingBalance`` plus the
+        ``creditSum`` / ``debitSum`` aggregates the response carries.
+
+        DigiPass nonce required (same constraint as ``fetch_movements``). When
+        callers fetch both movements and balance in one OTP window, pass the
+        same nonce to both methods.
+        """
+        nonce = nonce or os.environ.get("TBC_NONCE", "")
+        if not nonce:
+            raise TBCBankError(
+                "TBC nonce missing — pass `nonce=` (DigiPass-generated 9-digit "
+                "OTP) or set TBC_NONCE env var."
+            )
+
+        as_of = as_of or date.today()
+        envelope = _build_balance_envelope(
+            user=self.username,
+            password=self.password,
+            nonce=nonce,
+            account=self.account,
+            currency=self.currency,
+            period_from=as_of,
+            period_to=as_of,
+        )
+        xml = self._post(envelope, soap_action="GetAccountStatement")
+        return _parse_balance(xml)
 
     def fetch_movements(
         self,

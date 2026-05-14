@@ -79,6 +79,7 @@ export default function Suppliers({
   const [searchName, setSearchName] = useState('');
   const [supplierSortKey, setSupplierSortKey] = useState('debt_asc');
   const [payAmount, setPayAmount] = useState('');
+  const [payDate, setPayDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [recordedFlash, setRecordedFlash] = useState(false);
   const [archiveOverrides, setArchiveOverrides] = useState({});
   const [pendingArchiveTid, setPendingArchiveTid] = useState(null);
@@ -265,7 +266,7 @@ export default function Suppliers({
         body: JSON.stringify({
           tax_id: tid,
           amount: payVal,
-          date: new Date().toISOString().slice(0, 10),
+          date: payDate || new Date().toISOString().slice(0, 10),
           comment: 'ბრაუზერიდან',
         }),
       });
@@ -514,6 +515,17 @@ export default function Suppliers({
                 </button>
               ) : null}
             </div>
+
+            <input
+              type="date"
+              className="pay-card-input"
+              value={payDate}
+              onChange={(e) => setPayDate(e.target.value)}
+              max={new Date().toISOString().slice(0, 10)}
+              aria-label="გადახდის თარიღი"
+              title="როდის მოხდა გადახდა (default = დღეს)"
+              style={{ minWidth: 140 }}
+            />
 
             <button
               type="button"

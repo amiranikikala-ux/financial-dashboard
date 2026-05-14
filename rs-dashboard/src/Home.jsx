@@ -569,6 +569,40 @@ export default function Home({ retailSales, fromDate, fromTime, toDate, toTime, 
   const [profitExpExpanded, setProfitExpExpanded] = useState({ salary: false, rent: false, owner: false, service: false, refund: false });
   const toggleProfitExp = (k) => setProfitExpExpanded((s) => ({ ...s, [k]: !s[k] }));
 
+  // Bank balances (TBC + BOG) — populated as a side-effect of /api/banks/refresh
+  const [bankBalance, setBankBalance] = useState({});
+  useEffect(() => {
+    let active = true;
+    fetch('/api/bank-balance')
+      .then((r) => r.json())
+      .then((data) => { if (active) setBankBalance(data || {}); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [reloadKey]);
+
+  // Data freshness — bank cache + Megaplus ingest state
+  const [freshness, setFreshness] = useState(null);
+  useEffect(() => {
+    let active = true;
+    fetch('/api/freshness')
+      .then((r) => r.json())
+      .then((data) => { if (active) setFreshness(data || null); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [reloadKey]);
+
+  // Per-store cash till — uses active period from picker, falls back to last 14 days
+  const [cashTill, setCashTill] = useState(null);
+  useEffect(() => {
+    let active = true;
+    const qs = periodActive ? `?from=${periodFrom}&to=${periodTo}` : '';
+    fetch(`/api/cash-till${qs}`)
+      .then((r) => r.json())
+      .then((data) => { if (active) setCashTill(data || null); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [reloadKey, periodActive, periodFrom, periodTo]);
+
   useEffect(() => {
     let active = true;
     setMoneyFlowLoading(true);
@@ -974,6 +1008,40 @@ export default function Home({ retailSales, fromDate, fromTime, toDate, toTime, 
           <div style={{ color: '#94a3b8', fontSize: '0.92rem', marginTop: 2 }}>
             {periodLabel}: <strong style={{ color: '#cbd5e1' }}>{headerLabel}</strong>
           </div>
+          {freshness && (() => {
+            const banks = freshness.banks || {};
+            const bankTimes = ['tbc', 'bog', 'rsge']
+              .map((k) => banks[k]?.last_completed_at)
+              .filter(Boolean)
+              .map((iso) => new Date(iso).getTime())
+              .filter((n) => !isNaN(n));
+            const bankLatest = bankTimes.length ? Math.max(...bankTimes) : null;
+            const mpDates = Object.values(freshness.megaplus || {})
+              .map((s) => s?.last_backup_date)
+              .filter(Boolean);
+            const mpEarliest = mpDates.length ? mpDates.sort()[0] : null;
+            const fmtAgo = (ms) => {
+              const diff = Date.now() - ms;
+              if (diff < 0) return 'ახლახან';
+              const min = Math.floor(diff / 60000);
+              if (min < 60) return `${min} წთ წინ`;
+              const hr = Math.floor(min / 60);
+              if (hr < 24) return `${hr} სთ წინ`;
+              return `${Math.floor(hr / 24)} დღის წინ`;
+            };
+            const bankColor = bankLatest && (Date.now() - bankLatest) < 6 * 3600 * 1000 ? '#10b981' : (bankLatest && (Date.now() - bankLatest) < 24 * 3600 * 1000 ? '#f59e0b' : '#ef4444');
+            const mpColor = mpEarliest && mpEarliest >= todayDay ? '#10b981' : (mpEarliest && new Date(mpEarliest).getTime() > Date.now() - 2 * 86400000 ? '#f59e0b' : '#ef4444');
+            return (
+              <div style={{ color: '#64748b', fontSize: '0.78rem', marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                {bankLatest && (
+                  <span><span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 4, background: bankColor, marginRight: 5, verticalAlign: 'middle' }} />ბანკი: {fmtAgo(bankLatest)}</span>
+                )}
+                {mpEarliest && (
+                  <span><span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 4, background: mpColor, marginRight: 5, verticalAlign: 'middle' }} />Megaplus: {fmtDayKa(mpEarliest)}-მდე</span>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -1011,15 +1079,112 @@ export default function Home({ retailSales, fromDate, fromTime, toDate, toTime, 
           sub={profitSub}
           color={profitColor}
         />
-        <KpiCard
-          icon="🏦"
-          label="ბანკში ნაშთი"
-          value="მზადდება HOME-2 ეტაპზე"
-          sub="ეს ციფრი მომდევნო sprint-ში დაემატება"
-          color="#64748b"
-          placeholder
-        />
+        {(() => {
+          const tbc = bankBalance.tbc;
+          const bog = bankBalance.bog;
+          const fmtFetchedAgo = (iso) => {
+            if (!iso) return null;
+            const ms = Date.now() - new Date(iso).getTime();
+            if (isNaN(ms) || ms < 0) return null;
+            const min = Math.floor(ms / 60000);
+            if (min < 1) return 'ახლახან';
+            if (min < 60) return `${min} წთ წინ`;
+            const hr = Math.floor(min / 60);
+            if (hr < 24) return `${hr} სთ წინ`;
+            const days = Math.floor(hr / 24);
+            return `${days} დღის წინ`;
+          };
+          return (
+            <>
+              <KpiCard
+                icon="🏦"
+                label="TBC ნაშთი"
+                value={tbc ? fmtGel2(tbc.closing_balance) : '—'}
+                sub={tbc ? `განახლდა ${fmtFetchedAgo(tbc.fetched_at) || ''}` : 'ჯერ არ განახლებულა — დააწექი „განახლება"'}
+                color={tbc ? '#3b82f6' : '#64748b'}
+                placeholder={!tbc}
+              />
+              <KpiCard
+                icon="🏦"
+                label="BOG ნაშთი"
+                value={bog ? fmtGel2(bog.current) : '—'}
+                sub={bog ? `განახლდა ${fmtFetchedAgo(bog.fetched_at) || ''}` : 'ჯერ არ განახლებულა — დააწექი „განახლება"'}
+                color={bog ? '#f59e0b' : '#64748b'}
+                placeholder={!bog}
+              />
+            </>
+          );
+        })()}
       </div>
+
+      {/* ----- Cash till per store ----- */}
+      {cashTill && cashTill.stores && (() => {
+        const stores = cashTill.stores;
+        const totals = cashTill.totals;
+        const periodLabel2 = `${fmtDayKa(cashTill.period.from)} → ${fmtDayKa(cashTill.period.to)}`;
+        const storeEntries = Object.entries(stores).filter(([_, s]) => (s.cash_sales || 0) > 0 || (s.cash_deposits || 0) > 0);
+        if (storeEntries.length === 0) return null;
+        return (
+          <div style={{
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 12,
+            padding: '18px 20px',
+            marginBottom: 24,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#f1f5f9' }}>
+                💵 ნაღდი ფული საფიცარში
+              </h3>
+              <div style={{ color: '#94a3b8', fontSize: '0.85rem' }}>{periodLabel2}</div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
+              {storeEntries.map(([name, s]) => {
+                const tillColor = s.till_change >= 0 ? '#10b981' : '#ef4444';
+                return (
+                  <div key={name}>
+                    <div style={{ color: '#f1f5f9', fontSize: '1rem', fontWeight: 600, marginBottom: 8 }}>{name}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', color: '#cbd5e1', fontSize: '0.92rem' }}>
+                      <span>გაიყიდა ნაღდად</span>
+                      <span>{fmtGel2(s.cash_sales)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', color: '#94a3b8', fontSize: '0.92rem' }}>
+                      <span>− ბანკში ჩაიდო</span>
+                      <span>−{fmtGel2(s.cash_deposits)}</span>
+                    </div>
+                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', margin: '6px 0' }} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', color: tillColor, fontWeight: 700, fontSize: '1.05rem' }}>
+                      <span>საფიცარში დარჩა</span>
+                      <span>{s.till_change > 0 ? '+' : ''}{fmtGel2(s.till_change)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.10)', marginTop: 14, paddingTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <span style={{ color: '#94a3b8', fontSize: '0.92rem' }}>სალაროდან ბანკში გასული (ჯამი)</span>
+              <span style={{ color: '#cbd5e1', fontSize: '0.95rem' }}>
+                {totals.till_change > 0 ? '+' : ''}{fmtGel2(totals.till_change)}
+              </span>
+            </div>
+            {totals.cash_supplier_paid > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', color: '#94a3b8', fontSize: '0.92rem' }}>
+                <span>− ხელით მომწოდებლებს ნაღდად</span>
+                <span style={{ color: '#f87171' }}>−{fmtGel2(totals.cash_supplier_paid)}</span>
+              </div>
+            )}
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.10)', marginTop: 6, paddingTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <span style={{ color: '#f1f5f9', fontWeight: 600, fontSize: '0.95rem' }}>რეალური სალაროს ცვლილება</span>
+              <span style={{ color: totals.real_till_change >= 0 ? '#10b981' : '#ef4444', fontWeight: 700, fontSize: '1.2rem' }}>
+                {totals.real_till_change > 0 ? '+' : ''}{fmtGel2(totals.real_till_change)}
+              </span>
+            </div>
+            <div style={{ color: '#64748b', fontSize: '0.78rem', marginTop: 6, fontStyle: 'italic' }}>
+              ⓘ ხელფასი/იჯარა ნაღდად, თუ ჟურნალში ცალკე ჩაწერე — აქ ჯერ არ ჩანს, რომელი მაღაზიის სალაროდან წავიდა.
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ----- Real Net Profit breakdown ----- */}
       {moneyFlow && moneyFlow.profit_breakdown && (periodActive || todayDay) && (() => {

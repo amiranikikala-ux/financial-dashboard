@@ -177,6 +177,30 @@ class BOGBankConnector:
             f"BOG response shape unexpected: keys={list(payload.keys())[:10]}"
         )
 
+    def fetch_balance(self) -> dict[str, float]:
+        """
+        Fetch current and available balance for this account.
+
+        Endpoint: GET /api/accounts/{account}/{currency}
+        Response: {"AvailableBalance": float, "CurrentBalance": float}
+        """
+        token = self._get_token()
+        url = f"{API_BASE}/api/accounts/{self.account}/{self.currency}"
+        r = self._session.get(
+            url,
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=self.timeout,
+        )
+        if r.status_code != 200:
+            raise BOGBankError(
+                f"BOG balance fetch failed: HTTP {r.status_code} {r.text[:200]}"
+            )
+        payload = r.json() or {}
+        return {
+            "available": _g_float(payload, "AvailableBalance", "availableBalance"),
+            "current": _g_float(payload, "CurrentBalance", "currentBalance"),
+        }
+
     def fetch_statement(
         self,
         start: date,

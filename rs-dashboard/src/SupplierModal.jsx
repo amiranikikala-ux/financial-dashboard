@@ -289,6 +289,7 @@ export default function SupplierModal({
   const [agingLoading, setAgingLoading] = useState(!initialAgingData || initialAgingData.length === 0);
   const [importedResult, setImportedResult] = useState({ key: '', detail: null, error: '' });
   const [payAmount, setPayAmount] = useState('');
+  const [payDate, setPayDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [recordedFlash, setRecordedFlash] = useState(false);
   const [confirmingWaybillKey, setConfirmingWaybillKey] = useState('');
   const [autoConfirmedKeys, setAutoConfirmedKeys] = useState(() => new Set());
@@ -775,7 +776,7 @@ export default function SupplierModal({
         body: JSON.stringify({
           tax_id: taxId,
           amount: payVal,
-          date: new Date().toISOString().slice(0, 10),
+          date: payDate || new Date().toISOString().slice(0, 10),
           comment: 'ბრაუზერიდან',
         }),
       });
@@ -1552,6 +1553,16 @@ export default function SupplierModal({
                 />
                 <span className="supplier-modal-pay-currency" aria-hidden="true">₾</span>
               </div>
+              <input
+                type="date"
+                className="supplier-modal-pay-input"
+                value={payDate}
+                onChange={(e) => setPayDate(e.target.value)}
+                max={new Date().toISOString().slice(0, 10)}
+                aria-label="გადახდის თარიღი"
+                title="როდის მოხდა გადახდა (default = დღეს)"
+                style={{ minWidth: 140 }}
+              />
               <button
                 type="button"
                 className="supplier-modal-pay-record"

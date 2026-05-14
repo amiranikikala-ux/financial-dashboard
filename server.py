@@ -577,6 +577,29 @@ def _run_bank_refresh(nonce: str | None) -> None:
             ]
             _bank_refresh_status["last_error"] = "; ".join(failures)[:500]
 
+        # Phase C — Fetch current balances for successful banks. Failures are
+        # logged but do NOT mark the refresh as failed; balance is a "nice to
+        # have" on top of the statement fetch.
+        try:
+            from dashboard_pipeline.bank_balance import (
+                fetch_bog_balance,
+                fetch_tbc_balance,
+            )
+            if result["bog"]["ok"]:
+                try:
+                    fetch_bog_balance()
+                    logger.info("BOG balance fetched")
+                except Exception as exc:
+                    logger.warning("BOG balance fetch failed: %s", exc)
+            if nonce and result["tbc"]["ok"]:
+                try:
+                    fetch_tbc_balance(nonce)
+                    logger.info("TBC balance fetched")
+                except Exception as exc:
+                    logger.warning("TBC balance fetch failed: %s", exc)
+        except Exception as exc:
+            logger.warning("Balance phase skipped: %s", exc)
+
         if any_ok:
             # At least one cache changed — kick a pipeline regen so the
             # dashboard sees the new data. `_run_pipeline` is reentrant via
@@ -621,6 +644,89 @@ async def trigger_bank_refresh(request: Request, payload: dict = Body(default={}
         "status": "started",
         "message": "Bank refresh kicked off in background",
     }
+
+
+@app.get("/api/bank-balance")
+@limiter.limit("30/minute")
+async def get_bank_balance(request: Request):
+    """Return the latest cached bank balances for BOG and TBC.
+
+    Balances are populated as a side-effect of `POST /api/banks/refresh`.
+    First-time visitors (no refresh ever) get an empty object.
+    """
+    from dashboard_pipeline.bank_balance import load_balances
+    return load_balances()
+
+
+@app.get("/api/cash-till")
+@limiter.limit("30/minute")
+async def get_cash_till(request: Request):
+    """Per-store cash till change for [from, to] (defaults to last 14 days).
+
+    Query params: ``from`` and ``to`` (ISO YYYY-MM-DD). ``from`` is read off
+    the raw query string because it's a Python reserved word and FastAPI
+    can't bind it to a function parameter.
+    """
+    from datetime import date as _date, timedelta as _td
+    from dashboard_pipeline.cash_till import compute_cash_till
+
+    qp = request.query_params
+    today = _date.today()
+    try:
+        start = _date.fromisoformat(qp["from"]) if "from" in qp else today - _td(days=14)
+        end = _date.fromisoformat(qp["to"]) if "to" in qp else today
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"bad date: {exc}")
+
+    try:
+        data = load_full_data()
+        cdb = (data.get("retail_sales") or {}).get("cashier_day_breakdown") or []
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=500, detail=f"could not load retail_sales: {exc}"
+        )
+
+    return compute_cash_till(cdb, start=start, end=end)
+
+
+@app.get("/api/freshness")
+@limiter.limit("60/minute")
+async def get_data_freshness(request: Request):
+    """Return how current each data source is.
+
+    Reads:
+      - `Financial_Analysis/cache/.last_refresh.json` — bank caches (TBC/BOG/rsge)
+      - `Financial_Analysis/მეგაპლიუსის არქიტექტურა/*/_megaplus_state.json` —
+        Megaplus ZIP ingest state per store
+    """
+    import json as _json
+    from pathlib import Path as _Path
+
+    root = _Path(__file__).resolve().parent
+    out: dict = {"banks": {}, "megaplus": {}}
+
+    bank_state = root / "Financial_Analysis" / "cache" / ".last_refresh.json"
+    if bank_state.exists():
+        try:
+            out["banks"] = _json.loads(bank_state.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            out["banks"] = {}
+
+    mp_root = root / "Financial_Analysis" / "მეგაპლიუსის არქიტექტურა"
+    if mp_root.exists():
+        for store_dir in mp_root.iterdir():
+            state_file = store_dir / "_megaplus_state.json"
+            if state_file.exists():
+                try:
+                    s = _json.loads(state_file.read_text(encoding="utf-8"))
+                    out["megaplus"][store_dir.name] = {
+                        "last_backup_date": s.get("last_backup_date"),
+                        "last_processed_at": s.get("last_processed_at"),
+                    }
+                except Exception:  # noqa: BLE001
+                    continue
+
+    return out
 
 
 # ---------------------------------------------------------------------------
