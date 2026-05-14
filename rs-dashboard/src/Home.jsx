@@ -1053,7 +1053,10 @@ export default function Home({ retailSales, fromDate, fromTime, toDate, toTime, 
               .filter(Boolean)
               .map((iso) => new Date(iso).getTime())
               .filter((n) => !isNaN(n));
-            const bankLatest = bankTimes.length ? Math.max(...bankTimes) : null;
+            // Use the STALEST bank (Math.min of completion timestamps), not the freshest —
+            // otherwise a fresh BOG hides a stale TBC. The dot/badge should reflect
+            // the worst-case freshness across all bank sources.
+            const bankLatest = bankTimes.length ? Math.min(...bankTimes) : null;
             const mpDates = Object.values(freshness.megaplus || {})
               .map((s) => s?.last_backup_date)
               .filter(Boolean);
@@ -2181,21 +2184,6 @@ export default function Home({ retailSales, fromDate, fromTime, toDate, toTime, 
             </div>
           </div>
         )}
-      </div>
-
-      {/* Roadmap note (visible while page is in early sprint) */}
-      <div
-        style={{
-          background: 'rgba(59,130,246,0.06)',
-          border: '1px dashed rgba(59,130,246,0.3)',
-          borderRadius: 10,
-          padding: '12px 16px',
-          color: '#cbd5e1',
-          fontSize: '0.88rem',
-          lineHeight: 1.5,
-        }}
-      >
-        ეს გვერდი ვითარდება. მომდევნო ეტაპებზე დაემატება: ბანკში ნაშთი + სალარო/ბანკი შედარება (HOME-2).
       </div>
 
       {/* Cash expense modal */}
