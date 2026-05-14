@@ -721,6 +721,39 @@ async def get_data_freshness(request: Request):
         except Exception:  # noqa: BLE001
             out["banks"] = {}
 
+    # Compute "last complete day" per store from cashier_hour_breakdown so API
+    # consumers know whether the latest Megaplus backup is a partial mid-day
+    # snapshot (last_backup_date covers only part of the day). A day counts as
+    # complete when the store's max recorded hour reaches 22:00 — same rule the
+    # Home page uses.
+    last_complete_by_store: dict[str, str] = {}
+    try:
+        data = load_full_data()
+        chb = (data.get("retail_sales") or {}).get("cashier_hour_breakdown") or []
+        max_hour: dict[tuple[str, str], int] = {}
+        for r in chb:
+            day = str(r.get("day") or "")[:10]
+            obj = r.get("object") or ""
+            if not day or not obj:
+                continue
+            try:
+                h = int(r.get("hour") or 0)
+            except (TypeError, ValueError):
+                continue
+            key = (obj, day)
+            if h > max_hour.get(key, -1):
+                max_hour[key] = h
+        per_store_days: dict[str, list[tuple[str, int]]] = {}
+        for (obj, day), h in max_hour.items():
+            per_store_days.setdefault(obj, []).append((day, h))
+        for obj, days in per_store_days.items():
+            for day, h in sorted(days, reverse=True):
+                if h >= 22:
+                    last_complete_by_store[obj] = day
+                    break
+    except Exception:  # noqa: BLE001
+        last_complete_by_store = {}
+
     mp_root = root / "Financial_Analysis" / "მეგაპლიუსის არქიტექტურა"
     if mp_root.exists():
         for store_dir in mp_root.iterdir():
@@ -728,8 +761,15 @@ async def get_data_freshness(request: Request):
             if state_file.exists():
                 try:
                     s = _json.loads(state_file.read_text(encoding="utf-8"))
+                    last_backup = s.get("last_backup_date")
+                    last_complete = last_complete_by_store.get(store_dir.name)
+                    partial = bool(
+                        last_backup and last_complete and last_complete < last_backup
+                    )
                     out["megaplus"][store_dir.name] = {
-                        "last_backup_date": s.get("last_backup_date"),
+                        "last_backup_date": last_backup,
+                        "last_complete_day": last_complete,
+                        "partial": partial,
                         "last_processed_at": s.get("last_processed_at"),
                     }
                 except Exception:  # noqa: BLE001
