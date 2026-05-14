@@ -60,6 +60,15 @@ SAMURNEO_PATTERN = re.compile(r"სამეურნეო", re.IGNORECASE)
 SALARY_PATTERN = re.compile(r"ხელფასი|შრომის ანაზღაურება|პრემია", re.IGNORECASE)
 RENT_PATTERN = re.compile(r"იჯარა|ქირა", re.IGNORECASE)
 REFUND_PATTERN = re.compile(r"ოპერაციის გაუქმება|თანხის დაბრუნება", re.IGNORECASE)
+# Incoming refunds — money landing back in our account because a prior
+# outgoing transfer was reversed (wrong account, bank correction, etc.).
+# Not real revenue; must be excluded from the "ბანკში შემოვიდა" headline.
+# NB: samurneo expense refunds ("სამეურნეო ხარჯის დაბრუნება") are caught
+# by _is_samurneo first and stay in the samurneo netting bucket.
+REFUND_IN_PATTERN = re.compile(
+    r"შეცდომით ჩარიცხული|უკან დაბრუნება|დაბრუნებული თანხა",
+    re.IGNORECASE,
+)
 OWNER_PARTNER_PATTERN = re.compile(r"კიკალიშვილი", re.IGNORECASE)
 SUPPLIER_DEBT_PATTERN = re.compile(r"დავალიანების დაფარვა", re.IGNORECASE)
 BANK_FEE_EXTRA_PATTERN = re.compile(
@@ -153,6 +162,10 @@ def _is_owner_withdraw(purpose: str, partner_name: str) -> bool:
 
 def _is_refund_out(purpose: str) -> bool:
     return bool(REFUND_PATTERN.search(purpose or ""))
+
+
+def _is_refund_in(purpose: str) -> bool:
+    return bool(REFUND_IN_PATTERN.search(purpose or ""))
 
 
 def _is_bank_fee_extra(purpose: str) -> bool:
@@ -679,6 +692,9 @@ def compute_daily_money_flow(
         cash_to_bank = 0.0
         cash_deposit_tbc = 0.0
         cash_deposit_bog = 0.0
+        refund_in_tbc = 0.0
+        refund_in_bog = 0.0
+        refund_in_items: list[dict] = []
 
         if bank_by_day is not None and date in bank_by_day.groups:
             day_df = bank_by_day.get_group(date)
@@ -707,6 +723,26 @@ def compute_daily_money_flow(
 
                 # IN side
                 if in_amt > 0:
+                    # Incoming refund (wrong transfer corrected, etc.) is not
+                    # real revenue — track separately and DO NOT roll into
+                    # bank_in_total so the "ბანკში შემოვიდა" headline stays
+                    # clean. e.g. April 1 2026 had a 1,090.69 ₾ row with
+                    # "შეცდომით ჩარიცხული თანხის უკან დაბრუნება" that was
+                    # silently inflating April's IN headline.
+                    if _is_refund_in(purpose):
+                        item_rin = {
+                            "bank": bank,
+                            "partner": pname or ptin,
+                            "tax_id": ptin,
+                            "amount": round(in_amt, 2),
+                            "purpose": purpose[:120],
+                        }
+                        refund_in_items.append(item_rin)
+                        if bank == "TBC":
+                            refund_in_tbc += in_amt
+                        elif bank == "BOG":
+                            refund_in_bog += in_amt
+                        continue
                     bank_in_total += in_amt
                     # TBC "ნავაჭრი" rows from bank transit partner = physical cash deposit
                     # by owner (NOT POS card). Owner confirmed 2026-05-13.
@@ -1050,6 +1086,10 @@ def compute_daily_money_flow(
                     "other_total": round(bog_other_sum, 2),
                     "total": round(bog_in_total, 2),
                 },
+                "refund_in": round(refund_in_tbc + refund_in_bog, 2),
+                "refund_in_tbc": round(refund_in_tbc, 2),
+                "refund_in_bog": round(refund_in_bog, 2),
+                "refund_in_items": refund_in_items,
                 "bank_total": round(bank_in, 2),
                 "total": round(cash + card + bank_in, 2),
             },
