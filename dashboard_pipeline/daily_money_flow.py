@@ -555,15 +555,23 @@ def compute_daily_money_flow(
 
     # Re-attribute TBC ნავაჭრი cash deposits from bank-deposit date to
     # inferred sales date. Pattern (project_cash_deposit_lag_pattern.md):
-    # Dvabzu typically 1-day lag; Ozurgeti weekday 1-day; Ozurgeti Monday =
-    # weekend bundle of Fri+Sat+Sun. Match by store + amount within ±15%
-    # over last 1-3 days; if no match, keep bank-deposit date.
+    # Dvabzu = 1-day lag; Ozurgeti weekday Tue-Sun = 1-day; Ozurgeti Monday =
+    # Fri+Sat+Sun bundle (3-day shift to Friday).
+    #
+    # Earlier versions tried to "verify" the lag by matching deposit amount
+    # against that day's cash sales within ±20%, falling back to the bank
+    # date when no match. That broke partial deposits — e.g. 1 აპრ ოზურგ
+    # 648.50 ₾ is genuinely 31 მარ ოზურგ money, but the owner had only
+    # deposited part of that day's 1,748 ₾ in cash sales, so the 37% gap
+    # tripped the guard and the row stayed on April 1, inflating April's
+    # "ბანკში შემოვიდა" headline. cash_till.py already uses the simple
+    # unconditional shift; we align here so the two views agree.
     def _infer_cash_deposit_sales_date(
         purpose: str, deposit_date: str, deposit_amount: float
     ) -> str:
         if "დვაბზუ" in purpose or "დუვაბზუ" in purpose:
             store = "დვაბზუ"
-        elif "ოზურგეთი" in purpose:
+        elif "ოზურგეთი" in purpose or "ოზურგეტი" in purpose:
             store = "ოზურგეთი"
         else:
             return deposit_date
@@ -571,28 +579,8 @@ def compute_daily_money_flow(
         if pd.isna(d):
             return deposit_date
         if store == "ოზურგეთი" and d.weekday() == 0:
-            fri = (d - pd.Timedelta(days=3)).strftime("%Y-%m-%d")
-            sat = (d - pd.Timedelta(days=2)).strftime("%Y-%m-%d")
-            sun = (d - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-            bundle = sum(
-                cash_sales_per_store_date.get((store, x), 0.0)
-                for x in (fri, sat, sun)
-            )
-            if bundle > 0 and abs(bundle - deposit_amount) / bundle < 0.15:
-                return fri
-        # Prefer shortest lag (1-day) over best %-match — Dvabzu canonical
-        # rule is 1-day lag; only fall to 2-3 day lag if 1-day clearly fails.
-        # (Owner confirmed 2026-05-13: e.g. 2 აპრ Dvabzu 1,774.50 deposit IS
-        # April's money (= 1 აპრ Dvabzu sale 1,756.24), NOT Mar 31's match.)
-        for back in range(1, 4):
-            sd = (d - pd.Timedelta(days=back)).strftime("%Y-%m-%d")
-            sale = cash_sales_per_store_date.get((store, sd), 0.0)
-            if sale <= 0:
-                continue
-            diff_pct = abs(sale - deposit_amount) / sale
-            if diff_pct < 0.20:
-                return sd
-        return deposit_date
+            return (d - pd.Timedelta(days=3)).strftime("%Y-%m-%d")
+        return (d - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
     if not bank_df.empty:
         for idx, r in bank_df.iterrows():
