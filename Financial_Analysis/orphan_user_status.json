@@ -1,4 +1,9 @@
 {
-  "ignored": {},
+  "ignored": {
+    "ოზურგეთი::82622": {
+      "ignored_at": "2026-05-17T20:21:19",
+      "note": null
+    }
+  },
   "version": 1
 }
