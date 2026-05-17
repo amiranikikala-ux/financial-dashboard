@@ -1877,11 +1877,13 @@ def run():
         fa_dir = Path(script_dir) / "Financial_Analysis"
         megaplus_folders = _megaplus_discover(fa_dir)
         if megaplus_folders:
+            refresh_failed = False
             try:
                 refreshed = _process_megaplus_stores(megaplus_folders)
             except Exception as exc:
                 logger.warning("MegaPlus DB backup-ი refresh ვერ მოხერხდა (cache-ი მაინც გამოვიყენო): %s", exc)
                 refreshed = None
+                refresh_failed = True
             if refreshed is not None:
                 for store_id, rollup in refreshed.get("stores", {}).items():
                     logger.info(
@@ -1891,7 +1893,7 @@ def run():
                         f"{float(rollup['totals']['revenue']):,.0f}",
                         float(rollup['totals']['margin_pct'] or 0),
                     )
-            else:
+            elif not refresh_failed:
                 logger.info("MegaPlus DB backup-ი — ახალი ZIP არ არის, cache-დან წაიკითხება")
 
             megaplus_combined = _read_megaplus_combined(megaplus_folders)
