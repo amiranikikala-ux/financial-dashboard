@@ -22,6 +22,8 @@ export const TAB_GROUPS = [
       { id: 'duplicate_products', label: '👥 დუბლიკატები' },
       { id: 'store_compare', label: '🏬 მაღაზიები' },
       { id: 'category_anomalies', label: '🚨 კატეგორიები' },
+      { id: 'inventory', label: '📦 ნაშთები' },
+      { id: 'inventory_cleanup', label: '🧹 ნაშთის გასუფთავება' },
       { id: 'dead_stock', label: '💀 Dead Stock' },
     ],
   },

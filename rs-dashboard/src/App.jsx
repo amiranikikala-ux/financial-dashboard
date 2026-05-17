@@ -22,6 +22,8 @@ import ChatAssistant from './components/ChatAssistant.jsx';
 const Analytics = lazy(() => import('./Analytics.jsx'));
 const Home = lazy(() => import('./Home.jsx'));
 const DeadStock = lazy(() => import('./DeadStock.jsx'));
+const Inventory = lazy(() => import('./Inventory.jsx'));
+const Cleanup = lazy(() => import('./Cleanup.jsx'));
 const DebtPlan = lazy(() => import('./DebtPlan.jsx'));
 const PnL = lazy(() => import('./PnL.jsx'));
 const WorkingCapital = lazy(() => import('./WorkingCapital.jsx'));
@@ -543,6 +545,14 @@ function App() {
         ) : activeTab === 'dead_stock' ? (
           <Suspense fallback={tabSuspenseFallback}>
             <DeadStock deadStock={data.dead_stock_summary} />
+          </Suspense>
+        ) : activeTab === 'inventory' ? (
+          <Suspense fallback={tabSuspenseFallback}>
+            <Inventory inventoryView={data.inventory_view} />
+          </Suspense>
+        ) : activeTab === 'inventory_cleanup' ? (
+          <Suspense fallback={tabSuspenseFallback}>
+            <Cleanup inventoryCleanup={data.inventory_cleanup} />
           </Suspense>
         ) : activeTab === 'debt_plan' ? (
           <Suspense fallback={tabSuspenseFallback}>
