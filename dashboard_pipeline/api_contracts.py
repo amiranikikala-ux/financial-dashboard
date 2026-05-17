@@ -70,6 +70,8 @@ FIELD_DEFAULTS = {
     "invoice_waybill_match": [],
     "supplier_invoices_meta": {},
     "daily_money_flow_index": {},
+    "inventory_view": {},
+    "inventory_cleanup": {},
 }
 
 # ერთი ჭერი: სრული rollup/API პასუხები დიდი მოცულობისას (OOM-ისგან დასაცავად ზედა საზღვარი).
@@ -111,6 +113,8 @@ TAB_ALLOWLIST = {
     "orphan_products": ["orphan_products"],
     "duplicate_products": ["duplicate_products"],
     "daily_money_flow": ["daily_money_flow_index"],
+    "inventory": ["inventory_view"],
+    "inventory_cleanup": ["inventory_cleanup"],
     "executive_export": [
         "monthly_pnl",
         "budget",
@@ -2993,9 +2997,31 @@ def _build_working_capital_response(cache, period_filter=None, **_kwargs):
     }
 
 
+def _build_inventory_cleanup_response(cache, **_kwargs):
+    """Derive the cleanup payload on the fly from inventory_view + duplicate_products.
+
+    Lets the tab work the moment the service restarts — no full pipeline regen
+    needed. Once data.json is regenerated, the cached `inventory_cleanup`
+    field (if present) is preferred and returned as-is.
+    """
+    cached = cache.get("inventory_cleanup")
+    if isinstance(cached, dict) and cached.get("available"):
+        return {"inventory_cleanup": cached}
+    try:
+        from dashboard_pipeline.inventory_cleanup import build_inventory_cleanup_bundle
+        bundle = build_inventory_cleanup_bundle(
+            cache.get("inventory_view"),
+            cache.get("duplicate_products"),
+        )
+    except Exception:
+        bundle = FIELD_DEFAULTS["inventory_cleanup"]
+    return {"inventory_cleanup": bundle}
+
+
 SPECIAL_TAB_BUILDERS = {
     "suppliers": _build_suppliers_response,
     "working_capital": _build_working_capital_response,
+    "inventory_cleanup": _build_inventory_cleanup_response,
     "cashflow_summary": _build_cashflow_summary_response,
     "cashflow_tbc_expenses_detail": _build_cashflow_tbc_expenses_detail_response,
     "cashflow_bank_unmatched_detail": _build_cashflow_bank_unmatched_detail_response,

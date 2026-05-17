@@ -2040,6 +2040,33 @@ def run():
     except Exception as exc:
         logger.warning("MegaPlus DB backup-ი — ვერ ჩაიტვირთა: %s", exc)
 
+    # ----- ნაშთები (current inventory snapshot, per store + per supplier) -----
+    # Reads PRODUCTS / DISTRIBUTORS / ORDERS direct from each restored
+    # MEGAPLUS_<store> database. Independent of megaplus_combined success
+    # above — runs whenever there is at least one store rollup in cache.
+    try:
+        from dashboard_pipeline.inventory import build_inventory_view
+        inv_view = build_inventory_view(data.get("megaplus_live"))
+        data["inventory_view"] = inv_view
+        if inv_view.get("available"):
+            tc = inv_view.get("totals_combined") or {}
+            logger.info(
+                "inventory_view → data.json: %d SKU, %.0f ₾ cost-value, "
+                "%.0f ₾ retail-value, dead %.1f%%, alerts: neg=%d stockout=%d low=%d dead365=%d",
+                int(tc.get("sku_total") or 0),
+                float(tc.get("stock_value_cost") or 0),
+                float(tc.get("stock_value_retail") or 0),
+                float(tc.get("dead_pct") or 0),
+                int(tc.get("negative_stock_count") or 0),
+                int(tc.get("stockout_recent_count") or 0),
+                int(tc.get("low_stock_count") or 0),
+                int(tc.get("dead_365_plus_count") or 0),
+            )
+        else:
+            logger.info("inventory_view: store data unavailable — section skipped")
+    except Exception as exc:
+        logger.warning("inventory_view — ვერ ჩაითვალა: %s", exc)
+
     # ----- per-supplier პროდუქციული მოგება (strict barcode JOIN) -----
     # imported_products (ვინ-რა-მომიტანა) ↔ retail by_product (რა-რა-
     # ფასად-გავყიდე) — barcode/code-ით 1:1, name-fuzzy-ი აკრძალულია
@@ -2134,6 +2161,19 @@ def run():
             data["duplicate_products"] = dup_bundle
     except Exception as exc:
         logger.warning("duplicate_products: ვერ ჩაიდო data.json-ში: %s", exc)
+
+    # ----- ნაშთის გასუფთავება (inventory_cleanup) -----
+    # Derived view that surfaces dead stock, negative stock, and phantom
+    # duplicate variants so the owner can clear them inside MegaPlus.
+    # Refreshes naturally — fixed rows drop off on the next regen.
+    try:
+        from dashboard_pipeline.inventory_cleanup import build_inventory_cleanup_bundle
+        data["inventory_cleanup"] = build_inventory_cleanup_bundle(
+            data.get("inventory_view"),
+            data.get("duplicate_products"),
+        )
+    except Exception as exc:
+        logger.warning("inventory_cleanup: ვერ ჩაითვალა: %s", exc)
 
     # ----- რს.ge ფაქტურები — supplier_invoices Phase 1 (Foodmart 360°) -----
     # Reads buyer XLS (canonical, no row drops) + seller CSV; builds per-supplier
