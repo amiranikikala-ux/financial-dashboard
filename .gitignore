@@ -121,3 +121,8 @@ rs-dashboard/playwright-report/
 # Playwright MCP page snapshots (machine-local browser DOM dumps)
 home-loaded.yml
 home-snapshot.yml
+
+# Playwright MCP screenshots (testing artifacts, machine-local)
+*.png
+!rs-dashboard/public/**/*.png
+!rs-dashboard/src/**/*.png
