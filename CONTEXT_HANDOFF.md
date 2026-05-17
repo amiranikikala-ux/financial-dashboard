@@ -1,14 +1,76 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-17 დღე გაგრძელება #4 — **MegaPlus auto-ingest 3 დღე ჩუმად მარცხდებოდა; SYSTEM-ს RESTORE-ის უფლება მივეცი** (`grant_system_megaplus_access.sql` updated, SQL applied, manual refresh confirmed). 16 მაისი (დვაბზუ) + 17 მაისი (ოზურგეთი) უკვე ცოცხალია state-ში. Pipeline regen ფონში დატრიგერდა — Home გვერდი F5-ით განახლდება როცა დასრულდება.
+> **განახლდა**: 2026-05-18 #1 — **Google Workspace CLI (gws) დაყენდა + Foodmart marketing income სტრუქტურა ცხადია**. ბრანჩი push-შია (4 commit gone to origin: `444e7ac` + `53f2544` + `1d74288` + handoff). Owner-ის ფოსტიდან აღმოვაჩინეთ რომ „cashback" სინამდვილეში 3 ნაკადია (რეტრო/სალარო/ტრეიდი) + KPI ბონუსი 2%. გავაგზავნე ფოსტა Anastasia Nedria-ს (FoodMart FS-form contact) — ვითხოვთ 4-თვიან გაშიფრვას. Lela-ც პასუხს გვმართებს May 13-დან.
 >
-> წინა: 2026-05-17 დღე გაგრძელება #3 — Inventory Cleanup ცალკე გვერდად + 2 commit (`285a218` + `24e62ac`).
+> წინა: 2026-05-17 #4 — MegaPlus permission gap fixed (RESTORE-ი 3 დღე მარცხდებოდა, SYSTEM-ს dbcreator+db_owner მივეცი).
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-17 დღე გაგრძელება #4) — MegaPlus auto-ingest permission gap fixed
+## 0. ბოლო session-ის შედეგი (2026-05-18 #1) — gws CLI + Foodmart marketing income discovery
+
+### Headline
+
+Owner-ის ფოსტა მანამდე ხელით იკითხებოდა (`_scratch_gmail_*.py` IMAP-ით). ამ სესიაში დავაყენე **Google Workspace CLI (`gws` v0.22.5)** — Claude-ი Bash-ით კითხულობს Gmail/Drive/Calendar-ს. შემდეგ Foodmart-ის ფოსტის ანალიზში აღმოვაჩინეთ **"FS Form for Franchises.xlsx" + "KPI Project 2026.pdf"** (Maka Alimbarashvili-სგან), რომელიც ცხადყოფს რომ owner-ის ბანკში „მომსახურების ღირებულების" სახელით შემოსული თანხები **სამი ცალკე ნაკადია** + KPI ბონუსი 2%.
+
+### What shipped — commits + actions
+
+| # | Commit/Action | რა |
+|---|---|---|
+| 1 | `444e7ac` | `fix(megaplus)`: SYSTEM grant SQL განახლდა dbcreator + db_owner-ით (წინა session-ის #4-ის commit). Pushed. |
+| 2 | `53f2544` | `chore(gitignore)`: root-level `*.png` ignored (Playwright screenshots აღარ ჩანს `git status`-ში). |
+| 3 | `1d74288` | `fix(megaplus)`: ცრუ "no new ZIP" log გასწორდა — exception case ცალკე refresh_failed flag-ით (HANDOFF #4 bug-bonus). |
+| 4 | gws install | `npm install -g @googleworkspace/cli` (v0.22.5). |
+| 5 | gcloud install | `winget install Google.CloudSDK` → at `C:\Users\tengiz\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd`. |
+| 6 | GCP project | `financial-dash-1779046436` შექმნა + Gmail API enabled. |
+| 7 | OAuth setup | Consent screen + Desktop OAuth client created (browser steps); credentials at `C:\Users\tengiz\.config\gws\client_secret.json` + encrypted `credentials.enc`. |
+| 8 | Permissions | `.claude/settings.local.json`: `Bash(gws:*)` + per-service subcommand entries added. |
+| 9 | Email sent | To `a.nedria@foodmart.ge` (CC Lela), msg id `19e37b34751c5b1d` — asking 4-month რეტრო/სალარო/ტრეიდი breakdown + per-supplier + formula. |
+
+### Discoveries (saved to memory)
+
+- **`project_gws_cli_setup.md`** — full install path, OAuth client id, credential locations, common gws usage patterns.
+- **`project_foodmart_marketing_income_structure.md`** — 3 streams (რეტრო/სალარო/ტრეიდი) + KPI bonus 2%; Anastasia Nedria pending; Lela pending; KPI math: current 70%/2%/17% vs targets 90%/5%/22-25%.
+
+### Foodmart KPI math (current vs target)
+
+| KPI | მიზანი | ბონუსი | ჩვენი |
+|---|---|---|---|
+| Assortment Matching | 90% | 0.5% | 70% ❌ |
+| Import & PL Share | 5% | 0.5% | 2% ❌ |
+| Promo Sale Share | 22-25% | 0.5% | 17% ❌ |
+| On-time Payments | 100% | 0.25% | ? |
+| Financial info shared (by 25th) | per request | 0.25% | ? |
+| **TOTAL** | | **2%** | **0%** |
+
+KPI Project active from 2026-03-01. Monthly calc, quarterly settlement. All-or-nothing per KPI.
+
+### Files state (post-commits)
+
+```
+M  CONTEXT_HANDOFF.md            (this update)
+M  .claude/settings.local.json   (gws permissions added — gitignored normally? check)
+```
+
+ბრანჩი origin/main-თან sync. `git status`-ში მხოლოდ ეს handoff + settings ცვლილება.
+
+### Open / next-session candidates
+
+1. **Wait for Anastasia reply** — 4-თვის რეტრო/სალარო/ტრეიდი breakdown. პასუხის შემდეგ backtest formula-ის გაუმჯობესება.
+2. **Wait for Lela** — May 13-ის დაპირება (cashback გაშიფრვა) + April 2026 "სააქციო ანაზღაურება" Excel (ჩვეულებრივ 22-25 რიცხვს მოდის, დაგვიანებაშია).
+3. **Negative/Dead stock cleanup** (carryover) — Owner-მა ფიზიკურად უნდა შეამოწმოს 1,753 negative + 1,960 dead stock.
+4. **HOME-9 bookkeeping** (carryover) — AP headline + Net liquidity card + Tax obligations.
+5. **KPI dashboard** — assortment match / import-PL / promo % per-month chart, რომ Owner-მა იცოდეს რომელი KPI რეალურია მისაღწევი.
+
+### Memory updates
+
+- ახალი: `project_gws_cli_setup.md`, `project_foodmart_marketing_income_structure.md`.
+- წინა „Lela email pending" (`project_foodmart_cashback_backtest_2026-05-09.md`) — ახლა cross-referenced ახალ ფაილში; pending list დღეს უფრო ცხადია (Anastasia + Lela + April Excel).
+
+---
+
+## 0aaa. წინა session (2026-05-17 დღე გაგრძელება #4) — MegaPlus auto-ingest permission gap fixed
 
 ### Headline
 
