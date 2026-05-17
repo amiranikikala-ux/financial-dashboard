@@ -1,14 +1,160 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-15 — **HOME-9: 10-ბაგ-batch + bookkeeping review.** 12 commit pushed (`1948676` ბოლო). სერვისი გადატვირთული, freshness API ცოცხალია.
+> **განახლდა**: 2026-05-17 დღე გაგრძელება #3 — **ნაშთის გასუფთავება (Inventory Cleanup) ცალკე ცოცხალ გვერდად + წინა session-ის commits ჩაიდო** (`285a218` backend + `24e62ac` frontend). 2 ფაილი (Inventory.jsx ფილტრი + INVENTORY page wire-in) ბოლო 2 დღის სამუშაოს ხურავს.
 >
-> წინა: 2026-05-14 ღამე HOME-8 (bank balance + cash-till + freshness) `b85225c` + agent baseline `fee78c6` + handoff `a84f2fe`.
+> წინა: 2026-05-17 დღე გაგრძელება #2 — INVENTORY ფილტრი fix (Inventory.jsx ერთ-ფაილიანი). იყო uncommitted, ახლა ჩაიდო `24e62ac`-ში.
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-15) — HOME-9: 10 ბაგი + bookkeeping review
+## 0. ბოლო session-ის შედეგი (2026-05-17 დღე გაგრძელება #3) — INVENTORY CLEANUP ცალკე გვერდი
+
+### Headline
+
+Owner-მა შენიშნა: „ოზურგეთის მაღაზია 124,150 მიწერს მეგა პლიუსში ნაშთს და მაგდენი არ მიდევს მაღაზიაში". ვიყავი მაქს რეჟიმზე, სრულ გამოკვლევას ვიწყე დუბლირებიდან — SQL პირდაპირ MEGAPLUS_1301-ში: 1,877 დუბლირებული შტრიხკოდი, მაგრამ მხოლოდ 21 ნამდვილი phantom (1,125 ₾). იგივე-სახელი-სხვა-შტრიხკოდი დამატებითი 27 ჯგუფი (~2,077 ₾). სულ დუბლირებიდან გადანამეტი ~3,200 ₾ — 124,150-ის 2.6%. ე.ი. **დუბლირება არ არის მთავარი მიზეზი**. რეალური განცალკევება: **მკვდარი საქონელი** (1,123 პროდუქტი, 32,138 ₾ ოზურგეთში — 26%) რომელიც ფიზიკურად შესაძლოა აღარ არსებობს (გაფუჭდა, ვადა გავიდა, წაიკარგა).
+
+ამის გადასაჭრელად — ცალკე გვერდი dashboard-ში, რომ Owner-მა MegaPlus-ში გაასწოროს და განახლების შემდეგ ჩამოვარდეს სიიდან.
+
+### What shipped — 2 commit
+
+| # | Commit | რა გავაკეთე |
+|---|---|---|
+| 1 | `285a218` | **Backend: inventory page module + cleanup section.** NEW `dashboard_pipeline/inventory.py` (live PRODUCTS + DISTRIBUTORS + ORDERS query per restored MEGAPLUS_<store>, builds inventory_view bundle). NEW `dashboard_pipeline/inventory_cleanup.py` (derives 3 problem-stock classes: dead 365+, negative qty, phantom duplicates). `generate_dashboard_data.py` wires both. `dashboard_pipeline/api_contracts.py` adds inventory_view + inventory_cleanup to FIELD_DEFAULTS + TAB_ALLOWLIST + SPECIAL_TAB_BUILDERS. Cleanup builder also derives on-the-fly from cached inputs — no regen needed for the tab to work immediately after service restart. NEW `grant_system_megaplus_access.sql` (idempotent SYSTEM db_datareader grant). |
+| 2 | `24e62ac` | **Frontend: Inventory + Cleanup pages.** NEW `rs-dashboard/src/Inventory.jsx` (~470 lines — KPI cards, per-store toggle, 3 ცალკე search fields, DOS color badge, view filters, today's sales table). Filter logic split into 2 memos: `searchedItems` (supplier+text only — fed to TodaysSalesTable) vs `filteredItems` (view filter on top — fed to main table). NEW `rs-dashboard/src/Cleanup.jsx` (3 KPI cards + tabbed tables dead/negative/phantom + per-store toggle + search + CSV export). App.jsx + tabConfig.js wire `inventory` + `inventory_cleanup` tabs under გაყიდვები group. |
+
+### Verification done
+
+1. **SQL forensics** — MEGAPLUS_1301 raw query: 1,869 P_BARCODE clusters with 2+ active products. Only 4 clusters have 2+ stock-positive variants (1 of which is barcode "2" placeholder). BARCODES secondary table: 1 cluster with 2+ stock. Name-based potential dups: 27 groups. **Total max inflation: ~3,200 ₾** (vs 121,485 ₾ Ozurgeti total = 2.6%).
+2. **API live** — `/api/data?tab=inventory_cleanup` returns `available: true`, totals: dead=1960 (60,102 ₾), negative=1753 (34,724 ₾), phantom=21 (1,125 ₾). ოზურგეთი: dead=1123, neg=1039, phantom=21. დვაბზუ: dead=837, neg=714, phantom=0.
+3. **Vite build** — წარმატებით, `Cleanup-CQYflJ1-.js` 15.08 kB chunk, BUILD_ID `mpa1ry4s-8s5o9l`.
+4. **Service restart** — UAC დიალოგი დადასტურდა, status Running. `/api/data?tab=meta` 400-ი დააბრუნა, რაც დაადასტურა რომ `inventory_cleanup` ALLOWED_TABS-ში ჩაჯდა.
+5. **Playwright browser** — `http://localhost:8000/#inventory_cleanup` რენდერდება, KPI = API ჯამები, ოზურგეთი → Phantom tab → 21 row, პირველი row: სულგუნი დიდგორი / barcode 1166 / iconflict ორცხობილა-სთან (იგივე რასაც SQL forensics-ში ვიპოვე). CSV button enabled.
+
+### How the auto-drop works
+
+Cleanup სია derived-ია `inventory_view` და `duplicate_products`-დან, რომლებიც ცოცხლად რეგენდება pipeline-ის ყოველი regen-ის შემდეგ. Workflow:
+
+1. Owner CSV ჩამოტვირთავს ან გვერდიდან ხედავს.
+2. MegaPlus-ში ფიზიკურად ამოწმებს, „ჩამოწერა"/„კორექცია" qty=0-მდე.
+3. Dashboard → „ხელახლა გათვლა" (5-10 წთ) → F5.
+4. გასწორებული row ავტომატურად ჩამოვარდება (filter `qty > 0` + dead/`qty < 0` neg/phantom kind logic აღარ მოიხედავს).
+
+### Files state (post-commits)
+
+```
+M  CONTEXT_HANDOFF.md            (this update)
+M  Financial_Analysis/orphan_user_status.json  (owner UI action, untouched)
+?? 8 screenshot PNGs              (testing artifacts, not committed)
+```
+
+ბრანჩი 2 commit-ით წინ origin/main-ზე. Push-ი ჯერ არ.
+
+### Open / next-session candidates
+
+1. **Push origin** — `285a218` + `24e62ac` + (this handoff commit).
+2. **Negative stock cleanup workflow** — 1,753 row მინუსში. Owner-მა ფიზიკურად შეამოწმოს და MegaPlus-ში გასწოროს.
+3. **Dead stock cleanup workflow** — 1,960 row 365+ დღე. გავამახვილოს რომელია ნამდვილად დაგროვილი vs ნამდვილად დაკარგული.
+4. **Phantom dedup tool** — 21 phantom variant MegaPlus-ში ხელით inactive-ად მონიშვნა, ან ფასების merger.
+5. **Memory adds** — `project_ozurgeti_inventory_audit_2026-05-17.md` (124k MegaPlus vs ~100k physical, root cause = dead stock not duplicates), `project_inventory_cleanup_tab.md` (architecture: auto-drop on regen).
+
+---
+
+## 0a. წინა session (2026-05-17 დღე გაგრძელება #2) — INVENTORY ფილტრი fix
+
+### Headline
+
+Owner-მა შენიშნა: „მომწოდებლის კომპანიის სახელწოდებას რომ ვწერ უმოქმედოა". Browser-ში დადასტურდა — input მართლა იღებდა keystroke-ს და მთავარი „პროდუქცია" ცხრილი ფილტრდებოდა (6707 → 40 row), მაგრამ search input-ის მაშინვე ქვემოთ მდებარე „📅 დღევანდელი გაყიდვა" ცხრილი storeView.items-ს იღებდა და ფილტრს არ ეპასუხებოდა. Owner ხედავდა „ელიზი ჯგუფი", „ახალიგეო" — სხვა მომწოდებლების სიგარეტებს — და ჰგონებდა რომ ფილტრი არ მუშაობს.
+
+### Fix
+
+`rs-dashboard/src/Inventory.jsx` — filter ლოგიკა ორ memo-ად გავყავი:
+- **`searchedItems`** — მხოლოდ supplier + text search filters (company / name / barcode). გამოიყენება `TodaysSalesTable`-ში.
+- **`filteredItems`** — view filter (low / dead / stockout / negative / all) `searchedItems`-ის თავზე. გამოიყენება მთავარ ცხრილში.
+
+რატომ ცალკე: Today's sales-ში თვითონ აქვს `qty_sold_today > 0` ფილტრი, ამიტომ stock-ის view (qty>0 etc) არ უნდა ეხედებოდეს — წინააღმდეგ შემთხვევაში დღევანდელი გაყიდვის ცარიელი ცხრილი გამოვა იმ პროდუქტებზე, რომელთა ნაშთიც ნულზე ან უარყოფითზე ჩავარდა გაყიდვის შემდეგ.
+
+### Verification
+
+- Vite build წარმატებით (`Inventory-D_W66v52.js`, BUILD_ID `mp9yzwc2-e7t5ab`).
+- Playwright: კომპანიის ველში „ჯიდიაი" → ორივე ცხრილში პირველი row „ჯიდიაი შპს". მთავარი ცხრილი: 40 ცალი (იყო 6707).
+- Screenshot `inventory-filter-fixed.png` დადასტურდა.
+
+### Files state — uncommitted ბოლო session-ის + ამ fix-ის (8 ფაილი)
+
+```
+M  rs-dashboard/src/Inventory.jsx            (this session — 2-memo split + TodaysSalesTable items={searchedItems})
+A  dashboard_pipeline/inventory.py            (prev session — NEW, ~330 lines)
+M  generate_dashboard_data.py                 (prev session — +27 lines)
+M  dashboard_pipeline/api_contracts.py        (prev session — +2 lines)
+M  rs-dashboard/src/App.jsx                   (prev session — +5 lines)
+M  rs-dashboard/src/tabConfig.js              (prev session — +1 line)
+A  grant_system_megaplus_access.sql           (prev session — SYSTEM db_datareader grant)
+?? rs-dashboard/dist/                          (rebuilt)
+```
+
+---
+
+## 0b. წინა session (2026-05-17 დღე გაგრძელება #1) — INVENTORY: ცოცხალია + SYSTEM grant + 3 search field
+
+### Headline
+
+წინა session-ში backend + frontend „ნაშთები" გვერდი ააწყო, მაგრამ pipeline-ი ცარიელ `inventory_view`-ს აბრუნებდა, რადგან NSSM სერვისი `NT AUTHORITY\SYSTEM`-ით ეშვება და MEGAPLUS SQL ბაზებზე წვდომა არ ჰქონდა. ამ სესიაში: (1) SYSTEM-ს მიენიჭა `db_datareader` MEGAPLUS_1329 + MEGAPLUS_1301-ზე → pipeline ახლა ცოცხლად ააწყობს inventory-ს ყოველი regen-ის შემდეგ; (2) Owner-მა მოითხოვა საძიებო ველების სამად გაყოფა (კომპანია / პროდუქტი / შტრიხკოდი) — გაკეთდა; (3) payload 10 MB-დან 4.8 MB-მდე შემცირდა (alerts arrays + 5 unused per-SKU field მოშორდა, supplier rollup ერთ pass-ში folded); (4) საძიებო ველები მაღაზიების ღილაკების მაშინვე ქვემოთ გადავიდა. ბრაუზერში დადასტურდა (Service Worker banner-ით განახლება).
+
+### What shipped (uncommitted — adds to prev session work)
+
+| ფაილი | რა შეიცვალა (ამ session-ში) |
+|---|---|
+| **NEW** `grant_system_megaplus_access.sql` | One-time idempotent SQL script. `CREATE LOGIN [NT AUTHORITY\SYSTEM] FROM WINDOWS` + `CREATE USER` + `ALTER ROLE db_datareader` MEGAPLUS_1329 + MEGAPLUS_1301-ზე. გაშვება: `sqlcmd -E -S localhost\SQLEXPRESS -i grant_system_megaplus_access.sql`. **გავიდა ჩემი user-ით (windows sysadmin რომ ჰქონდა)** — owner-მა admin powershell არ დასჭირდა. |
+| `dashboard_pipeline/inventory.py` | (a) წაიშალა `alerts` ბლოკი (4× dup data items-ში); (b) წაიშალა 5 unused per-item field: `margin_unit`, `margin_pct`, `active`, `qty_sold_7d`, `sell_through_30d_pct`; (c) supplier rollup folded into the same loop as items[] (no second pass over items[] for `revenue_30d`/`qty_sold_7d`); (d) totals_combined-ში revenue_30d/qty_sold_30d/today ჯამიდან by_supplier-დან გადათვლა. **Payload effect: 10,026,725 → 6,596,935 → 4,892,xxx bytes** (52% შემცირება). |
+| `rs-dashboard/src/Inventory.jsx` | (a) `search` single field → 3 ცალკე state: `searchCompany` (supplier_name + supplier_tax_id), `searchName` (product_name only), `searchBarcode` (barcode + product_code). 3 ცალკე input. (b) Controls section მაღაზიების ღილაკების მაშინვე ქვემოთ გადავიდა (იყო Today's sales-ის შემდეგ). Today's sales ახლა search-ის შემდეგ. |
+
+### Verification done
+
+1. **SQL grant** — `sqlcmd -E ...` წარმატებით → `Done. NT AUTHORITY\SYSTEM has db_datareader on MEGAPLUS_1329 and MEGAPLUS_1301.`
+2. **Pipeline regen via `/api/refresh`** — დასრულდა ~22 წთ. Log: `inventory_view → data.json: 6707 SKU, 255209 ₾ cost-value, 318776 ₾ retail-value, dead 23.6%, alerts: neg=1753 stockout=195 low=826 dead365=1960`. SYSTEM-ით ცოცხლად მუშაობს ✅.
+3. **Payload size measurement** — `curl ... | wc -c`: 10,026,725 → 6,596,935 (alerts dropped) → 4,892,xxx (per-item fields trimmed). Frontend ჯერ ნელია 4.8 MB-ზე — შემდგომი ოპტიმიზაცია 200-row pre-pagination server-side შემდეგი session-ისთვის.
+4. **Vite build** — წარმატებით (`Inventory-DAZTC6z8.js`, `index-DQuK5SOM.js`, BUILD_ID `mp9qczba-hyfybl`).
+5. **Playwright browser verify** — `http://localhost:8000/#inventory` → ხედავა 6,707 SKU, 255k ₾, KPI ცხრილი, 3 search ველი (კომპანია/პროდუქტი/შტრიხკოდი), მაღაზიების ღილაკები. Snapshot DOM-ში დადასტურდა labels: `კომპანია (მომწოდებელი)` / `პროდუქტის სახელი` / `შტრიხკოდი / კოდი`.
+6. **Owner verify** — „გამოჩნდა მაგრამ მირჩევნია ოზურგეთი და დვაბზუს ქვემოთ იყოს" → reorder შესრულდა. „კარგი არის" → დადასტურდა.
+
+### ⚠️ STILL OPEN — შემდეგი session-ისთვის
+
+1. **Commit + push** — 7 uncommitted ფაილი (იხ. ქვემოთ). Owner-მა approve თქვა; ერთ commit-ში ან 2-ში (pipeline + UI ცალკე).
+2. **Payload further reduce** — 4.8 MB ჯერ კიდევ ნელია first-load-ზე. Options: (a) server-side top-200 per store + on-demand load (b) ცალკე endpoint `/api/inventory/items?store_id=&supplier_uuid=&offset=&limit=` და მთავარ tab-ში მხოლოდ summaries; (c) gzip უკვე ჩართულია (sent 4.8 MB → wire ~700 KB), მაგრამ parse + render ბრაუზერში მაინც დიდია.
+3. **Negative stock cleanup** — 1,753 უარყოფითი row (data quality). Owner-ის ხელით recount-ი ან ცალკე filter view.
+4. **Stockout reorder workflow** — 195 stockout SKU → ღილაკი „ზედნადები შევქმენი".
+5. **Brand vs supplier disambiguation** — orphan products (P_DAFAULTSUPPLIER ცარიელია, „(უცნობი)" შევარდა).
+6. **Bookkeeping review #1** (HOME-9 carryover) — AP headline + Net liquidity card.
+
+### Industry KPIs (carryover from prev session — still in code)
+
+- **Days of Supply (DOS)** = qty / (qty_sold_30d / 30). UI ფერი: < 7 წითელი, 7-21 ყვითელი, ≥ 21 მწვანე.
+- **Sell-through 30d %** — გათვლა inline მუშაობდა, მაგრამ field წაიშალა (UI არ იყენებდა). საჭიროების შემთხვევაში inventory.py-ში დააბრუნება.
+- **Stock turn (annualized)** — future extension.
+
+### Files state (uncommitted, full session combined)
+
+```
+A  dashboard_pipeline/inventory.py            (NEW, ~330 lines now; trimmed + inline rollup)
+M  generate_dashboard_data.py                 (+27 lines — prev session)
+M  dashboard_pipeline/api_contracts.py        (+2 lines — prev session)
+A  rs-dashboard/src/Inventory.jsx             (NEW, ~470 lines now; 3-field search + reorder)
+M  rs-dashboard/src/App.jsx                   (+5 lines — prev session)
+M  rs-dashboard/src/tabConfig.js              (+1 line — prev session)
+A  grant_system_megaplus_access.sql           (NEW, this session)
+?? rs-dashboard/dist/                          (rebuilt; new chunks Inventory-DAZTC6z8.js + index-DQuK5SOM.js)
+?? home-bookkeeping-review.png                 (pre-existing, ignored)
+```
+
+### Memory adds this session
+
+- `project_megaplus_system_db_grant.md` — SYSTEM-ის db_datareader grant ფაქტი + სკრიპტი (idempotent, re-run safe).
+- `feedback_try_before_asking_user.md` — ვცადო ბრძანება ჩემი tool-ით ჯერ, შემდეგ მხოლოდ წარუმატებლობის შემთხვევაში ვთხოვო user-ს admin-ით. burned by `sqlcmd -E` რომელიც user-ის sysadmin-ით უპრობლემოდ გავიდა.
+
+---
+
+## 0c. წინა session (2026-05-15) — HOME-9: 10 ბაგი + bookkeeping review
 
 ### Headline
 
@@ -94,7 +240,7 @@ Owner-მა მოითხოვა Home გვერდის ბუღალ
 
 ---
 
-## 0a. წინა session (2026-05-14 ღამე) — HOME-8: bank balance + cash-till + freshness + agent quality
+## 0d. წინა session (2026-05-14 ღამე) — HOME-8: bank balance + cash-till + freshness + agent quality
 
 ### Headline
 
@@ -175,7 +321,7 @@ curl -s http://localhost:8000/api/freshness | python -m json.tool
 
 ---
 
-## 0b-prev. წინა session (2026-05-14 დილა) — HOME-7: audit + 3 bugs
+## 0e. წინა session (2026-05-14 დილა) — HOME-7: audit + 3 bugs
 
 5,700 ₾ silent drift in April bank OUT (headline 159,682 ≠ category sum 165,382). 8 findings (3 bugs + 5 UX); all 3 bugs fixed + 3 UX + Real Net Profit expandable rows. Commit `e64ea2e`. Memory: `project_home_page_audit_2026-05-14.md`.
 
