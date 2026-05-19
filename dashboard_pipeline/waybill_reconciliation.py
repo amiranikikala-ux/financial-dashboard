@@ -455,8 +455,16 @@ def reconcile(rs_df: pd.DataFrame, megaplus_stores: dict) -> dict:
     rs_df = rs_df.copy()
     rs_df["dest_class"] = rs_df["destination"].apply(classify_destination)
 
-    # Categorize active rs.ge rows
-    active = rs_df[rs_df["status"] == "აქტიური"].copy()
+    # Categorize active rs.ge rows. For returns specifically ("უკან დაბრუნება"),
+    # also include "დასრულებული" status — owner-confirmed completed returns
+    # must still be present in MegaPlus GACERA; filtering by "აქტიური" alone
+    # hides 13+ completed returns that were never recorded (silent gap).
+    # For non-return waybills we keep the original "აქტიური" filter to avoid
+    # surfacing thousands of historical completed deliveries.
+    active = rs_df[
+        (rs_df["status"] == "აქტიური") |
+        ((rs_df["status"] == "დასრულებული") & (rs_df["type"] == "უკან დაბრუნება"))
+    ].copy()
     cats = active.apply(lambda r: _categorize_row(r, get_index, gacera_index, r["dest_class"]), axis=1)
     active["category"] = [c[0] for c in cats]
     active["match_meta"] = [c[1] for c in cats]
