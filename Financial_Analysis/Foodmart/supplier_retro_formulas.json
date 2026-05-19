@@ -1,0 +1,143 @@
+{
+  "200140267": {
+    "name": "კანტი შპს",
+    "base": "rs.ge_in",
+    "rate_pct": 30.03,
+    "cv": 0.009,
+    "verdict": "STABLE ✓"
+  },
+  "400132192": {
+    "name": "პარტნიორი შპს (400132192)",
+    "base": "rs.ge_in",
+    "rate_pct": 25.97,
+    "cv": 0.099,
+    "verdict": "STABLE ✓"
+  },
+  "242005888": {
+    "name": "ენგადი შპს",
+    "base": "rs.ge_in",
+    "rate_pct": 16.02,
+    "cv": 0.038,
+    "verdict": "STABLE ✓"
+  },
+  "404898973": {
+    "name": "ლაქტალის ჯორჯია შპს",
+    "base": "rs.ge_in",
+    "rate_pct": 26.18,
+    "cv": 0.035,
+    "verdict": "STABLE ✓"
+  },
+  "405152953": {
+    "name": "კოკა-კოლა გურია",
+    "base": "rs.ge_in",
+    "rate_pct": 2.76,
+    "cv": 0.021,
+    "verdict": "STABLE ✓"
+  },
+  "406254146": {
+    "name": "ფუდსერვისი შპს  ემთიჯი შპს",
+    "base": "rs.ge_in",
+    "rate_pct": 17.01,
+    "cv": 0.03,
+    "verdict": "STABLE ✓"
+  },
+  "204968730": {
+    "name": "იბერია რეფრეშმენტსი სს",
+    "base": "rs.ge_in",
+    "rate_pct": 7.85,
+    "cv": 0.134,
+    "verdict": "STABLE ✓"
+  },
+  "250723971": {
+    "name": "გაგრა პლუსი შპს",
+    "base": "rs.ge_in",
+    "rate_pct": 22.41,
+    "cv": 0.059,
+    "verdict": "STABLE ✓"
+  },
+  "200179118": {
+    "name": "იფქლი შპს",
+    "base": "mp_cogs",
+    "rate_pct": 5.43,
+    "cv": 0.01,
+    "verdict": "STABLE ✓"
+  },
+  "200172785": {
+    "name": "ტკბილი ქვეყანა შპს",
+    "base": "rs.ge_in",
+    "rate_pct": 25.33,
+    "cv": 0.015,
+    "verdict": "STABLE ✓"
+  },
+  "202061053": {
+    "name": "ზახარ შპს",
+    "base": "rs.ge_in",
+    "rate_pct": 19.6,
+    "cv": 0.531,
+    "verdict": "unstable"
+  },
+  "400029036": {
+    "name": "3GGeorgian Global Group შპს",
+    "base": "rs.ge_in",
+    "rate_pct": 17.26,
+    "cv": 0.276,
+    "verdict": "OK"
+  },
+  "201948063": {
+    "name": "კოკა-კოლა ბოთლერს ჯორჯია",
+    "base": "mp_brand_sales",
+    "rate_pct": 10.15,
+    "cv": 0.33,
+    "verdict": "brand-derived",
+    "name_keywords": [
+      "Coca",
+      "Cola",
+      "კოკა",
+      "კოლა",
+      "Fanta",
+      "ფანტა",
+      "Sprite",
+      "სპრაიტ",
+      "Schweppes",
+      "შვეფ",
+      "Burn",
+      "Powerade",
+      "პაუერ"
+    ]
+  },
+  "205274834": {
+    "name": "ბარამბო შპს",
+    "base": "MANUAL_REVIEW",
+    "rate_pct": null,
+    "cv": null,
+    "verdict": "unstable brand-match rate (25%-48% over 4 months). Last 4 months: 403, 170, 361, 765 ₾",
+    "last_4_months": [
+      402.59,
+      169.54,
+      361.13,
+      764.5
+    ],
+    "name_keywords": [
+      "ბარამბო",
+      "Barambo"
+    ],
+    "note": "საკონდიტრო brand. Sales variance high; rate jumps Mar-Apr. Possibly mixed: marketing + retro components."
+  },
+  "404900737": {
+    "name": "ქართული ლუდის კომპანია სს",
+    "base": "MANUAL_REVIEW",
+    "rate_pct": null,
+    "cv": null,
+    "verdict": "no stable formula — fixed monthly stipend? ask Elene. Last 4 months: 1098, 972, 1026, 1951 ₾",
+    "last_4_months": [
+      1097.78,
+      972.09,
+      1026.0,
+      1951.35
+    ],
+    "name_keywords": [
+      "ზედაზენ"
+    ],
+    "note": "ბრენდი: ზედაზენი (ლუდი + ლიმონათი + ცივი ჩაი). აჭარა keyword false-positives (souvenirs). ფორმულა % gross of brand sales — Apr outlier 89% vs Jan-Mar 54-60%."
+  }
+}
