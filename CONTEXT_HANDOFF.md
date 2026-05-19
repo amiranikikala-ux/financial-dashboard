@@ -1,14 +1,214 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-18 #2 — **Returns silent gap fixed (19 → 32)**. Owner-მა იეჭვა რომ MegaPlus-ში დაუფიქსირებელი დაბრუნებების რეალური რაოდენობა მეტი იყო ვიდრე dashboard აჩვენებდა. ცოცხალი audit დაადასტურა — `waybill_reconciliation.py`-ი მხოლოდ `status="აქტიური"` filter-ით მუშაობდა, 13 „დასრულებული" დაბრუნება (299 ₾) silent-ად იცარიელებოდა. Fix-ი: filter გავაფართოვე მხოლოდ TYPE="უკან დაბრუნება"-სთვის, რეგრესია სხვა category-ში არ მოხდა. Service restarted + pipeline regenerated. ცოცხალი data.json ახლა აჩვენებს 32 ცალს, 807.90 ₾. **Uncommitted**.
+> **განახლდა**: 2026-05-20 (საღამოს გაგრძელება) — **+7 stable solo TIN ფორმულა დამატებული JSON-ში**. დილით აღმოვაჩინე 19 missing TIN; საღამოს calibration script-მა (`_scratch_calibrate_missing.py`) გაარკვია 7 stable (CV<5%) + 1 OK + 7 one-month + 1 no-rsge-match + 3 unstable. 7 დასამატებლად მზადყოფნა-ფორმულა: მასტერ თრეიდი 16%, ლიდერი ფუდი 31%, მარტინ პამაჩ 17%, ბაგრატი 8.86%, პირამიდა 14%, გეოდისტრიბუცია 0.54%, სოლარი 11% — დაიდო JSON-ში. Verify ხელახლა მარტისთვის: 22 ფორმულა, coverage 70%→**76%** (6,941 → 7,474 ₾), drift უცვლელი -135 ₾. ცენტიდან ემთხვევა ცალკეული spot-check: მასტერ თრეიდი/ლიდერი ფუდი/მარტინ პამაჩ/პირამიდა exact match.
 >
-> წინა: 2026-05-18 #1 — gws CLI + Foodmart marketing income discovery (3 streams + 2% KPI bonus, Anastasia/Lela pending).
+> Owner-ისთვის ვუხსენი Spar-ის რეტრო ლოგიკა: ფაქტურით ვიყიდულობთ → ბანკიდან ვუხდით → რეტროდ % უკან გვირიცხება. მაგ. მარტინ პამაჩ: 1,614 ₾ ნაყიდი - 1,200 ₾ გადახდილი - 274 ₾ რეტრო = 140 ₾ ცარჩა ვალდებულება.
+>
+> ⚠️ დღევანდელი დილის session: Foodmart verify script reliability audit + 2 group-TIN formula fixes (ქართული ლუდი + Coca-Cola ბოთლერი) — დეტალური ხელახლა ქვემოთ §0-ში.
+>
+> Uncommitted: `Financial_Analysis/Foodmart/supplier_retro_formulas.json` (2 group + 7 solo = 9 formula changes), `scripts/foodmart_verify.py` (rs.ge_in_group base type), `CONTEXT_HANDOFF.md`.
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-18 #2) — Waybill returns silent gap fixed
+## 0. ბოლო session-ის შედეგი (2026-05-20) — verify script reliability audit + 2 group-TIN fixes
+
+### Headline
+
+`scripts/foodmart_verify.py` reliability audit-ი ჩავატარე. Owner-ის ცხადი hint-ით („ქართული ლუდი = ზედაზენი + აჭარა", „კოკაკოლა ბოთლერი + გურია") **გავარკვიე ფუნდამენტური pattern**: Elene-ს retro ფაილში TIN ერთია (brand owner), მაგრამ rs.ge-ში ფაქტობრივი ზედნადებები სხვა sister TIN-ებიდან მოდის. ფორმულის base-ად ჯგუფის ჯამი უნდა ვიყენოთ, არა solo TIN. 2 problematic ფორმულა გადაიწერა sthable-ად.
+
+### What shipped — uncommitted ცვლილებები
+
+| ფაილი | რა შეიცვალა |
+|---|---|
+| `Financial_Analysis/Foodmart/supplier_retro_formulas.json` | 2 ფორმულა გადაიწერა: **404900737 ქართული ლუდი** (MANUAL_REVIEW → `rs.ge_in_group` × 16.69%, related_tins=[445404232 ზედაზენი აჭარა + 404932258 ზედაზენი 2012], CV=0.05) + **201948063 Coca-Cola ბოთლერი** (brand × 10.15% CV=0.33 → `rs.ge_in_group` × 12.92%, related_tins=[201948063 + 405152953 გურია], CV=0.06). გურია (405152953) ცალკე solo ფორმულას იყენებს (2.76%) — იგივე waybills ორ ფორმულას ემსახურება სხვადასხვა მხრიდან. |
+| `scripts/foodmart_verify.py` | ახალი base type `rs.ge_in_group`: `base_amt = sum(rsge_in.get(t, 0) for t in fl['related_tins'])`. დანარჩენი ლოგიკა უცვლელი. |
+
+### Verification — 4 თვის ფიქსის შემოწმება
+
+| თვე | Bottlers exp | Bottlers act | drift | ლუდი exp | ლუდი act | drift |
+|---|---:|---:|---:|---:|---:|---:|
+| 2026-01 | 1,205 | 1,287 | -18 | 1,050 | 1,098 | +48 |
+| 2026-02 | 863 | 863 | -0.06 | 950 | 972 | +22 |
+| 2026-03 | 2,127 | 2,090 | -37 | 1,023 | 1,026 | +3 |
+| 2026-04 | 2,247 | 2,205 | -42 | 2,105 | 1,951 | -154 |
+
+მარტი 2026 retro სრული 15 ფორმულის drift: **+548 ₾ (10.2%) → -135 ₾ (-1.9%)**.
+
+### 7 ხარვეზი ნაპოვნი audit-ში (ფიქს-ი მხოლოდ 2+1-ისთვის გავაკეთე)
+
+| # | ხარვეზი | სტატუსი |
+|---|---|---|
+| 1 | **19 TIN Elene-ში არ აქვს ფორმულა** (4-თვის ჯამი ~3,300 ₾) — 7 stable solo რეიტი: მასტერ თრეიდი 16%, ლიდერი ფუდი 31%, მარტინ პამაჩ 17%, ბაგრატი 8.86%, პირამიდა 14%, გეოდისტრიბუცია 0.54%, სოლარი 11% | ✅ **DONE (2026-05-20 საღამოს)** — 7 stable JSON-ში დაიდო. Verify cross-check ცენტიდან ემთხვევა. Coverage 70%→76%. Remaining 12 TIN: 1 OK (სტარდი 3.35% CV=21%), 1 unstable (აიდიეს ბორჯომი CV=83%), 7 one-month-only, 1 no-rsge-match (ვიმ ბილ დან 204546553 — Elene-ში 57.74 ₾, rs.ge-ში 0; sister TIN ან ცალკე arrangement), 2 (მეგაკო/ფორტუ) unstable. |
+| 2 | **Marketing 5-section structure not parsed** — ფრენჩაიზის / ტრეიდი / სალარო / ქვეიჯარა / გამოსაწერი — საშუალოდ 2,000 ₾/თვე script-ი არ კითხულობს. "გამოსაწერი" ბოლო ხაზი = bank-side actual. | OPEN |
+| 3 | **MANUAL_REVIEW silent skip** ბარამბო-სთვის — actual დაითვლება, expected = 0. ჩემი fix-ი ქართული ლუდს ჩაიდო, ბარამბო ისევ MANUAL (აქვს 3 sister TIN-ი 205274834/400052287/404885184 მაგრამ 2026-ში ცარიელი rs.ge_in; brand_sales CV=0.5 unstable). | OPEN |
+| 4 | **Coca-Cola brand-rate Mar/Apr spike** (10.15% → 14-15%) — ✅ FIXED ფიქსით #2 (group rate 12.92% CV=0.06) | DONE |
+| 5 | **Bank-side reconciliation missing** — script რეტრო+cashback total-ს ბრუნდება, ბანკი ცალკე query-ით. Combined view არ არსებობს. | OPEN |
+| 6 | **Cashback date filter bug** — `ORD_TIMESTAMP <= '2026-03-31'` ნიშნავს `<= 00:00:00` — დაკარგავს მთელი მარტი 31-ის გაყიდვებს. სავარაუდოდ ~150 ₾ shortfall მარტში (script 549 vs previous-session 702). უნდა იყოს `< next_day_00:00:00`. | OPEN |
+| 7 | **141 ბარკოდი ვერ შემაერთდა** (Lela template-ის 6%) — სავარაუდოდ ჩვენ ეს პროდუქტი არ შემოგვაქვს. დაგროვებითი monitoring სასურველი. | OPEN (low priority) |
+
+### rs.ge cross-check — silent gap detection
+
+რეტრო ფაილიდან + Marketing-დან + Lela-დან + rs.ge waybill-ებიდან + owner-ის სიტყვიერი classification-დან, ფიქსირდება შემდეგი თხრობა:
+
+| TIN | სახელი | სტატუსი | Foodmart ფაილში |
+|---|---|---|---|
+| 34 TIN | Elene-ს რეტრო | ოფიციალური | ✓ retro |
+| Philip Morris, JTI, თ&რ, GDCC, TBC Pay, ენგადი 8%, Coca 3.5%, მასტერი 17%, ბარამბო 2%, ბორჯომი 3%, ფუდსერვის-როშენი 3% | Marketing | ოფიციალური | ✓ Marketing |
+| ელიზი ჯგუფი (204920381), ჯიდიაი (406181616), ინტერნეიშნლ მარკეტინგ (420424393) | სიგარეტი | protected (CLAUDE.md) | (გარეთ — protected) |
+| შრომა-2023, თისო, კადევე, ვასაძის პური, ჯიბე, იო 2022, კახაბერ, შავნაბადა, ექსტრამითი, VIVA, ლავაზა + სხვა | owner direct | შემოყვანილი | (გარეთ — სწორად) |
+| **400093974 თი-აი-დი ფუდს** | owner says ოფიციალური | **❌ არცერთ Elene/Lela ფაილში** | **🔴 SILENT GAP** |
+
+### თი-აი-დი ფუდს — pending Elene question
+
+rs.ge-ში 18 ზედნადები (4 თვის ჯამში 5,094 ₾). Owner ცხადად ამბობს „ოფიციალურია". არც retro, არც marketing, არც cashback template-ში ვერ ვიპოვე (verified `_search_tid_v2_results.txt` — 0 matches across ყველა Elene/Lela ფაილში). Hypothesis: წლიური/კვარტალური settlement-ი ან ცალკე ფურცელი გვაკლია.
+
+**Action:** Elene-ს მომავალ წერილში გადავკითხავთ.
+
+### Email verification (წინა სესიის Elene-ისთვის გაგზავნილი რიცხვები)
+
+Email msg `19e3fc1b63fb9669` (sent 2026-05-19) ციფრები გადავამოწმე ფაილებთან:
+
+| სვეტი | ემაილში | რეალური | სტატუსი |
+|---|---:|---:|---|
+| retro 4 თვის | 9,292 / 6,111 / 7,847 / 9,886 | 9,291.53 / 6,111.24 / 7,846.75 / 9,886.11 | ✓ ცენტამდე ემთხვევა |
+| მარკ. 4 თვის | 2,046 / 1,946 / 2,081 / 2,638 | 2,045.71 / 1,945.64 / 2,080.51 / 2,637.54 | ✓ |
+| ბანკი 4 თვის | 11,587 / 8,571 / 5,606 / 7,300 | TBC ფაქტური (activity → next-month deposit) | ✓ |
+| cashback Mar | 702 | 549 (script ხელახლა გათვლისას) | ⚠ -153 ₾ — date bug #6-ის გამო, conclusion-ი არ იცვლება |
+
+ე.ი. **ემაილში ცენტამდე სწორი ციფრები გავაგზავნეთ**. ღია ერთი მცირე date-bug-ი (-153 ₾ cashback მარტში). მთავარი დასკვნა „მარტი/აპრილი ბანკში 45%-ით ნაკლები" ძალაში.
+
+### Files state
+
+```
+M  CONTEXT_HANDOFF.md                                          (this update — both dilis + saghamos)
+M  Financial_Analysis/Foodmart/supplier_retro_formulas.json    (2 group + 7 solo = 9 changes)
+M  scripts/foodmart_verify.py                                  (rs.ge_in_group base type)
+?? _scratch_calibrate_missing.py                               (gitignored)
+?? _scratch_missing_calibration.json                           (gitignored)
+?? _search_tid_v2_results.txt                                  (audit artifact)
+?? Financial_Analysis/orphan_user_status.json                  (owner UI artifact, carry)
+```
+
+ბრანჩი origin/main-თან sync (გუშინდელი 4 commit pushed დღეს რეუსტი). ახალი ცვლილებები commit-დება დღეს საღამოს.
+
+### Memory updates (2 new)
+
+- `project_foodmart_group_tin_retro.md` — pattern: Elene's retro TIN ≠ shipping TIN; combine sister entities. 2 confirmed cases (ქართული ლუდი, Coca-Cola ბოთლერი).
+- `project_foodmart_supplier_classification.md` — official/brought-in/protected categories + თი-აი-დი ფუდს gap.
+- MEMORY.md index განახლდა ორივეთი.
+
+### Open / next-session candidates (priority order)
+
+1. **Cashback date-bug fix #6** — `<= end_date` → `< next_day` SQL fix. ~150 ₾ მარტში recovery; მცირე ფიქსი 1-ხაზიანი. Quick-win.
+2. **Marketing parsing** — საშუალოდ 2,000 ₾/თვე. "გამოსაწერი" line read = simplest add (it's actually the bank-side total). მნიშვნელოვანი coverage boost.
+3. **Bank reconciliation in script** — pull TBC Foodmart deposits per-month, add to summary output. Combined view ერთ ცხრილში.
+4. **ვიმ ბილ დან საქართველო (204546553) sister-TIN ძებნა** — Elene-ში 4 თვის რეტრო 57.74 ₾, rs.ge-ში TIN ცარიელია. ან brand owner შემოწმდეს (Wimm-Bill-Dann = Danone subsidiary; sister TIN ძებნა საჭიროა) ან Elene-ს გადავკითხოთ.
+5. **Wait for Elene reply** — Mar/Apr KPI penalty + თი-აი-დი ფუდს (400093974) question.
+6. **Wait for Lela April template** (~22-25 მაისს).
+7. **One-month suppliers monitoring** — 7 TIN-ი (ქართული სადისტრიბუცია, მზიური, დიპლომატ ჰოლდინგი, დაფნა, რთველისი, ბი ემ ესი, ჯიდისისი) — შემდეგი თვის ფაილებში თუ კიდევ გამოჩნდება, რეიტი დადგინდება.
+8. **Carryover from prior sessions** — Negative/Dead stock cleanup (1,753 neg + 1,960 dead) + HOME-9 bookkeeping review.
+
+---
+
+## 0a. წინა session (2026-05-19) — Foodmart 3-stream formula + verify script
+
+### Headline
+
+Owner-ის კითხვა: „რა მინდა გავიგო — საიდან მოდის ფული? გამოგზავნის გარეშე ჩვენ თვითონ ვითვალოთ, რომ არ შემარცხვინონ". 4-თვის Elene + Lela ფაილების ანალიზით **3-ნაკადიანი ფორმულა აღმოვაჩინე**:
+
+```
+bank_deposit = Elene_RETRO (per supplier %) + Elene_MARKETING (5 sub-sections) + Lela_CASHBACK (template × qty)
+```
+
+15 მომწოდებლის %-i სტაბილურია 4 თვის შედარებით (e.g., კოკა-კოლა გურია 2.76%, ლაქტალის ჯორჯია 26.18%, კანტი 30%). Reverse-engineering რეიტი rs.ge-ის ზედნადებების ჯამთან.
+
+### What shipped — 4 commits (uncommitted = handoff only)
+
+| # | Commit | რა |
+|---|---|---|
+| 1 | `8f5e1f1` | `fix(waybill)`: include completed returns in reconciliation (19 → 32, prev session work pushed forward) |
+| 2 | `a62af9d` | `data(payments)`: 3 manual cash payments to ჯიდიაი (May 13/15/16, total 5,706.25 ₾) |
+| 3 | `af16bdf` | `docs(handoff)`: close 2026-05-18 #2 |
+| 4 | `a98f057` | **`feat(foodmart)`: per-supplier retro self-verify** — scripts/foodmart_verify.py + supplier_retro_formulas.json |
+
+ბრანჩი 4 commit-ით წინ origin/main-ზე. Excel ფაილები (8 Elene + 4 Lela) ლოკალურად ინახება, .gitignore-ით გამორიცხული (`*.xlsx` rule).
+
+### Files state
+
+```
+M  CONTEXT_HANDOFF.md                                          (this update)
+?? Financial_Analysis/Foodmart/გაშიფვრები_2026/*.xlsx          (gitignored — 8 Elene files)
+?? Financial_Analysis/Foodmart/სააქცია_2025-2026/*.xlsx        (gitignored — 4 Lela files)
+?? Financial_Analysis/orphan_user_status.json                   (owner UI artifact, carry)
+```
+
+### Reconciliation 4 თვის (the formula works for Jan/Feb)
+
+| აქტ.თვე | ლელა | ელენე-რეტრო | ელენე-მარკ | 3-ფაირი ჯამი | ბანკი | სხვაობა |
+|---|---:|---:|---:|---:|---:|---:|
+| 2026-01 | 576 | 9,292 | 2,046 | **11,914** | 11,587 | -327 (-2.7%) ✓ |
+| 2026-02 | 450 | 6,111 | 1,946 | **8,507** | 8,571 | +64 (+0.7%) ✓ |
+| **2026-03** | 702 | 7,847 | 2,081 | **10,629** | **5,606** | **-5,023 (-47.3%) ❌** |
+| **2026-04** | ? | 9,886 | 2,638 | 12,524+ | **7,300** | **-5,223 (-41.7%) ❌** |
+
+Apr Lela template ჯერ არ მოვიდა (~22-25 მაისს მოვა). 4-თვის ჯამში დაკავებული ~10,250 ₾ — **KPI penalty hypothesis** (KPI Project 2026-03-01).
+
+### Self-verify script
+
+`scripts/foodmart_verify.py YYYY-MM` — input: month. Computes for each supplier:
+- rs.ge waybill amount × saved % rate → expected retro
+- Lela template × Megaplus sold qty → expected cashback
+- Comparison with Elene's monthly xlsx (if present)
+- Print drift per supplier + total
+
+Tested:
+- **Jan 2026**: expected 8,475 ₾ vs actual 8,395 ₾ → drift -80 ₾ (1%) ✓
+- **Nov 2025**: 13 stable suppliers = 5,153 ₾ + ბარამბო/ლუდი manual + Lela/Marketing estimates ≈ 8,000 ₾ vs bank 8,072 ₾ ✓
+
+### 15 მომწოდებლის formula state
+
+13 stable (CV < 0.15):
+- ლაქტალის ჯორჯია 26.18%, კოკა-კოლა გურია 2.76%, კანტი 30%, ენგადი 16%, პარტნიორი 26%, იბერია რეფრეშმენტსი 7.85%, ფუდსერვისი 17%, გაგრა პლუსი 22%, ტკბილი ქვეყანა 25%, იფქლი 5.4% (mp_cogs base), 3GGeorgian 17%, ზახარ 19.6%
+
+2 MANUAL_REVIEW (no stable formula, brand-only):
+- კოკა-კოლა ბოთლერს ჯორჯია (TIN 201948063) — base = brand sales 10.15%, but Mar-Apr spike to 14-15%
+- ბარამბო — variable 21-48%
+- ქართული ლუდის (ზედაზენი brand) — 54-89% of brand sales, Apr outlier
+
+### Discovered in Megaplus (potential future decode)
+
+`AGREEMENTS` ცხრილი — 1,554 აქტიური კონტრაქტი per supplier-with encoded `AG_TERMS` strings (26 chars), `AG_TERMSTYPE` BYSALES/BYPROCURMENT, `AG_CENTRALIZEDCASHBACK=1` flag. ფორმულის shortcut decoder შესაძლებელია მომავალში.
+
+### ⚠️ Email failure — Owner instructed to send manually
+
+ვცადე owner-ის approved წერილის გაგზავნა Elene-სთან 2-ჯერ gws +reply helper-ით. ორივეჯერ **body-ი იჭრებოდა პირველი ხაზის შემდეგ** + `--cc` flag-ი იგნორდებოდა + `--draft` flag-იც ვერ მუშაობდა (label=SENT). ე.ი. Elene-მ მიიღო 2 ცარიელი წერილი დღეს (msg ids `19e3f6fc97b78302`, `19e3fbc729bcdb1e`) — მხოლოდ "გამარჯობა ელენე," + მისი წინა წერილის ციტირება, ცხრილი + 3 კითხვა ვერ ჩაჯდა.
+
+Owner-მა მითხრა — "გამომიგზავნე გასაგზავნი წერილი მე გავაგზავნი". ტექსტი მივეცი ჩატში (იხ. ბოლო assistant turn) — owner Gmail-ში თვითონ ჩასვამს Reply All-ით, CC ხელით დაამატებს (l.qapianidze, a.nedria, office@foodmart.ge).
+
+### Lesson
+
+`gws gmail +reply` helper-ი **broken multi-line body**-ზე. Workaround: raw MIME via `gws gmail users messages send` API (პირდაპირ, helper-ის გვერდის ავლით). მომავალში არ გამოვიყენო `+reply --html` multi-line body-სთვის.
+
+### Memory updates
+
+- `project_foodmart_marketing_income_structure.md` — overhauled with 3-stream formula + Jan/Feb match + Mar/Apr KPI hypothesis + Elene/Lela contact map.
+- MEMORY.md index updated (Foodmart entry replaced).
+
+### Open / next-session candidates
+
+1. **Owner sends manual email to Elene** — text provided. Wait for reply on Mar/Apr clawback question.
+2. **April 2026 Lela template** — expected ~2026-05-22..25. When arrives, run `python scripts/foodmart_verify.py 2026-04` for full reconciliation.
+3. **Push 4 commits to origin** — `git push origin main` (whenever owner ready). Branch is 4 ahead.
+4. **AGREEMENTS decoder** — Megaplus has 1,554 contracts with encoded AG_TERMS. Future task: decode position-by-position to auto-populate `supplier_retro_formulas.json`.
+5. **ბარამბო + ქართული ლუდი formula** — currently MANUAL_REVIEW. Need Elene clarification on what base they use (fixed monthly + variable? bonus for promo?).
+6. **Marketing 3.5% ფრენჩაიზი base** — line says "3.5% × X" but X not derivable from our data alone. Ask Elene for the base.
+7. **Carryover** — Negative/Dead stock cleanup (1,753 negative + 1,960 dead). HOME-9 bookkeeping review.
+
+---
+
+## 0a. წინა session (2026-05-18 #2) — Waybill returns silent gap fixed
 
 ### Headline
 

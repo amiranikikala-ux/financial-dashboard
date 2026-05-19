@@ -241,6 +241,9 @@ def main():
             continue
         if base == 'rs.ge_in':
             base_amt = rsge_in.get(tin, 0)
+        elif base == 'rs.ge_in_group':
+            related = fl.get('related_tins') or [tin]
+            base_amt = sum(rsge_in.get(t, 0) for t in related)
         elif base == 'mp_brand_sales':
             rev, _ = megaplus_brand_sales(fl.get('name_keywords', []), year, month)
             base_amt = rev

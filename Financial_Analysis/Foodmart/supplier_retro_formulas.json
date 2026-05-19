@@ -85,25 +85,12 @@
   },
   "201948063": {
     "name": "კოკა-კოლა ბოთლერს ჯორჯია",
-    "base": "mp_brand_sales",
-    "rate_pct": 10.15,
-    "cv": 0.33,
-    "verdict": "brand-derived",
-    "name_keywords": [
-      "Coca",
-      "Cola",
-      "კოკა",
-      "კოლა",
-      "Fanta",
-      "ფანტა",
-      "Sprite",
-      "სპრაიტ",
-      "Schweppes",
-      "შვეფ",
-      "Burn",
-      "Powerade",
-      "პაუერ"
-    ]
+    "base": "rs.ge_in_group",
+    "related_tins": ["201948063", "405152953"],
+    "rate_pct": 12.92,
+    "cv": 0.059,
+    "verdict": "STABLE ✓",
+    "note": "Retro = % of combined waybills from Bottlers + Gurea entities. Gurea (405152953) has its own separate retro at 2.76% — both formulas use same waybills, different sides. Discovered 2026-05-19."
   },
   "205274834": {
     "name": "ბარამბო შპს",
@@ -125,19 +112,67 @@
   },
   "404900737": {
     "name": "ქართული ლუდის კომპანია სს",
-    "base": "MANUAL_REVIEW",
-    "rate_pct": null,
-    "cv": null,
-    "verdict": "no stable formula — fixed monthly stipend? ask Elene. Last 4 months: 1098, 972, 1026, 1951 ₾",
-    "last_4_months": [
-      1097.78,
-      972.09,
-      1026.0,
-      1951.35
-    ],
-    "name_keywords": [
-      "ზედაზენ"
-    ],
-    "note": "ბრენდი: ზედაზენი (ლუდი + ლიმონათი + ცივი ჩაი). აჭარა keyword false-positives (souvenirs). ფორმულა % gross of brand sales — Apr outlier 89% vs Jan-Mar 54-60%."
+    "base": "rs.ge_in_group",
+    "related_tins": ["445404232", "404932258"],
+    "rate_pct": 16.69,
+    "cv": 0.049,
+    "verdict": "STABLE ✓",
+    "note": "Retro tied to brand-owner TIN 404900737, but waybills come from sister entities: ზედაზენი აჭარა (445404232) + ზედაზენი 2012 (404932258). Discovered 2026-05-19."
+  },
+  "205217941": {
+    "name": "მასტერ თრეიდი",
+    "base": "rs.ge_in",
+    "rate_pct": 16.0,
+    "cv": 0.0,
+    "verdict": "STABLE ✓",
+    "note": "Calibrated 2026-05-20 from 4-month Elene file. CV=0 (exact 16% every month)."
+  },
+  "206337052": {
+    "name": "ლიდერი ფუდი შპს",
+    "base": "rs.ge_in",
+    "rate_pct": 31.0,
+    "cv": 0.0,
+    "verdict": "STABLE ✓",
+    "note": "Calibrated 2026-05-20. Only Mar+Apr had data; CV=0 across both months."
+  },
+  "424067618": {
+    "name": "მარტინ პამაჩ შპს",
+    "base": "rs.ge_in",
+    "rate_pct": 17.0,
+    "cv": 0.0,
+    "verdict": "STABLE ✓",
+    "note": "Calibrated 2026-05-20 from 4-month Elene file. CV=0 (exact 17% every month)."
+  },
+  "412672807": {
+    "name": "ბაგრატი შპს",
+    "base": "rs.ge_in",
+    "rate_pct": 8.86,
+    "cv": 0.02,
+    "verdict": "STABLE ✓",
+    "note": "Calibrated 2026-05-20 from 4-month Elene file."
+  },
+  "402203110": {
+    "name": "პირამიდა 2022 შპს",
+    "base": "rs.ge_in",
+    "rate_pct": 14.0,
+    "cv": 0.0,
+    "verdict": "STABLE ✓",
+    "note": "Calibrated 2026-05-20. Only Mar+Apr had data; CV=0."
+  },
+  "401958271": {
+    "name": "გეოდისტრიბუცია შპს",
+    "base": "rs.ge_in",
+    "rate_pct": 0.54,
+    "cv": 0.02,
+    "verdict": "STABLE ✓",
+    "note": "Calibrated 2026-05-20 from 4-month Elene file. Very low rate but stable."
+  },
+  "400090450": {
+    "name": "სოლარი შპს",
+    "base": "rs.ge_in",
+    "rate_pct": 11.0,
+    "cv": 0.0,
+    "verdict": "STABLE ✓",
+    "note": "Calibrated 2026-05-20. Only Feb+Apr had data; CV=0 across both."
   }
 }
