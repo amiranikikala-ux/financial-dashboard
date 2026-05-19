@@ -1,14 +1,78 @@
 # CONTEXT HANDOFF — ცოცხალი სტატუსი
 
-> **განახლდა**: 2026-05-18 #1 — **Google Workspace CLI (gws) დაყენდა + Foodmart marketing income სტრუქტურა ცხადია**. ბრანჩი push-შია (4 commit gone to origin: `444e7ac` + `53f2544` + `1d74288` + handoff). Owner-ის ფოსტიდან აღმოვაჩინეთ რომ „cashback" სინამდვილეში 3 ნაკადია (რეტრო/სალარო/ტრეიდი) + KPI ბონუსი 2%. გავაგზავნე ფოსტა Anastasia Nedria-ს (FoodMart FS-form contact) — ვითხოვთ 4-თვიან გაშიფრვას. Lela-ც პასუხს გვმართებს May 13-დან.
+> **განახლდა**: 2026-05-18 #2 — **Returns silent gap fixed (19 → 32)**. Owner-მა იეჭვა რომ MegaPlus-ში დაუფიქსირებელი დაბრუნებების რეალური რაოდენობა მეტი იყო ვიდრე dashboard აჩვენებდა. ცოცხალი audit დაადასტურა — `waybill_reconciliation.py`-ი მხოლოდ `status="აქტიური"` filter-ით მუშაობდა, 13 „დასრულებული" დაბრუნება (299 ₾) silent-ად იცარიელებოდა. Fix-ი: filter გავაფართოვე მხოლოდ TYPE="უკან დაბრუნება"-სთვის, რეგრესია სხვა category-ში არ მოხდა. Service restarted + pipeline regenerated. ცოცხალი data.json ახლა აჩვენებს 32 ცალს, 807.90 ₾. **Uncommitted**.
 >
-> წინა: 2026-05-17 #4 — MegaPlus permission gap fixed (RESTORE-ი 3 დღე მარცხდებოდა, SYSTEM-ს dbcreator+db_owner მივეცი).
+> წინა: 2026-05-18 #1 — gws CLI + Foodmart marketing income discovery (3 streams + 2% KPI bonus, Anastasia/Lela pending).
 >
 > Roadmap → `docs/MASTER_PLAN.md`. წესები → `AGENTS.md`.
 
 ---
 
-## 0. ბოლო session-ის შედეგი (2026-05-18 #1) — gws CLI + Foodmart marketing income discovery
+## 0. ბოლო session-ის შედეგი (2026-05-18 #2) — Waybill returns silent gap fixed
+
+### Headline
+
+Owner-მა ჰკითხა: „მაინტერესებს მეგადან არის თუ არა პროექტში ისეთი დაბრუნება რომელიც მეგაში არ მყავს პროგრამულად შეყვანილი". Pipeline-ის dashboard აჩვენებდა 19 ცალს. Owner intuition-ი — „მეტი იქნება მგონია".
+
+ცოცხალი audit-ი rs.ge cache-ში დაადასტურა owner-ი. რეალური ციფრი: **32 დაბრუნება** (508→808 ₾, +13 silent-ად ცარიელებული). Root cause — `waybill_reconciliation.py:459` filter-ი მხოლოდ `status="აქტიური"`-ს ხედავდა. რეგისტრირებული რეტურნი rs.ge-ში სტატუსს იცვლის → „დასრულებული" → pipeline მას ცარიელად ფიქსირდებოდა, თუნდაც MegaPlus-ის GACERA-ში არასოდეს ჩაუყვანიათ.
+
+### What shipped — 1 file edited (uncommitted)
+
+| ფაილი | რა შეიცვალა |
+|---|---|
+| `dashboard_pipeline/waybill_reconciliation.py:459-466` | Status filter ვიწროდ გავაფართოვე: `status=="აქტიური"` → `(აქტიური) OR (დასრულებული AND type="უკან დაბრუნება")`. ე.ი. ფართოება მხოლოდ რეტურნებზე ვრცელდება, რეგისტრირებული რეგულარული ზედნადებები (TYPE 2,3,6) უცვლელად დარჩა — სხვაგვარად 374 wrong_store ცრუ-pozitivebi წარმოიქმნებოდა. Inline comment-ი ცხადყოფს WHY-ის. |
+
+### Verification (3-layer proof gate)
+
+1. **Source (rs.ge cache)** — `Financial_Analysis/cache/rsge/{2022..2026}.parquet` სრულად 3,822 row TYPE="უკან დაბრუნება". Active-store (1329+1301) dest = 132 row. Status breakdown: 49 აქტიური + 81 დასრულებული + 2 გაუქმებული.
+2. **Calc (live GACERA cross-check)** — sqlcmd MEGAPLUS_1301 + MEGAPLUS_1329 (`SELECT DISTINCT GAC_ZED, GAC_G_ZED FROM GACERA WHERE GAC_ACT=1`): 132 rs.ge zed-ებიდან 100 ჩანდა GACERA-ში (received_gacera), 32 არასოდეს — ეს არის true silent-gap-ი. Status: 19 აქტიური + 13 დასრულებული. გაუქმებული 2-ი silent-ად შენარჩუნდა (rs.ge-ში თვითონ cancelled).
+3. **Output (post-regen data.json)** — `curl /api/data?tab=waybill_reconciliation` ცოცხალი: `totals.returns_not_recorded=32`, sum=807.90 ₾. ოზურგეთი 29 / დვაბზუ 3. სხვა category-ები სტაბილური: wrong_store 28 უცვლელი, ghost_ap 10 უცვლელი, sub_waybills_not_recorded 9 უცვლელი.
+
+### 4 მომწოდებელი (was 2)
+
+| მომწოდებელი | ცალი | სულ ₾ |
+|---|---:|---:|
+| შპს ვასაძის პური | 15 | 434.15 |
+| შპს თისო | 10 | 151.94 |
+| **შპს შრომა - 2023** ← **NEW** | 4 | 134.40 |
+| **კახაბერ აროშიძე** ← **NEW** | 3 | 87.41 |
+| **TOTAL** | **32** | **807.90** |
+
+წლის მიხედვით: 2024=2, 2025=12, 2026=18. დიაპაზონი 2024-07-09 → 2026-04-20.
+
+### Service + regen actions
+
+1. **Restart-Service FinancialDashboardBackend** — admin elevation (UAC) დადასტურდა → Running, /api/data 200.
+2. **POST /api/refresh** — pipeline regenerated in background (~14 წთ). data_file_modified updated.
+3. **Live verify** — `/api/data?tab=waybill_reconciliation` returns 32 ✓.
+
+### Files state (uncommitted)
+
+```
+M  CONTEXT_HANDOFF.md                          (this update)
+M  dashboard_pipeline/waybill_reconciliation.py (the one-line fix + comment block)
+M  Financial_Analysis/orphan_user_status.json   (carried from prev session)
+?? screenshot PNGs                              (carried; gitignored)
+```
+
+ბრანჩი origin/main-თან sync (4 commit პრევ session-დან already pushed). Fix uncommitted.
+
+### Open / next-session candidates
+
+1. **Commit + push** — 1 file (`waybill_reconciliation.py`) + this handoff. ერთი მცირე fix commit.
+2. **Owner F5** — dashboard waybill_reconciliation tab → 32 ცალი + 2 ახალი მომწოდებელი (შრომა-2023, კახაბერ აროშიძე) უნდა ჩანდეს.
+3. **Apply similar audit to other categories** — wrong_store/missing/amount_mismatch — შესაძლოა „დასრულებული" status-ი იქაც silent gap-ი იყოს, თუმცა შემოწმდა რომ 374 false-positive იქმნება; უფრო ვიწრო rule-ი საჭიროა (e.g., date window or per-supplier).
+4. **Carryover from prev session** — Anastasia Nedria 4-month breakdown wait + Lela May 13 follow-up + Foodmart KPI dashboard.
+5. **Carryover** — Negative/Dead stock cleanup (1,753 negative + 1,960 dead).
+6. **Carryover** — HOME-9 bookkeeping review (AP headline + Net liquidity + Tax obligations).
+
+### Memory updates
+
+- არცერთი ახალი memory. Fix-ი documented in code comment + this section. Lesson „rs.ge status semantics differ between waybill types (regular completed = normal noise; return completed without GACERA = silent gap)" კოდის comment-ში ცხადია.
+
+---
+
+## 0aaaa. წინა session (2026-05-18 #1) — gws CLI + Foodmart marketing income discovery
 
 ### Headline
 
